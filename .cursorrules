@@ -1,0 +1,139 @@
+1. Code Modification Policy
+
+Always analyze existing code before generating new code.
+
+Prefer modifying and improving existing implementations over creating new ones.
+
+If a feature is replaced, remove all obsolete related code.
+
+Never leave:
+
+Unused variables
+
+Unused imports
+
+Dead code
+
+Commented-out legacy code
+
+Duplicate logic
+
+Ensure the final codebase contains no redundant or unused elements.
+
+2. Simplicity & Engineering Discipline
+
+Prioritize clarity over cleverness.
+
+Avoid over-engineering.
+
+Do not introduce advanced patterns or abstractions unless clearly necessary.
+
+Write code at the level of a strong intermediate developer:
+
+Practical
+
+Clean
+
+Maintainable
+
+Keep implementations straightforward and readable.
+
+3. Clean Architecture & Structure
+
+Project uses Clean Architecture with Provider for state management.
+Keep it simple — start with the scanning-sections pattern and extend as needed.
+
+Folder structure (features):
+lib/
+  main.dart              — App entry point only
+  app.dart               — MaterialApp, theme, routes
+  features/
+    <feature_name>/
+      presentation/
+        providers/       — ChangeNotifier classes (extends ChangeNotifier)
+        screens/         — Full-screen widgets
+        widgets/         — Reusable UI within the feature
+
+Rules for new features:
+- One feature = one folder under lib/features/
+- State: use Provider (ChangeNotifier + ChangeNotifierProvider)
+- Screens: StatelessWidget + context.read<T>() or Consumer<T> for UI
+- Follow the scanning sections feature as reference: features/scanning_sections/
+
+Follow a logical and scalable folder structure.
+
+Maintain separation of concerns.
+
+Extract reusable logic into shared utilities/services when appropriate.
+
+Before creating a new function, verify whether similar functionality already exists and reuse it.
+
+Use consistent, meaningful, and concise naming conventions.
+
+4. Production-Ready Standards
+
+All generated code must be production-ready.
+
+Include proper error handling.
+
+Consider realistic edge cases.
+
+Avoid unnecessary API calls.
+
+Optimize performance where reasonable.
+
+Do not expose sensitive data.
+
+Ensure stability and maintainability.
+
+5. Comments Policy
+
+Do not over-comment.
+
+Only add comments when:
+
+Explaining non-obvious logic
+
+Documenting business rules
+
+Clarifying important architectural decisions
+
+Avoid commenting obvious behavior.
+
+6. Performance & API Discipline
+
+Avoid duplicate API requests.
+
+Prevent unnecessary computations.
+
+Reuse existing API utilities when available.
+
+Handle async logic properly and safely.
+
+Avoid inefficient patterns.
+
+7. Refactoring Rules
+
+When modifying code:
+
+Improve clarity where possible.
+
+Remove duplication.
+
+Simplify complex logic.
+
+Do not change functionality unless explicitly requested.
+
+Ensure refactored code remains stable and coherent.
+
+8. Behavioral Constraints
+
+Generate only what is required — no unnecessary expansion.
+
+Do not assume missing requirements.
+
+If instructions are unclear, request clarification.
+
+Do not create new files unless necessary.
+
+Clearly indicate structural changes when introduced.
