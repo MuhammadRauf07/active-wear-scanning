@@ -29,7 +29,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   final _overrideQuantityController = TextEditingController();
 
   /// Work order details loaded after scanning machine barcode. Null until scan.
-  List<PlanLineResponse>? _planLines;
+  List<PlanLineResponseModel>? _planLines;
   List<TrayDetailsModel> availableTraysDetail = [];
 
   // ─── Styles ───────────────────────────────────────────────────────────────
@@ -85,14 +85,14 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     final trayDetail = available.first.trayDetails;
     if (trayDetail?.active != true) return 'Tray is not active';
 
-    _scannedTrays.add(ScannedTray(trayCode: scannedCode.trim(), trayUpdateId: trayDetail!.id));
+    _scannedTrays.add(ScannedTray(trayCode: scannedCode.trim(), trayUpdateId: trayDetail!.id, trayConcurrencyStamp: trayDetail.concurrencyStamp));
 
     return null;
   }
 
   /// Builds a map of plan line fields for [DynamicInfoDisplay].
   /// Only includes non-empty values.
-  Map<String, dynamic> _buildPlanLineDetailsMap(PlanLineResponse planLine) {
+  Map<String, dynamic> _buildPlanLineDetailsMap(PlanLineResponseModel planLine) {
     final result = <String, dynamic>{};
 
     void addField(String key, IconData icon, String label, String? value) {
@@ -155,16 +155,13 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
     final apiResult = await _trayScanningRepo.loadWorkOrderBySerialNumber(scannedCode);
 
-    print("Printed:: ${apiResult.data.toString()}");
-
-
     final trayDetailsModel = await _trayScanningRepo.fetchAvailableTrayDetails();
 
     if (!mounted) return;
 
     if (trayDetailsModel.success && trayDetailsModel.data != null) {
       setState(() {
-        _planLines = apiResult.data as List<PlanLineResponse>;
+        _planLines = apiResult.data as List<PlanLineResponseModel>;
         availableTraysDetail = trayDetailsModel.data as List<TrayDetailsModel>;
         _overrideQuantityController.text = _getPlanQuantityPerTray();
       });
@@ -179,7 +176,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $message')));
   }
 
-  // Save API ────────────────────────────────────────────────────────────────
+  /// Save API ────────────────────────────────────────────────────────────────
 
   void saveTrayAndProductionProgress() async {
     AppLoader.show();
@@ -193,7 +190,9 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
         'workOrderHeaderId': _planLines!.first.workOrderHeader.id,
         'workOrderLineId': _planLines!.first.workOrderLine.id,
         'knitItemId': _planLines!.first.planLine.itemId,
-        'concurrencyStamp': DateTime.now().toString(),
+        "locatorId": 2,
+        "active": true,
+        'concurrencyStamp': _scannedTrays[i].trayConcurrencyStamp,
       };
 
       Map<String, dynamic> productionProgressData = {
@@ -213,12 +212,13 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
         "workOrderLineId": _planLines!.first.workOrderLine.id,
         "itemId": _planLines!.first.planLine.itemId,
         "shiftId": _planLines!.first.planLine.shiftId,
-        "primaryTrayId": _scannedTrays[i].trayCode,
+        "primaryTrayId": _scannedTrays[i].trayUpdateId,
         "machineId": _planLines!.first.planLine.resourceId,
         "planHeaderId": _planLines!.first.planLine.planHeaderId,
+        "locatorId": 2,
       };
 
-      await _trayScanningRepo.saveTrayDetails(planData, _scannedTrays[i].trayUpdateId!);
+      await _trayScanningRepo.updateTrayDetails(planData, _scannedTrays[i].trayUpdateId!);
       await _trayScanningRepo.saveProductionProgress(productionProgressData);
     }
 
@@ -242,7 +242,6 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                 isShowBackIcon: true,
                 topPadding: 0,
                 horizontalPadding: 12,
-                buttonLabel: 'Save Changes',
                 widget: CustomOutlinedButton(
                   label: 'Save Changes',
                   borderColor: Colors.blue,

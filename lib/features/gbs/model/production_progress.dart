@@ -1,40 +1,39 @@
 import 'package:active_wear_scanning/features/common-models/common_models.dart';
 
-class PlanLineResponseModel {
-  final PlanLine planLine;
+class ProductionProgressResponseModel {
+  final ProductionProgress productionProgress;
   final Operation operation;
   final Shift shift;
-  final Resource resource;
+  final MachineModel machineModel;
   final WorkOrderHeader workOrderHeader;
   final WorkOrderLine workOrderLine;
+  final PrimaryTrayModel primaryTrayModel;
   final Item item;
-  final CostCenterLine costCenterLine;
   final PlanHeader planHeader;
 
-  PlanLineResponseModel({
-    required this.planLine,
+  ProductionProgressResponseModel({
+    required this.productionProgress,
     required this.operation,
     required this.shift,
-    required this.resource,
+    required this.machineModel,
     required this.workOrderHeader,
     required this.workOrderLine,
+    required this.primaryTrayModel,
     required this.item,
-    required this.costCenterLine,
     required this.planHeader,
   });
 
-  factory PlanLineResponseModel.fromJson(Map<String, dynamic> json) {
-    return PlanLineResponseModel(
-      planLine: PlanLine.fromJson(json['planLine']),
+  factory ProductionProgressResponseModel.fromJson(Map<String, dynamic> json) {
+    return ProductionProgressResponseModel(
+      productionProgress: ProductionProgress.fromJson(json['productionProgress']),
       operation: Operation.fromJson(json['operation']),
       shift: Shift.fromJson(json['shift']),
-      resource: Resource.fromJson(json['resource']),
+      machineModel: MachineModel.fromJson(json['machine']),
       workOrderHeader: WorkOrderHeader.fromJson(json['workOrderHeader']),
       workOrderLine: WorkOrderLine.fromJson(json['workOrderLine']),
       item: Item.fromJson(json['item']),
-      costCenterLine: CostCenterLine.fromJson(json['costCenterLine']),
+      primaryTrayModel: PrimaryTrayModel.fromJson(json['primaryTray']),
       planHeader: PlanHeader.fromJson(json['planHeader']),
     );
   }
 }
-

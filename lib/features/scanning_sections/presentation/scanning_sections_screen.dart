@@ -1,4 +1,5 @@
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
+import 'package:active_wear_scanning/features/gbs/presentation/gbs_receiving_screen.dart';
 import 'package:active_wear_scanning/features/header/order_header_screen.dart';
 import 'package:active_wear_scanning/features/scanning_sections/presentation/widgets/section_card.dart';
 import 'package:active_wear_scanning/features/tray/presentation/tray_scanning_screen.dart';
@@ -44,7 +45,6 @@ class ScanningSectionsScreen extends StatelessWidget {
                             Navigator.push(context, MaterialPageRoute(builder: (context) => const TrayScanningScreen()));
                           },
                         ),
-
                       ],
                     ),
                     SizedBox(height: 10),
@@ -57,7 +57,7 @@ class ScanningSectionsScreen extends StatelessWidget {
                           progressValue: 0.75,
                           isShowProgress: true,
                           onTap: () {
-                            Navigator.push(context, MaterialPageRoute(builder: (context) => const TrayScanningScreen()));
+                            Navigator.push(context, MaterialPageRoute(builder: (context) => const GBSReceivingScreen()));
                           },
                         ),
                         const SizedBox(width: 12),
@@ -71,7 +71,6 @@ class ScanningSectionsScreen extends StatelessWidget {
                             Navigator.push(context, MaterialPageRoute(builder: (context) => const TrayScanningScreen()));
                           },
                         ),
-
                       ],
                     ),
                   ],

@@ -1,4 +1,5 @@
 import 'package:active_wear_scanning/core/config/app_config.dart';
+import 'package:active_wear_scanning/features/gbs/repo/gbs_receiving_repo.dart';
 import 'package:active_wear_scanning/features/scanning_sections/presentation/scanning_sections_screen.dart';
 import 'package:active_wear_scanning/features/tray/repo/tray_scanning_repo.dart';
 import 'package:active_wear_scanning/features/user/model/active_wear_user.dart';
@@ -12,16 +13,6 @@ import 'package:plex/plex_package.dart';
 import 'package:plex/plex_route.dart';
 import 'package:plex/plex_screens/plex_login_screen.dart';
 import 'package:plex/plex_utils/plex_messages.dart';
-import 'package:plex/plex_widget.dart';
-
-PlexInputWidgetController<String, String> _tenantController = PlexInputWidgetController();
-
-PlexInputWidgetController<String, String> _getTenantController() {
-  if (_tenantController.isDisposed) {
-    _tenantController = PlexInputWidgetController();
-  }
-  return _tenantController;
-}
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,6 +21,7 @@ void main() {
 
   injectSingleton(UserRepo());
   injectSingleton(TrayScanningRepo());
+  injectSingleton(GBSReceivingRepo());
 
   runApp(
     PlexApp(

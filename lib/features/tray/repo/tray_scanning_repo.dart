@@ -23,21 +23,16 @@ class TrayScanningRepo {
   Future<PlexApiResult> fetchPlanLines(int resourceId) async {
     final result = await _api.getList('/api/app/plan-lines', query: {'ResourceId': resourceId.toString()});
 
-    print("PrintedResultOfPlanLines :: ${result.data.toString()}");
-
     if (!result.success || result.data == null) return result;
 
+    print("PrintedResultOfPlanLines :: ${result.data.toString()}");
+
+
     try {
-      final data = result.data as List;
-      final list = <PlanLineResponse>[];
-      for (var i = 0; i < data.length; i++) {
-        try {
-          final item = Map<String, dynamic>.from(data[i] as Map);
-          list.add(PlanLineResponse.fromJson(item));
-        } catch (e) {
-          return PlexApiResult(false, 500, 'Parse error at index $i: $e', null);
-        }
-      }
+
+      final data = result.data as List<Map<String, dynamic>>;
+      final list = data.map((item) => PlanLineResponseModel.fromJson(item)).toList();
+
       return PlexApiResult(true, 200, "Success", list);
     } catch (e) {
       return PlexApiResult(false, 500, e.toString(), null);
@@ -76,7 +71,7 @@ class TrayScanningRepo {
   }
 
   ///
-  Future<void> saveTrayDetails(Map<String, dynamic> data, int trayUpdateId) async {
+  Future<void> updateTrayDetails(Map<String, dynamic> data, int trayUpdateId) async {
     print("ProductionProgressData :: ${data.toString()}");
 
     await _api.put('/api/app/tray-details/$trayUpdateId', body: data);
