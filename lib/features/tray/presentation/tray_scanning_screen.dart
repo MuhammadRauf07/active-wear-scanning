@@ -12,6 +12,9 @@ import 'package:active_wear_scanning/features/tray/repo/tray_scanning_repo.dart'
 import 'package:flutter/material.dart';
 import 'package:plex/plex_di/plex_dependency_injection.dart';
 
+import '../../../core/widgets/custom_expanded_async_dropdown.dart';
+import '../../../core/widgets/scanner_always_open.dart';
+
 class TrayScanningScreen extends StatefulWidget {
   const TrayScanningScreen({super.key});
 
@@ -28,9 +31,11 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   final List<TextEditingController> _quantityControllers = [];
   final _overrideQuantityController = TextEditingController();
 
+
   /// Work order details loaded after scanning machine barcode. Null until scan.
   List<PlanLineResponseModel>? _planLines;
   List<TrayDetailsModel> availableTraysDetail = [];
+  PlanLineResponseModel? _selectedPlanLine;
 
   // ─── Styles ───────────────────────────────────────────────────────────────
 
@@ -76,7 +81,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
     // Check if already scanned (already assigned)
     final alreadyScanned = _scannedTrays.any((t) => t.trayCode.trim() == code);
-    if (alreadyScanned) return 'Tray already assigned';
+    if (alreadyScanned) return 'Already assigned';
 
     // Find matching tray in available list
     final available = availableTraysDetail.where((t) => (t.trayDetails?.trayCode ?? '').trim() == code).toList();
@@ -122,51 +127,68 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
   /// Opens barcode scanner for tray. On success, validates and adds tray if eligible.
   Future<void> _onScanTray() async {
-    AppLoader.show();
-    final scannedCode = await BarcodeScannerDialog.show(context, title: 'Scan Tray');
+    await ScannerAlwaysOpen.show(
+      context,
+      title: 'Scan Trays',
+      onResult: (scannedCode) {
+        // 1. Run your validation logic (Returns String? message or null)
+        final String? validationError = _validateTrayForScan(scannedCode);
 
-    if (scannedCode == null || !mounted) {
-      AppLoader.hide();
-      return;
-    }
+        if (validationError == null) {
+          // CASE: SUCCESS
+          setState(() {
+            // Add the controller to the background list
+            _quantityControllers.add(
+              TextEditingController(text: _getDefaultQuantityForNewTray()),
+            );
+          });
 
-    final validationError = _validateTrayForScan(scannedCode);
-    if (validationError != null) {
-      AppLoader.hide();
-      if (mounted) _showError(validationError);
-      return;
-    }
-
-    setState(() {
-      _quantityControllers.add(TextEditingController(text: _getDefaultQuantityForNewTray()));
-    });
-    AppLoader.hide();
+          // Return null to tell ScannerAlwaysOpen there is no error
+          return null;
+        } else {
+          // CASE: ERROR (Duplicate, Invalid, Inactive, etc.)
+          // Return the actual error string so the scanner can display it
+          return validationError;
+        }
+      },
+    );
   }
-
   /// Opens barcode scanner for machine. On success, loads work order from API.
   Future<void> _onScanMachineBarcode() async {
     AppLoader.show();
 
     final scannedCode = await BarcodeScannerDialog.show(context, title: 'Scan Machine Barcode');
 
-    if (scannedCode == null || !mounted) return;
+    if (scannedCode == null || !mounted) {
+      AppLoader.hide(); // Ensure loader hides if scan is cancelled
+      return;
+    }
 
-    setState(() => _machineBarcode = scannedCode);
+    setState(() {
+      _machineBarcode = scannedCode;
+      _planLines = null;       // Reset previous data
+      _selectedPlanLine = null; // Reset selection
+    });
 
     final apiResult = await _trayScanningRepo.loadWorkOrderBySerialNumber(scannedCode);
-
     final trayDetailsModel = await _trayScanningRepo.fetchAvailableTrayDetails();
 
     if (!mounted) return;
 
-    if (trayDetailsModel.success && trayDetailsModel.data != null) {
+    if (apiResult.success && apiResult.data != null) {
       setState(() {
-        _planLines = apiResult.data as List<PlanLineResponseModel>;
+        // Cast the data to our list
+        _planLines = List<PlanLineResponseModel>.from(apiResult.data);
         availableTraysDetail = trayDetailsModel.data as List<TrayDetailsModel>;
-        _overrideQuantityController.text = _getPlanQuantityPerTray();
+
+        // Logic: Auto-select if only 1 item exists
+        if (_planLines!.length == 1) {
+          _selectedPlanLine = _planLines!.first;
+          _overrideQuantityController.text = _getPlanQuantityPerTray();
+        }
       });
     } else {
-      _showError(apiResult.message);
+      _showError(apiResult.message ?? "No data found");
     }
 
     AppLoader.hide();
@@ -293,8 +315,9 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                   ),
                 ],
               ),
+              _buildWorkOrderDropdown(),
               const SizedBox(height: 10),
-              if (_planLines != null) ...[DynamicInfoDisplay(items: _buildPlanLineDetailsMap(_planLines![0]))],
+              if (_selectedPlanLine != null) ...[DynamicInfoDisplay(items: _buildPlanLineDetailsMap(_selectedPlanLine!))],
             ],
           ),
         ),
@@ -453,6 +476,50 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       _quantityControllers.removeAt(index);
       _scannedTrays.removeAt(index);
     });
+  }
+
+  Widget _buildWorkOrderDropdown() {
+    // Only show if we actually have data from the scan
+    if (_planLines == null || _planLines!.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Select Work Order & Item Description', style: _labelStyle),
+          const SizedBox(height: 8),
+          CustomExpandedAsyncDropdown<PlanLineResponseModel>(
+            hint: "Select from list...",
+            width: double.infinity, // Take full width
+            height: 48,            // Match your app's input height
+            borderColor: Colors.blue,
+            items: _planLines,      // Use the list fetched from machine scan
+            selectedValue: _selectedPlanLine,
+
+            // This tells the dropdown what text to show in the list
+            itemAsString: (plan) => "${plan.workOrderHeader.workOrderCode} - ${plan.item.description}",
+
+            // Optional: Add a tag if an item is high priority or specific status
+            itemTagBuilder: (plan) {
+              // Example: if (plan.isUrgent) return "URGENT";
+              return null;
+            },
+                onChanged: (PlanLineResponseModel? newValue) {
+                  setState(() {
+                    _selectedPlanLine = newValue;
+                    // Automatically update the quantity field for the new selection
+                    if (_selectedPlanLine != null) {
+                      _overrideQuantityController.text = _getPlanQuantityPerTray();
+                    }
+                  });
+                },
+              ),
+            ],
+          ),
+
+
+    );
   }
 
   /// Shared input decoration to reduce duplication.

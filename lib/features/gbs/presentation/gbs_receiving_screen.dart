@@ -1,6 +1,5 @@
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
-import 'package:active_wear_scanning/core/widgets/barcode_scanner_dialog.dart';
 import 'package:active_wear_scanning/core/widgets/content_card.dart';
 import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
 import 'package:active_wear_scanning/core/widgets/dynamic_info_display.dart';
@@ -10,6 +9,8 @@ import 'package:active_wear_scanning/features/gbs/model/production_progress.dart
 import 'package:active_wear_scanning/features/gbs/repo/gbs_receiving_repo.dart';
 import 'package:flutter/material.dart';
 import 'package:plex/plex_di/plex_dependency_injection.dart';
+
+import '../../../core/widgets/scanner_always_open.dart';
 
 class GBSReceivingScreen extends StatefulWidget {
   const GBSReceivingScreen({super.key});
@@ -37,23 +38,21 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
 
   /// Opens barcode scanner for tray receiving
   Future<void> _onScanTray() async {
-    AppLoader.show();
-    final scannedCode = await BarcodeScannerDialog.show(context, title: 'Scan Tray for GBS Receiving');
+    await ScannerAlwaysOpen.show(
+      context,
+      title: 'GBS Tray Receiving',
+      onResult: (scannedCode) {
+        final String? validationError = _validateTrayForReceiving(scannedCode);
 
-    if (scannedCode == null || !mounted) {
-      AppLoader.hide();
-      return;
-    }
+        if (validationError == null) {
 
-    final validationError = _validateTrayForReceiving(scannedCode);
-    if (validationError != null) {
-      AppLoader.hide();
-      if (mounted) _showError(validationError);
-      return;
-    }
 
-    AppLoader.hide();
-    _showSuccess('Tray ${scannedCode.trim()} received successfully!');
+          return null;
+        } else {
+          return validationError;
+        }
+      },
+    );
   }
 
   /// Validates scanned tray against availableTraysDetail. Returns null if valid, error message if invalid.
@@ -190,6 +189,62 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
     );
   }
 
+  Widget _buildGbsTableHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+      ),
+      child: Row(
+        children: [
+          Expanded(flex: 2, child: Text('TRAY CODE', style: _tableHeaderStyle)),
+          Expanded(flex: 2, child: Text('WORK ORDER', style: _tableHeaderStyle)),
+          Expanded(flex: 3, child: Text('ITEM DESC', style: _tableHeaderStyle)),
+          const SizedBox(width: 30), // Space for the delete/close icon
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGbsDataRow(int index, GBSScannedTray tray) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+      ),
+      child: Row(
+        children: [
+          // Tray Code
+          Expanded(
+              flex: 2,
+              child: Text(tray.trayCode, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))
+          ),
+          // Work Order
+          Expanded(
+              flex: 2,
+              child: Text(tray.workOrderCode, style: const TextStyle(fontSize: 13))
+          ),
+          // Item Description
+          Expanded(
+              flex: 3,
+              child: Text(
+                tray.itemDescription,
+                style: const TextStyle(fontSize: 13),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              )
+          ),
+          // Remove Action
+          GestureDetector(
+            onTap: () => _onRemoveTray(index),
+            child: Icon(Icons.cancel, size: 20, color: Colors.red.shade300),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Tray scanner section
   Widget _buildTrayScannerSection() {
     return Column(
@@ -236,6 +291,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
   /// Received trays section
   Widget _buildReceivedTraysSection() {
     final hasTrays = _scannedTrays.isNotEmpty;
+    final displayTrays = _scannedTrays.reversed.toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -243,12 +299,24 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
         SectionHeader(title: 'Received Trays', subtitle: 'Trays received in GBS (${_scannedTrays.length})'),
         const SizedBox(height: 12),
         ContentCard(
+          padding: EdgeInsets.zero,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildTrayTableHeader(),
-              const SizedBox(height: 8),
-              if (!hasTrays) _buildEmptyState() else ...List.generate(_scannedTrays.length, (index) => DynamicInfoDisplay(items: _buildTrayDetailsMap(_scannedTrays[index]))),
+              if (hasTrays) _buildGbsTableHeader(),
+              if (!hasTrays)
+                _buildEmptyState()
+              else
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _scannedTrays.length,
+                  itemBuilder: (context, index) {
+                    // Show most recent at the top
+                    final reversedIndex = _scannedTrays.length - 1 - index;
+                    return _buildGbsDataRow(reversedIndex, _scannedTrays[reversedIndex]);
+                  },
+                ),
+              //if (!hasTrays) _buildEmptyState() else ...List.generate(_scannedTrays.length, (index) => DynamicInfoDisplay(items: _buildTrayDetailsMap(_scannedTrays[index]))),
             ],
           ),
         ),
