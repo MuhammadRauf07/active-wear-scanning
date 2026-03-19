@@ -155,7 +155,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   Future<void> _onScanMachineBarcode() async {
     AppLoader.show();
 
-    final scannedCode = await BarcodeScannerDialog.show(context, title: 'Scan Machine Barcode');
+    final scannedCode = await BarcodeScannerDialog.show(context, title: 'Scan Barcode');
 
     if (scannedCode == null || !mounted) {
       AppLoader.hide(); // Ensure loader hides if scan is cancelled
