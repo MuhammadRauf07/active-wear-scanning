@@ -1,6 +1,4 @@
 import 'dart:io';
-
-import 'package:active_wear_scanning/core/api/plex-result/plex_api_result.dart' hide PlexApiResult;
 import 'package:active_wear_scanning/core/config/app_config.dart';
 import 'package:active_wear_scanning/features/user/model/active_wear_user.dart';
 import 'package:active_wear_scanning/features/user/repo/profile.dart';

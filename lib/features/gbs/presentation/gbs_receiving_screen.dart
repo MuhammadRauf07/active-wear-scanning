@@ -45,8 +45,6 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
         final String? validationError = _validateTrayForReceiving(scannedCode);
 
         if (validationError == null) {
-
-
           return null;
         } else {
           return validationError;
@@ -114,6 +112,10 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
     });
   }
 
+  void _showSuccessMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Success: $message')));
+  }
+
   /// Save API ────────────────────────────────────────────────────────────────
 
   void saveWipTransactionsAndUpdateTray() async {
@@ -148,6 +150,8 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
 
       await _trayScanningRepo.postWipTransactions(wipProductionProgress);
     }
+
+    _showSuccessMessage("Saved");
 
     AppLoader.hide();
   }
@@ -217,23 +221,15 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
         children: [
           // Tray Code
           Expanded(
-              flex: 2,
-              child: Text(tray.trayCode, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))
+            flex: 2,
+            child: Text(tray.trayCode, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
           ),
           // Work Order
-          Expanded(
-              flex: 2,
-              child: Text(tray.workOrderCode, style: const TextStyle(fontSize: 13))
-          ),
+          Expanded(flex: 2, child: Text(tray.workOrderCode, style: const TextStyle(fontSize: 13))),
           // Item Description
           Expanded(
-              flex: 3,
-              child: Text(
-                tray.itemDescription,
-                style: const TextStyle(fontSize: 13),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              )
+            flex: 3,
+            child: Text(tray.itemDescription, style: const TextStyle(fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
           ),
           // Remove Action
           GestureDetector(
@@ -269,18 +265,6 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
                   icon: Icons.qr_code_scanner,
                 ),
               ),
-              // Show dynamic info display when a tray is scanned
-              if (_currentTrayDetails != null) ...[
-                const SizedBox(height: 16),
-                const Divider(),
-                const SizedBox(height: 8),
-                /*Text(
-                  'Last Scanned Tray Details',
-                  style: _labelStyle.copyWith(fontWeight: FontWeight.w600, color: Colors.green.shade700),
-                ),
-                const SizedBox(height: 8),
-                //DynamicInfoDisplay(items: _buildTrayDetailsMap(_currentTrayDetails!)),*/
-              ],
             ],
           ),
         ),
@@ -316,26 +300,10 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
                     return _buildGbsDataRow(reversedIndex, _scannedTrays[reversedIndex]);
                   },
                 ),
-              //if (!hasTrays) _buildEmptyState() else ...List.generate(_scannedTrays.length, (index) => DynamicInfoDisplay(items: _buildTrayDetailsMap(_scannedTrays[index]))),
             ],
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildTrayTableHeader() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(6)),
-      child: Row(
-        children: [
-          const SizedBox(width: 12),
-          Expanded(child: Text('TRAY CODE', style: _tableHeaderStyle)),
-          Text('RECEIVED TIME', style: _tableHeaderStyle),
-          const SizedBox(width: 50),
-        ],
-      ),
     );
   }
 
@@ -359,48 +327,6 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
     );
   }
 
-  Widget _buildTrayRow(int index, String trayCode) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade200),
-        borderRadius: BorderRadius.circular(6),
-        color: Colors.green.shade50,
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(4)),
-            child: const Icon(Icons.check, size: 16, color: Colors.white),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              trayCode,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87),
-            ),
-          ),
-          Text(_formatTime(DateTime.now()), style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: () => _onRemoveTray(index),
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(color: Colors.red.shade100, borderRadius: BorderRadius.circular(4)),
-              child: Icon(Icons.close, size: 16, color: Colors.red.shade600),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatTime(DateTime dateTime) {
-    return '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
-  }
-
   /// Opens barcode scanner for machine. On success, loads work order from API.
   Future<void> _onScanMachineBarcode() async {
     final apiResult = await _trayScanningRepo.getProductionProgress();
@@ -420,9 +346,5 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
 
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $message'), backgroundColor: Colors.red));
-  }
-
-  void _showSuccess(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: Colors.green));
   }
 }

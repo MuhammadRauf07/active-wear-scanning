@@ -57,6 +57,7 @@ class TrayScanningRepo {
       final data = result.data as List;
       final list = <TrayDetailsModel>[];
       for (var i = 0; i < data.length; i++) {
+        
         try {
           final item = Map<String, dynamic>.from(data[i] as Map);
           list.add(TrayDetailsModel.fromJson(item));
@@ -64,6 +65,7 @@ class TrayScanningRepo {
           return PlexApiResult(false, 500, 'Parse error at index $i: $e', null);
         }
       }
+
       return PlexApiResult(true, 200, "Success", list);
     } catch (e) {
       return PlexApiResult(false, 500, e.toString(), null);
