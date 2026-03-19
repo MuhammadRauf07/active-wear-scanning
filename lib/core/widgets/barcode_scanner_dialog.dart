@@ -106,7 +106,8 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
       child: SafeArea(
         child: Column(
           children: [
-            CustomInspectionHeader(heading: widget.title, subtitle: 'Scan or enter manually', isShowBackIcon: true, onBackPress: _close, topPadding: 0, horizontalPadding: 12),
+            CustomInspectionHeader(heading: widget.title, subtitle: 'Scan or enter manually', isShowBackIcon: true, onBackPress: _close, topPadding: 0, horizontalPadding: 12, widget: CustomOutlinedButton(borderColor: Colors.blue, label: 'Done',fillColor: Colors.blue,textColor: Colors.white,buttonHeight: 36.0,onPressed: () {_close();}
+            ),),
             Padding(
               padding: const EdgeInsets.all(12),
               child: Row(

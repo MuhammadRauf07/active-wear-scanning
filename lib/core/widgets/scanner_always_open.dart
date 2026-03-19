@@ -42,7 +42,11 @@ class ScannerAlwaysOpen extends StatefulWidget {
 }
 
 class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
-  final _controller = MobileScannerController();
+  late final MobileScannerController _controller = MobileScannerController(
+    autoStart: false,
+    detectionSpeed: DetectionSpeed.noDuplicates,
+    formats: [BarcodeFormat.qrCode, BarcodeFormat.code128],
+  );
   final _manualController = TextEditingController();
   bool _showSubmit = false;
   Timer? _duplicateAlertTimer;
@@ -53,6 +57,13 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
   void initState() {
     super.initState();
     _manualController.addListener(_onManualChange);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(milliseconds: 800), () {
+        if (mounted) {_controller.start();
+        debugPrint("SCANNER: Camera Started Manually");
+        }
+      });
+    });
   }
 
   void _onManualChange() {
@@ -67,7 +78,13 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
     _isProcessing = true;
     _manualController.clear();
 
-    final String? errorMessage = widget.onResult(text);
+    String? errorMessage;
+    try {
+      errorMessage = widget.onResult(text);
+    } catch (e) {
+      debugPrint("SCANNER ERROR: $e");
+      errorMessage = 'An unexpected error occurred';
+    }
 
     if (errorMessage == null) {
       HapticFeedback.lightImpact();
@@ -94,7 +111,13 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
         _isProcessing = true;
 
         // Call the parent validation logic
-        final String? errorMessage = widget.onResult(raw.trim());
+        String? errorMessage;
+        try {
+          errorMessage = widget.onResult(raw.trim());
+        } catch (e) {
+          debugPrint("SCANNER ERROR: $e");
+          errorMessage = 'An unexpected error occurred';
+        }
 
         if (errorMessage == null) {
           // SUCCESS
@@ -117,6 +140,7 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
       }
     }
   }
+  void _close() => Navigator.pop(context);
 
   @override
   void dispose() {
@@ -134,14 +158,9 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
       child: SafeArea(
         child: Column(
           children: [
-            CustomInspectionHeader(
-              heading: widget.title,
-              subtitle: 'Scan or enter manually',
-              isShowBackIcon: true,
-              onBackPress: () => Navigator.pop(context),
-              topPadding: 0,
-              horizontalPadding: 12,
-            ),
+            CustomInspectionHeader(heading: widget.title, subtitle: 'Scan or enter manually', isShowBackIcon: true, onBackPress: _close, topPadding: 0, horizontalPadding: 12, widget: CustomOutlinedButton(borderColor: Colors.blue, label: 'Done',fillColor: Colors.blue,textColor: Colors.white,buttonHeight: 36.0,onPressed: () {
+              _close();}
+            ),),
             Padding(
               padding: const EdgeInsets.all(12),
               child: Row(

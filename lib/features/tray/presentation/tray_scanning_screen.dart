@@ -75,19 +75,33 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
   /// Validates scanned tray against availableTraysDetail. Returns null if valid, error message if invalid.
   String? _validateTrayForScan(String scannedCode) {
+    if (_selectedPlanLine == null) return 'Please select a work order first';
     final code = scannedCode.trim();
     if (code.isEmpty) return 'Invalid tray code';
 
     final alreadyScanned = _scannedTrays.any((t) => t.trayCode.trim() == code);
     if (alreadyScanned) return 'Already assigned';
 
-    final available = availableTraysDetail.where((t) => (t.trayDetails?.trayCode ?? '').trim() == code).toList();
-    if (available.isEmpty) return 'Tray not available';
+    //final available = availableTraysDetail.where((t) => (t.trayDetails?.trayCode ?? '').trim() == code).toList();
+    final available = availableTraysDetail.where((t) {
+      final trayCodeFromApi = (t.trayDetails?.trayCode ?? '').trim().toLowerCase();
+      final scannedCodeClean = code.toLowerCase();
+      return trayCodeFromApi == scannedCodeClean;
+    }).toList();if (available.isEmpty) return 'Tray not available';
 
     final trayDetail = available.first.trayDetails;
     if (trayDetail?.active != true) return 'Tray is not active';
 
-    _scannedTrays.add(ScannedTray(trayCode: scannedCode.trim(), trayUpdateId: trayDetail!.id, trayConcurrencyStamp: trayDetail.concurrencyStamp));
+    setState(() {
+      _scannedTrays.add(ScannedTray(
+          trayCode: code,
+          trayUpdateId: trayDetail!.id,
+          trayConcurrencyStamp: trayDetail.concurrencyStamp
+      ));
+      _quantityControllers.add(
+          TextEditingController(text: _getDefaultQuantityForNewTray())
+      );
+    });
 
     return null;
   }
@@ -123,21 +137,17 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
   /// Opens barcode scanner for tray. On success, validates and adds tray if eligible.
   Future<void> _onScanTray() async {
+    await Future.delayed(const Duration(milliseconds: 300));
     await ScannerAlwaysOpen.show(
       context,
       title: 'Scan Trays',
       onResult: (scannedCode) {
+        debugPrint("DEBUG: Scanned code received: $scannedCode");
         final String? validationError = _validateTrayForScan(scannedCode);
 
-        if (validationError == null) {
-          setState(() {
-            _quantityControllers.add(TextEditingController(text: _getDefaultQuantityForNewTray()));
-          });
-          return null;
-        } else {
-          return validationError;
-        }
+        return validationError;
       },
+
     );
   }
 
@@ -167,11 +177,18 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       setState(() {
         // Cast the data to our list
         _planLines = List<PlanLineResponseModel>.from(apiResult.data);
-        availableTraysDetail = trayDetailsModel.data as List<TrayDetailsModel>;
+
+        if (trayDetailsModel.data != null) {
+          availableTraysDetail = (trayDetailsModel.data as List)
+              .map((item) => item as TrayDetailsModel)
+              .toList();
+          debugPrint("API LOADED: ${availableTraysDetail.length} trays available for validation.");
+        }
+        //availableTraysDetail = trayDetailsModel.data as List<TrayDetailsModel>;
 
         // Logic: Auto-select if only 1 item exists
         if (_planLines!.length == 1) {
-          _selectedPlanLine = _selectedPlanLine;
+          _selectedPlanLine = _planLines!.first;
           _overrideQuantityController.text = _getPlanQuantityPerTray();
         }
       });
@@ -311,9 +328,11 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                   ),
                 ],
               ),
+
               _buildWorkOrderDropdown(),
               const SizedBox(height: 10),
               if (_selectedPlanLine != null) ...[DynamicInfoDisplay(items: _buildPlanLineDetailsMap(_selectedPlanLine!))],
+
             ],
           ),
         ),
@@ -404,12 +423,34 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   }
 
   Widget _buildTrayTableHeader() {
-    return Row(
-      children: [
-        Expanded(flex: 2, child: Text('TRAY CODE', style: _tableHeaderStyle)),
-        Expanded(child: Text('QUANTITY', style: _tableHeaderStyle)),
-        const SizedBox(width: 44),
-      ],
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+              flex: 3,
+              child: Text('TRAY CODE', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))
+          ),
+          Expanded(
+              flex: 3,
+              child: Text('WORK ORDER CODE', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))
+          ),
+          Expanded(
+              flex: 2,
+              child: Text('GARMENTS', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))
+          ),
+          Expanded(
+              flex: 2,
+              child: Text('QUANTITY (PCS)', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))
+          ),
+          const SizedBox(width: 40), // Space for the delete icon
+        ],
+      ),
     );
   }
 
@@ -425,23 +466,71 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   Widget _buildTrayRow(int index, ScannedTray tray) {
     final isEmpty = tray.trayCode.isEmpty;
     final displayCode = isEmpty ? '-' : tray.trayCode;
-    final textColor = isEmpty ? Colors.grey.shade400 : Colors.black87;
+    final textColor = isEmpty ? Colors.grey.shade400 : Colors.black;
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      decoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(color: Colors.grey.shade300),
+          right: BorderSide(color: Colors.grey.shade300),
+          bottom: BorderSide(color: Colors.grey.shade300),
+        ),
+        // Alternate row colors for better readability
+        color: index.isEven ? Colors.white : Colors.grey.shade50,
+      ),
       child: Row(
         children: [
+          // Tray Code Column
           Expanded(
-            flex: 2,
-            child: Text(displayCode, style: TextStyle(fontSize: 14, color: textColor)),
+            flex: 3,
+            child: Text(
+              displayCode,
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: isEmpty ? Colors.grey : Colors.black87
+              ),
+            ),
           ),
           Expanded(
+            flex: 3,
+            child: Text(
+              "-",
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: isEmpty ? Colors.grey : Colors.black87
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              "-",
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: isEmpty ? Colors.grey : Colors.black87
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
             child: SizedBox(
-              height: _inputAndButtonHeight,
+              height: 35, // Slightly slimmer for table look
               child: TextField(
                 controller: _quantityControllers[index],
-                decoration: _inputDecoration(hintText: '0', isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12), borderRadius: 4),
                 keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                decoration: InputDecoration(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: const BorderSide(color: Colors.blue, width: 1.5),
+                  ),
+                ),
               ),
             ),
           ),
@@ -461,7 +550,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
           border: Border.all(color: Colors.grey.shade300),
           borderRadius: BorderRadius.circular(6),
         ),
-        child: Icon(Icons.delete_outline, size: 18, color: Colors.red.shade400),
+        child: Icon(Icons.cancel, size: 18, color: Colors.red.shade400),
       ),
     );
   }

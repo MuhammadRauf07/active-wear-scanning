@@ -22,6 +22,7 @@ class GBSReceivingScreen extends StatefulWidget {
 class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
   final List<GBSScannedTray> _scannedTrays = [];
   static const _borderColor = Colors.green;
+  static const _inputAndButtonHeight = 42.0;
   final _trayScanningRepo = fromPlex<GBSReceivingRepo>();
   List<ProductionProgressResponseModel> availableTrayForGbs = [];
   ProductionProgressResponseModel? _currentTrayDetails;
@@ -60,7 +61,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
 
     /// Check if already scanned (already assigned)
     final alreadyScanned = _scannedTrays.any((t) => t.trayCode.trim() == code);
-    if (alreadyScanned) return 'Tray already assigned';
+    if (alreadyScanned) return 'Already assigned';
 
     /// Find matching tray in available list
     final available = availableTrayForGbs.where((t) => (t.primaryTrayModel.trayCode ?? '').trim() == code).toList();
@@ -253,17 +254,34 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Scan Tray Barcode', style: _labelStyle),
-              const SizedBox(height: 12),
-              Center(
-                child: CustomOutlinedButton(
-                  label: 'Scan Tray',
-                  borderColor: _borderColor,
-                  fillColor: _borderColor,
-                  textColor: Colors.white,
-                  buttonHeight: 50,
-                  onPressed: _onScanTray,
-                  icon: Icons.qr_code_scanner,
-                ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      height: _inputAndButtonHeight,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.blue),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Ready for scan...',
+                        style: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  CustomOutlinedButton(
+                    label: 'Scan Tray',
+                    borderColor: Colors.blue,
+                    fillColor: Colors.blue,
+                    textColor: Colors.white,
+                    buttonHeight: _inputAndButtonHeight,
+                    onPressed: _onScanTray, // Your existing scan logic
+                  ),
+                ],
               ),
             ],
           ),
