@@ -220,19 +220,22 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
       ),
       child: Row(
         children: [
-          // Tray Code
+          /// Tray Code
           Expanded(
             flex: 2,
             child: Text(tray.trayCode, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
           ),
-          // Work Order
+
+          /// Work Order
           Expanded(flex: 2, child: Text(tray.workOrderCode, style: const TextStyle(fontSize: 13))),
-          // Item Description
+
+          /// Item Description
           Expanded(
             flex: 3,
             child: Text(tray.itemDescription, style: const TextStyle(fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
           ),
-          // Remove Action
+
+          /// Remove Action
           GestureDetector(
             onTap: () => _onRemoveTray(index),
             child: Icon(Icons.cancel, size: 20, color: Colors.red.shade300),
