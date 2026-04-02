@@ -138,6 +138,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
         "code": currentTrayData.item.code,
         "productGrade": currentTrayData.productionProgress.productGrade,
         "productNature": currentTrayData.productionProgress.productNature,
+        "progressId": currentTrayData.productionProgress.id, // ← Link to production progress!
         "operationId": currentTrayData.operation.id,
         "workOrderHeaderId": currentTrayData.workOrderHeader.id,
         "workOrderLineId": currentTrayData.workOrderLine.id,
@@ -178,11 +179,34 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
       if (currentTrayData.productionProgress.id != null) {
         await _trayScanningRepo.updateProductionProgress(currentTrayData.productionProgress.id!, updateData);
       }
+
+      // Add Tray Update logic safely bouncing with a GET request
+      if (_scannedTrays[i].trayUpdateId != null) {
+        final getTrayRes = await _trayScanningRepo.fetchTrayDetailById(_scannedTrays[i].trayUpdateId!);
+        if (getTrayRes.success && getTrayRes.data != null) {
+          Map<String, dynamic> rawTrayPayload = getTrayRes.data.containsKey('trayDetail') 
+              ? getTrayRes.data['trayDetail'] 
+              : getTrayRes.data;
+          
+          rawTrayPayload["locatorId"] = 3; // Update to GBS explicitly!
+          
+          rawTrayPayload.remove("creatorId");
+          rawTrayPayload.remove("creationTime");
+          rawTrayPayload.remove("lastModifierId");
+          rawTrayPayload.remove("lastModificationTime");
+          
+          final trayRes = await _trayScanningRepo.updateTrayDetails(rawTrayPayload, _scannedTrays[i].trayUpdateId!);
+          if (!trayRes.success) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tray Fix Failed: ${trayRes.message}')));
+          }
+        }
+      }
     }
 
     _showSuccessMessage("Saved");
 
     AppLoader.hide();
+    Navigator.pop(context);
   }
 
   // ─── Build ────────────────────────────────────────────────────────────────
@@ -235,6 +259,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
           Expanded(flex: 2, child: Text('WORK ORDER', style: _tableHeaderStyle)),
           Expanded(flex: 3, child: Text('ITEM DESC', style: _tableHeaderStyle)),
           Expanded(flex: 2, child: Text('QUANTITY', style: _tableHeaderStyle)),
+          Expanded(flex: 2, child: Text('WEIGHT', style: _tableHeaderStyle)),
           const SizedBox(width: 30), // Space for the delete/close icon
         ],
       ),
@@ -267,6 +292,11 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
           Expanded(
             flex: 2,
             child: Text(tray.primaryQuantity, style: const TextStyle(fontSize: 13)),
+          ),
+
+          Expanded(
+            flex: 2,
+            child: const Text("-", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
           ),
 
           /// Remove Action

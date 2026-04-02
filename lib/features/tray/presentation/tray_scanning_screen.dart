@@ -265,9 +265,12 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       await _trayScanningRepo.saveProductionProgress(productionProgressData);
     }
 
-    AppLoader.hide();
+    
 
     _showSuccessMessage("Saved");
+
+    AppLoader.hide();
+    Navigator.pop(context);
   }
 
   // ─── Build ────────────────────────────────────────────────────────────────
@@ -458,6 +461,10 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
               flex: 2,
               child: Text('QUANTITY', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))
           ),
+          Expanded(
+              flex: 2,
+              child: Text('WEIGHT', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))
+          ),
           const SizedBox(width: 40), // Space for the delete icon
         ],
       ),
@@ -539,10 +546,21 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                 decoration: InputDecoration(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
-                  focusedBorder: OutlineInputBorder(
-                    borderSide: const BorderSide(color: Colors.blue, width: 1.5),
+                  focusedBorder: const OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.blue, width: 1.5),
                   ),
                 ),
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              "-",
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: isEmpty ? Colors.grey : Colors.black87
               ),
             ),
           ),

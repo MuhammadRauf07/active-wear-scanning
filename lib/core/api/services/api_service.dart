@@ -79,4 +79,27 @@ class ApiService {
       return PlexApiResult(false, error.code, error.message, null);
     }
   }
+
+  Future<PlexApiResult> delete(String endNode, {bool isRetry = false}) async {
+    var response = await PlexNetworking.instance.delete(endNode);
+
+    if (response is PlexSuccess) {
+      var data = response.response;
+      return PlexApiResult(true, 204, "Deleted", data != null ? Map<String, dynamic>.from(data) : null);
+    } else {
+      var error = response as PlexError;
+
+      // 204 No Content is a valid success response for DELETE requests.
+      // Some HTTP clients report it as an "error" because the body is empty.
+      if (error.code == HttpStatus.noContent || error.code == 204) {
+        return PlexApiResult(true, 204, "Deleted", null);
+      }
+
+      if (error.code == HttpStatus.unauthorized) {
+        PlexApp.app.logout();
+      }
+
+      return PlexApiResult(false, error.code, error.message, null);
+    }
+  }
 }

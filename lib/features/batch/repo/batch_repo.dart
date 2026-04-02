@@ -26,6 +26,52 @@ class BatchRepo {
     return result;
   }
 
+  Future<PlexApiResult> updateTrayDetails(int trayId, Map<String, dynamic> data) async {
+    final result = await _api.put('/api/app/tray-details/$trayId', body: data);
+    return result;
+  }
+
+  Future<PlexApiResult> fetchTrayDetails() async {
+    final result = await _api.getList('/api/app/tray-details');
+    return result;
+  }
+
+  Future<PlexApiResult> fetchTrayDetailById(int trayId) async {
+    final result = await _api.getObject('/api/app/tray-details/$trayId');
+    return result;
+  }
+
+  Future<PlexApiResult> createBatchHeader(Map<String, dynamic> data) async {
+    final result = await _api.post('/api/app/batch-headers', body: data);
+    return result;
+  }
+
+  Future<PlexApiResult> deleteBatchHeader(int id) async {
+    final result = await _api.delete('/api/app/batch-headers/$id');
+    return result;
+  }
+
+  Future<PlexApiResult> fetchBatchHeaders() async {
+    final result = await _api.getList('/api/app/batch-headers');
+    return result; // Allows manual mapping since we'll map it where needed
+  }
+
+  Future<PlexApiResult> fetchBatchLines({int? batchHeaderId}) async {
+    final query = batchHeaderId != null ? {'BatchHeaderId': batchHeaderId.toString()} : <String, dynamic>{};
+    final result = await _api.getList('/api/app/batch-liness', query: query);
+    return result;
+  }
+
+  Future<PlexApiResult> createBatchLine(Map<String, dynamic> data) async {
+    final result = await _api.post('/api/app/batch-liness', body: data);
+    return result;
+  }
+
+  Future<PlexApiResult> deleteBatchLine(int id) async {
+    final result = await _api.delete('/api/app/batch-liness/$id');
+    return result;
+  }
+
   Future<PlexApiResult> fetchBatchColors() async {
     final result = await _api.getList('/api/app/segment-codes', query: {'SegmentTypeId': '629'});
     

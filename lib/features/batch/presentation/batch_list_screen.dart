@@ -3,7 +3,8 @@ import 'package:active_wear_scanning/core/widgets/content_card.dart';
 import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
 import 'package:active_wear_scanning/features/batch/presentation/batch_scanning_screen.dart';
 import 'package:active_wear_scanning/features/batch/repo/batch_repo.dart';
-import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
+
+import 'package:active_wear_scanning/features/batch/model/batch_header_model.dart';
 import 'package:flutter/material.dart';
 
 class BatchListScreen extends StatefulWidget {
@@ -13,53 +14,70 @@ class BatchListScreen extends StatefulWidget {
   State<BatchListScreen> createState() => _BatchListScreenState();
 }
 
-class _BatchListScreenState extends State<BatchListScreen> {
+class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProviderStateMixin {
   final _batchRepo = BatchRepo();
   bool _isLoading = true;
   
-  // This will store our logically grouped batches
-  // The Key is the progressCode (Batch ID).
-  // The Value is a list of all trays that share that progressCode.
-  Map<String, List<ProductionProgressResponseModel>> _groupedBatches = {};
+  List<BatchHeaderResponseModel> _unlockedBatches = [];
+  List<BatchHeaderResponseModel> _lockedBatches = [];
+  
+  // Maps batchHeaderId -> List of BatchLine raw maps from the batch-lines API
+  Map<int, List<Map<String, dynamic>>> _batchLinesByHeader = {};
+
+  late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _fetchAndGroupBatches();
+  }
+  
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchAndGroupBatches() async {
     setState(() => _isLoading = true);
-    final result = await _batchRepo.fetchProductionProgress();
+    
+    final headerResult = await _batchRepo.fetchBatchHeaders();
+    final batchLinesResult = await _batchRepo.fetchBatchLines();
 
-    if (mounted && result.success && result.data != null) {
-      final allProgresses = result.data as List<ProductionProgressResponseModel>;
+    if (mounted && headerResult.success) {
       
-      // Filter strictly for records that HAVE a progressCode and are part of Batch (pbsFlag = true)
-      final validBatches = allProgresses.where((p) => 
-        p.productionProgress.pbsFlag == true && 
-        p.productionProgress.progressCode != null &&
-        p.productionProgress.progressCode!.trim().isNotEmpty
-      ).toList();
+      // 1. Map Headers
+      final headerData = headerResult.data as List<Map<String, dynamic>>? ?? [];
+      final headers = headerData.map((e) => BatchHeaderResponseModel.fromJson(e)).toList();
 
-      // Group them cleanly!
-      Map<String, List<ProductionProgressResponseModel>> grouped = {};
-      for (var tray in validBatches) {
-        final code = tray.productionProgress.progressCode!;
-        if (!grouped.containsKey(code)) {
-          grouped[code] = [];
+      // Separate Headers by Lock State
+      _unlockedBatches = headers.where((h) => h.batchHeader.lockFlag == false).toList();
+      _lockedBatches = headers.where((h) => h.batchHeader.lockFlag == true).toList();
+
+      // 2. Group tray counts by batchHeaderId using the batch-lines API
+      //    This is the proper relational source of truth.
+      Map<int, List<Map<String, dynamic>>> grouped = {};
+      if (batchLinesResult.success && batchLinesResult.data != null) {
+        final rawLines = batchLinesResult.data as List<Map<String, dynamic>>;
+        for (var line in rawLines) {
+          final batchHeaderId = line['batchLines']?['batchHeaderId'];
+          if (batchHeaderId != null) {
+            final id = batchHeaderId as int;
+            if (!grouped.containsKey(id)) grouped[id] = [];
+            grouped[id]!.add(line);
+          }
         }
-        grouped[code]!.add(tray);
       }
 
       setState(() {
-        _groupedBatches = grouped;
+        _batchLinesByHeader = grouped;
         _isLoading = false;
       });
     } else {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${result.message}')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error: Failed to fetch batches')));
       }
     }
   }
@@ -69,9 +87,87 @@ class _BatchListScreenState extends State<BatchListScreen> {
       context, 
       MaterialPageRoute(builder: (context) => const BatchScanningScreen())
     );
-    // If we pop back with a true result (meaning a batch was saved), refresh the list!
     if (result == true) {
       _fetchAndGroupBatches();
+    }
+  }
+
+  void _navigateToEditBatch(BatchHeaderResponseModel batchHeaderModel) async {
+    final result = await Navigator.push(
+      context, 
+      MaterialPageRoute(
+        builder: (context) => BatchScanningScreen(
+          existingBatch: batchHeaderModel,
+          preloadedTrays: const [], // Edit screen loads its own trays from batch-lines
+        )
+      )
+    );
+    if (result == true) {
+      _fetchAndGroupBatches();
+    }
+  }
+
+  Future<void> _deleteBatch(BatchHeaderResponseModel header) async {
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Batch?'),
+        content: Text('Are you sure you want to delete batch ${header.batchHeader.batchHeaderCode}?\nThis will permanently wipe it from the backend and unlink all trays.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isLoading = true);
+    final headerId = header.batchHeader.id!;
+
+    // 1. Defensively Unlink mapped Trays - find them from batch-lines
+    final batchLinesToUnlink = _batchLinesByHeader[headerId] ?? [];
+    for (var line in batchLinesToUnlink) {
+      final trayId = line['batchLines']?['trayId'] as int?;
+      final progressId = line['batchLines']?['progressId'] as int?;
+      final batchLineId = line['batchLines']?['id'] as int?;
+
+      // a. Unlink tray-details
+      if (trayId != null) {
+        final getTrayRes = await _batchRepo.fetchTrayDetailById(trayId);
+        if (getTrayRes.success && getTrayRes.data != null) {
+          Map<String, dynamic> rawTrayPayload = getTrayRes.data.containsKey('trayDetail') ? getTrayRes.data['trayDetail'] : getTrayRes.data;
+          rawTrayPayload["batchHeaderId"] = null;
+          rawTrayPayload.remove("creatorId");
+          rawTrayPayload.remove("creationTime");
+          rawTrayPayload.remove("lastModifierId");
+          rawTrayPayload.remove("lastModificationTime");
+          await _batchRepo.updateTrayDetails(trayId, rawTrayPayload);
+        }
+      }
+
+      // b. Unlink production-progress via progressId from batch-line
+      if (progressId != null) {
+        // We'll just delete the batch-line; the progress batchHeaderId cleanup
+        // happens implicitly when the batch header is deleted.
+      }
+
+      // c. Delete the batch-line record itself
+      if (batchLineId != null) {
+        await _batchRepo.deleteBatchLine(batchLineId);
+      }
+    }
+
+    // 2. Erase the Batch Header Object
+    final res = await _batchRepo.deleteBatchHeader(headerId);
+    
+    setState(() => _isLoading = false);
+
+    if (res.success) {
+      _fetchAndGroupBatches(); // Rerender
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Batch permanently deleted!'), backgroundColor: Colors.green));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete Failed: ${res.message}'), backgroundColor: Colors.red));
     }
   }
 
@@ -98,10 +194,29 @@ class _BatchListScreenState extends State<BatchListScreen> {
                 onPressed: _navigateToAddBatch,
               ),
             ),
+            
+            // Tab Bar Rendering
+            TabBar(
+              controller: _tabController,
+              labelColor: Colors.blue,
+              unselectedLabelColor: Colors.grey.shade600,
+              indicatorColor: Colors.blue,
+              tabs: const [
+                Tab(text: "Unlocked"),
+                Tab(text: "Locked"),
+              ],
+            ),
+            
             Expanded(
               child: _isLoading 
                 ? const Center(child: CircularProgressIndicator()) 
-                : _buildBatchList(),
+                : TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildBatchList(_unlockedBatches, isLocked: false),
+                      _buildBatchList(_lockedBatches, isLocked: true),
+                    ],
+                  ),
             ),
           ],
         ),
@@ -109,20 +224,18 @@ class _BatchListScreenState extends State<BatchListScreen> {
     );
   }
 
-  Widget _buildBatchList() {
-    if (_groupedBatches.isEmpty) {
+  Widget _buildBatchList(List<BatchHeaderResponseModel> batches, {required bool isLocked}) {
+    if (batches.isEmpty) {
       return Center(
         child: Text(
-          'No batches found. Build a batch to see it here.', 
+          isLocked ? 'No batch is locked' : 'No unlocked batches found.', 
           style: TextStyle(fontSize: 14, color: Colors.grey.shade500)
         ),
       );
     }
 
-    // Convert map to a sorted list (newest first).
-    // Assuming the progressCode (e.g. BCH-timestamp) allows string sorting or we sort by the first tray's date.
-    final List<MapEntry<String, List<ProductionProgressResponseModel>>> batchList = _groupedBatches.entries.toList();
-    batchList.sort((a, b) => b.key.compareTo(a.key)); // Basic string sort
+    // Sort heavily newest first
+    batches.sort((a, b) => (b.batchHeader.id ?? 0).compareTo((a.batchHeader.id ?? 0)));
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(12),
@@ -139,52 +252,86 @@ class _BatchListScreenState extends State<BatchListScreen> {
               ),
               child: Row(
                 children: [
-                  Expanded(flex: 3, child: Text('BATCH ID', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
-                  Expanded(flex: 3, child: Text('MACHINE', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
-                  Expanded(flex: 2, child: Text('TRAYS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
-                  Expanded(flex: 2, child: Text('DATE', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
+                  Expanded(flex: 3, child: Text('BATCH ID', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
+                  Expanded(flex: 3, child: Text('MACHINE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
+                  Expanded(flex: 2, child: Text('COLOR', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
+                  Expanded(flex: 2, child: Text('TRAYS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
+                  Expanded(flex: 2, child: Text('WEIGHT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
+                  Expanded(flex: 2, child: Text('DATE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
+                  if (!isLocked) Expanded(flex: 1, child: Text('DEL', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
                 ],
               ),
             ),
-            ...List.generate(batchList.length, (index) {
-              final batchId = batchList[index].key;
-              final trays = batchList[index].value;
+            ...List.generate(batches.length, (index) {
+              final header = batches[index];
+              final batchId = header.batchHeader.batchHeaderCode ?? "Undef";
+              final machineBrand = header.machine?.brand ?? 'Unknown';
+              final colorDesc = header.batchHeader.colorDescription ?? '-';
               
-              // We infer machine brand and date from the very first grouped tray
-              final firstTray = trays.first;
-              final machineBrand = firstTray.machineModel.brand ?? 'Unknown';
-              final rawDate = firstTray.productionProgress.date;
+              final rawDateStr = header.batchHeader.planDate;
+              final DateTime? rawDate = rawDateStr != null ? DateTime.tryParse(rawDateStr) : null;
               final displayDate = rawDate != null ? "${rawDate.year}-${rawDate.month.toString().padLeft(2, '0')}-${rawDate.day.toString().padLeft(2, '0')}" : "-";
               
-              return Container(
-                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-                decoration: BoxDecoration(
-                  border: Border(
-                    left: BorderSide(color: Colors.grey.shade300),
-                    right: BorderSide(color: Colors.grey.shade300),
-                    bottom: BorderSide(color: Colors.grey.shade300),
+              // Load Trays logic securely
+              final headerDatabaseId = header.batchHeader.id ?? 0;
+              final traysLength = _batchLinesByHeader[headerDatabaseId]?.length ?? 0;
+
+              return GestureDetector(
+                onTap: () {
+                  if(!isLocked) {
+                     // Opens EDIT mode if unlocked
+                     _navigateToEditBatch(header);
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      left: BorderSide(color: Colors.grey.shade300),
+                      right: BorderSide(color: Colors.grey.shade300),
+                      bottom: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    color: index.isEven ? Colors.white : Colors.grey.shade50,
                   ),
-                  color: index.isEven ? Colors.white : Colors.grey.shade50,
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: Text(batchId, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87)),
-                    ),
-                    Expanded(
-                      flex: 3,
-                      child: Text(machineBrand, style: const TextStyle(fontSize: 13, color: Colors.black87), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ),
-                    Expanded(
-                      flex: 2,
-                      child: Text("${trays.length}", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.blue)),
-                    ),
-                    Expanded(
-                      flex: 2,
-                      child: Text(displayDate, style: const TextStyle(fontSize: 13, color: Colors.black87)),
-                    ),
-                  ],
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: Text(batchId, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87)),
+                      ),
+                      Expanded(
+                        flex: 3,
+                        child: Text(machineBrand, style: const TextStyle(fontSize: 12, color: Colors.black87), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: Text(colorDesc, style: const TextStyle(fontSize: 12, color: Colors.black87), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: Text("$traysLength", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue)),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: Text("-", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87)), // Native Weight Placeholder
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: Text(displayDate, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                      ),
+                      if (!isLocked)
+                        Expanded(
+                          flex: 1,
+                          child: InkWell(
+                            onTap: () => _deleteBatch(header),
+                            child: const Padding(
+                               padding: EdgeInsets.all(4.0),
+                               child: Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                            )
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               );
             }),

@@ -73,14 +73,14 @@ void main() {
         dashboardScreens: [
           PlexRoute(
             route: '/scanning',
-            title: 'Active Wear',
+            title: 'Active Ware',
             logo: const Icon(Icons.home_outlined),
             selectedLogo: const Icon(Icons.home),
             screen: (context, {data}) => const ScanningSectionsScreen(),
           ),
         ],
       ),
-      pages: [PlexRoute(route: '/scanning', title: 'Active Wear', screen: (context, {data}) => const ScanningSectionsScreen())],
+      pages: [PlexRoute(route: '/scanning', title: 'Active Ware', screen: (context, {data}) => const ScanningSectionsScreen())],
     ),
   );
 }

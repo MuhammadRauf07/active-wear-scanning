@@ -29,4 +29,14 @@ class GBSReceivingRepo {
     final result = await _api.put('/api/app/production-progresses/$id', body: data);
     return result;
   }
+
+  Future<PlexApiResult> updateTrayDetails(Map<String, dynamic> data, int trayId) async {
+    final result = await _api.put('/api/app/tray-details/$trayId', body: data);
+    return result;
+  }
+
+  Future<PlexApiResult> fetchTrayDetailById(int trayId) async {
+    final result = await _api.getObject('/api/app/tray-details/$trayId');
+    return result;
+  }
 }

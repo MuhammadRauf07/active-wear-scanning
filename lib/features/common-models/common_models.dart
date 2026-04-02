@@ -74,6 +74,7 @@ class ProductionProgress {
   final int? machineId;
   final int? planHeaderId;
   final int? locatorId;
+  final int? batchHeaderId;
   final String? concurrencyStamp;
   final DateTime? lastModificationTime;
   final String? lastModifierId;
@@ -107,6 +108,7 @@ class ProductionProgress {
     this.machineId,
     this.planHeaderId,
     this.locatorId,
+    this.batchHeaderId,
     this.concurrencyStamp,
     this.lastModificationTime,
     this.lastModifierId,
@@ -142,6 +144,7 @@ class ProductionProgress {
       machineId: json['machineId'],
       planHeaderId: json['planHeaderId'],
       locatorId: json['locatorId'],
+      batchHeaderId: json['batchHeaderId'],
       concurrencyStamp: json['concurrencyStamp'],
       lastModificationTime: json['lastModificationTime'] != null ? DateTime.parse(json['lastModificationTime']) : null,
       lastModifierId: json['lastModifierId'],
