@@ -1,5 +1,6 @@
 import 'package:active_wear_scanning/core/api/plex-result/plex_api_result.dart';
 import 'package:active_wear_scanning/core/api/services/api_service.dart';
+import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:active_wear_scanning/features/tray/model/plan_header_model.dart';
 import 'package:active_wear_scanning/features/tray/model/resource_model.dart';
 import 'package:active_wear_scanning/features/tray/model/tray_details_model.dart';
@@ -9,12 +10,26 @@ class TrayScanningRepo {
 
   Future<PlexApiResult> fetchResource(String serialNumber) async {
     final result = await _api.getList('/api/app/resources', query: {'SerialNumber': serialNumber});
+    
     if (!result.success || result.data == null) return result;
 
     try {
       final data = result.data as List<Map<String, dynamic>>;
       final resource = data.map((item) => ResourceResponseModel.fromJson(item)).toList();
       return PlexApiResult(true, 200, "Success", resource);
+    } catch (e) {
+      return PlexApiResult(false, 500, e.toString(), null);
+    }
+  }
+
+  Future<PlexApiResult> fetchProductionProgress() async {
+    final result = await _api.getList('/api/app/production-progresses');
+    if (!result.success || result.data == null) return result;
+
+    try {
+      final data = result.data as List<Map<String, dynamic>>;
+      final list = data.map((item) => ProductionProgressResponseModel.fromJson(item)).toList();
+      return PlexApiResult(true, 200, "Success", list);
     } catch (e) {
       return PlexApiResult(false, 500, e.toString(), null);
     }

@@ -24,4 +24,9 @@ class GBSReceivingRepo {
 
     await _api.post('/api/app/w-iPTransactions', body: data);
   }
+
+  Future<PlexApiResult> updateProductionProgress(int id, Map<String, dynamic> data) async {
+    final result = await _api.put('/api/app/production-progresses/$id', body: data);
+    return result;
+  }
 }

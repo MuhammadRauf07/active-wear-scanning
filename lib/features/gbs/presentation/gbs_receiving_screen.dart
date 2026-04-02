@@ -78,6 +78,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
           componentDescription: _currentTrayDetails!.item.componentDescription!,
           sizeDescription: _currentTrayDetails!.item.sizeDescription!,
           workOrderCode: _currentTrayDetails!.workOrderHeader.workOrderCode,
+          primaryQuantity: _currentTrayDetails!.productionProgress.primaryQuantity?.toString() ?? '0',
           trayCode: scannedCode.trim(),
           trayUpdateId: trayDetail.id,
           trayConcurrencyStamp: trayDetail.concurrencyStamp,
@@ -122,34 +123,61 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
   void saveWipTransactionsAndUpdateTray() async {
     AppLoader.show();
     for (int i = 0; i < _scannedTrays.length; i++) {
+      final currentTrayData = availableTrayForGbs.firstWhere((t) => t.primaryTrayModel.id == _scannedTrays[i].trayUpdateId);
+
       Map<String, dynamic> wipProductionProgress = {
         "subOperation": "string",
-        "transactionDate": "2026-03-13T10:43:21.589Z",
+        "transactionDate": DateTime.now().toIso8601String(),
         "transactionType": 1,
-        "uom": availableTrayForGbs[i].workOrderLine.uom,
-        "operatorDescription": availableTrayForGbs[i].productionProgress.operatorDescription,
-        "primaryQuantity": availableTrayForGbs[i].productionProgress.primaryQuantity,
-        "secondaryQuantity": availableTrayForGbs[i].productionProgress.secondaryQuantity,
-        "primaryUOM": availableTrayForGbs[i].productionProgress.primaryUOM,
-        "secondaryUOM": availableTrayForGbs[i].productionProgress.secondaryUOM,
-        "code": availableTrayForGbs[i].item.code,
-        "productGrade": availableTrayForGbs[i].productionProgress.productGrade,
-        "productNature": availableTrayForGbs[i].productionProgress.productNature,
-        //"progressId": availableTrayForGbs[i].productionProgress.itemId,///TODO IMPLEMENTATION
-        "operationId": availableTrayForGbs[i].operation.id,
-        "workOrderHeaderId": availableTrayForGbs[i].workOrderHeader.id,
-        "workOrderLineId": availableTrayForGbs[i].workOrderLine.id,
-        //"processItemd": availableTrayForGbs[i].productionProgress.itemId,///TODO IMPLEMENTATION,
-        "itemId": availableTrayForGbs[i].item.id,
-        "shiftId": availableTrayForGbs[i].shift.id,
-        "primaryTrayId": availableTrayForGbs[i].primaryTrayModel.id,
-        //"secondaryTrayId": availableTrayForGbs[i].primaryTrayModel.id,///TODO IMPLEMENTATION,
-        "machineId": availableTrayForGbs[i].machineModel.id,
-        "planHeaderId": availableTrayForGbs[i].planHeader.id,
-        "locatorId": 2,
+        "uom": currentTrayData.workOrderLine.uom,
+        "operatorDescription": currentTrayData.productionProgress.operatorDescription,
+        "primaryQuantity": currentTrayData.productionProgress.primaryQuantity,
+        "secondaryQuantity": currentTrayData.productionProgress.secondaryQuantity,
+        "primaryUOM": currentTrayData.productionProgress.primaryUOM,
+        "secondaryUOM": currentTrayData.productionProgress.secondaryUOM,
+        "code": currentTrayData.item.code,
+        "productGrade": currentTrayData.productionProgress.productGrade,
+        "productNature": currentTrayData.productionProgress.productNature,
+        "operationId": currentTrayData.operation.id,
+        "workOrderHeaderId": currentTrayData.workOrderHeader.id,
+        "workOrderLineId": currentTrayData.workOrderLine.id,
+        "itemId": currentTrayData.item.id,
+        "shiftId": currentTrayData.shift.id,
+        "primaryTrayId": currentTrayData.primaryTrayModel.id,
+        "machineId": currentTrayData.machineModel.id,
+        "planHeaderId": currentTrayData.planHeader.id,
+        "locatorId": 3,
       };
 
       await _trayScanningRepo.postWipTransactions(wipProductionProgress);
+
+      Map<String, dynamic> updateData = {
+        "subOperation": "GBS Received",
+        "date": DateTime.now().toIso8601String(),
+        "transactionType": currentTrayData.productionProgress.transactionType,
+        "operatorDescription": "system",
+        "primaryQuantity": currentTrayData.productionProgress.primaryQuantity,
+        "primaryUOM": currentTrayData.productionProgress.primaryUOM,
+        "secondaryQuantity": currentTrayData.productionProgress.secondaryQuantity,
+        "secondaryUOM": currentTrayData.productionProgress.secondaryUOM,
+        "wipStatus": currentTrayData.productionProgress.wipStatus,
+        "gbsFlag": true,
+        "pbsFlag": currentTrayData.productionProgress.pbsFlag,
+        "operationId": currentTrayData.operation.id,
+        "workOrderHeaderId": currentTrayData.workOrderHeader.id,
+        "workOrderLineId": currentTrayData.workOrderLine.id,
+        "itemId": currentTrayData.item.id,
+        "shiftId": currentTrayData.shift.id,
+        "primaryTrayId": currentTrayData.primaryTrayModel.id,
+        "machineId": currentTrayData.machineModel.id,
+        "planHeaderId": currentTrayData.planHeader.id,
+        "locatorId": 3,
+        "concurrencyStamp": currentTrayData.productionProgress.concurrencyStamp,
+      };
+
+      if (currentTrayData.productionProgress.id != null) {
+        await _trayScanningRepo.updateProductionProgress(currentTrayData.productionProgress.id!, updateData);
+      }
     }
 
     _showSuccessMessage("Saved");
@@ -206,6 +234,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
           Expanded(flex: 2, child: Text('TRAY CODE', style: _tableHeaderStyle)),
           Expanded(flex: 2, child: Text('WORK ORDER', style: _tableHeaderStyle)),
           Expanded(flex: 3, child: Text('ITEM DESC', style: _tableHeaderStyle)),
+          Expanded(flex: 2, child: Text('QUANTITY', style: _tableHeaderStyle)),
           const SizedBox(width: 30), // Space for the delete/close icon
         ],
       ),
@@ -233,6 +262,11 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
           Expanded(
             flex: 3,
             child: Text(tray.itemDescription, style: const TextStyle(fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+
+          Expanded(
+            flex: 2,
+            child: Text(tray.primaryQuantity, style: const TextStyle(fontSize: 13)),
           ),
 
           /// Remove Action

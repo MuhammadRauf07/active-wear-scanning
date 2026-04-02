@@ -8,6 +8,7 @@ class GBSScannedTray {
   final String itemDescription;
   final String styleDescription;
   final String locatorCode;
+  final String primaryQuantity;
 
   GBSScannedTray({
     this.trayUpdateId,
@@ -19,5 +20,6 @@ class GBSScannedTray {
     this.itemDescription = '',
     this.styleDescription = '',
     this.locatorCode = '',
+    this.primaryQuantity = '',
   });
 }

@@ -9,6 +9,7 @@ import 'package:active_wear_scanning/features/tray/model/plan_header_model.dart'
 import 'package:active_wear_scanning/features/tray/model/scanned_tray.dart';
 import 'package:active_wear_scanning/features/tray/model/tray_details_model.dart';
 import 'package:active_wear_scanning/features/tray/repo/tray_scanning_repo.dart';
+import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:flutter/material.dart';
 import 'package:plex/plex_di/plex_dependency_injection.dart';
 
@@ -34,6 +35,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   /// Work order details loaded after scanning machine barcode. Null until scan.
   List<PlanLineResponseModel>? _planLines;
   List<TrayDetailsModel> availableTraysDetail = [];
+  List<ProductionProgressResponseModel> existingProductionProgresses = [];
   PlanLineResponseModel? _selectedPlanLine;
 
   // ─── Styles ───────────────────────────────────────────────────────────────
@@ -81,6 +83,9 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
     final alreadyScanned = _scannedTrays.any((t) => t.trayCode.trim() == code);
     if (alreadyScanned) return 'Already assigned';
+
+    final alreadyInProduction = existingProductionProgresses.any((t) => (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase() == code.toLowerCase());
+    if (alreadyInProduction) return 'Tray already scanned (Exists in Production Progress)';
 
     //final available = availableTraysDetail.where((t) => (t.trayDetails?.trayCode ?? '').trim() == code).toList();
     final available = availableTraysDetail.where((t) {
@@ -170,6 +175,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
     final apiResult = await _trayScanningRepo.loadWorkOrderBySerialNumber(scannedCode);
     final trayDetailsModel = await _trayScanningRepo.fetchAvailableTrayDetails();
+    final progressResult = await _trayScanningRepo.fetchProductionProgress();
 
     if (!mounted) return;
 
@@ -177,6 +183,10 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       setState(() {
         // Cast the data to our list
         _planLines = List<PlanLineResponseModel>.from(apiResult.data);
+
+        if (progressResult.success && progressResult.data != null) {
+          existingProductionProgresses = progressResult.data as List<ProductionProgressResponseModel>;
+        }
 
         if (trayDetailsModel.data != null) {
           availableTraysDetail = (trayDetailsModel.data as List)
@@ -438,15 +448,15 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
           ),
           Expanded(
               flex: 3,
-              child: Text('WORK ORDER CODE', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))
+              child: Text('WORK ORDER', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))
+          ),
+          Expanded(
+              flex: 3,
+              child: Text('ITEM DESC', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))
           ),
           Expanded(
               flex: 2,
-              child: Text('GARMENTS', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))
-          ),
-          Expanded(
-              flex: 2,
-              child: Text('QUANTITY (PCS)', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))
+              child: Text('QUANTITY', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))
           ),
           const SizedBox(width: 40), // Space for the delete icon
         ],
@@ -496,20 +506,22 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
           Expanded(
             flex: 3,
             child: Text(
-              "-",
+              _selectedPlanLine?.workOrderHeader.workOrderCode ?? "-",
               style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: FontWeight.bold,
                   color: isEmpty ? Colors.grey : Colors.black87
               ),
             ),
           ),
           Expanded(
-            flex: 2,
+            flex: 3,
             child: Text(
-              "-",
+              _selectedPlanLine?.item.description ?? "-",
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: FontWeight.bold,
                   color: isEmpty ? Colors.grey : Colors.black87
               ),

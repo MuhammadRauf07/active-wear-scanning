@@ -36,7 +36,7 @@ class MachineModel {
       model: json['model'],
       serialNumber: json['serialNumber'],
       installationDate: json['installationDate'] != null ? DateTime.parse(json['installationDate']) : null,
-      capacity: (json['capacity'] as num?)?.toDouble(),
+      capacity: json['capacity'] != null ? double.tryParse(json['capacity'].toString()) : null,
       status: json['status'],
       isActive: json['isActive'],
       resourceCode: json['resourceCode'],
@@ -121,9 +121,9 @@ class ProductionProgress {
       date: json['date'] != null ? DateTime.parse(json['date']) : null,
       transactionType: json['transactionType'],
       operatorDescription: json['operatorDescription'],
-      primaryQuantity: (json['primaryQuantity'] as num?)?.toDouble(),
+      primaryQuantity: json['primaryQuantity'] != null ? double.tryParse(json['primaryQuantity'].toString()) : null,
       primaryUOM: json['primaryUOM'],
-      secondaryQuantity: (json['secondaryQuantity'] as num?)?.toDouble(),
+      secondaryQuantity: json['secondaryQuantity'] != null ? double.tryParse(json['secondaryQuantity'].toString()) : null,
       secondaryUOM: json['secondaryUOM'],
       wipStatus: json['wipStatus'],
       gbsFlag: json['gbsFlag'],
@@ -242,6 +242,7 @@ class Resource {
   final String? brand;
   final String? model;
   final String? serialNumber;
+  final String? capacity;
   final bool isActive;
   final int costCenterLineId;
   final int resourceTypeId;
@@ -253,6 +254,7 @@ class Resource {
     required this.brand,
     required this.model,
     required this.serialNumber,
+    this.capacity,
     required this.isActive,
     required this.costCenterLineId,
     required this.resourceTypeId,
@@ -266,6 +268,7 @@ class Resource {
       brand: json['brand'],
       model: json['model'],
       serialNumber: json['serialNumber'],
+      capacity: json['capacity']?.toString(),
       isActive: json['isActive'],
       costCenterLineId: (json['costCenterLineId'] as num?)?.toInt() ?? 0,
       resourceTypeId: (json['resourceTypeId'] as num?)?.toInt() ?? 0,
