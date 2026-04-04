@@ -90,6 +90,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     //final available = availableTraysDetail.where((t) => (t.trayDetails?.trayCode ?? '').trim() == code).toList();
     final available = availableTraysDetail.where((t) {
       final trayCodeFromApi = (t.trayDetails?.trayCode ?? '').trim().toLowerCase();
+      print ("API LOADED: $trayCodeFromApi");
       final scannedCodeClean = code.toLowerCase();
       return trayCodeFromApi == scannedCodeClean;
     }).toList();if (available.isEmpty) return 'Tray not available';
@@ -103,9 +104,9 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
           trayUpdateId: trayDetail!.id,
           trayConcurrencyStamp: trayDetail.concurrencyStamp
       ));
-      _quantityControllers.add(
-          TextEditingController(text: _getDefaultQuantityForNewTray())
-      );
+      final controller = TextEditingController(text: _getDefaultQuantityForNewTray());
+      controller.addListener(() => setState(() {})); // live weight recalculation
+      _quantityControllers.add(controller);
     });
 
     return null;
@@ -451,7 +452,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
           ),
           Expanded(
               flex: 3,
-              child: Text('WORK ORDER', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))
+              child: Text('WO', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))
           ),
           Expanded(
               flex: 3,
@@ -504,8 +505,8 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
             child: Text(
               displayCode,
               style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                  fontWeight: FontWeight.normal,
                   color: isEmpty ? Colors.grey : Colors.black87
               ),
             ),
@@ -515,8 +516,8 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
             child: Text(
               _selectedPlanLine?.workOrderHeader.workOrderCode ?? "-",
               style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  fontWeight: FontWeight.normal,
                   color: isEmpty ? Colors.grey : Colors.black87
               ),
             ),
@@ -525,11 +526,11 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
             flex: 3,
             child: Text(
               _selectedPlanLine?.item.description ?? "-",
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 11,
+                  fontWeight: FontWeight.normal,
                   color: isEmpty ? Colors.grey : Colors.black87
               ),
             ),
@@ -555,14 +556,18 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
           ),
           Expanded(
             flex: 2,
-            child: Text(
-              "-",
-              style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: isEmpty ? Colors.grey : Colors.black87
-              ),
-            ),
+            child: Builder(builder: (_) {
+              final qty = double.tryParse(_quantityControllers[index].text) ?? 0;
+              final pw = _selectedPlanLine?.item.pieceWeight;
+              if (pw == null || pw == 0) {
+                return Text('-', style: TextStyle(fontSize: 13, fontWeight: FontWeight.normal, color: isEmpty ? Colors.grey : Colors.black87));
+              }
+              final total = qty * pw;
+              return Text(
+                '${total.toStringAsFixed(2)} kg',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.normal, color: isEmpty ? Colors.grey : Colors.black87),
+              );
+            }),
           ),
           const SizedBox(width: 8),
           _buildDeleteTrayButton(index),

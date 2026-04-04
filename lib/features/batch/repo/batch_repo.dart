@@ -51,9 +51,19 @@ class BatchRepo {
     return result;
   }
 
+  Future<PlexApiResult> updateBatchHeader(int id, Map<String, dynamic> data) async {
+    final result = await _api.put('/api/app/batch-headers/$id', body: data);
+    return result;
+  }
+
+  Future<PlexApiResult> postWipTransaction(Map<String, dynamic> data) async {
+    final result = await _api.post('/api/app/w-iPTransactions', body: data);
+    return result;
+  }
+
   Future<PlexApiResult> fetchBatchHeaders() async {
     final result = await _api.getList('/api/app/batch-headers');
-    return result; // Allows manual mapping since we'll map it where needed
+    return result;
   }
 
   Future<PlexApiResult> fetchBatchLines({int? batchHeaderId}) async {
@@ -69,6 +79,13 @@ class BatchRepo {
 
   Future<PlexApiResult> deleteBatchLine(int id) async {
     final result = await _api.delete('/api/app/batch-liness/$id');
+    return result;
+  }
+
+  /// Finds the WIP transaction linked to a given progressId.
+  /// Returns the raw list so the caller can extract the wipTransaction.id.
+  Future<PlexApiResult> fetchWipTransactionsByProgressId(int progressId) async {
+    final result = await _api.getList('/api/app/w-iPTransactions', query: {'ProgressId': progressId.toString()});
     return result;
   }
 

@@ -451,6 +451,7 @@ class Item {
   final bool active;
   final double sam;
   final double perGarmentTube;
+  final double? pieceWeight;
   final String? sizeDescription;
   final String? componentDescription;
   final int itemCategoryId;
@@ -467,6 +468,7 @@ class Item {
     required this.active,
     required this.sam,
     required this.perGarmentTube,
+    this.pieceWeight,
     required this.sizeDescription,
     required this.componentDescription,
     required this.itemCategoryId,
@@ -485,6 +487,7 @@ class Item {
       active: json['active'],
       sam: (json['sam'] as num?)?.toDouble() ?? 0,
       perGarmentTube: (json['perGarmentTube'] as num?)?.toDouble() ?? 0,
+      pieceWeight: (json['pieceWeight'] as num?)?.toDouble(),
       sizeDescription: json['sizeDescription'],
       componentDescription: json['componentDescription'],
       itemCategoryId: (json['itemCategoryId'] as num?)?.toInt() ?? 0,

@@ -21,8 +21,8 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
   List<BatchHeaderResponseModel> _unlockedBatches = [];
   List<BatchHeaderResponseModel> _lockedBatches = [];
   
-  // Maps batchHeaderId -> List of BatchLine raw maps from the batch-lines API
-  Map<int, List<Map<String, dynamic>>> _batchLinesByHeader = {};
+  // Maps batchHeaderId → raw batch-line records linked to that batch
+  Map<int, List<Map<String, dynamic>>> _groupedBatchLinesByHeader = {};
 
   late TabController _tabController;
 
@@ -41,37 +41,30 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
 
   Future<void> _fetchAndGroupBatches() async {
     setState(() => _isLoading = true);
-    
+
     final headerResult = await _batchRepo.fetchBatchHeaders();
     final batchLinesResult = await _batchRepo.fetchBatchLines();
 
     if (mounted && headerResult.success) {
-      
-      // 1. Map Headers
       final headerData = headerResult.data as List<Map<String, dynamic>>? ?? [];
       final headers = headerData.map((e) => BatchHeaderResponseModel.fromJson(e)).toList();
-
-      // Separate Headers by Lock State
       _unlockedBatches = headers.where((h) => h.batchHeader.lockFlag == false).toList();
       _lockedBatches = headers.where((h) => h.batchHeader.lockFlag == true).toList();
 
-      // 2. Group tray counts by batchHeaderId using the batch-lines API
-      //    This is the proper relational source of truth.
-      Map<int, List<Map<String, dynamic>>> grouped = {};
+      // Group batch-lines by batchHeaderId — this IS populated correctly
+      final Map<int, List<Map<String, dynamic>>> grouped = {};
       if (batchLinesResult.success && batchLinesResult.data != null) {
         final rawLines = batchLinesResult.data as List<Map<String, dynamic>>;
+        debugPrint('📦 Total batch-lines fetched: ${rawLines.length}');
         for (var line in rawLines) {
-          final batchHeaderId = line['batchLines']?['batchHeaderId'];
-          if (batchHeaderId != null) {
-            final id = batchHeaderId as int;
-            if (!grouped.containsKey(id)) grouped[id] = [];
-            grouped[id]!.add(line);
-          }
+          final id = line['batchLines']?['batchHeaderId'] as int?;
+          if (id != null) grouped.putIfAbsent(id, () => []).add(line);
         }
       }
+      debugPrint('📊 Grouped batch-lines: ${grouped.map((k, v) => MapEntry(k, v.length))}');
 
       setState(() {
-        _batchLinesByHeader = grouped;
+        _groupedBatchLinesByHeader = grouped;
         _isLoading = false;
       });
     } else {
@@ -81,6 +74,7 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
       }
     }
   }
+
 
   void _navigateToAddBatch() async {
     final result = await Navigator.push(
@@ -125,50 +119,129 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
     setState(() => _isLoading = true);
     final headerId = header.batchHeader.id!;
 
-    // 1. Defensively Unlink mapped Trays - find them from batch-lines
-    final batchLinesToUnlink = _batchLinesByHeader[headerId] ?? [];
-    for (var line in batchLinesToUnlink) {
-      final trayId = line['batchLines']?['trayId'] as int?;
-      final progressId = line['batchLines']?['progressId'] as int?;
-      final batchLineId = line['batchLines']?['id'] as int?;
-
-      // a. Unlink tray-details
-      if (trayId != null) {
-        final getTrayRes = await _batchRepo.fetchTrayDetailById(trayId);
-        if (getTrayRes.success && getTrayRes.data != null) {
-          Map<String, dynamic> rawTrayPayload = getTrayRes.data.containsKey('trayDetail') ? getTrayRes.data['trayDetail'] : getTrayRes.data;
-          rawTrayPayload["batchHeaderId"] = null;
-          rawTrayPayload.remove("creatorId");
-          rawTrayPayload.remove("creationTime");
-          rawTrayPayload.remove("lastModifierId");
-          rawTrayPayload.remove("lastModificationTime");
-          await _batchRepo.updateTrayDetails(trayId, rawTrayPayload);
-        }
-      }
-
-      // b. Unlink production-progress via progressId from batch-line
-      if (progressId != null) {
-        // We'll just delete the batch-line; the progress batchHeaderId cleanup
-        // happens implicitly when the batch header is deleted.
-      }
-
-      // c. Delete the batch-line record itself
-      if (batchLineId != null) {
-        await _batchRepo.deleteBatchLine(batchLineId);
-      }
+    // 1. Delete all batch-lines linked to this batch
+    final linkedLines = _groupedBatchLinesByHeader[headerId] ?? [];
+    for (var line in linkedLines) {
+      final lineId = line['batchLines']?['id'] as int?;
+      if (lineId != null) await _batchRepo.deleteBatchLine(lineId);
     }
 
-    // 2. Erase the Batch Header Object
+    // 2. Delete the Batch Header
     final res = await _batchRepo.deleteBatchHeader(headerId);
     
     setState(() => _isLoading = false);
 
     if (res.success) {
-      _fetchAndGroupBatches(); // Rerender
+      _fetchAndGroupBatches();
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Batch permanently deleted!'), backgroundColor: Colors.green));
     } else {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete Failed: ${res.message}'), backgroundColor: Colors.red));
     }
+  }
+
+  Future<void> _lockBatch(BatchHeaderResponseModel header) async {
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Lock / Issue Batch?'),
+        content: Text(
+          'Are you sure you want to issue batch ${header.batchHeader.batchHeaderCode}?\n\n'
+          'This will:\n'
+          '• Set the batch to Locked\n'
+          '• Post negative WIP transactions (type 3) for all trays',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Lock & Issue', style: TextStyle(color: Colors.orange)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isLoading = true);
+    final headerId = header.batchHeader.id!;
+    final bh = header.batchHeader;
+
+    // ── Step 1: Set lockFlag = true on batch header ──────────────────────────
+    final lockRes = await _batchRepo.updateBatchHeader(headerId, {
+      'planDate': bh.planDate,
+      'colorDescription': bh.colorDescription,
+      'lockFlag': true,
+      'batchHeaderCode': bh.batchHeaderCode,
+      'machineId': bh.machineId,
+      'colorCode': bh.colorCodeId,
+      'shiftId': bh.shiftId,
+      'concurrencyStamp': bh.concurrencyStamp,
+    });
+
+    if (!lockRes.success) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lock Failed: ${lockRes.message}'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    // ── Step 2: POST negative WIP transaction (type=3) for each batch-line ───
+    final lines = _groupedBatchLinesByHeader[headerId] ?? [];
+    int successCount = 0;
+
+    for (final line in lines) {
+      final bl = line['batchLines'] as Map<String, dynamic>?;
+      final progress = line['progress'] as Map<String, dynamic>?;
+      final item = line['item'] as Map<String, dynamic>?;
+
+      if (bl == null) continue;
+
+      final primaryQty = (bl['primaryQuantity'] as num?)?.toDouble() ?? 0;
+      final secondaryQty = (bl['secondaryQuantity'] as num?)?.toDouble() ?? 0;
+
+      final wipData = {
+        'subOperation': 'Batch Issue',
+        'transactionDate': DateTime.now().toIso8601String(),
+        'transactionType': 3,
+        'uom': line['workOrderLine']?['uom'],
+        'operatorDescription': 'system',
+        'primaryQuantity': -primaryQty,
+        'secondaryQuantity': -secondaryQty,
+        'primaryUOM': bl['primaryUOM'] ?? 0,
+        'secondaryUOM': bl['secondaryUOM'] ?? 0,
+        'code': item?['code'],
+        'productGrade': progress?['productGrade'],
+        'productNature': progress?['productNature'],
+        'progressId': bl['progressId'],
+        'operationId': progress?['operationId'],
+        'workOrderHeaderId': bl['workOrderHeaderId'],
+        'workOrderLineId': bl['workOrderLineId'],
+        'itemId': bl['itemId'],
+        'shiftId': progress?['shiftId'] ?? bh.shiftId,
+        'primaryTrayId': bl['trayId'],
+        'machineId': progress?['machineId'] ?? bh.machineId,
+        'planHeaderId': progress?['planHeaderId'],
+        'locatorId': bl['locatorId'],
+      };
+
+      final wipRes = await _batchRepo.postWipTransaction(wipData);
+      if (wipRes.success) {
+        successCount++;
+        debugPrint('✅ WIP issued for tray ${bl["trayId"]}');
+      } else {
+        debugPrint('❌ WIP issue failed for tray ${bl["trayId"]}: ${wipRes.message}');
+      }
+    }
+
+    setState(() => _isLoading = false);
+    _fetchAndGroupBatches();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Batch locked! $successCount/${lines.length} WIP transactions posted.'),
+        backgroundColor: Colors.green,
+      ),
+    );
   }
 
   @override
@@ -257,8 +330,7 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
                   Expanded(flex: 2, child: Text('COLOR', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
                   Expanded(flex: 2, child: Text('TRAYS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
                   Expanded(flex: 2, child: Text('WEIGHT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
-                  Expanded(flex: 2, child: Text('DATE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
-                  if (!isLocked) Expanded(flex: 1, child: Text('DEL', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
+                  if (!isLocked) const SizedBox(width: 40),
                 ],
               ),
             ),
@@ -268,18 +340,21 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
               final machineBrand = header.machine?.brand ?? 'Unknown';
               final colorDesc = header.batchHeader.colorDescription ?? '-';
               
-              final rawDateStr = header.batchHeader.planDate;
-              final DateTime? rawDate = rawDateStr != null ? DateTime.tryParse(rawDateStr) : null;
-              final displayDate = rawDate != null ? "${rawDate.year}-${rawDate.month.toString().padLeft(2, '0')}-${rawDate.day.toString().padLeft(2, '0')}" : "-";
-              
-              // Load Trays logic securely
               final headerDatabaseId = header.batchHeader.id ?? 0;
-              final traysLength = _batchLinesByHeader[headerDatabaseId]?.length ?? 0;
+              final traysLength = _groupedBatchLinesByHeader[headerDatabaseId]?.length ?? 0;
+
+              // Cumulative weight: sum(primaryQuantity × pieceWeight) for all lines in this batch
+              double totalWeight = 0;
+              for (final line in (_groupedBatchLinesByHeader[headerDatabaseId] ?? [])) {
+                final qty = (line['batchLines']?['primaryQuantity'] as num?)?.toDouble() ?? 0;
+                final pw = (line['item']?['pieceWeight'] as num?)?.toDouble() ?? 0;
+                totalWeight += qty * pw;
+              }
+              final weightDisplay = totalWeight > 0 ? '${totalWeight.toStringAsFixed(2)} kg' : '-';
 
               return GestureDetector(
                 onTap: () {
                   if(!isLocked) {
-                     // Opens EDIT mode if unlocked
                      _navigateToEditBatch(header);
                   }
                 },
@@ -313,22 +388,46 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
                       ),
                       Expanded(
                         flex: 2,
-                        child: Text("-", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87)), // Native Weight Placeholder
-                      ),
-                      Expanded(
-                        flex: 2,
-                        child: Text(displayDate, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                        child: Text(weightDisplay, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.black87)),
                       ),
                       if (!isLocked)
-                        Expanded(
-                          flex: 1,
-                          child: InkWell(
-                            onTap: () => _deleteBatch(header),
-                            child: const Padding(
-                               padding: EdgeInsets.all(4.0),
-                               child: Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                            )
-                          ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Three-dots menu
+                            PopupMenuButton<String>(
+                              icon: Icon(Icons.more_vert, size: 18, color: Colors.grey.shade600),
+                              padding: EdgeInsets.zero,
+                              onSelected: (value) {
+                                if (value == 'lock') _lockBatch(header);
+                              },
+                              itemBuilder: (_) => [
+                                const PopupMenuItem(
+                                  value: 'lock',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.lock_outline, size: 18, color: Colors.orange),
+                                      SizedBox(width: 8),
+                                      Text('Lock / Issue Batch'),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(width: 4),
+                            // Delete button
+                            GestureDetector(
+                              onTap: () => _deleteBatch(header),
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey.shade300),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Icon(Icons.cancel, size: 18, color: Colors.red.shade400),
+                              ),
+                            ),
+                          ],
                         ),
                     ],
                   ),

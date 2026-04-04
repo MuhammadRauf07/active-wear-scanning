@@ -65,7 +65,7 @@ class TrayScanningRepo {
   }
 
   Future<PlexApiResult> fetchAvailableTrayDetails() async {
-    final result = await _api.getList('/api/app/tray-details');
+    final result = await _api.getList('/api/app/tray-details?MaxResultCount=1000');
     if (!result.success || result.data == null) return result;
 
     try {

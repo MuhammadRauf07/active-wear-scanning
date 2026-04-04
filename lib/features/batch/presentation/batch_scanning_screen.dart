@@ -17,8 +17,8 @@ class BatchScanningScreen extends StatefulWidget {
   final List<ProductionProgressResponseModel>? preloadedTrays;
 
   const BatchScanningScreen({
-    super.key, 
-    this.existingBatch, 
+    super.key,
+    this.existingBatch,
     this.preloadedTrays
   });
 
@@ -43,6 +43,8 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
 
   List<ProductionProgressResponseModel> productionProgressTrays = [];
 
+  final Set<int> _batchedProgressIds = {};
+
   static const _inputAndButtonHeight = 42.0;
 
   @override
@@ -51,26 +53,28 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     _fetchMachines();
     _fetchColors();
     _fetchProductionProgresses();
+    _fetchBatchedProgressIds();
   }
 
-  /// In edit mode, load the trays that are already linked to this batch
-  /// via the batch-lines API. This is the reliable source of truth.
   Future<void> _loadExistingBatchTrays(List<ProductionProgressResponseModel> allProgresses) async {
     if (widget.existingBatch == null) return;
     final batchHeaderId = widget.existingBatch!.batchHeader.id;
     if (batchHeaderId == null) return;
 
     final linesRes = await _batchRepo.fetchBatchLines(batchHeaderId: batchHeaderId);
-    if (!mounted || !linesRes.success || linesRes.data == null) return;
+    if (!linesRes.success || linesRes.data == null) return;
 
     final rawLines = linesRes.data as List<Map<String, dynamic>>;
+    // Collect progressIds from linked batch-lines
     final linkedProgressIds = rawLines
-        .map((l) => l['batchLines']?['progressId'] as int?)
+        .map((line) => line['batchLines']?['progressId'] as int?)
         .whereType<int>()
         .toSet();
 
+    debugPrint('📋 Edit mode: batchHeaderId=$batchHeaderId, linked progressIds=$linkedProgressIds');
+
     final linkedTrays = allProgresses
-        .where((p) => linkedProgressIds.contains(p.productionProgress.id))
+        .where((p) => p.productionProgress.id != null && linkedProgressIds.contains(p.productionProgress.id))
         .toList();
 
     if (mounted && linkedTrays.isNotEmpty) {
@@ -86,6 +90,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
 
 
 
+
   Future<void> _fetchProductionProgresses() async {
     final result = await _batchRepo.fetchProductionProgress();
     if (mounted && result.success && result.data != null) {
@@ -93,8 +98,23 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
       setState(() {
         productionProgressTrays = progresses;
       });
-      // In edit mode, once we have all progresses, load the ones linked to this batch
       await _loadExistingBatchTrays(progresses);
+    }
+  }
+
+  /// Fetches ALL batch-lines to build a Set of progressIds already in any batch.
+  /// This is the reliable source of truth because the production-progresses list
+  /// API does NOT return batchHeaderId in its response.
+  Future<void> _fetchBatchedProgressIds() async {
+    final result = await _batchRepo.fetchBatchLines();
+    if (result.success && result.data != null) {
+      final lines = result.data as List<Map<String, dynamic>>;
+      final ids = lines
+          .map((l) => l['batchLines']?['progressId'] as int?)
+          .whereType<int>()
+          .toSet();
+      debugPrint('🔒 Already batched progressIds: $ids');
+      if (mounted) setState(() => _batchedProgressIds.addAll(ids));
     }
   }
 
@@ -174,9 +194,16 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
         ).toList();
 
         if (available.isEmpty) return 'Tray not found or not checked out via GBS';
+
+        // Block if tray's progressId is already linked to any batch (via batch-liness)
+        final tray = available.first;
+        final progressId = tray.productionProgress.id;
+        if (progressId != null && _batchedProgressIds.contains(progressId)) {
+          return 'Tray already assigned to a batch';
+        }
         
         setState(() {
-          _scannedTrays.add(available.first);
+          _scannedTrays.add(tray);
           _quantityControllers.add(TextEditingController(text: _overrideQuantityController.text));
         });
         
@@ -205,7 +232,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
       final String timestampStr = DateTime.now().millisecondsSinceEpoch.toString();
       final String batchCode = "BCH-${timestampStr.substring(timestampStr.length - 5)}";
 
-      Map<String, dynamic> batchHeaderPayload = {
+      final headerResponse = await _batchRepo.createBatchHeader({
         "planDate": DateTime.now().toIso8601String(),
         "colorDescription": _selectedColor?.segmentCode?.description ?? "Undefined",
         "batchHeaderCode": batchCode,
@@ -213,136 +240,161 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
         "colorCode": _selectedColor?.segmentCode?.id ?? 0,
         "shiftId": _scannedTrays.first.shift.id,
         "lockFlag": false,
-      };
+      });
 
-      final headerResponse = await _batchRepo.createBatchHeader(batchHeaderPayload);
       if (!headerResponse.success) {
         AppLoader.hide();
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Header Failed: ${headerResponse.message}')));
         return;
       }
-      batchHeaderId = headerResponse.data['id'] as int;
-    }
 
-    // ── Fetch existing batch-lines to know which trays are already saved ─────
-    // Key: trayId → already has a BatchLine, skip POST for these
-    final Set<int> alreadyLinkedTrayIds = {};
-    if (isEditMode) {
-      final linesRes = await _batchRepo.fetchBatchLines(batchHeaderId: batchHeaderId);
-      if (linesRes.success && linesRes.data != null) {
-        final rawLines = linesRes.data as List<Map<String, dynamic>>;
-        for (var line in rawLines) {
-          final trayId = line['batchLines']?['trayId'];
-          if (trayId != null) alreadyLinkedTrayIds.add(trayId as int);
-        }
-      }
-    }
+      // ABP integer PKs return id=0 on POST — resolve real ID via GET by batchCode
+      final responseData = headerResponse.data as Map<String, dynamic>;
+      int? extractedId = (responseData.containsKey('batchHeader')
+          ? responseData['batchHeader']['id']
+          : responseData['id']) as int?;
 
-    // ── Per-tray updates ─────────────────────────────────────────────────────
-    for (int i = 0; i < _scannedTrays.length; i++) {
-      final currentTrayData = _scannedTrays[i];
-      final trayId = currentTrayData.primaryTrayModel.id;
-
-      // 1. Update ProductionProgress with batchHeaderId
-      Map<String, dynamic> updateData = {
-        "subOperation": "Batch Received",
-        "date": DateTime.now().toIso8601String(),
-        "transactionType": currentTrayData.productionProgress.transactionType,
-        "operatorDescription": "system",
-        "primaryQuantity": currentTrayData.productionProgress.primaryQuantity,
-        "primaryUOM": currentTrayData.productionProgress.primaryUOM,
-        "secondaryQuantity": currentTrayData.productionProgress.secondaryQuantity,
-        "secondaryUOM": currentTrayData.productionProgress.secondaryUOM,
-        "wipStatus": currentTrayData.productionProgress.wipStatus,
-        "gbsFlag": true,
-        "pbsFlag": true,
-        "progressCode": currentTrayData.productionProgress.progressCode,
-        "batchHeaderId": batchHeaderId,
-        "operationId": currentTrayData.operation.id,
-        "workOrderHeaderId": currentTrayData.workOrderHeader.id,
-        "workOrderLineId": currentTrayData.workOrderLine.id,
-        "itemId": currentTrayData.item.id,
-        "shiftId": currentTrayData.shift.id,
-        "primaryTrayId": trayId,
-        "machineId": _selectedMachine?.resource?.id ?? currentTrayData.machineModel.id,
-        "planHeaderId": currentTrayData.planHeader.id,
-        "locatorId": currentTrayData.productionProgress.locatorId,
-        "concurrencyStamp": currentTrayData.productionProgress.concurrencyStamp,
-      };
-
-      if (currentTrayData.productionProgress.id != null) {
-        final prodRes = await _batchRepo.updateProductionProgress(currentTrayData.productionProgress.id!, updateData);
-        if (!prodRes.success) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Prod Progress Failed: ${prodRes.message}')));
-        }
-      }
-
-      // 2. Update TrayDetails with batchHeaderId (GET then PUT bounce)
-      if (trayId != null) {
-        final getTrayRes = await _batchRepo.fetchTrayDetailById(trayId);
-        if (getTrayRes.success && getTrayRes.data != null) {
-          Map<String, dynamic> rawTrayPayload = getTrayRes.data.containsKey('trayDetail')
-              ? getTrayRes.data['trayDetail']
-              : getTrayRes.data;
-          rawTrayPayload["batchHeaderId"] = batchHeaderId;
-          rawTrayPayload.remove("creatorId");
-          rawTrayPayload.remove("creationTime");
-          rawTrayPayload.remove("lastModifierId");
-          rawTrayPayload.remove("lastModificationTime");
-          final trayRes = await _batchRepo.updateTrayDetails(trayId, rawTrayPayload);
-          if (!trayRes.success) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tray Fix Failed: ${trayRes.message}')));
+      if (extractedId == null || extractedId == 0) {
+        final listRes = await _batchRepo.fetchBatchHeaders();
+        if (listRes.success && listRes.data != null) {
+          for (var item in (listRes.data as List<Map<String, dynamic>>)) {
+            final h = item.containsKey('batchHeader') ? item['batchHeader'] : item;
+            if (h['batchHeaderCode'] == batchCode) {
+              extractedId = h['id'] as int?;
+              break;
+            }
           }
         }
       }
 
-      // 3. POST a new BatchLine ONLY if this tray is not already linked
-      final bool isNewTray = trayId == null || !alreadyLinkedTrayIds.contains(trayId);
-      if (isNewTray) {
-        final String lineCode = "BL-$batchHeaderId-${trayId ?? i}";
-        Map<String, dynamic> batchLinePayload = {
-          "planDate": DateTime.now().toIso8601String(),
-          "transactionDate": DateTime.now().toIso8601String(),
-          "primaryQuantity": currentTrayData.productionProgress.primaryQuantity ?? 0,
-          "primaryUOM": currentTrayData.productionProgress.primaryUOM ?? 0,
-          "secondaryQuantity": currentTrayData.productionProgress.secondaryQuantity ?? 0,
-          "secondaryUOM": currentTrayData.productionProgress.secondaryUOM ?? 0,
-          "batchLineCode": lineCode,
-          "batchHeaderId": batchHeaderId,
-          "workOrderHeaderId": currentTrayData.workOrderHeader.id,
-          "workOrderLineId": currentTrayData.workOrderLine.id,
-          "itemId": currentTrayData.item.id,
-          "trayId": trayId,
-          "locatorId": currentTrayData.productionProgress.locatorId,
-        };
-        // Only include optional FK fields if they have valid values
-        if (currentTrayData.productionProgress.id != null) {
-          batchLinePayload["progressId"] = currentTrayData.productionProgress.id;
-        }
+      if (extractedId == null || extractedId == 0) {
+        AppLoader.hide();
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Could not resolve batch ID. Try again.'),
+          duration: Duration(seconds: 6),
+        ));
+        return;
+      }
+      batchHeaderId = extractedId;
+      debugPrint('✅ Batch header created: id=$batchHeaderId');
+    }
 
-        final lineRes = await _batchRepo.createBatchLine(batchLinePayload);
-        if (!lineRes.success) {
-          AppLoader.hide();
-          await showDialog(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('BatchLine Failed'),
-              content: SingleChildScrollView(
-                child: Text(
-                  'Tray $trayId failed to link to batch.\n\nFull Server Error:\n${lineRes.message}',
-                ),
-              ),
-              actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
-            ),
-          );
-          AppLoader.show();
+    // ── In edit mode: which progresses already have a batch-line? ───────────
+    final Set<int> alreadyLinkedProgressIds = {};
+    if (isEditMode) {
+      final linesRes = await _batchRepo.fetchBatchLines(batchHeaderId: batchHeaderId);
+      if (linesRes.success && linesRes.data != null) {
+        for (var line in (linesRes.data as List<Map<String, dynamic>>)) {
+          final pid = line['batchLines']?['progressId'] as int?;
+          if (pid != null) alreadyLinkedProgressIds.add(pid);
         }
       }
+    }
+
+    // ── Per-tray: sequential, blocking ──────────────────────────────────────
+    for (int i = 0; i < _scannedTrays.length; i++) {
+      final tray = _scannedTrays[i];
+      final progressId = tray.productionProgress.id;
+      final trayId = tray.primaryTrayModel.id;
+
+      // ① Update productionProgress.batchHeaderId (always, even in edit)
+      if (progressId != null) {
+        final prodRes = await _batchRepo.updateProductionProgress(progressId, {
+          "subOperation": "Batch Received",
+          "date": DateTime.now().toIso8601String(),
+          "transactionType": tray.productionProgress.transactionType,
+          "operatorDescription": "system",
+          "primaryQuantity": tray.productionProgress.primaryQuantity,
+          "primaryUOM": tray.productionProgress.primaryUOM,
+          "secondaryQuantity": tray.productionProgress.secondaryQuantity,
+          "secondaryUOM": tray.productionProgress.secondaryUOM,
+          "wipStatus": tray.productionProgress.wipStatus,
+          "gbsFlag": true,
+          "pbsFlag": true,
+          "progressCode": tray.productionProgress.progressCode,
+          "batchHeaderId": batchHeaderId,
+          "operationId": tray.operation.id,
+          "workOrderHeaderId": tray.workOrderHeader.id,
+          "workOrderLineId": tray.workOrderLine.id,
+          "itemId": tray.item.id,
+          "shiftId": tray.shift.id,
+          "primaryTrayId": trayId,
+          "machineId": _selectedMachine?.resource?.id ?? tray.machineModel.id,
+          "planHeaderId": tray.planHeader.id,
+          "locatorId": tray.productionProgress.locatorId,
+          "concurrencyStamp": tray.productionProgress.concurrencyStamp,
+        });
+        debugPrint(prodRes.success
+            ? '✅ Progress $progressId → batchHeaderId=$batchHeaderId'
+            : '❌ Progress $progressId failed: ${prodRes.message}');
+      }
+
+      // ② POST batch-line (skip if already linked for this progress)
+      if (progressId != null && !alreadyLinkedProgressIds.contains(progressId)) {
+        // Lookup wipTransactionId — backend DTO requires it as non-nullable FK
+        int? wipTransactionId;
+        final wipRes = await _batchRepo.fetchWipTransactionsByProgressId(progressId);
+        if (wipRes.success && wipRes.data != null) {
+          final items = wipRes.data as List<Map<String, dynamic>>;
+          if (items.isNotEmpty) {
+            wipTransactionId = items.first['wipTransaction']?['id'] as int?;
+          }
+        }
+        debugPrint('🔍 WIP for progress $progressId → wipTransactionId=$wipTransactionId');
+
+        if (wipTransactionId != null) {
+          final lineRes = await _batchRepo.createBatchLine({
+            "planDate": DateTime.now().toIso8601String(),
+            "transactionDate": DateTime.now().toIso8601String(),
+            "primaryQuantity": tray.productionProgress.primaryQuantity ?? 0,
+            "primaryUOM": tray.productionProgress.primaryUOM ?? 0,
+            "secondaryQuantity": tray.productionProgress.secondaryQuantity ?? 0,
+            "secondaryUOM": tray.productionProgress.secondaryUOM ?? 0,
+            "batchLineCode": "BL-$batchHeaderId-${trayId ?? i}",
+            "batchHeaderId": batchHeaderId,
+            "progressId": progressId,
+            "wipTransactionId": wipTransactionId,
+            "workOrderHeaderId": tray.workOrderHeader.id,
+            "workOrderLineId": tray.workOrderLine.id,
+            "itemId": tray.item.id,
+            "trayId": trayId,
+            "locatorId": tray.productionProgress.locatorId,
+          });
+
+          if (lineRes.success) {
+            debugPrint('✅ BatchLine saved: tray=$trayId batch=$batchHeaderId');
+          } else {
+            // Show full server error in scrollable dialog — never silently fail
+            AppLoader.hide();
+            await showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: Text('BatchLine Error (tray $trayId)'),
+                content: SingleChildScrollView(
+                  child: Text(lineRes.message.isNotEmpty ? lineRes.message : 'Unknown server error'),
+                ),
+                actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
+              ),
+            );
+            AppLoader.show();
+          }
+        } else {
+          debugPrint('⚠ No WIP found for progress $progressId — batch-line skipped');
+        }
+      }
+    }
+
+    // Update in-memory set so trays just saved can't be scanned into another batch
+    for (final tray in _scannedTrays) {
+      final pid = tray.productionProgress.id;
+      if (pid != null) _batchedProgressIds.add(pid);
     }
 
     AppLoader.hide();
     Navigator.pop(context, true);
   }
+
+
 
   InputDecoration _inputDecoration({required String hintText, bool isDense = false, EdgeInsetsGeometry? contentPadding, double borderRadius = 6}) {
     final border = OutlineInputBorder(
@@ -495,6 +547,36 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                                   ),
                                   Row(
                                     children: [
+                                      // Cumulative weight badge
+                                      Builder(builder: (_) {
+                                        double total = 0;
+                                        for (int i = 0; i < _scannedTrays.length; i++) {
+                                          final qty = _scannedTrays[i].productionProgress.primaryQuantity ?? 0;
+                                          final pw = _scannedTrays[i].item.pieceWeight;
+                                          if (pw != null && pw > 0) total += qty * pw;
+                                        }
+                                        if (total == 0) return const SizedBox.shrink();
+                                        return Container(
+                                          margin: const EdgeInsets.only(right: 10),
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                          decoration: BoxDecoration(
+                                            color: Colors.blue.shade50,
+                                            border: Border.all(color: Colors.blue.shade200),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.scale_outlined, size: 16, color: Colors.blue.shade700),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                '${total.toStringAsFixed(2)} kg',
+                                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.blue.shade700),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }),
                                       SizedBox(
                                         width: 120,
                                         height: _inputAndButtonHeight,
@@ -526,9 +608,9 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                               Row(
                                 children: [
                                   Expanded(flex: 2, child: Text('TRAY CODE', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
-                                  Expanded(flex: 2, child: Text('WORK ORDER', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
+                                  Expanded(flex: 2, child: Text('WO', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
                                   Expanded(flex: 3, child: Text('ITEM DESC', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
-                                  Expanded(flex: 2, child: Text('CAPACITY', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
+                                  Expanded(flex: 2, child: Text('QUANTITY', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
                                   Expanded(flex: 2, child: Text('WEIGHT', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
                                   const SizedBox(width: 44),
                                 ],
@@ -549,39 +631,44 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                                         Expanded(
                                           flex: 2,
                                           child: Text(
-                                            _scannedTrays[index].primaryTrayModel.trayCode ?? '', 
-                                            style: const TextStyle(fontSize: 14, color: Colors.black87)
+                                            _scannedTrays[index].primaryTrayModel.trayCode ?? '',
+                                            style: const TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.normal)
                                           ),
                                         ),
                                         Expanded(
                                           flex: 2,
                                           child: Text(
-                                            _scannedTrays[index].workOrderHeader.workOrderCode, 
-                                            style: const TextStyle(fontSize: 13, color: Colors.black87)
+                                            _scannedTrays[index].workOrderHeader.workOrderCode,
+                                            style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.normal)
                                           ),
                                         ),
                                         Expanded(
                                           flex: 3,
                                           child: Text(
-                                            _scannedTrays[index].item.description, 
-                                            maxLines: 1,
+                                            _scannedTrays[index].item.description,
+                                            maxLines: 2,
                                             overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(fontSize: 13, color: Colors.black87)
+                                            style: const TextStyle(fontSize: 11, color: Colors.black87, fontWeight: FontWeight.normal)
                                           ),
                                         ),
                                         Expanded(
                                           flex: 2,
-                                          child: const Text(
-                                            '-', 
-                                            style: TextStyle(fontSize: 14, color: Colors.black87, fontWeight: FontWeight.bold)
+                                          child: Text(
+                                            '${(_scannedTrays[index].productionProgress.primaryQuantity ?? 0).toStringAsFixed(0)} pcs',
+                                            style: const TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.normal)
                                           ),
                                         ),
                                         Expanded(
                                           flex: 2,
-                                          child: const Text(
-                                            '-', 
-                                            style: TextStyle(fontSize: 14, color: Colors.black87, fontWeight: FontWeight.bold)
-                                          ),
+                                          child: Builder(builder: (_) {
+                                            final qty = _scannedTrays[index].productionProgress.primaryQuantity ?? 0;
+                                            final pw = _scannedTrays[index].item.pieceWeight;
+                                            if (pw == null || pw == 0) {
+                                              return const Text('-', style: TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.normal));
+                                            }
+                                            final total = qty * pw;
+                                            return Text('${total.toStringAsFixed(2)} kg', style: const TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.normal));
+                                          }),
                                         ),
                                         const SizedBox(width: 8),
                                         GestureDetector(
@@ -598,7 +685,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                                               border: Border.all(color: Colors.grey.shade300),
                                               borderRadius: BorderRadius.circular(6),
                                             ),
-                                            child: Icon(Icons.delete_outline, size: 18, color: Colors.red.shade400),
+                                            child: Icon(Icons.cancel, size: 18, color: Colors.red.shade400),
                                           ),
                                         ),
                                       ],

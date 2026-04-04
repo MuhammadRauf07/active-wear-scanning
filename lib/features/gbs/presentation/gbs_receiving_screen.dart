@@ -256,11 +256,11 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
       child: Row(
         children: [
           Expanded(flex: 2, child: Text('TRAY CODE', style: _tableHeaderStyle)),
-          Expanded(flex: 2, child: Text('WORK ORDER', style: _tableHeaderStyle)),
+          Expanded(flex: 2, child: Text('WO', style: _tableHeaderStyle)),
           Expanded(flex: 3, child: Text('ITEM DESC', style: _tableHeaderStyle)),
           Expanded(flex: 2, child: Text('QUANTITY', style: _tableHeaderStyle)),
           Expanded(flex: 2, child: Text('WEIGHT', style: _tableHeaderStyle)),
-          const SizedBox(width: 30), // Space for the delete/close icon
+          const SizedBox(width: 36), // Space for the delete icon
         ],
       ),
     );
@@ -277,32 +277,55 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
           /// Tray Code
           Expanded(
             flex: 2,
-            child: Text(tray.trayCode, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+            child: Text(tray.trayCode, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.normal)),
           ),
 
           /// Work Order
-          Expanded(flex: 2, child: Text(tray.workOrderCode, style: const TextStyle(fontSize: 13))),
+          Expanded(flex: 2, child: Text(tray.workOrderCode, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal))),
 
           /// Item Description
           Expanded(
             flex: 3,
-            child: Text(tray.itemDescription, style: const TextStyle(fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+            child: Text(
+              tray.itemDescription,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.normal),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
 
+          /// Quantity
           Expanded(
             flex: 2,
-            child: Text(tray.primaryQuantity, style: const TextStyle(fontSize: 13)),
+            child: Text(tray.primaryQuantity, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.normal)),
           ),
 
+          /// Weight
           Expanded(
             flex: 2,
-            child: const Text("-", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+            child: Builder(builder: (_) {
+              final qty = double.tryParse(tray.primaryQuantity) ?? 0;
+              final match = availableTrayForGbs.where((t) => t.primaryTrayModel.id == tray.trayUpdateId).firstOrNull;
+              final pw = match?.item.pieceWeight;
+              if (pw == null || pw == 0) {
+                return const Text('-', style: TextStyle(fontSize: 13, fontWeight: FontWeight.normal));
+              }
+              final total = qty * pw;
+              return Text('${total.toStringAsFixed(2)} kg', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.normal));
+            }),
           ),
 
           /// Remove Action
           GestureDetector(
             onTap: () => _onRemoveTray(index),
-            child: Icon(Icons.cancel, size: 20, color: Colors.red.shade300),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Icon(Icons.cancel, size: 18, color: Colors.red.shade400),
+            ),
           ),
         ],
       ),
