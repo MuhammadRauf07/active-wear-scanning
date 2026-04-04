@@ -61,6 +61,11 @@ class BatchRepo {
     return result;
   }
 
+  Future<PlexApiResult> postProductionProgress(Map<String, dynamic> data) async {
+    final result = await _api.post('/api/app/production-progresses', body: data);
+    return result;
+  }
+
   Future<PlexApiResult> fetchBatchHeaders() async {
     final result = await _api.getList('/api/app/batch-headers');
     return result;

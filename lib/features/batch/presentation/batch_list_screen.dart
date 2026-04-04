@@ -106,7 +106,7 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Batch?'),
-        content: Text('Are you sure you want to delete batch ${header.batchHeader.batchHeaderCode}?\nThis will permanently wipe it from the backend and unlink all trays.'),
+        content: Text('Are you sure you want to delete batch ${header.batchHeader.batchHeaderCode}?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete', style: TextStyle(color: Colors.red))),
@@ -146,9 +146,7 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
         title: const Text('Lock / Issue Batch?'),
         content: Text(
           'Are you sure you want to issue batch ${header.batchHeader.batchHeaderCode}?\n\n'
-          'This will:\n'
-          '• Set the batch to Locked\n'
-          '• Post negative WIP transactions (type 3) for all trays',
+          ,
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
@@ -231,6 +229,69 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
         debugPrint('✅ WIP issued for tray ${bl["trayId"]}');
       } else {
         debugPrint('❌ WIP issue failed for tray ${bl["trayId"]}: ${wipRes.message}');
+      }
+
+      // ── Step 2b: POST new production-progress (operationId=10, type=1, +qty) ─
+      final progressData = {
+        'subOperation': 'Batch Issue',
+        'date': DateTime.now().toIso8601String(),
+        'transactionType': 1,
+        'operatorDescription': progress?['operatorDescription'] ?? 'system',
+        'primaryQuantity': primaryQty,
+        'primaryUOM': bl['primaryUOM'] ?? 0,
+        'secondaryQuantity': secondaryQty,
+        'secondaryUOM': bl['secondaryUOM'] ?? 0,
+        'wipStatus': progress?['wipStatus'] ?? 0,
+        'gbsFlag': progress?['gbsFlag'] ?? false,
+        'pbsFlag': progress?['pbsFlag'] ?? false,
+        'progressCode': progress?['progressCode'],
+        'productGrade': progress?['productGrade'],
+        'productNature': progress?['productNature'],
+        'operationId': 10,
+        'workOrderHeaderId': bl['workOrderHeaderId'],
+        'workOrderLineId': bl['workOrderLineId'],
+        'itemId': bl['itemId'],
+        'shiftId': progress?['shiftId'] ?? bh.shiftId,
+        'primaryTrayId': bl['trayId'],
+        'machineId': progress?['machineId'] ?? bh.machineId,
+        'planHeaderId': progress?['planHeaderId'],
+        'locatorId': bl['locatorId'],
+        'batchHeaderId': headerId,
+      };
+
+      final progRes = await _batchRepo.postProductionProgress(progressData);
+      if (progRes.success) {
+        debugPrint('✅ ProductionProgress issued for tray ${bl["trayId"]}');
+      } else {
+        debugPrint('❌ ProductionProgress issue failed for tray ${bl["trayId"]}: ${progRes.message}');
+      }
+
+      // ── Step 2c: Update tray-details to empty it ─────────────────────────────
+      final trayId = bl['trayId'] as int?;
+      if (trayId != null) {
+        final trayRes = await _batchRepo.fetchTrayDetailById(trayId);
+        if (trayRes.success && trayRes.data != null) {
+          final trayMap = Map<String, dynamic>.from(trayRes.data as Map<String, dynamic>);
+          
+          trayMap['shiftId'] = null;
+          trayMap['planLineId'] = null;
+          trayMap['resourceId'] = null;
+          trayMap['workOrderHeaderId'] = null;
+          trayMap['workOrderLineId'] = null;
+          trayMap['knitItemId'] = null;
+          trayMap['batchHeaderId'] = null;
+          trayMap['batchLineId'] = null;
+          trayMap['batchLinesId'] = null; // Adding both just to be safe
+          trayMap['locatorId'] = null;
+          trayMap['trayQuantity'] = "0";
+
+          final updateRes = await _batchRepo.updateTrayDetails(trayId, trayMap);
+          if (updateRes.success) {
+            debugPrint('✅ TrayDetails emptied for reusable tray=$trayId');
+          } else {
+            debugPrint('❌ TrayDetails empty failed for tray=$trayId: ${updateRes.message}');
+          }
+        }
       }
     }
 
@@ -330,7 +391,7 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
                   Expanded(flex: 2, child: Text('COLOR', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
                   Expanded(flex: 2, child: Text('TRAYS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
                   Expanded(flex: 2, child: Text('WEIGHT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
-                  if (!isLocked) const SizedBox(width: 40),
+                  if (!isLocked) const SizedBox(width: 80),
                 ],
               ),
             ),
@@ -394,28 +455,7 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            // Three-dots menu
-                            PopupMenuButton<String>(
-                              icon: Icon(Icons.more_vert, size: 18, color: Colors.grey.shade600),
-                              padding: EdgeInsets.zero,
-                              onSelected: (value) {
-                                if (value == 'lock') _lockBatch(header);
-                              },
-                              itemBuilder: (_) => [
-                                const PopupMenuItem(
-                                  value: 'lock',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.lock_outline, size: 18, color: Colors.orange),
-                                      SizedBox(width: 8),
-                                      Text('Lock / Issue Batch'),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(width: 4),
-                            // Delete button
+                            // Delete button (left)
                             GestureDetector(
                               onTap: () => _deleteBatch(header),
                               child: Container(
@@ -425,6 +465,20 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Icon(Icons.cancel, size: 18, color: Colors.red.shade400),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // Lock / Issue Batch button (right)
+                            GestureDetector(
+                              onTap: () => _lockBatch(header),
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.orange.shade200),
+                                  color: Colors.orange.shade50,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Icon(Icons.lock_outline, size: 18, color: Colors.orange),
                               ),
                             ),
                           ],

@@ -201,6 +201,27 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
         if (progressId != null && _batchedProgressIds.contains(progressId)) {
           return 'Tray already assigned to a batch';
         }
+
+        // Capacity check: cumulative weight must not exceed machine capacity
+        final capacityRaw = _selectedMachine?.resource?.capacity;
+        final capacity = capacityRaw != null ? double.tryParse(capacityRaw.toString()) : null;
+        if (capacity != null && capacity > 0) {
+          final overrideText = _overrideQuantityController.text.trim();
+          final newQty = double.tryParse(overrideText) ?? tray.productionProgress.primaryQuantity ?? 0;
+          final pw = tray.item.pieceWeight;
+          if (pw != null && pw > 0) {
+            double currentTotal = 0;
+            for (int i = 0; i < _scannedTrays.length; i++) {
+              final qty = double.tryParse(_quantityControllers[i].text) ?? _scannedTrays[i].productionProgress.primaryQuantity ?? 0;
+              final p = _scannedTrays[i].item.pieceWeight;
+              if (p != null && p > 0) currentTotal += qty * p;
+            }
+            final newTotal = currentTotal + (newQty * pw);
+            if (newTotal > capacity) {
+              return 'Exceeds machine capacity (${newTotal.toStringAsFixed(2)} kg > ${capacity.toStringAsFixed(2)} kg)';
+            }
+          }
+        }
         
         setState(() {
           _scannedTrays.add(tray);
@@ -300,7 +321,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
       // ① Update productionProgress.batchHeaderId (always, even in edit)
       if (progressId != null) {
         final prodRes = await _batchRepo.updateProductionProgress(progressId, {
-          "subOperation": "Batch Received",
+          "subOperation": tray.productionProgress.subOperation,
           "date": DateTime.now().toIso8601String(),
           "transactionType": tray.productionProgress.transactionType,
           "operatorDescription": "system",
@@ -363,6 +384,32 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
 
           if (lineRes.success) {
             debugPrint('✅ BatchLine saved: tray=$trayId batch=$batchHeaderId');
+            
+            // Extract batchLineId from the new batch record response
+            final dynamic responseData = lineRes.data;
+            int? batchLineId;
+            if (responseData is Map<String, dynamic>) {
+              batchLineId = responseData['id'] as int?;
+            }
+            
+            // Update the tray-details record with both IDs
+            if (trayId != null) {
+              final trayRes = await _batchRepo.fetchTrayDetailById(trayId);
+              if (trayRes.success && trayRes.data != null) {
+                final trayMap = Map<String, dynamic>.from(trayRes.data as Map<String, dynamic>);
+                trayMap['batchHeaderId'] = batchHeaderId;
+                if (batchLineId != null) {
+                  trayMap['batchLineId'] = batchLineId;
+                }
+                
+                final updateRes = await _batchRepo.updateTrayDetails(trayId, trayMap);
+                if (updateRes.success) {
+                  debugPrint('✅ TrayDetails updated: tray=$trayId batchHeaderId=$batchHeaderId batchLineId=$batchLineId');
+                } else {
+                  debugPrint('❌ TrayDetails update failed: tray=$trayId error=${updateRes.message}');
+                }
+              }
+            }
           } else {
             // Show full server error in scrollable dialog — never silently fail
             AppLoader.hide();
