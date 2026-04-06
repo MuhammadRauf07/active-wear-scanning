@@ -317,6 +317,8 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
       final tray = _scannedTrays[i];
       final progressId = tray.productionProgress.id;
       final trayId = tray.primaryTrayModel.id;
+      
+      String? updatedConcurrencyStamp = tray.productionProgress.concurrencyStamp;
 
       // ① Update productionProgress.batchHeaderId (always, even in edit)
       if (progressId != null) {
@@ -343,11 +345,18 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
           "machineId": _selectedMachine?.resource?.id ?? tray.machineModel.id,
           "planHeaderId": tray.planHeader.id,
           "locatorId": tray.productionProgress.locatorId,
-          "concurrencyStamp": tray.productionProgress.concurrencyStamp,
+          "concurrencyStamp": updatedConcurrencyStamp,
         });
         debugPrint(prodRes.success
             ? '✅ Progress $progressId → batchHeaderId=$batchHeaderId'
             : '❌ Progress $progressId failed: ${prodRes.message}');
+            
+        if (prodRes.success && prodRes.data != null) {
+          final resData = prodRes.data as Map<String, dynamic>;
+          if (resData.containsKey('concurrencyStamp')) {
+            updatedConcurrencyStamp = resData['concurrencyStamp'];
+          }
+        }
       }
 
       // ② POST batch-line (skip if already linked for this progress)
@@ -408,6 +417,42 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                 } else {
                   debugPrint('❌ TrayDetails update failed: tray=$trayId error=${updateRes.message}');
                 }
+              }
+            }
+
+            // Update the original production-progress record with batchLinesId
+            if (progressId != null && batchLineId != null) {
+              final secondProgRes = await _batchRepo.updateProductionProgress(progressId, {
+                "subOperation": tray.productionProgress.subOperation,
+                "date": DateTime.now().toIso8601String(),
+                "transactionType": tray.productionProgress.transactionType,
+                "operatorDescription": "system",
+                "primaryQuantity": tray.productionProgress.primaryQuantity,
+                "primaryUOM": tray.productionProgress.primaryUOM,
+                "secondaryQuantity": tray.productionProgress.secondaryQuantity,
+                "secondaryUOM": tray.productionProgress.secondaryUOM,
+                "wipStatus": tray.productionProgress.wipStatus,
+                "gbsFlag": true,
+                "pbsFlag": true,
+                "progressCode": tray.productionProgress.progressCode,
+                "batchHeaderId": batchHeaderId,
+                "batchLinesId": batchLineId, // <-- The missing parameter
+                "operationId": tray.operation.id,
+                "workOrderHeaderId": tray.workOrderHeader.id,
+                "workOrderLineId": tray.workOrderLine.id,
+                "itemId": tray.item.id,
+                "shiftId": tray.shift.id,
+                "primaryTrayId": trayId,
+                "machineId": _selectedMachine?.resource?.id ?? tray.machineModel.id,
+                "planHeaderId": tray.planHeader.id,
+                "locatorId": tray.productionProgress.locatorId,
+                "concurrencyStamp": updatedConcurrencyStamp,
+              });
+              
+              if (secondProgRes.success) {
+                debugPrint('✅ Progress $progressId → batchLinesId=$batchLineId updated successfully');
+              } else {
+                debugPrint('❌ Progress $progressId batchLinesId update failed: ${secondProgRes.message}');
               }
             }
           } else {

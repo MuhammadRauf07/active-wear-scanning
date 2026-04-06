@@ -26,6 +26,11 @@ class BatchRepo {
     return result;
   }
 
+  Future<PlexApiResult> fetchProductionProgressById(int id) async {
+    final result = await _api.getObject('/api/app/production-progresses/$id');
+    return result;
+  }
+
   Future<PlexApiResult> updateTrayDetails(int trayId, Map<String, dynamic> data) async {
     final result = await _api.put('/api/app/tray-details/$trayId', body: data);
     return result;

@@ -143,7 +143,7 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
     final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Lock / Issue Batch?'),
+        title: const Text('Issue Batch?'),
         content: Text(
           'Are you sure you want to issue batch ${header.batchHeader.batchHeaderCode}?\n\n'
           ,
@@ -152,7 +152,7 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Lock & Issue', style: TextStyle(color: Colors.orange)),
+            child: const Text('Issue Batch', style: TextStyle(color: Colors.orange)),
           ),
         ],
       ),
@@ -179,7 +179,7 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
     if (!lockRes.success) {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lock Failed: ${lockRes.message}'), backgroundColor: Colors.red),
+        SnackBar(content: Text('Issue Failed: ${lockRes.message}'), backgroundColor: Colors.red),
       );
       return;
     }
@@ -221,6 +221,8 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
         'machineId': progress?['machineId'] ?? bh.machineId,
         'planHeaderId': progress?['planHeaderId'],
         'locatorId': bl['locatorId'],
+        'batchHeaderId': headerId,
+        'batchLinesId': bl['id'],
       };
 
       final wipRes = await _batchRepo.postWipTransaction(wipData);
@@ -257,6 +259,7 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
         'planHeaderId': progress?['planHeaderId'],
         'locatorId': bl['locatorId'],
         'batchHeaderId': headerId,
+        'batchLinesId': bl['id'],
       };
 
       final progRes = await _batchRepo.postProductionProgress(progressData);
@@ -299,7 +302,7 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
     _fetchAndGroupBatches();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Batch locked! $successCount/${lines.length} WIP transactions posted.'),
+        content: Text('Batch issued! $successCount/${lines.length} WIP transactions posted.'),
         backgroundColor: Colors.green,
       ),
     );
@@ -329,16 +332,30 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
               ),
             ),
             
-            // Tab Bar Rendering
-            TabBar(
-              controller: _tabController,
-              labelColor: Colors.blue,
-              unselectedLabelColor: Colors.grey.shade600,
-              indicatorColor: Colors.blue,
-              tabs: const [
-                Tab(text: "Unlocked"),
-                Tab(text: "Locked"),
-              ],
+            // Segmented Control Tab Bar
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: TabBar(
+                  controller: _tabController,
+                  labelColor: Colors.white,
+                  unselectedLabelColor: Colors.blue,
+                  indicatorSize: TabBarIndicatorSize.tab,
+                  dividerColor: Colors.transparent,
+                  indicator: BoxDecoration(
+                    color: Colors.blue,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  tabs: const [
+                    Tab(text: "Draft"),
+                    Tab(text: "Issued"),
+                  ],
+                ),
+              ),
             ),
             
             Expanded(
@@ -362,7 +379,7 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
     if (batches.isEmpty) {
       return Center(
         child: Text(
-          isLocked ? 'No batch is locked' : 'No unlocked batches found.', 
+          isLocked ? 'No batch is issued' : 'No draft batches found.',
           style: TextStyle(fontSize: 14, color: Colors.grey.shade500)
         ),
       );
@@ -391,7 +408,7 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
                   Expanded(flex: 2, child: Text('COLOR', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
                   Expanded(flex: 2, child: Text('TRAYS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
                   Expanded(flex: 2, child: Text('WEIGHT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
-                  if (!isLocked) const SizedBox(width: 80),
+                  if (!isLocked) const SizedBox(width: 120),
                 ],
               ),
             ),
@@ -413,22 +430,16 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
               }
               final weightDisplay = totalWeight > 0 ? '${totalWeight.toStringAsFixed(2)} kg' : '-';
 
-              return GestureDetector(
-                onTap: () {
-                  if(!isLocked) {
-                     _navigateToEditBatch(header);
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      left: BorderSide(color: Colors.grey.shade300),
-                      right: BorderSide(color: Colors.grey.shade300),
-                      bottom: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    color: index.isEven ? Colors.white : Colors.grey.shade50,
+              return Container(
+                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                decoration: BoxDecoration(
+                  border: Border(
+                    left: BorderSide(color: Colors.grey.shade300),
+                    right: BorderSide(color: Colors.grey.shade300),
+                    bottom: BorderSide(color: Colors.grey.shade300),
                   ),
+                  color: index.isEven ? Colors.white : Colors.grey.shade50,
+                ),
                   child: Row(
                     children: [
                       Expanded(
@@ -455,7 +466,20 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            // Delete button (left)
+                            // Edit button
+                            GestureDetector(
+                              onTap: () => _navigateToEditBatch(header),
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey.shade300),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Icon(Icons.edit, size: 18, color: Colors.blue.shade400),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // Delete button
                             GestureDetector(
                               onTap: () => _deleteBatch(header),
                               child: Container(
@@ -485,8 +509,7 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
                         ),
                     ],
                   ),
-                ),
-              );
+                );
             }),
           ],
         ),

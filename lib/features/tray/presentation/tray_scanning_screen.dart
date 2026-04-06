@@ -267,6 +267,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
         "machineId": _selectedPlanLine!.planLine.resourceId,
         "planHeaderId": _selectedPlanLine!.planLine.planHeaderId,
         "locatorId": 2,
+        "trayType": 1,
       };
 
       await _trayScanningRepo.updateTrayDetails(planData, _scannedTrays[i].trayUpdateId!);
