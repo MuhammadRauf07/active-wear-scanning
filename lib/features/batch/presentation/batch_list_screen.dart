@@ -1,3 +1,4 @@
+import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/content_card.dart';
 import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
@@ -184,8 +185,35 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
       return;
     }
 
-    // ── Step 2: POST negative WIP transaction (type=3) for each batch-line ───
+    // ── Step 1b: POST batch-header-routings (once per batch) ────────────────
     final lines = _groupedBatchLinesByHeader[headerId] ?? [];
+    final firstLine = lines.isNotEmpty ? lines.first : null;
+    final firstItemId = (firstLine?['batchLines'] as Map<String, dynamic>?)?['itemId'] as int?;
+
+    if (firstItemId != null) {
+      final routingRes = await _batchRepo.fetchItemRoutings(firstItemId);
+      if (routingRes.success && routingRes.data != null) {
+        final routingItems = routingRes.data as List;
+        for (final r in routingItems) {
+          final rMap = r as Map;
+          final routingCode = rMap['itemRouting']?['routingCode']?.toString();
+          final operationId = rMap['itemRouting']?['operationId'] as int?;
+          if (routingCode != null && operationId != null) {
+            final res = await _batchRepo.postBatchHeaderRouting({
+              'code': routingCode,
+              'batchHeaderId': headerId,
+              'operationId': operationId,
+              'isActive': true,
+            });
+            debugPrint(res.success
+                ? '✅ BatchHeaderRouting posted: code=$routingCode opId=$operationId'
+                : '❌ BatchHeaderRouting failed: code=$routingCode → ${res.message}');
+          }
+        }
+      }
+    }
+
+    // ── Step 2: POST WIP transaction & production-progress for each batch-line ─
     int successCount = 0;
 
     for (final line in lines) {
@@ -195,13 +223,52 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
 
       if (bl == null) continue;
 
+      // ── Compute min operationId from item routings ────────────────────────
+      int? minOpId;
+      final itemId = bl['itemId'] as int?;
+      if (itemId != null) {
+        final routingRes = await _batchRepo.fetchItemRoutings(itemId);
+        if (routingRes.success && routingRes.data != null) {
+          final routingItems = routingRes.data as List;
+          final opIds = routingItems
+              .map((r) => (r as Map)['itemRouting']?['operationId'])
+              .whereType<int>()
+              .toList();
+          if (opIds.isNotEmpty) {
+            minOpId = opIds.reduce((a, b) => a < b ? a : b);
+          }
+        }
+        debugPrint('🔑 Lock: item=$itemId minOpId=$minOpId');
+      }
+
+      // ── Fetch processedItemId from work-order-line-details ────────────────
+      int? processedItemId;
+      final workOrderLineId = bl['workOrderLineId'] as int?;
+      final colorDescription = bh.colorDescription;
+      if (workOrderLineId != null && colorDescription != null) {
+        final woRes = await _batchRepo.fetchWorkOrderLineDetails(workOrderLineId, colorDescription);
+        if (woRes.success && woRes.data != null) {
+          final woItems = woRes.data as List;
+          if (woItems.isNotEmpty) {
+            final firstItem = woItems.first as Map;
+            final raw = firstItem['processIItemd'];
+            if (raw is Map) {
+              processedItemId = raw['id'] as int?;
+            } else if (raw is int) {
+              processedItemId = raw;
+            }
+          }
+        }
+        debugPrint('📦 Lock: workOrderLineId=$workOrderLineId processedItemId=$processedItemId');
+      }
+
       final primaryQty = (bl['primaryQuantity'] as num?)?.toDouble() ?? 0;
       final secondaryQty = (bl['secondaryQuantity'] as num?)?.toDouble() ?? 0;
 
       final wipData = {
         'subOperation': 'Batch Issue',
         'transactionDate': DateTime.now().toIso8601String(),
-        'transactionType': 3,
+        'transactionType': 2,
         'uom': line['workOrderLine']?['uom'],
         'operatorDescription': 'system',
         'primaryQuantity': -primaryQty,
@@ -212,7 +279,7 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
         'productGrade': progress?['productGrade'],
         'productNature': progress?['productNature'],
         'progressId': bl['progressId'],
-        'operationId': progress?['operationId'],
+        'operationId': minOpId ?? progress?['operationId'],
         'workOrderHeaderId': bl['workOrderHeaderId'],
         'workOrderLineId': bl['workOrderLineId'],
         'itemId': bl['itemId'],
@@ -223,6 +290,7 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
         'locatorId': bl['locatorId'],
         'batchHeaderId': headerId,
         'batchLinesId': bl['id'],
+        'processItemd': processedItemId,
       };
 
       final wipRes = await _batchRepo.postWipTransaction(wipData);
@@ -233,11 +301,11 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
         debugPrint('❌ WIP issue failed for tray ${bl["trayId"]}: ${wipRes.message}');
       }
 
-      // ── Step 2b: POST new production-progress (operationId=10, type=1, +qty) ─
+      // ── Step 2b: POST new production-progress with min operationId ────────
       final progressData = {
         'subOperation': 'Batch Issue',
         'date': DateTime.now().toIso8601String(),
-        'transactionType': 1,
+        'transactionType': 2,
         'operatorDescription': progress?['operatorDescription'] ?? 'system',
         'primaryQuantity': primaryQty,
         'primaryUOM': bl['primaryUOM'] ?? 0,
@@ -249,7 +317,7 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
         'progressCode': progress?['progressCode'],
         'productGrade': progress?['productGrade'],
         'productNature': progress?['productNature'],
-        'operationId': 10,
+        'operationId': minOpId ?? progress?['operationId'],
         'workOrderHeaderId': bl['workOrderHeaderId'],
         'workOrderLineId': bl['workOrderLineId'],
         'itemId': bl['itemId'],
@@ -260,6 +328,7 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
         'locatorId': bl['locatorId'],
         'batchHeaderId': headerId,
         'batchLinesId': bl['id'],
+        'processedItemId': processedItemId,
       };
 
       final progRes = await _batchRepo.postProductionProgress(progressData);
@@ -267,6 +336,20 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
         debugPrint('✅ ProductionProgress issued for tray ${bl["trayId"]}');
       } else {
         debugPrint('❌ ProductionProgress issue failed for tray ${bl["trayId"]}: ${progRes.message}');
+        if (context.mounted) {
+          AppLoader.hide();
+          await showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Production Progress API Failed'),
+              content: SingleChildScrollView(
+                child: Text('Tray ${bl["trayId"]} failed to post progress: ${progRes.message}'),
+              ),
+              actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
+            ),
+          );
+          AppLoader.show();
+        }
       }
 
       // ── Step 2c: Update tray-details to empty it ─────────────────────────────

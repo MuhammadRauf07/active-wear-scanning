@@ -165,6 +165,8 @@ class Operation {
   final String? lastModificationTime;
   final String? creatorId;
   final String? lastModifierId;
+  final bool? isLastProcess;
+  final int? processNature;
   final int id;
 
   Operation({
@@ -177,6 +179,8 @@ class Operation {
     required this.lastModificationTime,
     required this.creatorId,
     required this.lastModifierId,
+    this.isLastProcess,
+    this.processNature,
     required this.id,
   });
 
@@ -191,6 +195,8 @@ class Operation {
       lastModificationTime: json['lastModificationTime'],
       creatorId: json['creatorId'],
       lastModifierId: json['lastModifierId'],
+      isLastProcess: json['isLastProcess'],
+      processNature: json['processNature'],
       id: (json['id'] as num?)?.toInt() ?? 0,
     );
   }

@@ -8,11 +8,11 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 class ScannerAlwaysOpen extends StatefulWidget {
   final String title;
-  final String? Function(String code) onResult; /// Changed to return bool (true if added, false if duplicate)
+  final FutureOr<String?> Function(String code) onResult; /// Changed to allow async
 
   const ScannerAlwaysOpen({super.key, required this.title, required this.onResult});
 
-  static Future<void> show(BuildContext context, {required String title, required String? Function(String) onResult}) {
+  static Future<void> show(BuildContext context, {required String title, required FutureOr<String?> Function(String) onResult}) {
     return showGeneralDialog<void>(
       context: context,
       barrierDismissible: true,
@@ -80,7 +80,7 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
 
     String? errorMessage;
     try {
-      errorMessage = widget.onResult(text);
+      errorMessage = await widget.onResult(text);
     } catch (e) {
       debugPrint("SCANNER ERROR: $e");
       errorMessage = 'An unexpected error occurred';
@@ -113,7 +113,7 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
         // Call the parent validation logic
         String? errorMessage;
         try {
-          errorMessage = widget.onResult(raw.trim());
+          errorMessage = await widget.onResult(raw.trim());
         } catch (e) {
           debugPrint("SCANNER ERROR: $e");
           errorMessage = 'An unexpected error occurred';

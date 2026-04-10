@@ -11,9 +11,15 @@ class BatchHeaderResponseModel {
 
   factory BatchHeaderResponseModel.fromJson(Map<String, dynamic> json) {
     return BatchHeaderResponseModel(
-      batchHeader: BatchHeaderModel.fromJson(json['batchHeader']),
-      machine: json['machine'] != null ? MachineModel.fromJson(json['machine']) : null,
-      colorCode: json['colorCode'] != null ? SegmentCode.fromJson(json['colorCode']) : null,
+      batchHeader: BatchHeaderModel.fromJson(json['batchHeader'] ?? json),
+      machine: (json['machine'] != null) 
+          ? MachineModel.fromJson(json['machine']) 
+          : (json['resourceCode'] != null || json['brand'] != null) 
+            ? MachineModel.fromJson(json)
+            : null,
+      colorCode: (json['colorCode'] != null && json['colorCode'] is Map<String, dynamic>) 
+          ? SegmentCode.fromJson(json['colorCode']) 
+          : null,
       shift: json['shift'] != null ? Shift.fromJson(json['shift']) : null,
     );
   }

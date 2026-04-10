@@ -44,6 +44,12 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
   List<ProductionProgressResponseModel> productionProgressTrays = [];
 
   final Set<int> _batchedProgressIds = {};
+  final Map<int, int> _trayProcessedItemId = {};
+
+  // Item routing reference — captured from the first scanned tray
+  Set<String>? _referenceRoutingCodes;
+  int? _referenceRoutingCount;
+  int? _referenceMinOperationId;
 
   static const _inputAndButtonHeight = 42.0;
 
@@ -182,9 +188,10 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     await ScannerAlwaysOpen.show(
       context,
       title: 'Scan Trays',
-      onResult: (scannedCode) {
+      onResult: (scannedCode) async {
         final code = scannedCode.trim();
         if (code.isEmpty) return 'Invalid tray code';
+        if (_selectedColor == null) return 'Please select a batch Color first';
         if (_scannedTrays.any((t) => (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase() == code.toLowerCase())) return 'Already assigned';
         
         final available = productionProgressTrays.where((t) => 
@@ -200,6 +207,73 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
         final progressId = tray.productionProgress.id;
         if (progressId != null && _batchedProgressIds.contains(progressId)) {
           return 'Tray already assigned to a batch';
+        }
+
+        final workOrderLineId = tray.productionProgress.workOrderLineId ?? tray.workOrderLine.id;
+        final colorDescription = _selectedColor!.segmentCode?.description;
+
+        if (colorDescription == null) {
+          return 'Selected Color has no description';
+        }
+
+
+        // Color validation via remote API
+        final colorRes = await _batchRepo.fetchWorkOrderLineDetails(workOrderLineId, colorDescription);
+        if (!colorRes.success || colorRes.data == null) {
+           return 'Validation error: ${colorRes.message}';
+        }
+        
+        final items = colorRes.data as List?;
+        if (items == null || items.isEmpty) {
+           return 'Invalid tray: Tray does not belong to the selected color';
+        }
+        
+        final firstItem = items.first as Map;
+        final processIdRaw = firstItem['processIItemd'];
+        int processedItemId;
+        if (processIdRaw is Map) {
+           processedItemId = processIdRaw['id'];
+        } else if (processIdRaw is int) {
+           processedItemId = processIdRaw;
+        } else {
+           return 'Invalid tray data: processedItemId missing in API response';
+        }
+
+        // ── Item Routing Validation (after color validation) ─────────────────
+        final itemDefId = tray.productionProgress.itemId;
+        debugPrint('🔑 itemDefId for routing: $itemDefId (from productionProgress.itemId)');
+        final routingRes = await _batchRepo.fetchItemRoutings(itemDefId!);
+        if (!routingRes.success || routingRes.data == null) {
+          return 'Routing validation error: ${routingRes.message}';
+        }
+
+        final routingItems = routingRes.data as List;
+        final routingCodes = routingItems
+            .map((r) => (r as Map)['itemRouting']?['operationId']?.toString() ?? '')
+            .where((c) => c.isNotEmpty)
+            .toSet();
+        final routingCount = routingItems.length;
+
+        if (routingCount == 0) {
+          debugPrint('❌ Item $itemDefId has no routings configured — scan blocked');
+          return 'Tray item has no route configured';
+        } else if (_referenceRoutingCodes == null) {
+          // First tray with routings: store as reference
+          _referenceRoutingCodes = routingCodes;
+          _referenceRoutingCount = routingCount;
+          _referenceMinOperationId = routingCodes
+              .map((s) => int.tryParse(s) ?? 0)
+              .where((v) => v > 0)
+              .fold<int?>(null, (min, v) => min == null || v < min ? v : min);
+          debugPrint('📋 Routing reference set: count=$routingCount codes=$routingCodes minOpId=$_referenceMinOperationId');
+        } else {
+          // Subsequent trays: compare against reference
+          debugPrint('🔍 Routing compare: ref=$_referenceRoutingCodes(${_referenceRoutingCount}) vs current=$routingCodes($routingCount)');
+          if (routingCount != _referenceRoutingCount || !routingCodes.containsAll(_referenceRoutingCodes!) || !_referenceRoutingCodes!.containsAll(routingCodes)) {
+            debugPrint('❌ Routing mismatch!');
+            return 'Tray has a different route';
+          }
+          debugPrint('✅ Routing matched');
         }
 
         // Capacity check: cumulative weight must not exceed machine capacity
@@ -224,6 +298,9 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
         }
         
         setState(() {
+          if (tray.primaryTrayModel.id != null) {
+             _trayProcessedItemId[tray.primaryTrayModel.id!] = processedItemId;
+          }
           _scannedTrays.add(tray);
           _quantityControllers.add(TextEditingController(text: _overrideQuantityController.text));
         });
@@ -312,6 +389,10 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
       }
     }
 
+    // Derive the minimum operationId from the validated routing set (first step in the process)
+    // Use the min operationId stored during scan validation (first step in the process)
+    debugPrint('🔑 Save: using minOperationId=$_referenceMinOperationId');
+
     // ── Per-tray: sequential, blocking ──────────────────────────────────────
     for (int i = 0; i < _scannedTrays.length; i++) {
       final tray = _scannedTrays[i];
@@ -322,7 +403,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
 
       // ① Update productionProgress.batchHeaderId (always, even in edit)
       if (progressId != null) {
-        final prodRes = await _batchRepo.updateProductionProgress(progressId, {
+        final prodPayload = <String, dynamic>{
           "subOperation": tray.productionProgress.subOperation,
           "date": DateTime.now().toIso8601String(),
           "transactionType": tray.productionProgress.transactionType,
@@ -346,7 +427,10 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
           "planHeaderId": tray.planHeader.id,
           "locatorId": tray.productionProgress.locatorId,
           "concurrencyStamp": updatedConcurrencyStamp,
-        });
+        };
+
+
+        final prodRes = await _batchRepo.updateProductionProgress(progressId, prodPayload);
         debugPrint(prodRes.success
             ? '✅ Progress $progressId → batchHeaderId=$batchHeaderId'
             : '❌ Progress $progressId failed: ${prodRes.message}');
@@ -389,6 +473,8 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
             "itemId": tray.item.id,
             "trayId": trayId,
             "locatorId": tray.productionProgress.locatorId,
+            if (trayId != null && _trayProcessedItemId.containsKey(trayId))
+              "processedItemId": _trayProcessedItemId[trayId],
           });
 
           if (lineRes.success) {
@@ -417,42 +503,6 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                 } else {
                   debugPrint('❌ TrayDetails update failed: tray=$trayId error=${updateRes.message}');
                 }
-              }
-            }
-
-            // Update the original production-progress record with batchLinesId
-            if (progressId != null && batchLineId != null) {
-              final secondProgRes = await _batchRepo.updateProductionProgress(progressId, {
-                "subOperation": tray.productionProgress.subOperation,
-                "date": DateTime.now().toIso8601String(),
-                "transactionType": tray.productionProgress.transactionType,
-                "operatorDescription": "system",
-                "primaryQuantity": tray.productionProgress.primaryQuantity,
-                "primaryUOM": tray.productionProgress.primaryUOM,
-                "secondaryQuantity": tray.productionProgress.secondaryQuantity,
-                "secondaryUOM": tray.productionProgress.secondaryUOM,
-                "wipStatus": tray.productionProgress.wipStatus,
-                "gbsFlag": true,
-                "pbsFlag": true,
-                "progressCode": tray.productionProgress.progressCode,
-                "batchHeaderId": batchHeaderId,
-                "batchLinesId": batchLineId, // <-- The missing parameter
-                "operationId": tray.operation.id,
-                "workOrderHeaderId": tray.workOrderHeader.id,
-                "workOrderLineId": tray.workOrderLine.id,
-                "itemId": tray.item.id,
-                "shiftId": tray.shift.id,
-                "primaryTrayId": trayId,
-                "machineId": _selectedMachine?.resource?.id ?? tray.machineModel.id,
-                "planHeaderId": tray.planHeader.id,
-                "locatorId": tray.productionProgress.locatorId,
-                "concurrencyStamp": updatedConcurrencyStamp,
-              });
-              
-              if (secondProgRes.success) {
-                debugPrint('✅ Progress $progressId → batchLinesId=$batchLineId updated successfully');
-              } else {
-                debugPrint('❌ Progress $progressId batchLinesId update failed: ${secondProgRes.message}');
               }
             }
           } else {
@@ -577,6 +627,9 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                                   setState(() {
                                     _selectedMachine = newValue;
                                     _selectedColor = null; // Reset color
+                                    _referenceRoutingCodes = null;
+                                    _referenceRoutingCount = null;
+                                    _referenceMinOperationId = null;
                                     _scannedTrays.clear(); // Reset trays
                                     _quantityControllers.clear();
                                   });
@@ -611,6 +664,9 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                                   onChanged: (BatchColorModel? newValue) {
                                     setState(() {
                                       _selectedColor = newValue;
+                                      _referenceRoutingCodes = null;
+                                      _referenceRoutingCount = null;
+                                      _referenceMinOperationId = null;
                                       _scannedTrays.clear(); // Reset trays
                                       _quantityControllers.clear();
                                     });
@@ -766,6 +822,8 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                                         GestureDetector(
                                           onTap: () {
                                             setState(() {
+                                              final pid = _scannedTrays[index].productionProgress.id;
+                                              if (pid != null) _batchedProgressIds.remove(pid);
                                               _quantityControllers[index].dispose();
                                               _quantityControllers.removeAt(index);
                                               _scannedTrays.removeAt(index);

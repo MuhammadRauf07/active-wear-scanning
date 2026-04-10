@@ -9,7 +9,8 @@ class SectionCard extends StatelessWidget {
   final bool? isShowProgress;
   final VoidCallback onTap;
 
-  const SectionCard({super.key, required this.title, required this.subtitle, required this.sectionCode, required this.progressValue, this.isShowProgress, required this.onTap});
+  const
+  SectionCard({super.key, required this.title, required this.subtitle, required this.sectionCode, required this.progressValue, this.isShowProgress, required this.onTap});
 
   IconData _getSectionIcon(String code) {
     switch (code.toUpperCase()) {

@@ -257,8 +257,9 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
         children: [
           Expanded(flex: 2, child: Text('TRAY CODE', style: _tableHeaderStyle)),
           Expanded(flex: 2, child: Text('WO', style: _tableHeaderStyle)),
-          Expanded(flex: 3, child: Text('ITEM DESC', style: _tableHeaderStyle)),
-          Expanded(flex: 4, child: Text('QTY / WEIGHT', style: _tableHeaderStyle)),
+          Expanded(flex: 5, child: Text('ITEM DESC', style: _tableHeaderStyle)),
+          Expanded(flex: 3, child: Text('QUANTITY', style: _tableHeaderStyle)),
+          Expanded(flex: 2, child: Text('WEIGHT', style: _tableHeaderStyle)),
           const SizedBox(width: 36), // Space for the delete icon
         ],
       ),
@@ -284,7 +285,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
 
           /// Item Description
           Expanded(
-            flex: 3,
+            flex: 5,
             child: Text(
               tray.itemDescription,
               style: const TextStyle(fontSize: 11, fontWeight: FontWeight.normal),
@@ -293,18 +294,24 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
             ),
           ),
 
-          /// Quantity & Weight
+          /// Quantity
           Expanded(
-            flex: 4,
+            flex: 3,
+            child: Text(tray.primaryQuantity, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.normal)),
+          ),
+
+          /// Weight
+          Expanded(
+            flex: 2,
             child: Builder(builder: (_) {
               final qty = double.tryParse(tray.primaryQuantity) ?? 0;
               final match = availableTrayForGbs.where((t) => t.primaryTrayModel.id == tray.trayUpdateId).firstOrNull;
               final pw = match?.item.pieceWeight;
               if (pw == null || pw == 0) {
-                return Text('${tray.primaryQuantity} / -', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.normal));
+                return Text('-', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.normal));
               }
               final total = qty * pw;
-              return Text('${tray.primaryQuantity} / ${total.toStringAsFixed(2)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.normal));
+              return Text('${total.toStringAsFixed(2)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.normal));
             }),
           ),
 

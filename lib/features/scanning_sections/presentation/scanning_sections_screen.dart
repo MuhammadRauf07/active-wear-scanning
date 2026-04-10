@@ -82,8 +82,8 @@ class ScanningSectionsScreen extends StatelessWidget {
                           title: 'Processing',
                           subtitle: 'WIP transaction',
                           sectionCode: 'PROC',
-                          progressValue: 0.0,
-                          isShowProgress: false,
+                          progressValue: 0.75,
+                          isShowProgress: true,
                           onTap: () {
                             Navigator.push(context, MaterialPageRoute(builder: (context) => const ProcessingScreen()));
                           },

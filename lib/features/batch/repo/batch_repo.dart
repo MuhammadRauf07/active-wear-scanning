@@ -76,6 +76,11 @@ class BatchRepo {
     return result;
   }
 
+  Future<PlexApiResult> fetchBatchHeaderById(int id) async {
+    final result = await _api.getObject('/api/app/batch-headers/$id');
+    return result;
+  }
+
   Future<PlexApiResult> fetchBatchLines({int? batchHeaderId}) async {
     final query = batchHeaderId != null ? {'BatchHeaderId': batchHeaderId.toString()} : <String, dynamic>{};
     final result = await _api.getList('/api/app/batch-liness', query: query);
@@ -125,5 +130,30 @@ class BatchRepo {
     } catch (e) {
       return PlexApiResult(false, 500, e.toString(), null);
     }
+  }
+
+  Future<PlexApiResult> fetchWorkOrderLineDetails(int workOrderLineId, String colorDescription) async {
+    final query = {
+      'WorkOrderLineId': workOrderLineId.toString(),
+      'ColorDescription': colorDescription,
+    };
+    
+    // Using the exact URL provided by the user (the GET list endpoint handles query params)
+    final result = await _api.getList('/api/app/work-order-line-details', query: query);
+    
+    return result;
+  }
+
+  Future<PlexApiResult> fetchItemRoutings(int itemDefId) async {
+    final query = {
+      'ItemDefId': itemDefId.toString(),
+    };
+    final result = await _api.getList('/api/app/item-routings', query: query);
+    return result;
+  }
+
+  Future<PlexApiResult> postBatchHeaderRouting(Map<String, dynamic> data) async {
+    final result = await _api.post('/api/app/batch-header-routings', body: data);
+    return result;
   }
 }
