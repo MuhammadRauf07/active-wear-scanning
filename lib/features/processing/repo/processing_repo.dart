@@ -33,4 +33,12 @@ class ProcessingRepo {
       return PlexApiResult(false, 500, e.toString(), null);
     }
   }
+
+  Future<PlexApiResult> updateProductionProgress(int id, Map<String, dynamic> data) async {
+    return await _api.put('/api/app/production-progresses/$id', body: data);
+  }
+
+  Future<PlexApiResult> createProductionProgress(Map<String, dynamic> data) async {
+    return await _api.post('/api/app/production-progresses', body: data);
+  }
 }

@@ -25,7 +25,7 @@ void main() {
 
   runApp(
     PlexApp(
-      appInfo: PlexAppInfo(title: 'Active Wear Scanning', appLogo: const Icon(Icons.qr_code_scanner), initialRoute: '/scanning'),
+      appInfo: PlexAppInfo(title: 'Active Wear Scanning', appLogo: const Icon(Icons.qr_code_scanner), initialRoute: '/'),
       onInitializationComplete: () {
         PlexNetworking.instance.allowBadCertificateForHTTPS();
         PlexNetworking.instance.setBasePath(AppConfig.baseUrl);

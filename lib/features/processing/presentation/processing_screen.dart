@@ -1,11 +1,16 @@
+import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
+import 'package:active_wear_scanning/core/widgets/scanner_always_open.dart';
 import 'package:active_wear_scanning/core/widgets/content_card.dart';
+import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
 import 'package:active_wear_scanning/core/widgets/section_header.dart';
 import 'package:active_wear_scanning/features/batch/model/batch_header_model.dart';
 import 'package:active_wear_scanning/features/batch/repo/batch_repo.dart';
 import 'package:active_wear_scanning/features/common-models/common_models.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:active_wear_scanning/features/processing/repo/processing_repo.dart';
+import 'package:active_wear_scanning/features/lapping/presentation/lapping_detail_screen.dart';
+import 'package:active_wear_scanning/features/processing/presentation/processing_batch_details.dart';
 import 'package:flutter/material.dart';
 
 class ProcessingScreen extends StatefulWidget {
@@ -21,12 +26,14 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
 
   List<Operation> _operations = [];
   Operation? _selectedOperation;
+  final Map<int, bool> _loadingDetails = {};
+  bool _isLoaderShown = false;
   bool _isLoadingOperations = false;
+  final _batchBarcodeController = TextEditingController();
 
   // Stats
   final Map<int, int> _opBatchCounts = {};
   final Map<int, List<_BatchSummaryItem>> _opBatchDetails = {};
-  final Map<int, bool> _loadingDetails = {};
 
   @override
   void initState() {
@@ -34,7 +41,35 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
     _fetchOperations();
   }
 
+  @override
+  void dispose() {
+    if (_isLoaderShown) AppLoader.hide();
+    _batchBarcodeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _onScanBatch() async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    await ScannerAlwaysOpen.show(
+      context,
+      title: 'Scan Batch',
+      onResult: (scannedCode) async {
+        final code = scannedCode.trim();
+        if (code.isEmpty) return 'Invalid batch code';
+        _batchBarcodeController.text = code;
+        // Navigation or filtering logic would go here
+        return null;
+      },
+    );
+  }
+
   Future<void> _fetchOperations() async {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        AppLoader.show();
+        _isLoaderShown = true;
+      }
+    });
     setState(() => _isLoadingOperations = true);
     final result = await _processingRepo.fetchProcessingOperations();
 
@@ -64,6 +99,10 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
     } else {
       if (mounted) {
         setState(() => _isLoadingOperations = false);
+        if (_isLoaderShown) {
+          AppLoader.hide();
+          _isLoaderShown = false;
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error loading operations: ${result.message}'),
@@ -94,6 +133,10 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
     });
 
     await Future.wait(futures);
+    if (_isLoaderShown) {
+      AppLoader.hide();
+      _isLoaderShown = false;
+    }
   }
 
   Future<void> _fetchOpDetails(int operationId) async {
@@ -145,6 +188,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
 
           summaries.add(
             _BatchSummaryItem(
+              batchHeaderId: bhId,
               batchCode: bhFull.batchHeader.batchHeaderCode ?? '-',
               machine: machineCode,
               color: bhFull.batchHeader.colorDescription ?? '-',
@@ -170,7 +214,8 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
+      body: AppLoaderContextAttach(
+        child: SafeArea(
         child: Column(
           children: [
             const CustomInspectionHeader(
@@ -192,12 +237,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                     ),
                     const SizedBox(height: 12),
                     ContentCard(
-                      child: _isLoadingOperations
-                          ? const Padding(
-                              padding: EdgeInsets.all(24),
-                              child: Center(child: CircularProgressIndicator()),
-                            )
-                          : _operations.isEmpty
+                      child: _operations.isEmpty && !_isLoadingOperations
                           ? const Padding(
                               padding: EdgeInsets.all(24),
                               child: Center(
@@ -294,10 +334,64 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                             ),
                     ),
                     if (_selectedOperation != null) ...[
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 16),
+                      const SectionHeader(
+                          title: 'Scanned Batch',
+                          subtitle: 'Scan a batch to verify details'),
+                      const SizedBox(height: 12),
                       ContentCard(
-                        child: _buildDetailsTable(_selectedOperation!.id),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _batchBarcodeController,
+                                decoration: InputDecoration(
+                                  hintText: 'Enter/Scan Batch ID',
+                                  hintStyle: TextStyle(
+                                      color: Colors.grey.shade400,
+                                      fontSize: 14),
+                                  prefixIcon: Icon(Icons.qr_code_scanner,
+                                      size: 20, color: Colors.grey.shade400),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                    borderSide:
+                                        const BorderSide(color: Colors.blue),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                    borderSide:
+                                        const BorderSide(color: Colors.blue),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                    borderSide:
+                                        const BorderSide(color: Colors.blue),
+                                  ),
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 12),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            CustomOutlinedButton(
+                              label: 'Scan Batch',
+                              borderColor: Colors.blue,
+                              fillColor: Colors.blue,
+                              textColor: Colors.white,
+                              buttonHeight: 46,
+                              onPressed: _onScanBatch,
+                            ),
+                          ],
+                        ),
                       ),
+                      const SizedBox(height: 20),
+                      SectionHeader(
+                        title: 'Batch Details',
+                        subtitle: 'Batches for ${_selectedOperation!.name}',
+                      ),
+                      const SizedBox(height: 12),
+                      _buildDetailsTable(_selectedOperation!.id),
                     ],
                   ],
                 ),
@@ -306,65 +400,55 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 
   Widget _buildDetailsTable(int opId) {
     if (_loadingDetails[opId] == true) {
-      return const Padding(
-        padding: EdgeInsets.all(24),
-        child: Center(child: CircularProgressIndicator()),
+      return const ContentCard(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Center(child: CircularProgressIndicator()),
+        ),
       );
     }
 
     final summaries = _opBatchDetails[opId];
     if (summaries == null || summaries.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(24),
-        child: Center(
-          child: Column(
-            children: [
-              Icon(Icons.info_outline, color: Colors.grey.shade400, size: 32),
-              const SizedBox(height: 8),
-              const Text(
-                'No batches found for this operation.',
-                style: TextStyle(fontSize: 13, color: Colors.grey),
-              ),
-            ],
+      return const ContentCard(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.info_outline, color: Colors.grey, size: 32),
+                SizedBox(height: 8),
+                Text(
+                  'No batches found for this operation.',
+                  style: TextStyle(fontSize: 13, color: Colors.grey),
+                ),
+              ],
+            ),
           ),
         ),
       );
     }
 
-    return Container(
-      padding: const EdgeInsets.all(12),
+    return ContentCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(Icons.layers, color: Colors.blue.shade700, size: 18),
-              const SizedBox(width: 8),
-              Text(
-                'Batch Details: ${_selectedOperation!.name}',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue.shade800,
-                ),
-              ),
-            ],
-          ),
-          const Divider(height: 24, thickness: 1),
           const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
                 flex: 2,
                 child: Text(
-                  'BATCH CODE',
+                  'BATCH ID',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: FontWeight.w600,
                     color: Colors.grey.shade700,
                   ),
@@ -375,7 +459,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                 child: Text(
                   'MACHINE',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: FontWeight.w600,
                     color: Colors.grey.shade700,
                   ),
@@ -386,7 +470,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                 child: Text(
                   'COLOR',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: FontWeight.w600,
                     color: Colors.grey.shade700,
                   ),
@@ -397,7 +481,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                 child: Text(
                   'TRAYS',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: FontWeight.w600,
                     color: Colors.grey.shade700,
                   ),
@@ -408,12 +492,13 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                 child: Text(
                   'WEIGHT',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: FontWeight.w600,
                     color: Colors.grey.shade700,
                   ),
                 ),
               ),
+              const Expanded(flex: 1, child: SizedBox.shrink()),
             ],
           ),
           const SizedBox(height: 8),
@@ -479,6 +564,67 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                       ),
                     ),
                   ),
+                  Expanded(
+                    flex: 1,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        if (_selectedOperation?.name.toLowerCase().contains('lapping') ?? false)
+                          IconButton(
+                            icon: const Icon(
+                              Icons.settings_suggest,
+                              size: 20,
+                              color: Colors.green,
+                            ),
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => LappingDetailScreen(
+                                    batchHeaderId: s.batchHeaderId,
+                                    batchCode: s.batchCode,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.chevron_right,
+                            size: 20,
+                            color: Colors.blue,
+                          ),
+                          onPressed: () {
+                            final currentIndex = _operations.indexWhere((o) => o.id == _selectedOperation?.id);
+                            String nextOpName = 'N/A';
+                            int? nextOpId;
+                            if (currentIndex != -1 && currentIndex < _operations.length - 1) {
+                              nextOpName = _operations[currentIndex + 1].name;
+                              nextOpId = _operations[currentIndex + 1].id;
+                            }
+
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ProcessingBatchDetailsScreen(
+                                  batchHeaderId: s.batchHeaderId,
+                                  currentOperationId: _selectedOperation!.id,
+                                  batchCode: s.batchCode,
+                                  machine: s.machine,
+                                  color: s.color,
+                                  trayCount: s.trayCount,
+                                  totalWeight: s.totalWeight,
+                                  operationName: _selectedOperation?.name ?? '-',
+                                  nextOperationName: nextOpName,
+                                  nextOperationId: nextOpId,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             );
@@ -490,6 +636,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
 }
 
 class _BatchSummaryItem {
+  final int batchHeaderId;
   final String batchCode;
   final String machine;
   final String color;
@@ -497,6 +644,7 @@ class _BatchSummaryItem {
   final double totalWeight;
 
   _BatchSummaryItem({
+    required this.batchHeaderId,
     required this.batchCode,
     required this.machine,
     required this.color,

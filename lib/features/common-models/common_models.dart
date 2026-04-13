@@ -153,6 +153,39 @@ class ProductionProgress {
       id: json['id'],
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'subOperation': subOperation,
+      'date': date?.toIso8601String(),
+      'transactionType': transactionType,
+      'operatorDescription': operatorDescription,
+      'primaryQuantity': primaryQuantity,
+      'primaryUOM': primaryUOM,
+      'secondaryQuantity': secondaryQuantity,
+      'secondaryUOM': secondaryUOM,
+      'wipStatus': wipStatus,
+      'gbsFlag': gbsFlag,
+      'pbsFlag': pbsFlag,
+      'progressCode': progressCode,
+      'productGrade': productGrade,
+      'productNature': productNature,
+      'operationId': operationId,
+      'workOrderHeaderId': workOrderHeaderId,
+      'workOrderLineId': workOrderLineId,
+      'processedItemId': processedItemId,
+      'itemId': itemId,
+      'shiftId': shiftId,
+      'primaryTrayId': primaryTrayId,
+      'secondaryTrayId': secondaryTrayId,
+      'machineId': machineId,
+      'planHeaderId': planHeaderId,
+      'locatorId': locatorId,
+      'batchHeaderId': batchHeaderId,
+      'concurrencyStamp': concurrencyStamp,
+      'id': id,
+    };
+  }
 }
 
 class Operation {
@@ -186,17 +219,17 @@ class Operation {
 
   factory Operation.fromJson(Map<String, dynamic> json) {
     return Operation(
-      code: json['code'],
-      name: json['name'],
+      code: json['code'] ?? '',
+      name: json['name'] ?? '',
       description: json['description'],
       identifierRef: json['identifierRef'],
-      concurrencyStamp: json['concurrencyStamp'],
-      creationTime: json['creationTime'],
+      concurrencyStamp: json['concurrencyStamp'] ?? '',
+      creationTime: json['creationTime'] ?? '',
       lastModificationTime: json['lastModificationTime'],
       creatorId: json['creatorId'],
       lastModifierId: json['lastModifierId'],
       isLastProcess: json['isLastProcess'],
-      processNature: json['processNature'],
+      processNature: (json['processNature'] as num?)?.toInt(),
       id: (json['id'] as num?)?.toInt() ?? 0,
     );
   }
@@ -231,13 +264,13 @@ class Shift {
 
   factory Shift.fromJson(Map<String, dynamic> json) {
     return Shift(
-      code: json['code'],
+      code: json['code'] ?? '',
       description: json['description'],
-      startTime: json['startTime'],
-      endTime: json['endTIme'],
+      startTime: json['startTime'] ?? '',
+      endTime: json['endTIme'] ?? '',
       department: json['department'],
-      concurrencyStamp: json['concurrencyStamp'],
-      creationTime: json['creationTime'],
+      concurrencyStamp: json['concurrencyStamp'] ?? '',
+      creationTime: json['creationTime'] ?? '',
       lastModificationTime: json['lastModificationTime'],
       creatorId: json['creatorId'],
       lastModifierId: json['lastModifierId'],
@@ -299,12 +332,12 @@ class ResourceType {
 
   factory ResourceType.fromJson(Map<String, dynamic> json) {
     return ResourceType(
-      code: json['code'] as String,
-      name: json['name'] as String,
-      description: json['description'] as String?,
-      costCenterLineId: json['costCenterLineId'] as int,
-      concurrencyStamp: json['concurrencyStamp'] as String,
-      id: json['id'] as int,
+      code: json['code']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      description: json['description']?.toString(),
+      costCenterLineId: (json['costCenterLineId'] as num?)?.toInt() ?? 0,
+      concurrencyStamp: json['concurrencyStamp']?.toString() ?? '',
+      id: (json['id'] as num?)?.toInt() ?? 0,
     );
   }
 }
@@ -348,12 +381,12 @@ class WorkOrderHeader {
 
   factory WorkOrderHeader.fromJson(Map<String, dynamic> json) {
     return WorkOrderHeader(
-      description: json['description'],
-      workOrderDate: json['workOrderDate'],
-      status: json['status'],
-      lockFlag: json['lockFlag'],
-      provisionalLock: json['provisionalLock'],
-      workOrderCode: json['workOrderCode'],
+      description: json['description'] ?? '',
+      workOrderDate: json['workOrderDate'] ?? '',
+      status: json['status'] ?? false,
+      lockFlag: json['lockFlag'] ?? false,
+      provisionalLock: json['provisionalLock'] ?? false,
+      workOrderCode: json['workOrderCode'] ?? '',
       customerPo: json['customerPo'],
       customerId: (json['customerId'] as num?)?.toInt() ?? 0,
       brandId: (json['brandId'] as num?)?.toInt() ?? 0,
@@ -488,14 +521,14 @@ class Item {
 
   factory Item.fromJson(Map<String, dynamic> json) {
     return Item(
-      code: json['code'],
-      description: json['description'],
-      active: json['active'],
+      code: json['code'] ?? '',
+      description: json['description'] ?? '',
+      active: json['active'] ?? false,
       sam: (json['sam'] as num?)?.toDouble() ?? 0,
       perGarmentTube: (json['perGarmentTube'] as num?)?.toDouble() ?? 0,
       pieceWeight: (json['pieceWeight'] as num?)?.toDouble(),
-      sizeDescription: json['sizeDescription'],
-      componentDescription: json['componentDescription'],
+      sizeDescription: json['sizeDescription'] ?? '',
+      componentDescription: json['componentDescription'] ?? '',
       itemCategoryId: (json['itemCategoryId'] as num?)?.toInt() ?? 0,
       concurrencyStamp: json['concurrencyStamp'],
       isDeleted: json['isDeleted'],
@@ -534,12 +567,12 @@ class CostCenterLine {
 
   factory CostCenterLine.fromJson(Map<String, dynamic> json) {
     return CostCenterLine(
-      code: json['code'],
-      name: json['name'],
+      code: json['code'] ?? '',
+      name: json['name'] ?? '',
       description: json['description'],
-      costCenterId: json['costCenterId'],
-      concurrencyStamp: json['concurrencyStamp'],
-      creationTime: json['creationTime'],
+      costCenterId: (json['costCenterId'] as num?)?.toInt() ?? 0,
+      concurrencyStamp: json['concurrencyStamp'] ?? '',
+      creationTime: json['creationTime'] ?? '',
       lastModificationTime: json['lastModificationTime'],
       creatorId: json['creatorId'],
       lastModifierId: json['lastModifierId'],
@@ -878,24 +911,24 @@ class PrimaryTrayModel {
       active: json['active'],
       trayCode: json['trayCode'],
       trayQuantity: (json['trayQuantity'] as num?)?.toDouble(),
-      productGrade: json['productGrade'],
-      productNature: json['productNature'],
-      trayType: json['trayType'],
-      shiftId: json['shiftId'],
-      planLineId: json['planLineId'],
-      resourceId: json['resourceId'],
-      workOrderHeaderId: json['workOrderHeaderId'],
-      workOrderLineId: json['workOrderLineId'],
-      knitItemId: json['knitItemId'],
-      locatorId: json['locatorId'],
-      batchHeaderId: json['batchHeaderId'],
-      batchLinesId: json['batchLinesId'],
+      productGrade: (json['productGrade'] as num?)?.toInt(),
+      productNature: (json['productNature'] as num?)?.toInt(),
+      trayType: (json['trayType'] as num?)?.toInt(),
+      shiftId: (json['shiftId'] as num?)?.toInt(),
+      planLineId: (json['planLineId'] as num?)?.toInt(),
+      resourceId: (json['resourceId'] as num?)?.toInt(),
+      workOrderHeaderId: (json['workOrderHeaderId'] as num?)?.toInt(),
+      workOrderLineId: (json['workOrderLineId'] as num?)?.toInt(),
+      knitItemId: (json['knitItemId'] as num?)?.toInt(),
+      locatorId: (json['locatorId'] as num?)?.toInt(),
+      batchHeaderId: (json['batchHeaderId'] as num?)?.toInt(),
+      batchLinesId: (json['batchLinesId'] as num?)?.toInt(),
       concurrencyStamp: json['concurrencyStamp'],
       lastModificationTime: json['lastModificationTime'] != null ? DateTime.parse(json['lastModificationTime']) : null,
       lastModifierId: json['lastModifierId'],
       creationTime: json['creationTime'] != null ? DateTime.parse(json['creationTime']) : null,
       creatorId: json['creatorId'],
-      id: json['id'],
+      id: (json['id'] as num?)?.toInt(),
     );
   }
 }

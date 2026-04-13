@@ -25,15 +25,15 @@ class ProductionProgressResponseModel {
 
   factory ProductionProgressResponseModel.fromJson(Map<String, dynamic> json) {
     return ProductionProgressResponseModel(
-      productionProgress: ProductionProgress.fromJson(json['productionProgress']),
-      operation: Operation.fromJson(json['operation']),
-      shift: Shift.fromJson(json['shift']),
-      machineModel: MachineModel.fromJson(json['machine']),
-      workOrderHeader: WorkOrderHeader.fromJson(json['workOrderHeader']),
-      workOrderLine: WorkOrderLine.fromJson(json['workOrderLine']),
-      item: Item.fromJson(json['item']),
-      primaryTrayModel: PrimaryTrayModel.fromJson(json['primaryTray']),
-      planHeader: PlanHeader.fromJson(json['planHeader']),
+      productionProgress: ProductionProgress.fromJson(json['productionProgress'] ?? {}),
+      operation: Operation.fromJson(json['operation'] ?? {}),
+      shift: Shift.fromJson(json['shift'] ?? {}),
+      machineModel: MachineModel.fromJson(json['machine'] ?? {}),
+      workOrderHeader: WorkOrderHeader.fromJson(json['workOrderHeader'] ?? {}),
+      workOrderLine: WorkOrderLine.fromJson(json['workOrderLine'] ?? {}),
+      item: Item.fromJson(json['item'] ?? {}),
+      primaryTrayModel: PrimaryTrayModel.fromJson(json['primaryTray'] ?? {}),
+      planHeader: PlanHeader.fromJson(json['planHeader'] ?? {}),
     );
   }
 }

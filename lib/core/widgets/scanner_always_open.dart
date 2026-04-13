@@ -8,21 +8,37 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 class ScannerAlwaysOpen extends StatefulWidget {
   final String title;
-  final FutureOr<String?> Function(String code) onResult; /// Changed to allow async
+  final FutureOr<String?> Function(String code) onResult;
 
-  const ScannerAlwaysOpen({super.key, required this.title, required this.onResult});
+  /// Changed to allow async
 
-  static Future<void> show(BuildContext context, {required String title, required FutureOr<String?> Function(String) onResult}) {
+  const ScannerAlwaysOpen({
+    super.key,
+    required this.title,
+    required this.onResult,
+  });
+
+  static Future<void> show(
+    BuildContext context, {
+    required String title,
+    required FutureOr<String?> Function(String) onResult,
+  }) {
     return showGeneralDialog<void>(
       context: context,
-      barrierDismissible: true,
+      barrierDismissible: false,
       barrierLabel: 'Dismiss',
       barrierColor: Colors.black54,
       pageBuilder: (context, animation, secondaryAnimation) => Center(
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 24, offset: const Offset(0, 12))],
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 24,
+                offset: const Offset(0, 12),
+              ),
+            ],
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(24),
@@ -59,8 +75,9 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
     _manualController.addListener(_onManualChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Future.delayed(const Duration(milliseconds: 800), () {
-        if (mounted) {_controller.start();
-        debugPrint("SCANNER: Camera Started Manually");
+        if (mounted) {
+          _controller.start();
+          debugPrint("SCANNER: Camera Started Manually");
         }
       });
     });
@@ -126,7 +143,9 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
         } else {
           // ERROR (Any of your 4 conditions)
           HapticFeedback.heavyImpact();
-          setState(() => _errorOverlayText = errorMessage); // Set the specific message
+          setState(
+            () => _errorOverlayText = errorMessage,
+          ); // Set the specific message
 
           _duplicateAlertTimer?.cancel();
           _duplicateAlertTimer = Timer(const Duration(seconds: 1), () {
@@ -140,6 +159,7 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
       }
     }
   }
+
   void _close() => Navigator.pop(context);
 
   @override
@@ -158,9 +178,24 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
       child: SafeArea(
         child: Column(
           children: [
-            CustomInspectionHeader(heading: widget.title, subtitle: 'Scan or enter manually', isShowBackIcon: true, onBackPress: _close, topPadding: 0, horizontalPadding: 12, widget: CustomOutlinedButton(borderColor: Colors.blue, label: 'Done',fillColor: Colors.blue,textColor: Colors.white,buttonHeight: 36.0,onPressed: () {
-              _close();}
-            ),),
+            CustomInspectionHeader(
+              heading: widget.title,
+              subtitle: 'Scan or enter manually',
+              isShowBackIcon: true,
+              onBackPress: _close,
+              topPadding: 0,
+              horizontalPadding: 12,
+              widget: CustomOutlinedButton(
+                borderColor: Colors.blue,
+                label: 'Done',
+                fillColor: Colors.blue,
+                textColor: Colors.white,
+                buttonHeight: 36.0,
+                onPressed: () {
+                  _close();
+                },
+              ),
+            ),
             Padding(
               padding: const EdgeInsets.all(12),
               child: Row(
@@ -174,12 +209,22 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
                           borderRadius: BorderRadius.circular(6),
                           borderSide: BorderSide(color: Colors.grey.shade300),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(width: 10),
-                  if (_showSubmit) CustomOutlinedButton(label: 'Submit', borderColor: Colors.blue, fillColor: Colors.blue, textColor: Colors.white, onPressed: _submitManual),
+                  if (_showSubmit)
+                    CustomOutlinedButton(
+                      label: 'Submit',
+                      borderColor: Colors.blue,
+                      fillColor: Colors.blue,
+                      textColor: Colors.white,
+                      onPressed: _submitManual,
+                    ),
                 ],
               ),
             ),
@@ -196,14 +241,24 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.error_outline, color: Colors.white, size: 80),
+                            const Icon(
+                              Icons.error_outline,
+                              color: Colors.white,
+                              size: 80,
+                            ),
                             const SizedBox(height: 16),
                             Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                              ),
                               child: Text(
                                 _errorOverlayText!, // Shows specific validation message
                                 textAlign: TextAlign.center,
-                                style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ],
@@ -217,7 +272,12 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
                       width: 250,
                       height: 250,
                       decoration: BoxDecoration(
-                        border: Border.all(color: _errorOverlayText != null ? Colors.red : Colors.blue.withOpacity(0.5), width: 4),
+                        border: Border.all(
+                          color: _errorOverlayText != null
+                              ? Colors.red
+                              : Colors.blue.withOpacity(0.5),
+                          width: 4,
+                        ),
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
