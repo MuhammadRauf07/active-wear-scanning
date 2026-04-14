@@ -222,15 +222,15 @@ class Operation {
       code: json['code'] ?? '',
       name: json['name'] ?? '',
       description: json['description'],
-      identifierRef: json['identifierRef'],
+      identifierRef: json['identifierRef']?.toString(),
       concurrencyStamp: json['concurrencyStamp'] ?? '',
       creationTime: json['creationTime'] ?? '',
       lastModificationTime: json['lastModificationTime'],
       creatorId: json['creatorId'],
       lastModifierId: json['lastModifierId'],
       isLastProcess: json['isLastProcess'],
-      processNature: (json['processNature'] as num?)?.toInt(),
-      id: (json['id'] as num?)?.toInt() ?? 0,
+      processNature: json['processNature'] != null ? int.tryParse(json['processNature'].toString()) : null,
+      id: json['id'] != null ? int.tryParse(json['id'].toString()) ?? 0 : 0,
     );
   }
 }

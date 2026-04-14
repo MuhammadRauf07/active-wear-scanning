@@ -16,8 +16,35 @@ class ApiService {
     var response = await PlexNetworking.instance.get(endNode, query: query ?? {});
 
     if (response is PlexSuccess) {
-      var data = response.response['items'] as List;
-      return PlexApiResult(true, 200, "Success", List<Map<String, dynamic>>.from(data));
+      try {
+        final resData = response.response;
+        List data = [];
+        if (resData is List) {
+          data = resData;
+        } else if (resData is Map) {
+          if (resData.containsKey('items') && resData['items'] is List) {
+            data = resData['items'] as List;
+          } else if (resData.containsKey('data') && resData['data'] is List) {
+            data = resData['data'] as List;
+          } else if (resData.containsKey('result')) {
+            final resNode = resData['result'];
+            if (resNode is List) {
+               data = resNode;
+            } else if (resNode is Map && resNode.containsKey('items') && resNode['items'] is List) {
+               data = resNode['items'] as List;
+            } else {
+               throw Exception("Result node is not a list and does not contain 'items'. Raw: $resNode");
+            }
+          } else {
+            throw Exception("Response map does not contain 'items', 'data', or 'result' keys. Raw keys: ${resData.keys}");
+          }
+        } else {
+          throw Exception("Response is completely unknown type: ${resData.runtimeType}");
+        }
+        return PlexApiResult(true, 200, "Success", List<Map<String, dynamic>>.from(data));
+      } catch (e) {
+        return PlexApiResult(false, 500, "Data parsing error: $e", null);
+      }
     } else {
       var error = response as PlexError;
 

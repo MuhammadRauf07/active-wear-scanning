@@ -29,6 +29,8 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
   final Map<int, bool> _loadingDetails = {};
   bool _isLoaderShown = false;
   bool _isLoadingOperations = false;
+  bool _isInitialLoading = true; // true until both operations + counts are ready
+  String? _errorMessage;
   final _batchBarcodeController = TextEditingController();
 
   // Stats
@@ -38,6 +40,10 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AppLoader.show(message: 'Loading Processing...');
+      _isLoaderShown = true;
+    });
     _fetchOperations();
   }
 
@@ -64,78 +70,89 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
   }
 
   Future<void> _fetchOperations() async {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        AppLoader.show();
-        _isLoaderShown = true;
-      }
-    });
     setState(() => _isLoadingOperations = true);
-    final result = await _processingRepo.fetchProcessingOperations();
+    
+    try {
+      final result = await _processingRepo.fetchProcessingOperations();
 
-    if (result.success && result.data != null) {
-      final List<Operation> fetched = result.data as List<Operation>;
+      if (result.success && result.data != null) {
+        final List<Operation> fetched = result.data as List<Operation>;
 
-      final filteredOps = fetched.where((op) {
-        if (op.identifierRef == null) return false;
-        if (op.processNature != 1) return false;
-        final int? idRef = int.tryParse(op.identifierRef!);
-        return idRef != null;
-      }).toList();
+        final filteredOps = fetched.where((op) {
+          if (op.identifierRef == null) return false;
+          if (op.processNature != 1) return false;
+          final int? idRef = int.tryParse(op.identifierRef!);
+          return idRef != null;
+        }).toList();
 
-      filteredOps.sort((a, b) {
-        final int valA = int.parse(a.identifierRef!);
-        final int valB = int.parse(b.identifierRef!);
-        return valA.compareTo(valB);
-      });
-
-      if (mounted) {
-        setState(() {
-          _operations = filteredOps;
-          _isLoadingOperations = false;
-        });
-        _fetchAllBatchCounts();
-      }
-    } else {
-      if (mounted) {
-        setState(() => _isLoadingOperations = false);
-        if (_isLoaderShown) {
-          AppLoader.hide();
-          _isLoaderShown = false;
+        try {
+          filteredOps.sort((a, b) {
+            final int valA = int.tryParse(a.identifierRef ?? '0') ?? 0;
+            final int valB = int.tryParse(b.identifierRef ?? '0') ?? 0;
+            return valA.compareTo(valB);
+          });
+        } catch (e) {
+          debugPrint('Sorting error: $e');
         }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading operations: ${result.message}'),
-          ),
-        );
+
+        if (mounted) {
+          setState(() {
+            _operations = filteredOps;
+            _isLoadingOperations = false;
+          });
+          await _fetchAllBatchCounts();
+        }
+      } else {
+        if (mounted) {
+          if (_isLoaderShown) { AppLoader.hide(); _isLoaderShown = false; }
+          setState(() {
+            _isLoadingOperations = false;
+            _isInitialLoading = false;
+            _errorMessage = 'API Error: ${result.message}';
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        if (_isLoaderShown) { AppLoader.hide(); _isLoaderShown = false; }
+        setState(() {
+          _isLoadingOperations = false;
+          _isInitialLoading = false;
+          _errorMessage = 'Parsing Error: $e';
+        });
       }
     }
   }
 
   Future<void> _fetchAllBatchCounts() async {
     final futures = _operations.map((op) async {
-      final res = await _processingRepo.fetchProductionProgress({
-        'OperationId': op.id.toString(),
-        'TransactionType': '2',
-      });
-      if (res.success && res.data != null) {
-        final records = res.data as List<ProductionProgressResponseModel>;
-        final uniqueBatchIds = records
-            .map((r) => r.productionProgress.batchHeaderId)
-            .whereType<int>()
-            .toSet();
-        if (mounted) {
-          setState(() {
-            _opBatchCounts[op.id] = uniqueBatchIds.length;
-          });
+      try {
+        final res = await _processingRepo.fetchProductionProgress({
+          'OperationId': op.id.toString(),
+          'TransactionType': '2',
+        });
+        if (res.success && res.data != null) {
+          final records = res.data as List<ProductionProgressResponseModel>;
+          final uniqueBatchIds = records
+              .map((r) => r.productionProgress.batchHeaderId)
+              .whereType<int>()
+              .toSet();
+          if (mounted) {
+            setState(() {
+              _opBatchCounts[op.id] = uniqueBatchIds.length;
+            });
+          }
         }
+      } catch (e) {
+        debugPrint('Error fetching batch counts for operation ${op.id}: $e');
       }
     });
 
     await Future.wait(futures);
-    if (_isLoaderShown) {
-      AppLoader.hide();
-      _isLoaderShown = false;
+    // Both operations and counts are now ready — hide loader and show the screen
+    if (mounted) {
+      if (_isLoaderShown) { AppLoader.hide(); _isLoaderShown = false; }
+      setState(() => _isInitialLoading = false);
     }
   }
 
@@ -237,23 +254,28 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                     ),
                     const SizedBox(height: 12),
                     ContentCard(
-                      child: _operations.isEmpty && !_isLoadingOperations
+                      child: _isLoadingOperations
                           ? const Padding(
-                              padding: EdgeInsets.all(24),
-                              child: Center(
-                                child: Text(
-                                  'No operations available.',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              ),
+                              padding: EdgeInsets.all(40),
+                              child: Center(child: CircularProgressIndicator()),
                             )
-                          : ListView.separated(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: _operations.length,
+                          : _operations.isEmpty
+                              ? Padding(
+                                  padding: const EdgeInsets.all(24),
+                                  child: Center(
+                                    child: Text(
+                                      _errorMessage ?? 'No operations available.',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: _errorMessage != null ? Colors.red : Colors.grey,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : ListView.separated(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  itemCount: _operations.length,
                               separatorBuilder: (_, __) =>
                                   const Divider(height: 1, thickness: 1),
                               itemBuilder: (context, index) {
@@ -498,7 +520,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                   ),
                 ),
               ),
-              const Expanded(flex: 1, child: SizedBox.shrink()),
+              const Expanded(flex: 2, child: SizedBox.shrink()),
             ],
           ),
           const SizedBox(height: 8),
@@ -523,7 +545,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                     child: Text(
                       s.machine,
                       style: const TextStyle(
-                        fontSize: 12,
+                        fontSize: 13,
                         color: Colors.black87,
                         fontWeight: FontWeight.normal,
                       ),
@@ -536,7 +558,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 11,
+                        fontSize: 13,
                         color: Colors.black87,
                         fontWeight: FontWeight.normal,
                       ),
@@ -565,7 +587,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                     ),
                   ),
                   Expanded(
-                    flex: 1,
+                    flex: 2,
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
@@ -576,6 +598,8 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                               size: 20,
                               color: Colors.green,
                             ),
+                            padding: const EdgeInsets.all(4),
+                            constraints: const BoxConstraints(),
                             onPressed: () {
                               Navigator.push(
                                 context,
@@ -583,18 +607,40 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                                   builder: (context) => LappingDetailScreen(
                                     batchHeaderId: s.batchHeaderId,
                                     batchCode: s.batchCode,
+                                    machine: s.machine,
+                                    color: s.color,
+                                    trayCount: s.trayCount,
+                                    totalWeight: s.totalWeight,
+                                    currentOperationId: _selectedOperation!.id,
+                                    nextOperationId: () {
+                                      final currentIndex = _operations.indexWhere((o) => o.id == _selectedOperation?.id);
+                                      if (currentIndex != -1 && currentIndex < _operations.length - 1) {
+                                        return _operations[currentIndex + 1].id;
+                                      }
+                                      return null;
+                                    }(),
+                                    nextOperationName: () {
+                                      final currentIndex = _operations.indexWhere((o) => o.id == _selectedOperation?.id);
+                                      if (currentIndex != -1 && currentIndex < _operations.length - 1) {
+                                        return _operations[currentIndex + 1].name;
+                                      }
+                                      return 'N/A';
+                                    }(),
                                   ),
                                 ),
                               );
                             },
                           ),
+                        const SizedBox(width: 4),
                         IconButton(
                           icon: const Icon(
                             Icons.chevron_right,
                             size: 20,
                             color: Colors.blue,
                           ),
-                          onPressed: () {
+                          padding: const EdgeInsets.all(4),
+                          constraints: const BoxConstraints(),
+                          onPressed: () async {
                             final currentIndex = _operations.indexWhere((o) => o.id == _selectedOperation?.id);
                             String nextOpName = 'N/A';
                             int? nextOpId;
@@ -603,7 +649,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                               nextOpId = _operations[currentIndex + 1].id;
                             }
 
-                            Navigator.push(
+                            final result = await Navigator.push(
                               context,
                               MaterialPageRoute(
                                 builder: (context) => ProcessingBatchDetailsScreen(
@@ -620,6 +666,12 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                                 ),
                               ),
                             );
+
+                            if (result == true) {
+                              // Auto-refresh counters and batch list when coming back from a successful submit
+                              _fetchAllBatchCounts();
+                              _fetchOpDetails(_selectedOperation!.id);
+                            }
                           },
                         ),
                       ],

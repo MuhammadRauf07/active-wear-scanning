@@ -9,7 +9,7 @@ class PlanLineResponseModel {
   final WorkOrderLine workOrderLine;
   final Item item;
   final CostCenterLine costCenterLine;
-  final PlanHeader planHeader;
+  final PlanHeader? planHeader;
 
   PlanLineResponseModel({
     required this.planLine,
@@ -20,7 +20,7 @@ class PlanLineResponseModel {
     required this.workOrderLine,
     required this.item,
     required this.costCenterLine,
-    required this.planHeader,
+    this.planHeader,
   });
 
   factory PlanLineResponseModel.fromJson(Map<String, dynamic> json) {
@@ -33,7 +33,7 @@ class PlanLineResponseModel {
       workOrderLine: WorkOrderLine.fromJson(json['workOrderLine']),
       item: Item.fromJson(json['item']),
       costCenterLine: CostCenterLine.fromJson(json['costCenterLine']),
-      planHeader: PlanHeader.fromJson(json['planHeader']),
+      planHeader: json['planHeader'] != null ? PlanHeader.fromJson(json['planHeader']) : null,
     );
   }
 }

@@ -27,6 +27,9 @@ void main() {
     PlexApp(
       appInfo: PlexAppInfo(title: 'Active Wear Scanning', appLogo: const Icon(Icons.qr_code_scanner), initialRoute: '/'),
       onInitializationComplete: () {
+        // // Force the app to clear memory and demand a login every single time it boots
+        // PlexApp.app.logout();
+        
         PlexNetworking.instance.allowBadCertificateForHTTPS();
         PlexNetworking.instance.setBasePath(AppConfig.baseUrl);
         PlexNetworking.instance.addHeaders = () async {

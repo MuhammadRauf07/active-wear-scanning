@@ -161,28 +161,30 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                                     onPressed: _toggleTrayDetails,
                                   ),
                                 ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: CustomOutlinedButton(
-                                    label: 'Rework',
-                                    borderColor: Colors.orange,
-                                    textColor: Colors.orange,
-                                    onPressed: () {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Rework action initiated')),
-                                      );
-                                    },
+                                if (!widget.operationName.toLowerCase().contains('lapping')) ...[
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: CustomOutlinedButton(
+                                      label: 'Rework',
+                                      borderColor: Colors.orange,
+                                      textColor: Colors.orange,
+                                      onPressed: () {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Rework action initiated')),
+                                        );
+                                      },
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: CustomOutlinedButton(
-                                    label: 'Submit',
-                                    borderColor: Colors.green,
-                                    textColor: Colors.green,
-                                    onPressed: _confirmSubmit,
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: CustomOutlinedButton(
+                                      label: 'Submit',
+                                      borderColor: Colors.green,
+                                      textColor: Colors.green,
+                                      onPressed: _confirmSubmit,
+                                    ),
                                   ),
-                                ),
+                                ],
                               ],
                             ),
                           ],

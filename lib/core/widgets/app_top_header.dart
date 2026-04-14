@@ -59,13 +59,14 @@ class CustomInspectionHeader extends StatelessWidget {
           ),
           callBack == null
               ? widget ?? Icon(icon, color: Colors.blueAccent)
-              : InkWell(
-                  onTap: () {
-                    callBack!.call();
-                  },
-                  child: SizedBox(
-                    width: 100,
-                    child: CustomOutlinedButton(borderColor: Colors.blue, label: buttonLabel, fillColor: Colors.blueAccent, textColor: Colors.white),
+              : SizedBox(
+                  width: 100,
+                  child: CustomOutlinedButton(
+                    borderColor: Colors.blue,
+                    label: buttonLabel,
+                    fillColor: Colors.blueAccent,
+                    textColor: Colors.white,
+                    onPressed: callBack,
                   ),
                 ),
         ],

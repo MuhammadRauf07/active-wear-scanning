@@ -36,6 +36,11 @@ class BatchRepo {
     return result;
   }
 
+  Future<PlexApiResult> createTrayDetail(Map<String, dynamic> data) async {
+    final result = await _api.post('/api/app/tray-details', body: data);
+    return result;
+  }
+
   Future<PlexApiResult> fetchTrayDetails() async {
     final result = await _api.getList('/api/app/tray-details');
     return result;
@@ -94,6 +99,16 @@ class BatchRepo {
 
   Future<PlexApiResult> deleteBatchLine(int id) async {
     final result = await _api.delete('/api/app/batch-liness/$id');
+    return result;
+  }
+
+  Future<PlexApiResult> updateBatchLine(int id, Map<String, dynamic> data) async {
+    final result = await _api.put('/api/app/batch-liness/$id', body: data);
+    return result;
+  }
+
+  Future<PlexApiResult> fetchBatchLinesByProgressId(int progressId) async {
+    final result = await _api.getList('/api/app/batch-liness', query: {'ProgressId': progressId.toString()});
     return result;
   }
 

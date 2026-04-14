@@ -287,7 +287,7 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
         'primaryTrayId': bl['trayId'],
         'machineId': progress?['machineId'] ?? bh.machineId,
         'planHeaderId': progress?['planHeaderId'],
-        'locatorId': bl['locatorId'],
+        'locatorId': 10,
         'batchHeaderId': headerId,
         'batchLinesId': bl['id'],
         'processItemd': processedItemId,
@@ -325,7 +325,7 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
         'primaryTrayId': bl['trayId'],
         'machineId': progress?['machineId'] ?? bh.machineId,
         'planHeaderId': progress?['planHeaderId'],
-        'locatorId': bl['locatorId'],
+        'locatorId': 10,
         'batchHeaderId': headerId,
         'batchLinesId': bl['id'],
         'processedItemId': processedItemId,
@@ -334,6 +334,34 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
       final progRes = await _batchRepo.postProductionProgress(progressData);
       if (progRes.success) {
         debugPrint('✅ ProductionProgress issued for tray ${bl["trayId"]}');
+        
+        // ── Step 2c: Update the BatchLine itself to reflect the new locator ──
+        final blId = bl['id'] as int?;
+        if (blId != null) {
+          // Clean Business DTO: Include all business fields but exclude read-only system metadata.
+          final Map<String, dynamic> cleanBlDto = {
+            'planDate': bl['planDate'],
+            'transactionDate': bl['transactionDate'],
+            'primaryQuantity': bl['primaryQuantity'],
+            'primaryUOM': bl['primaryUOM'],
+            'secondaryQuantity': bl['secondaryQuantity'],
+            'secondaryUOM': bl['secondaryUOM'],
+            'batchLineCode': bl['batchLineCode'],
+            'active': bl['active'] ?? true,
+            'isReAssigned': bl['isReAssigned'] ?? false,
+            'batchHeaderId': bl['batchHeaderId'],
+            'progressId': bl['progressId'],
+            'wipTransactionId': bl['wipTransactionId'],
+            'workOrderHeaderId': bl['workOrderHeaderId'],
+            'workOrderLineId': bl['workOrderLineId'],
+            'itemId': bl['itemId'],
+            'trayId': bl['trayId'],
+            'locatorId': 10, // Transition to Processing
+            'processedItemId': bl['processedItemId'],
+            'concurrencyStamp': bl['concurrencyStamp'],
+          };
+          await _batchRepo.updateBatchLine(blId, cleanBlDto);
+        }
       } else {
         debugPrint('❌ ProductionProgress issue failed for tray ${bl["trayId"]}: ${progRes.message}');
         if (context.mounted) {

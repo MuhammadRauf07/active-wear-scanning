@@ -95,9 +95,9 @@ class TrayScanningRepo {
   }
 
   ///
-  Future<void> saveProductionProgress(Map<String, dynamic> data) async {
+  Future<PlexApiResult> saveProductionProgress(Map<String, dynamic> data) async {
     print("ProductionProgressData :: ${data.toString()}");
 
-    await _api.post('/api/app/production-progresses', body: data);
+    return await _api.post('/api/app/production-progresses', body: data);
   }
 }

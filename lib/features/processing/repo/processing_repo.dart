@@ -7,13 +7,16 @@ class ProcessingRepo {
   final ApiService _api = ApiService();
 
   Future<PlexApiResult> fetchProcessingOperations() async {
-    final result = await _api.getList('/api/app/operations');
+    final result = await _api.getList('/api/app/operations?MaxResultCount=1000');
     
     if (!result.success || result.data == null) return result;
 
     try {
       final data = result.data as List<Map<String, dynamic>>;
-      final list = data.map((item) => Operation.fromJson(item)).toList();
+      final list = data.map((item) {
+        final opJson = item.containsKey('operation') ? (item['operation'] as Map<String, dynamic>) : item;
+        return Operation.fromJson(opJson);
+      }).toList();
       return PlexApiResult(true, 200, "Success", list);
     } catch (e) {
       return PlexApiResult(false, 500, e.toString(), null);

@@ -248,7 +248,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
       Map<String, dynamic> productionProgressData = {
         "subOperation": "Knitting Tray Allocation",
-        "date": DateTime.now().toString(),
+        "date": DateTime.now().toIso8601String(),
         "transactionType": 1,
         "operatorDescription": "system",
         "primaryQuantity": _quantityControllers[i].text.toString(),
@@ -270,8 +270,24 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
         "trayType": 1,
       };
 
-      await _trayScanningRepo.updateTrayDetails(planData, _scannedTrays[i].trayUpdateId!);
-      await _trayScanningRepo.saveProductionProgress(productionProgressData);
+      final trayRes = await _trayScanningRepo.updateTrayDetails(planData, _scannedTrays[i].trayUpdateId!);
+      final progRes = await _trayScanningRepo.saveProductionProgress(productionProgressData);
+
+      if (!progRes.success) {
+        debugPrint('❌ ProductionProgress failed for tray ${i}: ${progRes.message}');
+        if (mounted) {
+          AppLoader.hide();
+          await showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Save Failed'),
+              content: Text('Failed to save Production Progress: ${progRes.message}'),
+              actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
+            ),
+          );
+        }
+        return; // Stop if any tray fails
+      }
     }
 
     

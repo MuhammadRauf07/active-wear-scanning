@@ -9,6 +9,7 @@ class ProductionProgressResponseModel {
   final WorkOrderLine workOrderLine;
   final PrimaryTrayModel primaryTrayModel;
   final Item item;
+  final Item? processedItem;
   final PlanHeader planHeader;
 
   ProductionProgressResponseModel({
@@ -20,6 +21,7 @@ class ProductionProgressResponseModel {
     required this.workOrderLine,
     required this.primaryTrayModel,
     required this.item,
+    this.processedItem,
     required this.planHeader,
   });
 
@@ -32,6 +34,7 @@ class ProductionProgressResponseModel {
       workOrderHeader: WorkOrderHeader.fromJson(json['workOrderHeader'] ?? {}),
       workOrderLine: WorkOrderLine.fromJson(json['workOrderLine'] ?? {}),
       item: Item.fromJson(json['item'] ?? {}),
+      processedItem: json['processedItem'] != null ? Item.fromJson(json['processedItem']) : null,
       primaryTrayModel: PrimaryTrayModel.fromJson(json['primaryTray'] ?? {}),
       planHeader: PlanHeader.fromJson(json['planHeader'] ?? {}),
     );
