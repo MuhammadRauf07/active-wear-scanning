@@ -76,7 +76,7 @@ void main() {
         dashboardScreens: [
           PlexRoute(
             route: '/scanning',
-            title: 'Active Ware',
+            title: 'Active Wear',
             logo: const Icon(Icons.home_outlined),
             selectedLogo: const Icon(Icons.home),
             screen: (context, {data}) => const ScanningSectionsScreen(),

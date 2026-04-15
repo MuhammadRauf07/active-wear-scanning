@@ -10,7 +10,7 @@ class ProductionProgressResponseModel {
   final PrimaryTrayModel primaryTrayModel;
   final Item item;
   final Item? processedItem;
-  final PlanHeader planHeader;
+  final PlanHeader? planHeader;
 
   ProductionProgressResponseModel({
     required this.productionProgress,
@@ -22,7 +22,7 @@ class ProductionProgressResponseModel {
     required this.primaryTrayModel,
     required this.item,
     this.processedItem,
-    required this.planHeader,
+    this.planHeader,
   });
 
   factory ProductionProgressResponseModel.fromJson(Map<String, dynamic> json) {
@@ -36,7 +36,7 @@ class ProductionProgressResponseModel {
       item: Item.fromJson(json['item'] ?? {}),
       processedItem: json['processedItem'] != null ? Item.fromJson(json['processedItem']) : null,
       primaryTrayModel: PrimaryTrayModel.fromJson(json['primaryTray'] ?? {}),
-      planHeader: PlanHeader.fromJson(json['planHeader'] ?? {}),
+      planHeader: json['planHeader'] != null ? PlanHeader.fromJson(json['planHeader']) : null,
     );
   }
 }

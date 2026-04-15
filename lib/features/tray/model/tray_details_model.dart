@@ -30,7 +30,9 @@ class TrayDetailsModel {
   factory TrayDetailsModel.fromJson(Map<String, dynamic> json) {
     return TrayDetailsModel(
       planLine: json['planLine'] != null ? PlanLine.fromJson(json['planLine']) : null,
-      trayDetails: json['trayDetail'] != null ? TrayDetail.fromJson(json['trayDetail']) : null,
+      trayDetails: json['trayDetail'] != null 
+          ? TrayDetail.fromJson(json['trayDetail']) 
+          : (json['trayCode'] != null ? TrayDetail.fromJson(json) : null),
       operation: json['operation'] != null ? Operation.fromJson(json['operation']) : null,
       shift: json['shift'] != null ? Shift.fromJson(json['shift']) : null,
       locator: json['locator'] != null ? Locator.fromJson(json['locator']) : null,

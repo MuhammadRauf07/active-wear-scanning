@@ -1,7 +1,9 @@
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'dart:io' show Platform;
 
 class BarcodeScannerDialog extends StatefulWidget {
   const BarcodeScannerDialog({super.key, this.title = 'Scan Barcode'});
@@ -68,7 +70,9 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
   void _submitManual() {
     final text = _manualController.text.trim();
     if (text.isNotEmpty) {
-      _controller.stop();
+      if (!kIsWeb && !Platform.isWindows) {
+        _controller.stop();
+      }
       Navigator.pop(context, text);
     }
   }
@@ -95,7 +99,9 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
   void dispose() {
     _manualController.removeListener(_onManualChange);
     _manualController.dispose();
-    _controller.dispose();
+    if (!kIsWeb && !Platform.isWindows) {
+      _controller.dispose();
+    }
     super.dispose();
   }
 
@@ -131,7 +137,19 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
               ),
             ),
             Expanded(
-              child: MobileScanner(controller: _controller, onDetect: _onDetect),
+              child: (!kIsWeb && Platform.isWindows)
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.computer, size: 64, color: Colors.grey.shade300),
+                          const SizedBox(height: 16),
+                          const Text('Camera scanner not supported on Windows', style: TextStyle(color: Colors.grey)),
+                          const Text('Please enter the code manually above', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                        ],
+                      ),
+                    )
+                  : MobileScanner(controller: _controller, onDetect: _onDetect),
             ),
           ],
         ),

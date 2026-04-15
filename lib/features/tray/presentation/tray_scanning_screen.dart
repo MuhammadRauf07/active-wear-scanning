@@ -43,9 +43,17 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   static const _inputAndButtonHeight = 42.0;
   static const _borderColor = Colors.blue;
 
-  static final _labelStyle = TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87);
+  static final _labelStyle = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w500,
+    color: Colors.black87,
+  );
 
-  static final _tableHeaderStyle = TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700);
+  static final _tableHeaderStyle = TextStyle(
+    fontSize: 12,
+    fontWeight: FontWeight.w600,
+    color: Colors.grey.shade700,
+  );
 
   // ─── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -65,7 +73,9 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   String _getPlanQuantityPerTray() {
     if (_planLines == null || _planLines!.isEmpty) return '';
     final quantity = _selectedPlanLine!.planLine.quantityPerTray;
-    return quantity == quantity.roundToDouble() ? quantity.round().toString() : quantity.toString();
+    return quantity == quantity.roundToDouble()
+        ? quantity.round().toString()
+        : quantity.toString();
   }
 
   /// Returns the quantity to pre-fill for new trays. User override takes priority over plan value.
@@ -85,34 +95,48 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     if (alreadyScanned) return 'Already assigned';
 
     final available = availableTraysDetail.where((t) {
-      final trayCodeFromApi = (t.trayDetails?.trayCode ?? '').trim().toLowerCase();
+      final trayCodeFromApi = (t.trayDetails?.trayCode ?? '')
+          .trim()
+          .toLowerCase();
       final scannedCodeClean = code.toLowerCase();
       return trayCodeFromApi == scannedCodeClean;
     }).toList();
-    
+
     if (available.isEmpty) return 'Tray not available';
 
     final trayDetail = available.first.trayDetails;
     if (trayDetail?.active != true) return 'Tray is not active';
 
     // Check if the tray has been logically emptied (ready for reuse)
-    final bool isEmptied = trayDetail?.locatorId == null || 
-                           trayDetail?.trayQuantity == "0" || 
-                           trayDetail?.trayQuantity == 0;
+    final bool isEmptied =
+        trayDetail?.locatorId == null ||
+        trayDetail?.trayQuantity == "0" ||
+        trayDetail?.trayQuantity == 0;
 
-    final alreadyInProduction = existingProductionProgresses.any((t) => (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase() == code.toLowerCase());
-    
+    final alreadyInProduction = existingProductionProgresses.any(
+      (t) =>
+          (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase() ==
+          code.toLowerCase(),
+    );
+
     // Only block if it's in production AND hasn't been emptied out
-    if (alreadyInProduction && !isEmptied) return 'Tray already scanned (Exists in Production Progress)';
+    if (alreadyInProduction && !isEmptied)
+      return 'Tray already scanned (Exists in Production Progress)';
 
     setState(() {
-      _scannedTrays.add(ScannedTray(
+      _scannedTrays.add(
+        ScannedTray(
           trayCode: code,
           trayUpdateId: trayDetail!.id,
-          trayConcurrencyStamp: trayDetail.concurrencyStamp
-      ));
-      final controller = TextEditingController(text: _getDefaultQuantityForNewTray());
-      controller.addListener(() => setState(() {})); // live weight recalculation
+          trayConcurrencyStamp: trayDetail.concurrencyStamp,
+        ),
+      );
+      final controller = TextEditingController(
+        text: _getDefaultQuantityForNewTray(),
+      );
+      controller.addListener(
+        () => setState(() {}),
+      ); // live weight recalculation
       _quantityControllers.add(controller);
     });
 
@@ -120,7 +144,9 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   }
 
   /// Only includes non-empty values.
-  Map<String, dynamic> _buildPlanLineDetailsMap(PlanLineResponseModel planLine) {
+  Map<String, dynamic> _buildPlanLineDetailsMap(
+    PlanLineResponseModel planLine,
+  ) {
     final result = <String, dynamic>{};
 
     void addField(String key, IconData icon, String label, String? value) {
@@ -134,14 +160,49 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     final workOrder = planLine.workOrderHeader;
     final item = planLine.item;
 
-    addField('Plan Date', Icons.calendar_today, 'Plan Date', plan.planDate.toString());
-    addField('Knitting Tube', Icons.precision_manufacturing, 'Knitting Tube', plan.primaryPlanQuantity.toString());
-    addField('Pcs Per Tray', Icons.grid_view, 'Pcs Per Tray', plan.quantityPerTray.toString());
-    addField('Garment Pcs', Icons.checkroom, 'Garment Pcs', plan.secondaryPlanQuantity.toString());
+    addField(
+      'Plan Date',
+      Icons.calendar_today,
+      'Plan Date',
+      plan.planDate.toString(),
+    );
+    addField(
+      'Knitting Tube',
+      Icons.precision_manufacturing,
+      'Knitting Tube',
+      plan.primaryPlanQuantity.toString(),
+    );
+    addField(
+      'Pcs Per Tray',
+      Icons.grid_view,
+      'Pcs Per Tray',
+      plan.quantityPerTray.toString(),
+    );
+    addField(
+      'Garment Pcs',
+      Icons.checkroom,
+      'Garment Pcs',
+      plan.secondaryPlanQuantity.toString(),
+    );
     addField('Shift Code', Icons.schedule, 'Shift Code', shift.code.toString());
-    addField('Work Order Code', Icons.assignment, 'Work Order Code', workOrder.workOrderCode);
-    addField('Work Order Date', Icons.event, 'Work Order Date', workOrder.workOrderDate);
-    addField('Item Description', Icons.description, 'Item Description', item.description);
+    addField(
+      'Work Order Code',
+      Icons.assignment,
+      'Work Order Code',
+      workOrder.workOrderCode,
+    );
+    addField(
+      'Work Order Date',
+      Icons.event,
+      'Work Order Date',
+      workOrder.workOrderDate,
+    );
+    addField(
+      'Item Description',
+      Icons.description,
+      'Item Description',
+      item.description,
+    );
 
     return result;
   }
@@ -160,7 +221,6 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
         return validationError;
       },
-
     );
   }
 
@@ -168,7 +228,10 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   Future<void> _onScanMachineBarcode() async {
     AppLoader.show();
 
-    final scannedCode = await BarcodeScannerDialog.show(context, title: 'Scan Barcode');
+    final scannedCode = await BarcodeScannerDialog.show(
+      context,
+      title: 'Scan Barcode',
+    );
 
     if (scannedCode == null || !mounted) {
       AppLoader.hide(); // Ensure loader hides if scan is cancelled
@@ -181,8 +244,11 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       _selectedPlanLine = null; // Reset selection
     });
 
-    final apiResult = await _trayScanningRepo.loadWorkOrderBySerialNumber(scannedCode);
-    final trayDetailsModel = await _trayScanningRepo.fetchAvailableTrayDetails();
+    final apiResult = await _trayScanningRepo.loadWorkOrderBySerialNumber(
+      scannedCode,
+    );
+    final trayDetailsModel = await _trayScanningRepo
+        .fetchAvailableTrayDetails();
     final progressResult = await _trayScanningRepo.fetchProductionProgress();
 
     if (!mounted) return;
@@ -193,14 +259,17 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
         _planLines = List<PlanLineResponseModel>.from(apiResult.data);
 
         if (progressResult.success && progressResult.data != null) {
-          existingProductionProgresses = progressResult.data as List<ProductionProgressResponseModel>;
+          existingProductionProgresses =
+              progressResult.data as List<ProductionProgressResponseModel>;
         }
 
         if (trayDetailsModel.data != null) {
           availableTraysDetail = (trayDetailsModel.data as List)
               .map((item) => item as TrayDetailsModel)
               .toList();
-          debugPrint("API LOADED: ${availableTraysDetail.length} trays available for validation.");
+          debugPrint(
+            "API LOADED: ${availableTraysDetail.length} trays available for validation.",
+          );
         }
         //availableTraysDetail = trayDetailsModel.data as List<TrayDetailsModel>;
 
@@ -218,13 +287,16 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $message')));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Error: $message')));
   }
 
   void _showSuccessMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Success: $message')));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Success: $message')));
   }
-
 
   /// Save API ────────────────────────────────────────────────────────────────
 
@@ -242,47 +314,71 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
         'knitItemId': _selectedPlanLine!.planLine.itemId,
         "locatorId": 2,
         "active": true,
-        "trayQuantity": _quantityControllers[i].text.toString(),
+        "trayQuantity": (double.tryParse(_quantityControllers[i].text) ?? 0.0)
+            .toInt(),
         'concurrencyStamp': _scannedTrays[i].trayConcurrencyStamp,
       };
 
       Map<String, dynamic> productionProgressData = {
-        "subOperation": "Knitting Tray Allocation",
+        "subOperation": "Knitting",
         "date": DateTime.now().toIso8601String(),
         "transactionType": 1,
         "operatorDescription": "system",
-        "primaryQuantity": _quantityControllers[i].text.toString(),
-        "primaryUOM": _selectedPlanLine!.planLine.primaryUOM,
-        "secondaryQuantity": _selectedPlanLine!.item.perGarmentTube * int.parse(_quantityControllers[i].text),
-        "secondaryUOM": _selectedPlanLine!.planLine.secondaryUOM,
+        "primaryQuantity": (double.tryParse(_quantityControllers[i].text) ?? 5.0).toInt(),
+        "primaryUOM": _selectedPlanLine!.planLine.primaryUOM ?? 0,
+        "secondaryQuantity": ((_selectedPlanLine!.item.perGarmentTube) * (double.tryParse(_quantityControllers[i].text) ?? 5.0)).toInt(),
+        "secondaryUOM": _selectedPlanLine!.planLine.secondaryUOM ?? 0,
         "wipStatus": 0,
         "gbsFlag": false,
         "pbsFlag": false,
+        "productGrade": 0,
+        "productNature": 0,
+        "isFirstProcess": false, // New Field
+        "isLastProcess": false,  // New Field
+        "lotMakingFlag": false,  // New Field
+        "reworkFlag": false,     // New Field
         "operationId": _selectedPlanLine!.operation.id,
         "workOrderHeaderId": _selectedPlanLine!.workOrderHeader.id,
         "workOrderLineId": _selectedPlanLine!.workOrderLine.id,
         "itemId": _selectedPlanLine!.planLine.itemId,
+        "processedItemId": _selectedPlanLine!.planLine.itemId,
         "shiftId": _selectedPlanLine!.planLine.shiftId,
         "primaryTrayId": _scannedTrays[i].trayUpdateId,
+        "secondaryTrayId": _scannedTrays[i].trayUpdateId, // Null ki jagah ID bhejain
         "machineId": _selectedPlanLine!.planLine.resourceId,
-        "planHeaderId": _selectedPlanLine!.planLine.planHeaderId,
         "locatorId": 2,
-        "trayType": 1,
+        if (_selectedPlanLine!.planLine.planHeaderId != 0 && _selectedPlanLine!.planLine.planHeaderId != null)
+          "planHeaderId": _selectedPlanLine!.planLine.planHeaderId,
       };
 
-      final trayRes = await _trayScanningRepo.updateTrayDetails(planData, _scannedTrays[i].trayUpdateId!);
-      final progRes = await _trayScanningRepo.saveProductionProgress(productionProgressData);
+      final trayRes = await _trayScanningRepo.updateTrayDetails(
+        planData,
+        _scannedTrays[i].trayUpdateId!,
+      );
+      final progRes = await _trayScanningRepo.saveProductionProgress(
+        productionProgressData,
+      );
 
-      if (!progRes.success) {
-        debugPrint('❌ ProductionProgress failed for tray ${i}: ${progRes.message}');
+      if (!trayRes.success || !progRes.success) {
         if (mounted) {
           AppLoader.hide();
+          String error = "";
+          if (!trayRes.success)
+            error = "Tray Update Failed: ${trayRes.message}";
+          if (!progRes.success)
+            error = "Production Progress Failed: ${progRes.message}";
+
           await showDialog(
             context: context,
             builder: (ctx) => AlertDialog(
               title: const Text('Save Failed'),
-              content: Text('Failed to save Production Progress: ${progRes.message}'),
-              actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
+              content: Text(error),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('OK'),
+                ),
+              ],
             ),
           );
         }
@@ -290,12 +386,17 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       }
     }
 
-    
-
-    _showSuccessMessage("Saved");
-
     AppLoader.hide();
-    Navigator.pop(context);
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Saved successfully!')));
+      setState(() {
+        _scannedTrays.clear();
+        _quantityControllers.clear();
+      });
+      Navigator.pop(context);
+    }
   }
 
   // ─── Build ────────────────────────────────────────────────────────────────
@@ -328,7 +429,11 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                   padding: const EdgeInsets.all(12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [_buildMachineScannerSection(), const SizedBox(height: 10), if (_planLines != null) _buildScannedTraysSection()],
+                    children: [
+                      _buildMachineScannerSection(),
+                      const SizedBox(height: 10),
+                      if (_planLines != null) _buildScannedTraysSection(),
+                    ],
                   ),
                 ),
               ),
@@ -345,7 +450,10 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionHeader(title: 'Machine Scanner', subtitle: 'Scan the machine barcode to load work order details'),
+        const SectionHeader(
+          title: 'Machine Scanner',
+          subtitle: 'Scan the machine barcode to load work order details',
+        ),
         const SizedBox(height: 12),
         ContentCard(
           child: Column(
@@ -380,7 +488,11 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                 ),
               ),
               const SizedBox(height: 10),
-              if (_selectedPlanLine != null) ...[DynamicInfoDisplay(items: _buildPlanLineDetailsMap(_selectedPlanLine!))],
+              if (_selectedPlanLine != null) ...[
+                DynamicInfoDisplay(
+                  items: _buildPlanLineDetailsMap(_selectedPlanLine!),
+                ),
+              ],
             ],
           ),
         ),
@@ -404,8 +516,15 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                _machineBarcode.isEmpty ? 'Place cursor here and scan barcode...' : _machineBarcode,
-                style: TextStyle(fontSize: 14, color: _machineBarcode.isEmpty ? Colors.grey.shade400 : Colors.black87),
+                _machineBarcode.isEmpty
+                    ? 'Place cursor here and scan barcode...'
+                    : _machineBarcode,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: _machineBarcode.isEmpty
+                      ? Colors.grey.shade400
+                      : Colors.black87,
+                ),
               ),
             ),
           ],
@@ -421,7 +540,10 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionHeader(title: 'Scanned Trays', subtitle: 'Scan a machine to start binding trays'),
+        const SectionHeader(
+          title: 'Scanned Trays',
+          subtitle: 'Scan a machine to start binding trays',
+        ),
         const SizedBox(height: 12),
         ContentCard(
           child: Column(
@@ -430,7 +552,10 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Scanned Trays (${_scannedTrays.length})', style: _labelStyle.copyWith(fontWeight: FontWeight.w600)),
+                  Text(
+                    'Scanned Trays (${_scannedTrays.length})',
+                    style: _labelStyle.copyWith(fontWeight: FontWeight.w600),
+                  ),
                   Row(
                     children: [
                       SizedBox(
@@ -441,7 +566,10 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                           decoration: _inputDecoration(
                             hintText: 'Pcs/tray',
                             isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 13),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 13,
+                            ),
                             borderRadius: 4,
                           ),
                           keyboardType: TextInputType.number,
@@ -462,7 +590,13 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
               ),
               const SizedBox(height: 12),
               _buildTrayTableHeader(),
-              if (!hasTrays) _buildEmptyState() else ...List.generate(_scannedTrays.length, (index) => _buildTrayRow(index, _scannedTrays[index])),
+              if (!hasTrays)
+                _buildEmptyState()
+              else
+                ...List.generate(
+                  _scannedTrays.length,
+                  (index) => _buildTrayRow(index, _scannedTrays[index]),
+                ),
             ],
           ),
         ),
@@ -481,24 +615,39 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       child: Row(
         children: [
           Expanded(
-              flex: 3,
-              child: Text('TRAY CODE', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))
+            flex: 3,
+            child: Text(
+              'TRAY CODE',
+              style: _tableHeaderStyle.copyWith(letterSpacing: 1.1),
+            ),
           ),
           Expanded(
-              flex: 3,
-              child: Text('WO', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))
+            flex: 3,
+            child: Text(
+              'WO',
+              style: _tableHeaderStyle.copyWith(letterSpacing: 1.1),
+            ),
           ),
           Expanded(
-              flex: 3,
-              child: Text('ITEM DESC', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))
+            flex: 3,
+            child: Text(
+              'ITEM DESC',
+              style: _tableHeaderStyle.copyWith(letterSpacing: 1.1),
+            ),
           ),
           Expanded(
-              flex: 2,
-              child: Text('QUANTITY', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))
+            flex: 2,
+            child: Text(
+              'QUANTITY',
+              style: _tableHeaderStyle.copyWith(letterSpacing: 1.1),
+            ),
           ),
           Expanded(
-              flex: 2,
-              child: Text('WEIGHT', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))
+            flex: 2,
+            child: Text(
+              'WEIGHT',
+              style: _tableHeaderStyle.copyWith(letterSpacing: 1.1),
+            ),
           ),
           const SizedBox(width: 40), // Space for the delete icon
         ],
@@ -510,7 +659,10 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 24),
       child: Center(
-        child: Text('No scanned trays yet. Start by scanning a tray barcode.', style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
+        child: Text(
+          'No scanned trays yet. Start by scanning a tray barcode.',
+          style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+        ),
       ),
     );
   }
@@ -539,9 +691,9 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
             child: Text(
               displayCode,
               style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.normal,
-                  color: isEmpty ? Colors.grey : Colors.black87
+                fontSize: 13,
+                fontWeight: FontWeight.normal,
+                color: isEmpty ? Colors.grey : Colors.black87,
               ),
             ),
           ),
@@ -550,9 +702,9 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
             child: Text(
               _selectedPlanLine?.workOrderHeader.workOrderCode ?? "-",
               style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.normal,
-                  color: isEmpty ? Colors.grey : Colors.black87
+                fontSize: 12,
+                fontWeight: FontWeight.normal,
+                color: isEmpty ? Colors.grey : Colors.black87,
               ),
             ),
           ),
@@ -563,9 +715,9 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.normal,
-                  color: isEmpty ? Colors.grey : Colors.black87
+                fontSize: 11,
+                fontWeight: FontWeight.normal,
+                color: isEmpty ? Colors.grey : Colors.black87,
               ),
             ),
           ),
@@ -575,15 +727,20 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
               alignment: Alignment.centerLeft,
               child: SizedBox(
                 width: 55, // Slim text field
-                height: 35, 
+                height: 35,
                 child: TextField(
                   controller: _quantityControllers[index],
                   keyboardType: TextInputType.number,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
                   decoration: InputDecoration(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
                     focusedBorder: const OutlineInputBorder(
                       borderSide: BorderSide(color: Colors.blue, width: 1.5),
                     ),
@@ -594,18 +751,32 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
           ),
           Expanded(
             flex: 2,
-            child: Builder(builder: (_) {
-              final qty = double.tryParse(_quantityControllers[index].text) ?? 0;
-              final pw = _selectedPlanLine?.item.pieceWeight;
-              if (pw == null || pw == 0) {
-                return Text('-', style: TextStyle(fontSize: 13, fontWeight: FontWeight.normal, color: isEmpty ? Colors.grey : Colors.black87));
-              }
-              final total = qty * pw;
-              return Text(
-                '${total.toStringAsFixed(2)} kg',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.normal, color: isEmpty ? Colors.grey : Colors.black87),
-              );
-            }),
+            child: Builder(
+              builder: (_) {
+                final qty =
+                    double.tryParse(_quantityControllers[index].text) ?? 0;
+                final pw = _selectedPlanLine?.item.pieceWeight;
+                if (pw == null || pw == 0) {
+                  return Text(
+                    '-',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.normal,
+                      color: isEmpty ? Colors.grey : Colors.black87,
+                    ),
+                  );
+                }
+                final total = qty * pw;
+                return Text(
+                  '${total.toStringAsFixed(2)} kg',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.normal,
+                    color: isEmpty ? Colors.grey : Colors.black87,
+                  ),
+                );
+              },
+            ),
           ),
           const SizedBox(width: 8),
           _buildDeleteTrayButton(index),
@@ -638,7 +809,8 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
   Widget _buildWorkOrderDropdown() {
     /// Only show if we actually have data from the scan
-    if (_planLines == null || _planLines!.isEmpty) return const SizedBox.shrink();
+    if (_planLines == null || _planLines!.isEmpty)
+      return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.only(top: 16.0),
@@ -654,7 +826,8 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
             borderColor: Colors.blue,
             items: _planLines,
             selectedValue: _selectedPlanLine,
-            itemAsString: (plan) => "${plan.workOrderHeader.workOrderCode} - ${plan.item.description}",
+            itemAsString: (plan) =>
+                "${plan.workOrderHeader.workOrderCode} - ${plan.item.description}",
             onChanged: (PlanLineResponseModel? newValue) {
               setState(() {
                 _selectedPlanLine = newValue;
@@ -670,7 +843,12 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   }
 
   /// Shared input decoration to reduce duplication.
-  InputDecoration _inputDecoration({required String hintText, bool isDense = false, EdgeInsetsGeometry? contentPadding, double borderRadius = 6}) {
+  InputDecoration _inputDecoration({
+    required String hintText,
+    bool isDense = false,
+    EdgeInsetsGeometry? contentPadding,
+    double borderRadius = 6,
+  }) {
     final border = OutlineInputBorder(
       borderRadius: BorderRadius.circular(borderRadius),
       borderSide: const BorderSide(color: _borderColor),
@@ -679,12 +857,16 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     return InputDecoration(
       hintText: hintText,
       hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-      prefixIcon: isDense ? null : Icon(Icons.qr_code_scanner, size: 20, color: Colors.grey.shade400),
+      prefixIcon: isDense
+          ? null
+          : Icon(Icons.qr_code_scanner, size: 20, color: Colors.grey.shade400),
       border: border,
       focusedBorder: border,
       enabledBorder: border,
       isDense: isDense,
-      contentPadding: contentPadding ?? const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      contentPadding:
+          contentPadding ??
+          const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
     );
   }
 }

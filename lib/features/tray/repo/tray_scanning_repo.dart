@@ -87,11 +87,23 @@ class TrayScanningRepo {
     }
   }
 
+  /// Fetch a single tray by its ID to get the latest concurrencyStamp
+  Future<PlexApiResult> fetchTrayById(int trayId) async {
+    final result = await _api.getObject('/api/app/tray-details/$trayId');
+    if (!result.success || result.data == null) return result;
+    try {
+      final item = Map<String, dynamic>.from(result.data as Map);
+      return PlexApiResult(true, 200, "Success", TrayDetailsModel.fromJson(item));
+    } catch (e) {
+      return PlexApiResult(false, 500, e.toString(), null);
+    }
+  }
+
   ///
-  Future<void> updateTrayDetails(Map<String, dynamic> data, int trayUpdateId) async {
+  Future<PlexApiResult> updateTrayDetails(Map<String, dynamic> data, int trayUpdateId) async {
     print("ProductionProgressData :: ${data.toString()}");
 
-    await _api.put('/api/app/tray-details/$trayUpdateId', body: data);
+    return await _api.put('/api/app/tray-details/$trayUpdateId', body: data);
   }
 
   ///

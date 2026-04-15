@@ -8,6 +8,8 @@ import 'package:active_wear_scanning/features/gbs/model/production_progress.dart
 import 'package:active_wear_scanning/features/processing/repo/processing_repo.dart';
 import 'package:flutter/material.dart';
 
+import '../../lapping/presentation/lapping_detail_screen.dart';
+
 class ProcessingBatchDetailsScreen extends StatefulWidget {
   final int batchHeaderId;
   final int currentOperationId;
@@ -150,6 +152,43 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                               },
                             ),
                             const Divider(height: 32),
+                            // Row(
+                            //   children: [
+                            //     Expanded(
+                            //       child: CustomOutlinedButton(
+                            //         label: _showTrays ? 'Hide Trays' : 'Show Trays',
+                            //         borderColor: Colors.blue,
+                            //         textColor: _showTrays ? Colors.white : Colors.blue,
+                            //         fillColor: _showTrays ? Colors.blue : Colors.transparent,
+                            //         onPressed: _toggleTrayDetails,
+                            //       ),
+                            //     ),
+                            //     if (!widget.operationName.toLowerCase().contains('lapping')) ...[
+                            //       const SizedBox(width: 8),
+                            //       Expanded(
+                            //         child: CustomOutlinedButton(
+                            //           label: 'Rework',
+                            //           borderColor: Colors.orange,
+                            //           textColor: Colors.orange,
+                            //           onPressed: () {
+                            //             ScaffoldMessenger.of(context).showSnackBar(
+                            //               const SnackBar(content: Text('Rework action initiated')),
+                            //             );
+                            //           },
+                            //         ),
+                            //       ),
+                            //       const SizedBox(width: 8),
+                            //       Expanded(
+                            //         child: CustomOutlinedButton(
+                            //           label: 'Submit',
+                            //           borderColor: Colors.green,
+                            //           textColor: Colors.green,
+                            //           onPressed: _confirmSubmit,
+                            //         ),
+                            //       ),
+                            //     ],
+                            //   ],
+                            // ),
                             Row(
                               children: [
                                 Expanded(
@@ -161,8 +200,40 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                                     onPressed: _toggleTrayDetails,
                                   ),
                                 ),
-                                if (!widget.operationName.toLowerCase().contains('lapping')) ...[
-                                  const SizedBox(width: 8),
+                                const SizedBox(width: 8),
+                                if (widget.operationName.toLowerCase().contains('lapping'))
+                                // --- Lapping Specific Action ---
+                                  Expanded(
+                                    child: CustomOutlinedButton(
+                                      label: 'Re-assign Trays',
+                                      borderColor: Colors.green,
+                                      textColor: Colors.green,
+                                      onPressed: () async {
+                                        final result = await Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => LappingDetailScreen(
+                                              batchHeaderId: widget.batchHeaderId,
+                                              batchCode: widget.batchCode,
+                                              machine: widget.machine,
+                                              color: widget.color,
+                                              trayCount: widget.trayCount,
+                                              totalWeight: widget.totalWeight,
+                                              currentOperationId: widget.currentOperationId,
+                                              nextOperationId: widget.nextOperationId,
+                                              nextOperationName: widget.nextOperationName,
+                                            ),
+                                          ),
+                                        );
+                                        // Agar lapping screen se submit ho gaya toh piche bhi refresh bhejain
+                                        if (result == true) {
+                                          Navigator.pop(context, true);
+                                        }
+                                      },
+                                    ),
+                                  )
+                                else ...[
+                                  // --- Standard Submit/Rework Actions ---
                                   Expanded(
                                     child: CustomOutlinedButton(
                                       label: 'Rework',
@@ -276,13 +347,14 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
               'Failed to update tray ${t.primaryTrayModel.trayCode}: ${putRes.message}');
         }
 
-        // 2. POST next record (transactionType = 2)
+        debugPrint('📤 Submission for Tray: ${t.primaryTrayModel.trayCode}');
         final nextModelJson = currentPp.toJson();
         // Reset key identifiers for the next process/final record
         nextModelJson['transactionType'] = 2;
         nextModelJson.remove('id');
         nextModelJson.remove('progressCode');
         nextModelJson.remove('concurrencyStamp');
+        nextModelJson['batchHeaderId'] = widget.batchHeaderId;
 
         if (widget.nextOperationId != null) {
           // Standard Handover to next operation

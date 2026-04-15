@@ -192,10 +192,10 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
         final code = scannedCode.trim();
         if (code.isEmpty) return 'Invalid tray code';
         if (_selectedColor == null) return 'Please select a batch Color first';
-        if (_scannedTrays.any((t) => (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase() == code.toLowerCase())) return 'Already assigned';
+        if (_scannedTrays.any((t) => (t.primaryTrayModel?.trayCode ?? '').trim().toLowerCase() == code.toLowerCase())) return 'Already assigned';
         
         final available = productionProgressTrays.where((t) => 
-           (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase() == code.toLowerCase() &&
+           (t.primaryTrayModel?.trayCode ?? '').trim().toLowerCase() == code.toLowerCase() &&
            t.productionProgress.locatorId == 3 &&
            t.productionProgress.gbsFlag == true
         ).toList();
@@ -209,7 +209,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
           return 'Tray already assigned to a batch';
         }
 
-        final workOrderLineId = tray.productionProgress.workOrderLineId ?? tray.workOrderLine.id;
+        final workOrderLineId = tray.productionProgress.workOrderLineId ?? tray.workOrderLine?.id;
         final colorDescription = _selectedColor!.segmentCode?.description;
 
         if (colorDescription == null) {
@@ -218,7 +218,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
 
 
         // Color validation via remote API
-        final colorRes = await _batchRepo.fetchWorkOrderLineDetails(workOrderLineId, colorDescription);
+        final colorRes = await _batchRepo.fetchWorkOrderLineDetails(workOrderLineId!, colorDescription);
         if (!colorRes.success || colorRes.data == null) {
            return 'Validation error: ${colorRes.message}';
         }
@@ -229,15 +229,24 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
         }
         
         final firstItem = items.first as Map;
-        final processIdRaw = firstItem['processIItemd'];
+        final detail = firstItem['workOrderLineDetail'];
+        final dynamic processIdRaw = firstItem['processIItemd'];
         int processedItemId;
-        if (processIdRaw is Map) {
-           processedItemId = processIdRaw['id'];
-        } else if (processIdRaw is int) {
-           processedItemId = processIdRaw;
+        if (processIdRaw is int) {
+          processedItemId = processIdRaw;
+        } else if (processIdRaw is Map) {
+          processedItemId = processIdRaw['id'];
         } else {
-           return 'Invalid tray data: processedItemId missing in API response';
+          // Fallback: Agar null ho toh knitItemId use karein
+          processedItemId = detail['knitItemId'] ?? tray.item?.id ?? 0;
         }
+        // if (processIdRaw is Map) {
+        //    processedItemId = processIdRaw['id'];
+        // } else if (processIdRaw is int) {
+        //    processedItemId = processIdRaw;
+        // } else {
+        //    return 'Invalid tray data: processedItemId missing in API response';
+        // }
 
         // ── Item Routing Validation (after color validation) ─────────────────
         final itemDefId = tray.productionProgress.itemId;
@@ -282,12 +291,12 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
         if (capacity != null && capacity > 0) {
           final overrideText = _overrideQuantityController.text.trim();
           final newQty = double.tryParse(overrideText) ?? tray.productionProgress.primaryQuantity ?? 0;
-          final pw = tray.item.pieceWeight;
+          final pw = tray.item?.pieceWeight;
           if (pw != null && pw > 0) {
             double currentTotal = 0;
             for (int i = 0; i < _scannedTrays.length; i++) {
               final qty = double.tryParse(_quantityControllers[i].text) ?? _scannedTrays[i].productionProgress.primaryQuantity ?? 0;
-              final p = _scannedTrays[i].item.pieceWeight;
+              final p = _scannedTrays[i].item?.pieceWeight;
               if (p != null && p > 0) currentTotal += qty * p;
             }
             final newTotal = currentTotal + (newQty * pw);
@@ -298,8 +307,8 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
         }
         
         setState(() {
-          if (tray.primaryTrayModel.id != null) {
-             _trayProcessedItemId[tray.primaryTrayModel.id!] = processedItemId;
+          if (tray.primaryTrayModel?.id != null) {
+             _trayProcessedItemId[tray.primaryTrayModel!.id!] = processedItemId;
           }
           _scannedTrays.add(tray);
           _quantityControllers.add(TextEditingController(text: _overrideQuantityController.text));
@@ -336,7 +345,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
         "batchHeaderCode": batchCode,
         "machineId": _selectedMachine?.resource?.id ?? 0,
         "colorCode": _selectedColor?.segmentCode?.id ?? 0,
-        "shiftId": _scannedTrays.first.shift.id,
+        "shiftId": _scannedTrays.first.shift?.id,
         "lockFlag": false,
       });
 
@@ -423,9 +432,10 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
           "itemId": tray.item.id,
           "shiftId": tray.shift.id,
           "primaryTrayId": trayId,
+          "code": tray.item.code,
           "machineId": _selectedMachine?.resource?.id ?? tray.machineModel.id,
-          "planHeaderId": tray.planHeader.id,
-          "locatorId": tray.productionProgress.locatorId,
+          "planHeaderId": tray.planHeader?.id,
+          "locatorId": 3,
           "concurrencyStamp": updatedConcurrencyStamp,
         };
 
@@ -457,6 +467,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
         debugPrint('🔍 WIP for progress $progressId → wipTransactionId=$wipTransactionId');
 
         if (wipTransactionId != null) {
+          final int pItemId = _trayProcessedItemId[trayId] ?? tray.processedItem?.id ?? tray.item?.id ?? 0;
           final lineRes = await _batchRepo.createBatchLine({
             "planDate": DateTime.now().toIso8601String(),
             "transactionDate": DateTime.now().toIso8601String(),
@@ -468,13 +479,12 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
             "batchHeaderId": batchHeaderId,
             "progressId": progressId,
             "wipTransactionId": wipTransactionId,
-            "workOrderHeaderId": tray.workOrderHeader.id,
-            "workOrderLineId": tray.workOrderLine.id,
-            "itemId": tray.item.id,
+            "workOrderHeaderId": tray.workOrderHeader?.id,
+            "workOrderLineId": tray.workOrderLine?.id,
+            "itemId": tray.item?.id,
             "trayId": trayId,
             "locatorId": tray.productionProgress.locatorId,
-            if (trayId != null && _trayProcessedItemId.containsKey(trayId))
-              "processedItemId": _trayProcessedItemId[trayId],
+            "processItemId": pItemId,
           });
 
           if (lineRes.success) {
@@ -700,7 +710,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                                         double total = 0;
                                         for (int i = 0; i < _scannedTrays.length; i++) {
                                           final qty = _scannedTrays[i].productionProgress.primaryQuantity ?? 0;
-                                          final pw = _scannedTrays[i].item.pieceWeight;
+                                          final pw = _scannedTrays[i].item?.pieceWeight;
                                           if (pw != null && pw > 0) total += qty * pw;
                                         }
                                         if (total == 0) return const SizedBox.shrink();
@@ -779,21 +789,21 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                                         Expanded(
                                           flex: 2,
                                           child: Text(
-                                            _scannedTrays[index].primaryTrayModel.trayCode ?? '',
+                                            _scannedTrays[index].primaryTrayModel?.trayCode ?? '',
                                             style: const TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.normal)
                                           ),
                                         ),
                                         Expanded(
                                           flex: 2,
                                           child: Text(
-                                            _scannedTrays[index].workOrderHeader.workOrderCode,
+                                            _scannedTrays[index].workOrderHeader!.workOrderCode,
                                             style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.normal)
                                           ),
                                         ),
                                         Expanded(
                                           flex: 3,
                                           child: Text(
-                                            _scannedTrays[index].item.description,
+                                            _scannedTrays[index].item!.description,
                                             maxLines: 2,
                                             overflow: TextOverflow.ellipsis,
                                             style: const TextStyle(fontSize: 11, color: Colors.black87, fontWeight: FontWeight.normal)
@@ -810,7 +820,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                                           flex: 2,
                                           child: Builder(builder: (_) {
                                             final qty = _scannedTrays[index].productionProgress.primaryQuantity ?? 0;
-                                            final pw = _scannedTrays[index].item.pieceWeight;
+                                            final pw = _scannedTrays[index].item?.pieceWeight;
                                             if (pw == null || pw == 0) {
                                               return const Text('-', style: TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.normal));
                                             }

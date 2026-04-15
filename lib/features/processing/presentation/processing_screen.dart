@@ -586,69 +586,128 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                       ),
                     ),
                   ),
+                  // Expanded(
+                  //   flex: 2,
+                  //   child: Row(
+                  //     mainAxisAlignment: MainAxisAlignment.end,
+                  //     children: [
+                  //       IconButton(
+                  //         icon: const Icon(
+                  //           Icons.chevron_right,
+                  //           size: 24,
+                  //           color: Colors.blue,
+                  //         ),
+                  //       // if (_selectedOperation?.name.toLowerCase().contains('lapping') ?? false)
+                  //       //   IconButton(
+                  //       //     icon: const Icon(
+                  //       //       Icons.settings_suggest,
+                  //       //       size: 20,
+                  //       //       color: Colors.green,
+                  //       //     ),
+                  //           padding: const EdgeInsets.all(4),
+                  //           constraints: const BoxConstraints(),
+                  //           onPressed: () {
+                  //             Navigator.push(
+                  //               context,
+                  //               MaterialPageRoute(
+                  //                 builder: (context) => LappingDetailScreen(
+                  //                   batchHeaderId: s.batchHeaderId,
+                  //                   batchCode: s.batchCode,
+                  //                   machine: s.machine,
+                  //                   color: s.color,
+                  //                   trayCount: s.trayCount,
+                  //                   totalWeight: s.totalWeight,
+                  //                   currentOperationId: _selectedOperation!.id,
+                  //                   nextOperationId: () {
+                  //                     final currentIndex = _operations.indexWhere((o) => o.id == _selectedOperation?.id);
+                  //                     if (currentIndex != -1 && currentIndex < _operations.length - 1) {
+                  //                       return _operations[currentIndex + 1].id;
+                  //                     }
+                  //                     return null;
+                  //                   }(),
+                  //                   nextOperationName: () {
+                  //                     final currentIndex = _operations.indexWhere((o) => o.id == _selectedOperation?.id);
+                  //                     if (currentIndex != -1 && currentIndex < _operations.length - 1) {
+                  //                       return _operations[currentIndex + 1].name;
+                  //                     }
+                  //                     return 'N/A';
+                  //                   }(),
+                  //                 ),
+                  //               ),
+                  //             );
+                  //           },
+                  //         ),
+                  //       const SizedBox(width: 4),
+                  //       IconButton(
+                  //         icon: const Icon(
+                  //           Icons.chevron_right,
+                  //           size: 20,
+                  //           color: Colors.blue,
+                  //         ),
+                  //         padding: const EdgeInsets.all(4),
+                  //         constraints: const BoxConstraints(),
+                  //         onPressed: () async {
+                  //           final currentIndex = _operations.indexWhere((o) => o.id == _selectedOperation?.id);
+                  //           String nextOpName = 'N/A';
+                  //           int? nextOpId;
+                  //           if (currentIndex != -1 && currentIndex < _operations.length - 1) {
+                  //             nextOpName = _operations[currentIndex + 1].name;
+                  //             nextOpId = _operations[currentIndex + 1].id;
+                  //           }
+                  //
+                  //           final result = await Navigator.push(
+                  //             context,
+                  //             MaterialPageRoute(
+                  //               builder: (context) => ProcessingBatchDetailsScreen(
+                  //                 batchHeaderId: s.batchHeaderId,
+                  //                 currentOperationId: _selectedOperation!.id,
+                  //                 batchCode: s.batchCode,
+                  //                 machine: s.machine,
+                  //                 color: s.color,
+                  //                 trayCount: s.trayCount,
+                  //                 totalWeight: s.totalWeight,
+                  //                 operationName: _selectedOperation?.name ?? '-',
+                  //                 nextOperationName: nextOpName,
+                  //                 nextOperationId: nextOpId,
+                  //               ),
+                  //             ),
+                  //           );
+                  //
+                  //           if (result == true) {
+                  //             // Auto-refresh counters and batch list when coming back from a successful submit
+                  //             _fetchAllBatchCounts();
+                  //             _fetchOpDetails(_selectedOperation!.id);
+                  //           }
+                  //         },
+                  //       ),
+                  //     ],
+                  //   ),
+                  // ),
                   Expanded(
                     flex: 2,
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        if (_selectedOperation?.name.toLowerCase().contains('lapping') ?? false)
-                          IconButton(
-                            icon: const Icon(
-                              Icons.settings_suggest,
-                              size: 20,
-                              color: Colors.green,
-                            ),
-                            padding: const EdgeInsets.all(4),
-                            constraints: const BoxConstraints(),
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => LappingDetailScreen(
-                                    batchHeaderId: s.batchHeaderId,
-                                    batchCode: s.batchCode,
-                                    machine: s.machine,
-                                    color: s.color,
-                                    trayCount: s.trayCount,
-                                    totalWeight: s.totalWeight,
-                                    currentOperationId: _selectedOperation!.id,
-                                    nextOperationId: () {
-                                      final currentIndex = _operations.indexWhere((o) => o.id == _selectedOperation?.id);
-                                      if (currentIndex != -1 && currentIndex < _operations.length - 1) {
-                                        return _operations[currentIndex + 1].id;
-                                      }
-                                      return null;
-                                    }(),
-                                    nextOperationName: () {
-                                      final currentIndex = _operations.indexWhere((o) => o.id == _selectedOperation?.id);
-                                      if (currentIndex != -1 && currentIndex < _operations.length - 1) {
-                                        return _operations[currentIndex + 1].name;
-                                      }
-                                      return 'N/A';
-                                    }(),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        const SizedBox(width: 4),
                         IconButton(
                           icon: const Icon(
                             Icons.chevron_right,
-                            size: 20,
+                            size: 24,
                             color: Colors.blue,
                           ),
                           padding: const EdgeInsets.all(4),
                           constraints: const BoxConstraints(),
                           onPressed: () async {
+                            // 1. Calculate next operation info
                             final currentIndex = _operations.indexWhere((o) => o.id == _selectedOperation?.id);
                             String nextOpName = 'N/A';
                             int? nextOpId;
+
                             if (currentIndex != -1 && currentIndex < _operations.length - 1) {
                               nextOpName = _operations[currentIndex + 1].name;
                               nextOpId = _operations[currentIndex + 1].id;
                             }
 
+                            // 2. Always go to ProcessingBatchDetailsScreen
                             final result = await Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -667,8 +726,8 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                               ),
                             );
 
+                            // 3. Refresh if something changed
                             if (result == true) {
-                              // Auto-refresh counters and batch list when coming back from a successful submit
                               _fetchAllBatchCounts();
                               _fetchOpDetails(_selectedOperation!.id);
                             }

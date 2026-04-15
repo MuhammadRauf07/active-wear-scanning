@@ -19,7 +19,7 @@ class ScanningSectionsScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            CustomInspectionHeader(heading: 'Active Ware', isShowBackIcon: false, topPadding: 10, horizontalPadding: 12),
+            CustomInspectionHeader(heading: 'Active Wear', isShowBackIcon: false, topPadding: 10, horizontalPadding: 12),
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(12),

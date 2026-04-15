@@ -1,3 +1,4 @@
+import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/content_card.dart';
 import 'package:active_wear_scanning/core/widgets/dynamic_info_display.dart';
@@ -40,13 +41,12 @@ class LappingDetailScreen extends StatefulWidget {
 
 class _LappingDetailScreenState extends State<LappingDetailScreen> {
   final _processingRepo = ProcessingRepo();
+  final _batchRepo = BatchRepo();
   bool _isLoading = false;
   List<ProductionProgressResponseModel> _trays = [];
   final Map<String, _WorkOrderSummary> _workOrders = {};
   String? _selectedWorkOrderId;
-  // Keyed by composite work order ID — each WO keeps its own independent tray bucket
-  final Map<String, List<ProductionProgressResponseModel>> _scannedTraysByWO =
-      {};
+  final Map<String, List<ProductionProgressResponseModel>> _scannedTraysByWO = {};
 
   final _trayBarcodeController = TextEditingController();
   final _trayQtyController = TextEditingController();
@@ -57,6 +57,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
   @override
   void dispose() {
     _trayBarcodeController.dispose();
+    _trayQtyController.dispose();
     _trayFocusNode.dispose();
     super.dispose();
   }
@@ -72,22 +73,19 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
 
     final res = await _processingRepo.fetchProductionProgress({
       'BatchHeaderId': widget.batchHeaderId.toString(),
-      'TransactionType': '2', // Show active trays
+      'TransactionType': '2',
     });
 
     if (res.success && res.data != null) {
       final List<ProductionProgressResponseModel> fetchedTrays =
-          res.data as List<ProductionProgressResponseModel>;
+      res.data as List<ProductionProgressResponseModel>;
 
-      // Group by Work Order safely
       final Map<String, _WorkOrderSummary> summaries = {};
 
       for (final tray in fetchedTrays) {
-        final woId = tray.workOrderHeader.id;
-        final itemDesc =
-            tray.processedItem?.description ?? tray.item.description ?? '';
+        final woId = tray.workOrderHeader?.id;
+        final itemDesc = tray.processedItem?.description ?? tray.item?.description ?? '';
 
-        // Group strictly by both Work Order ID and Descriptive string to handle varied items mapped to a root order.
         if (woId != null && itemDesc.isNotEmpty) {
           final compositeId = '${woId}_$itemDesc';
 
@@ -98,14 +96,10 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
               description: existing.description,
               componentDescription: existing.componentDescription,
               trayCount: existing.trayCount + 1,
-              cumulativePieces:
-                  existing.cumulativePieces +
-                  (tray.productionProgress.primaryQuantity ?? 0),
+              cumulativePieces: existing.cumulativePieces + (tray.productionProgress.primaryQuantity ?? 0),
             );
           } else {
-            // Access nested fields safely with fallback values to ensure they are non-nullable
-            final woDesc = tray.workOrderHeader.description ?? '';
-
+            final woDesc = tray.workOrderHeader?.description ?? '';
             summaries[compositeId] = _WorkOrderSummary(
               id: compositeId,
               description: woDesc,
@@ -122,17 +116,104 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
         _workOrders.clear();
         _workOrders.addAll(summaries);
         _isLoading = false;
-        _selectedWorkOrderId =
-            null; // Ensure no work order is selected by default
+        _selectedWorkOrderId = null;
       });
     } else {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error fetching batch data: ${res.message}')),
+          SnackBar(content: Text('Error: ${res.message}')),
         );
       }
     }
+  }
+
+  // --- Core Validation Logic (Updated for Tray-Detail Support) ---
+  Future<String?> _onTrayScanned(String code) async {
+    if (_trayQtyController.text.trim().isEmpty) return 'Please add No. of Pcs before scanning!';
+    final double inputPcs = double.tryParse(_trayQtyController.text) ?? 0;
+    if (inputPcs <= 0) return 'Pcs amount must be greater than 0!';
+
+    final trayCode = code.trim().toLowerCase();
+    if (trayCode.isEmpty) return 'Invalid tray code';
+
+    final activeSummary = _workOrders[_selectedWorkOrderId];
+    if (activeSummary == null) return 'No Active Work Order selected!';
+
+    final currentWOTrays = _scannedTraysByWO[_selectedWorkOrderId] ?? [];
+    if (currentWOTrays.any((t) => t.primaryTrayModel.trayCode?.toLowerCase() == trayCode)) {
+      return 'Tray already scanned in this session!';
+    }
+
+    double totalScanned = currentWOTrays.fold(0, (sum, t) =>
+    sum + (_trayOverrideQuantities[t.primaryTrayModel.trayCode?.toLowerCase() ?? ''] ?? 0));
+
+    if ((totalScanned + inputPcs) > activeSummary.cumulativePieces) {
+      return 'Limit exceeded! Max: ${activeSummary.cumulativePieces}';
+    }
+
+    ProductionProgressResponseModel? matchedTray;
+    matchedTray = _trays.where((t) => t.primaryTrayModel.trayCode?.toLowerCase() == trayCode).firstOrNull;
+
+    if (matchedTray == null) {
+      AppLoader.show(message: "Searching system trays...");
+      final trayRes = await _batchRepo.fetchTrayDetailByCode(trayCode);
+      AppLoader.hide();
+
+      if (trayRes.success && trayRes.data != null) {
+        final trayMap = trayRes.data.containsKey('trayDetail') ? trayRes.data['trayDetail'] : trayRes.data;
+        final int? existingBatch = trayMap['batchHeaderId'];
+        if (existingBatch != null && existingBatch != 0 && existingBatch != widget.batchHeaderId) {
+          return 'Tray belongs to another batch ($existingBatch)';
+        }
+
+        final refTray = _trays.firstWhere((t) => '${t.workOrderHeader.id}_${t.processedItem?.description ?? t.item.description}' == _selectedWorkOrderId);
+
+        matchedTray = ProductionProgressResponseModel(
+          productionProgress: ProductionProgress(
+            id: null,
+            primaryTrayId: trayMap['id'],
+            locatorId: trayMap['locatorId'] ?? 2,
+            primaryQuantity: inputPcs,
+            transactionType: 2,
+          ),
+          operation: refTray.operation,
+          shift: refTray.shift,
+          machineModel: refTray.machineModel,
+          workOrderHeader: refTray.workOrderHeader,
+          workOrderLine: refTray.workOrderLine,
+          item: refTray.item,
+          primaryTrayModel: PrimaryTrayModel(
+            id: trayMap['id'],
+            trayCode: trayMap['trayCode'],
+            concurrencyStamp: trayMap['concurrencyStamp'],
+          ),
+        );
+      } else {
+        return 'Tray not available in system!';
+      }
+    }
+
+    setState(() {
+      _trayOverrideQuantities[trayCode] = inputPcs;
+      _scannedTraysByWO.putIfAbsent(_selectedWorkOrderId!, () => []);
+      _scannedTraysByWO[_selectedWorkOrderId!]!.add(matchedTray!);
+      _trayBarcodeController.clear();
+      _trayFocusNode.requestFocus();
+    });
+    return null;
+  }
+
+  void _openScanner() async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    await ScannerAlwaysOpen.show(
+      context,
+      title: 'Scan Tray',
+      onResult: (scannedCode) async {
+        _trayBarcodeController.text = scannedCode.trim();
+        return await _onTrayScanned(scannedCode);
+      },
+    );
   }
 
   @override
@@ -155,431 +236,32 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : SingleChildScrollView(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          DynamicInfoDisplay(
-                            items: {
-                              'batch': {
-                                'icon': Icons.qr_code,
-                                'label': 'Batch ID',
-                                'value': widget.batchCode,
-                              },
-                              'machine': {
-                                'icon': Icons.precision_manufacturing,
-                                'label': 'Machine',
-                                'value': widget.machine,
-                              },
-                              'color': {
-                                'icon': Icons.palette,
-                                'label': 'Color',
-                                'value': widget.color,
-                              },
-                              'weight': {
-                                'icon': Icons.scale,
-                                'label': 'Req Weight',
-                                'value':
-                                    '${widget.totalWeight.toStringAsFixed(2)} kg',
-                              },
-                              'trays': {
-                                'icon': Icons.layers,
-                                'label': 'Active Trays',
-                                'value': '${widget.trayCount} trays',
-                              },
-                            },
-                          ),
-                          const SizedBox(height: 20),
-                          if (_workOrders.isNotEmpty) ...[
-                            const Padding(
-                              padding: EdgeInsets.only(left: 4, bottom: 8),
-                              child: Text(
-                                'Select Work Order Line',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                            ),
-                            ContentCard(
-                              child: Column(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 10,
-                                      horizontal: 8,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey.shade100,
-                                      borderRadius: const BorderRadius.vertical(
-                                        top: Radius.circular(4),
-                                      ),
-                                    ),
-                                    child: const Row(
-                                      children: [
-                                        Expanded(
-                                          flex: 3,
-                                          child: Text(
-                                            'WORK ORDER',
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
-                                        Expanded(
-                                          flex: 6,
-                                          child: Text(
-                                            'ITEM DESC',
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
-                                        Expanded(
-                                          flex: 2,
-                                          child: Text(
-                                            'TRAYS',
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
-                                        Expanded(
-                                          flex: 2,
-                                          child: Text(
-                                            'TOTAL PCS',
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
-                                        Expanded(
-                                          flex: 2,
-                                          child: Text(
-                                            'RE-ASSIGN PCS',
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.green,
-                                            ),
-                                          ),
-                                        ),
-                                        SizedBox(width: 32),
-                                      ],
-                                    ),
-                                  ),
-                                  ..._workOrders.values.map((wo) {
-                                    final isSelected =
-                                        _selectedWorkOrderId == wo.id;
-                                    return InkWell(
-                                      onTap: () {
-                                        setState(
-                                          () => _selectedWorkOrderId = wo.id,
-                                        );
-                                      },
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 8,
-                                          horizontal: 8,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: isSelected
-                                              ? Colors.blue.withValues(
-                                                  alpha: 0.05,
-                                                )
-                                              : Colors.transparent,
-                                          border: Border(
-                                            bottom: BorderSide(
-                                              color: Colors.grey.shade200,
-                                            ),
-                                          ),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Expanded(
-                                              flex: 3,
-                                              child: Text(
-                                                wo.description,
-                                                style: const TextStyle(
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                            ),
-                                            Expanded(
-                                              flex: 6,
-                                              child: Text(
-                                                wo.componentDescription,
-                                                style: const TextStyle(
-                                                  fontSize: 11,
-                                                ),
-                                              ),
-                                            ),
-                                            Expanded(
-                                              flex: 2,
-                                              child: Text(
-                                                '${wo.trayCount}',
-                                                style: const TextStyle(
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                            ),
-                                            Expanded(
-                                              flex: 2,
-                                              child: Text(
-                                                '${wo.cumulativePieces.toInt()}',
-                                                style: const TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: Colors.blue,
-                                                ),
-                                              ),
-                                            ),
-                                            // RE-ASSIGN PCS: sum of override quantities for trays matching this work order
-                                            Builder(
-                                              builder: (context) {
-                                                final woTrays =
-                                                    _scannedTraysByWO[wo.id] ??
-                                                    [];
-                                                final reassigned = woTrays.fold<double>(
-                                                  0,
-                                                  (sum, t) =>
-                                                      sum +
-                                                      (_trayOverrideQuantities[t
-                                                                  .primaryTrayModel
-                                                                  .trayCode
-                                                                  ?.toLowerCase() ??
-                                                              ''] ??
-                                                          0),
-                                                );
-                                                return Expanded(
-                                                  flex: 2,
-                                                  child: Text(
-                                                    reassigned > 0
-                                                        ? '${reassigned.toInt()}'
-                                                        : '-',
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                      color: reassigned > 0
-                                                          ? Colors.green
-                                                          : Colors.grey,
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                            ),
-                                            SizedBox(
-                                              width: 32,
-                                              child: Radio<String>(
-                                                value: wo.id,
-                                                groupValue:
-                                                    _selectedWorkOrderId,
-                                                activeColor: Colors.blue,
-                                                onChanged: (val) {
-                                                  setState(() {
-                                                    _selectedWorkOrderId = val;
-                                                    _trayQtyController.clear();
-                                                  });
-                                                },
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    );
-                                  }).toList(),
-                                ],
-                              ),
-                            ),
-                            if (_selectedWorkOrderId != null) ...[
-                              const SizedBox(height: 24),
-                              const SectionHeader(
-                                title: 'Scan Trays',
-                                subtitle:
-                                    'Verify and assign trays to the selected work order',
-                              ),
-                              const SizedBox(height: 12),
-                              ContentCard(
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      flex: 2,
-                                      child: TextField(
-                                        controller: _trayBarcodeController,
-                                        focusNode: _trayFocusNode,
-                                        decoration: InputDecoration(
-                                          hintText: 'Enter/Scan Tray ID',
-                                          hintStyle: TextStyle(
-                                            color: Colors.grey.shade400,
-                                            fontSize: 14,
-                                          ),
-                                          prefixIcon: IconButton(
-                                            icon: Icon(
-                                              Icons.qr_code_scanner,
-                                              size: 20,
-                                              color: Colors.blue,
-                                            ),
-                                            onPressed: _openScanner,
-                                          ),
-                                          border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              6,
-                                            ),
-                                            borderSide: const BorderSide(
-                                              color: Colors.blue,
-                                            ),
-                                          ),
-                                          focusedBorder: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              6,
-                                            ),
-                                            borderSide: const BorderSide(
-                                              color: Colors.blue,
-                                            ),
-                                          ),
-                                          enabledBorder: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              6,
-                                            ),
-                                            borderSide: const BorderSide(
-                                              color: Colors.blue,
-                                            ),
-                                          ),
-                                          isDense: true,
-                                          contentPadding:
-                                              const EdgeInsets.symmetric(
-                                                horizontal: 12,
-                                                vertical: 12,
-                                              ),
-                                        ),
-                                        onSubmitted: (_) {
-                                          final String? error = _onTrayScanned(
-                                            _trayBarcodeController.text,
-                                          );
-                                          if (error != null) {
-                                            ScaffoldMessenger.of(
-                                              context,
-                                            ).showSnackBar(
-                                              SnackBar(
-                                                content: Text(error),
-                                                backgroundColor: Colors.red,
-                                              ),
-                                            );
-                                          }
-                                        },
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    SizedBox(
-                                      width: 120,
-                                      height: 44,
-                                      child: TextField(
-                                        controller: _trayQtyController,
-                                        keyboardType: TextInputType.number,
-                                        decoration: InputDecoration(
-                                          hintText: 'Pcs/tray',
-                                          hintStyle: TextStyle(
-                                            color: Colors.grey.shade400,
-                                            fontSize: 14,
-                                          ),
-                                          border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              6,
-                                            ),
-                                            borderSide: const BorderSide(
-                                              color: Colors.blue,
-                                            ),
-                                          ),
-                                          focusedBorder: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              6,
-                                            ),
-                                            borderSide: const BorderSide(
-                                              color: Colors.blue,
-                                            ),
-                                          ),
-                                          enabledBorder: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              6,
-                                            ),
-                                            borderSide: const BorderSide(
-                                              color: Colors.blue,
-                                            ),
-                                          ),
-                                          isDense: true,
-                                          contentPadding:
-                                              const EdgeInsets.symmetric(
-                                                horizontal: 8,
-                                                vertical: 13,
-                                              ),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    CustomOutlinedButton(
-                                      label: 'Scan Tray',
-                                      borderColor: Colors.blue,
-                                      fillColor: Colors.blue,
-                                      textColor: Colors.white,
-                                      buttonHeight: 44,
-                                      onPressed: () {
-                                        if (_trayBarcodeController.text
-                                            .trim()
-                                            .isEmpty) {
-                                          _openScanner();
-                                        } else {
-                                          final String? error = _onTrayScanned(
-                                            _trayBarcodeController.text,
-                                          );
-                                          if (error != null) {
-                                            ScaffoldMessenger.of(
-                                              context,
-                                            ).showSnackBar(
-                                              SnackBar(
-                                                content: Text(error),
-                                                backgroundColor: Colors.red,
-                                              ),
-                                            );
-                                          }
-                                        }
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              if ((_scannedTraysByWO[_selectedWorkOrderId] ??
-                                      [])
-                                  .isNotEmpty)
-                                _buildScannedTraysTable(),
-                            ],
-                          ] else if (!_isLoading && _trays.isEmpty)
-                            const Center(
-                              child: Padding(
-                                padding: EdgeInsets.all(20),
-                                child: Text('No trays found in this batch.'),
-                              ),
-                            ),
-                          const SizedBox(height: 20),
-                          // const Center(
-                          //   child: Text(
-                          //     'Lapping Process Details\nComing Soon',
-                          //     textAlign: TextAlign.center,
-                          //     style: TextStyle(
-                          //       fontSize: 16,
-                          //       color: Colors.grey,
-                          //       fontWeight: FontWeight.w500,
-                          //     ),
-                          //   ),
-                          // ),
-                        ],
-                      ),
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    DynamicInfoDisplay(
+                      items: {
+                        'batch': {'icon': Icons.qr_code, 'label': 'Batch ID', 'value': widget.batchCode},
+                        'machine': {'icon': Icons.precision_manufacturing, 'label': 'Machine', 'value': widget.machine},
+                        'color': {'icon': Icons.palette, 'label': 'Color', 'value': widget.color},
+                        'weight': {'icon': Icons.scale, 'label': 'Req Weight', 'value': '${widget.totalWeight.toStringAsFixed(2)} kg'},
+                        'trays': {'icon': Icons.layers, 'label': 'Active Trays', 'value': '${widget.trayCount} trays'},
+                      },
                     ),
+                    const SizedBox(height: 20),
+                    _buildWorkOrderSelection(),
+                    if (_selectedWorkOrderId != null) ...[
+                      const SizedBox(height: 24),
+                      const SectionHeader(title: 'Scan Trays', subtitle: 'Verify and assign trays to the selected work order'),
+                      const SizedBox(height: 12),
+                      _buildScannerUI(), // Original Layout
+                      if ((_scannedTraysByWO[_selectedWorkOrderId] ?? []).isNotEmpty)
+                        _buildScannedTraysTable(),
+                    ],
+                  ],
+                ),
+              ),
             ),
           ],
         ),
@@ -587,91 +269,116 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
     );
   }
 
-  void _openScanner() async {
-    await Future.delayed(const Duration(milliseconds: 300));
-    await ScannerAlwaysOpen.show(
-      context,
-      title: 'Scan Tray',
-      onResult: (scannedCode) async {
-        final code = scannedCode.trim();
-        if (code.isEmpty) return 'Invalid tray code';
-        _trayBarcodeController.text = code;
-        return _onTrayScanned(code);
-      },
+  Widget _buildWorkOrderSelection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(left: 4, bottom: 8),
+          child: Text('Select Work Order Line', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87)),
+        ),
+        ContentCard(
+          child: Column(
+            children: [
+              _buildTableHeader(),
+              ..._workOrders.values.map((wo) {
+                final isSelected = _selectedWorkOrderId == wo.id;
+                final reassigned = (_scannedTraysByWO[wo.id] ?? []).fold<double>(0, (sum, t) =>
+                sum + (_trayOverrideQuantities[t.primaryTrayModel.trayCode?.toLowerCase() ?? ''] ?? 0));
+
+                return InkWell(
+                  onTap: () => setState(() => _selectedWorkOrderId = wo.id),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.blue.withOpacity(0.05) : Colors.transparent,
+                      border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(flex: 3, child: Text(wo.description, style: const TextStyle(fontSize: 12))),
+                        Expanded(flex: 6, child: Text(wo.componentDescription, style: const TextStyle(fontSize: 11))),
+                        Expanded(flex: 2, child: Text('${wo.trayCount}', style: const TextStyle(fontSize: 12))),
+                        Expanded(flex: 2, child: Text('${wo.cumulativePieces.toInt()}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue))),
+                        Expanded(flex: 2, child: Text(reassigned > 0 ? '${reassigned.toInt()}' : '-', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: reassigned > 0 ? Colors.green : Colors.grey))),
+                        Radio<String>(value: wo.id, groupValue: _selectedWorkOrderId, activeColor: Colors.blue, onChanged: (val) => setState(() => _selectedWorkOrderId = val)),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
-  String? _onTrayScanned(String code) {
-    if (_trayQtyController.text.trim().isEmpty) {
-      return 'Please add No. of Pcs before scanning!';
-    }
-
-    final double inputPcs = double.tryParse(_trayQtyController.text) ?? 0;
-    if (inputPcs <= 0) {
-      return 'Pcs amount must be greater than 0!';
-    }
-
-    if (code.trim().isEmpty) return 'Invalid tray code';
-
-    final trayCode = code.trim().toLowerCase();
-
-    final activeSummary = _workOrders[_selectedWorkOrderId];
-    if (activeSummary == null) return 'No Active Work Order selected!';
-
-    final maxLimit = activeSummary.cumulativePieces;
-    final currentWOTrays = _scannedTraysByWO[_selectedWorkOrderId] ?? [];
-
-    // Validate commutative totals BEFORE adding (only for current WO)
-    double totalPcsCurrentlyScanned = currentWOTrays.fold(
-      0,
-      (sum, t) =>
-          sum +
-          (_trayOverrideQuantities[t.primaryTrayModel.trayCode?.toLowerCase() ??
-                  ''] ??
-              0),
+  Widget _buildTableHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      color: Colors.grey.shade100,
+      child: const Row(
+        children: [
+          Expanded(flex: 3, child: Text('WORK ORDER', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 6, child: Text('ITEM DESC', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('TRAYS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('TOTAL', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('RE-ASGN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green))),
+          SizedBox(width: 32),
+        ],
+      ),
     );
-    if ((totalPcsCurrentlyScanned + inputPcs) > maxLimit) {
-      return 'Scanning denied: Pcs cannot exceed max cumulative limit ($maxLimit). Currently at $totalPcsCurrentlyScanned!';
-    }
+  }
 
-    // In actual production, hit the validate API.
-    // For now we check if the scanned physical tray belongs to the API load and selected work order exactly matching the composite key.
-    final matchedTray = _trays.where((t) {
-      final tDesc = t.processedItem?.description ?? t.item.description ?? '';
-      return (t.primaryTrayModel.trayCode?.toLowerCase() == trayCode) &&
-          ('${t.workOrderHeader.id}_$tDesc' == _selectedWorkOrderId);
-    }).firstOrNull;
-
-    final currentWOTraysForDupe = _scannedTraysByWO[_selectedWorkOrderId] ?? [];
-    if (matchedTray != null) {
-      if (!currentWOTraysForDupe.any(
-        (st) =>
-            st.primaryTrayModel.trayCode ==
-            matchedTray.primaryTrayModel.trayCode,
-      )) {
-        setState(() {
-          _trayOverrideQuantities[matchedTray.primaryTrayModel.trayCode
-                      ?.toLowerCase() ??
-                  ''] =
-              inputPcs;
-          _scannedTraysByWO.putIfAbsent(_selectedWorkOrderId!, () => []);
-          _scannedTraysByWO[_selectedWorkOrderId!]!.add(matchedTray);
-          _trayBarcodeController.clear();
-          _trayFocusNode.requestFocus();
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Tray scanned successfully'),
-            backgroundColor: Colors.green,
+  Widget _buildScannerUI() {
+    return ContentCard(
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: TextField(
+              controller: _trayBarcodeController,
+              focusNode: _trayFocusNode,
+              decoration: InputDecoration(
+                hintText: 'Enter/Scan Tray ID',
+                prefixIcon: IconButton(icon: const Icon(Icons.qr_code_scanner, color: Colors.blue), onPressed: _openScanner),
+                border: const OutlineInputBorder(),
+              ),
+              onSubmitted: (val) async {
+                final err = await _onTrayScanned(val);
+                if (err != null) _showSnackBar(err);
+              },
+            ),
           ),
-        );
-        return null;
-      } else {
-        return 'Tray already scanned in this session!';
-      }
-    } else {
-      return 'Tray offline or does not belong to selected Work Order!';
-    }
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 120,
+            child: TextField(
+              controller: _trayQtyController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(hintText: 'Pcs/tray', border: OutlineInputBorder()),
+            ),
+          ),
+          const SizedBox(width: 8),
+          CustomOutlinedButton(
+            label: 'Scan Tray',
+            borderColor: Colors.blue,
+            fillColor: Colors.blue,
+            textColor: Colors.white,
+            buttonHeight: 44,
+            onPressed: () async {
+              if (_trayBarcodeController.text.trim().isEmpty) {
+                _openScanner();
+              } else {
+                final err = await _onTrayScanned(_trayBarcodeController.text);
+                if (err != null) _showSnackBar(err);
+              }
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildScannedTraysTable() {
@@ -680,141 +387,31 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 20),
-        const SectionHeader(
-          title: 'Scanned Trays',
-          subtitle: 'Trays successfully scanned and validated',
-        ),
+        const SectionHeader(title: 'Scanned Trays', subtitle: 'Trays successfully scanned and validated'),
         const SizedBox(height: 12),
         ContentCard(
           child: Column(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 10,
-                  horizontal: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(4),
-                  ),
-                ),
-                child: const Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: Text(
-                        'TRAY CODE',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      flex: 3,
-                      child: Text(
-                        'ITEM DESC',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      flex: 2,
-                      child: Text(
-                        'QTY',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      flex: 2,
-                      child: Text(
-                        'WEIGHT',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: 36),
-                  ],
-                ),
-              ),
+              _buildScannedHeader(),
               ...traysToShow.map((t) {
-                final trayKey =
-                    t.primaryTrayModel.trayCode?.toLowerCase() ?? '';
+                final trayKey = t.primaryTrayModel.trayCode?.toLowerCase() ?? '';
                 final qty = _trayOverrideQuantities[trayKey] ?? 0;
                 final pw = t.item.pieceWeight ?? 0;
                 return Container(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 12,
-                    horizontal: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(color: Colors.grey.shade200),
-                    ),
-                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                  decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade200))),
                   child: Row(
                     children: [
-                      Expanded(
-                        flex: 3,
-                        child: Text(
-                          t.primaryTrayModel.trayCode ?? '-',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ),
-                      Expanded(
-                        flex: 3,
-                        child: Text(
-                          t.processedItem?.description ??
-                              t.item.description ??
-                              '-',
-                          style: const TextStyle(fontSize: 11),
-                        ),
-                      ),
-                      Expanded(
-                        flex: 2,
-                        child: Text(
-                          qty.toString(),
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ),
-                      Expanded(
-                        flex: 2,
-                        child: Text(
-                          '${(qty * pw).toStringAsFixed(2)} kg',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.blue,
-                          ),
-                        ),
-                      ),
-                      SizedBox(
-                        width: 36,
-                        child: IconButton(
-                          icon: const Icon(
-                            Icons.cancel_outlined,
-                            color: Colors.red,
-                            size: 18,
-                          ),
-                          padding: EdgeInsets.zero,
-                          onPressed: () {
-                            setState(() {
-                              _scannedTraysByWO[_selectedWorkOrderId]?.remove(
-                                t,
-                              );
-                              _trayOverrideQuantities.remove(trayKey);
-                            });
-                          },
-                        ),
-                      ),
+                      Expanded(flex: 3, child: Text(t.primaryTrayModel.trayCode ?? '-', style: const TextStyle(fontSize: 12))),
+                      Expanded(flex: 3, child: Text(t.processedItem?.description ?? t.item.description ?? '-', style: const TextStyle(fontSize: 11))),
+                      Expanded(flex: 2, child: Text(qty.toString(), style: const TextStyle(fontSize: 12))),
+                      Expanded(flex: 2, child: Text('${(qty * pw).toStringAsFixed(2)} kg', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue))),
+                      IconButton(icon: const Icon(Icons.cancel_outlined, color: Colors.red, size: 18), onPressed: () {
+                        setState(() {
+                          _scannedTraysByWO[_selectedWorkOrderId]?.remove(t);
+                          _trayOverrideQuantities.remove(trayKey);
+                        });
+                      }),
                     ],
                   ),
                 );
@@ -826,364 +423,158 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
     );
   }
 
+  Widget _buildScannedHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      color: Colors.grey.shade100,
+      child: const Row(
+        children: [
+          Expanded(flex: 3, child: Text('TRAY CODE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 3, child: Text('ITEM DESC', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('QTY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('WEIGHT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
+          SizedBox(width: 36),
+        ],
+      ),
+    );
+  }
+
+  void _showSnackBar(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
+  }
+
+  // --- Submission Logic ---
   Future<void> _saveChanges() async {
-    // Check if any tray was scanned at all across all work orders
-    final allScannedTrays = _scannedTraysByWO.values
-        .expand((list) => list)
-        .toList();
+    final allScannedTrays = _scannedTraysByWO.values.expand((list) => list).toList();
+
     if (allScannedTrays.isEmpty) {
-      await showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('No Trays Scanned'),
-          content: const Text(
-            'Please scan at least one tray before submitting.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
+      _showDialog('No Trays Scanned', 'Please scan at least one tray.');
       return;
     }
 
-    // Completion validation: every work order must have at least one tray re-assigned
+    // Completion validation
     for (final wo in _workOrders.values) {
-      final woTrays = _scannedTraysByWO[wo.id] ?? [];
-      final reassigned = woTrays.fold<double>(
-        0,
-        (sum, t) =>
-            sum +
-            (_trayOverrideQuantities[t.primaryTrayModel.trayCode
-                        ?.toLowerCase() ??
-                    ''] ??
-                0),
-      );
-      if (reassigned == 0) {
-        await showDialog(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Incomplete Assignment'),
-            content: Text(
-              'You must Re-Assign trays for ALL Work Orders before submitting!\n\nMissing trays for:\n"${wo.componentDescription}"',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
+      if ((_scannedTraysByWO[wo.id] ?? []).isEmpty) {
+        _showDialog('Incomplete', 'Missing trays for "${wo.componentDescription}"');
         return;
       }
     }
 
     setState(() => _isLoading = true);
+
     try {
-      final batchRepo = BatchRepo();
-
-      // Step 0: Deactivate all existing (old) batch lines for the current batch header
-      final currentHeaderLinesRes = await batchRepo.fetchBatchLines(
-        batchHeaderId: widget.batchHeaderId,
-      );
-      if (currentHeaderLinesRes.success && currentHeaderLinesRes.data != null) {
-        final currentLines =
-            currentHeaderLinesRes.data as List<Map<String, dynamic>>;
-        for (final line in currentLines) {
-          // The diagnostic showed the actual record is nested under 'batchLines'
-          final batchLine = line['batchLines'] as Map<String, dynamic>? ?? line;
-
-          final id = batchLine['id'] as int?;
-          final activeRaw = batchLine['active'] ?? batchLine['isActive'];
-          final bool isActive = activeRaw == true || activeRaw == 1;
-          final reAssignedRaw =
-              batchLine['isReAssigned'] ??
-              batchLine['isreAssigned'] ??
-              batchLine['isReassigned'];
-          final bool isReassigned = reAssignedRaw == true || reAssignedRaw == 1;
-
-          if (id != null && isActive && !isReassigned) {
-            final updateRes = await batchRepo.updateBatchLine(id, {
-              'id': id,
-              'concurrencyStamp': batchLine['concurrencyStamp'],
-              'active': false,
-              'isActive': false,
-              'isReAssigned': false,
-              'planDate': batchLine['planDate'],
-              'transactionDate': batchLine['transactionDate'],
-              'primaryQuantity': batchLine['primaryQuantity'],
-              'primaryUOM': batchLine['primaryUOM'],
-              'secondaryQuantity': batchLine['secondaryQuantity'],
-              'secondaryUOM': batchLine['secondaryUOM'],
-              'batchLineCode': batchLine['batchLineCode'],
-              'batchHeaderId': batchLine['batchHeaderId'],
-              'progressId': batchLine['progressId'],
-              'wipTransactionId': batchLine['wipTransactionId'],
-              'workOrderHeaderId':
-                  batchLine['workOrderHeaderId'] ??
-                  line['workOrderHeader']?['id'],
-              'workOrderLineId':
-                  batchLine['workOrderLineId'] ?? line['workOrderLine']?['id'],
-              'itemId': batchLine['itemId'] ?? line['item']?['id'],
-              'trayId': batchLine['trayId'] ?? line['tray']?['id'],
-              'locatorId': batchLine['locatorId'],
-            });
-            if (!updateRes.success) {
-              throw Exception(
-                'Failed to deactivate old batch line ($id): ${updateRes.message}',
-              );
-            }
+      // --- Step 1: Deactivate Old Batch Lines ---
+      final batchLinesRes = await _batchRepo.fetchBatchLines(batchHeaderId: widget.batchHeaderId);
+      if (batchLinesRes.success && batchLinesRes.data != null) {
+        for (var line in (batchLinesRes.data as List)) {
+          final bl = line['batchLines'] ?? line;
+          if (bl['id'] != null && (bl['active'] == true || bl['isActive'] == true)) {
+            await _batchRepo.updateBatchLine(bl['id'], {...bl, 'active': false, 'isActive': false});
           }
         }
       }
 
+      // --- Step 2: Create New Batch Lines & Update Tray Details ---
       for (final tray in allScannedTrays) {
-        final progressId = tray.productionProgress.id!;
-        int? wipTransactionId;
+        final double qty = _trayOverrideQuantities[tray.primaryTrayModel.trayCode?.toLowerCase() ?? ''] ?? 0;
 
-        // Step 1: Fetch WIP transaction for the new entry
-        final wipRes = await batchRepo.fetchWipTransactionsByProgressId(
-          progressId,
-        );
-        if (wipRes.success && wipRes.data != null) {
-          final items = wipRes.data as List<Map<String, dynamic>>;
-          if (items.isNotEmpty) {
-            wipTransactionId = items.first['wipTransaction']?['id'] as int?;
-          }
-        }
+        // Correcting the reference: Composite key use karein jo validation mein set hui thi
+        final String compositeKey = '${tray.workOrderHeader.id}_${tray.processedItem?.description ?? tray.item.description}';
+        final activeSummary = _workOrders[compositeKey];
 
-        final double overrideQty =
-            _trayOverrideQuantities[tray.primaryTrayModel.trayCode
-                    ?.toLowerCase() ??
-                ''] ??
-            0;
-
-        // Step 2: POST new batch line entry with isReAssigned: true
-        final lineRes = await batchRepo.createBatchLine({
-          "planDate": DateTime.now().toIso8601String(),
-          "transactionDate": DateTime.now().toIso8601String(),
-          "primaryQuantity": overrideQty,
-          "primaryUOM": tray.productionProgress.primaryUOM ?? 0,
-          "secondaryQuantity": tray.productionProgress.secondaryQuantity ?? 0,
-          "secondaryUOM": tray.productionProgress.secondaryUOM ?? 0,
-          "batchLineCode":
-              "BL-${widget.batchHeaderId}-${tray.primaryTrayModel.id}",
+        await _batchRepo.createBatchLine({
+          "primaryQuantity": qty,
           "batchHeaderId": widget.batchHeaderId,
-          "progressId": progressId,
-          "wipTransactionId": wipTransactionId,
+          "progressId": tray.productionProgress.id,
           "workOrderHeaderId": tray.workOrderHeader.id,
           "workOrderLineId": tray.workOrderLine.id,
           "itemId": tray.item.id,
           "trayId": tray.primaryTrayModel.id,
-          "locatorId": tray.productionProgress.locatorId,
           "isReAssigned": true,
+          // Batch Lines uses 'processItemId'
+          "processItemId": tray.processedItem?.id ?? tray.item.id,
           "active": true,
-          if (tray.processedItem != null)
-            "processedItemId": tray.processedItem!.id,
         });
 
-        if (!lineRes.success) {
-          throw Exception(
-            lineRes.message ?? 'Unknown error creating batch line',
-          );
-        }
-
-        // Extract the new batch line ID from the response
-        int? newBatchLineId;
-        if (lineRes.data != null) {
-          final resData = lineRes.data as Map<String, dynamic>?;
-          newBatchLineId = resData?['id'] as int?;
-        }
-
-        // Step 2b: Fetch the full existing tray-detail record, then update only the changed fields
-        final trayId = tray.primaryTrayModel.id;
-        if (trayId != null) {
-          final fetchRes = await batchRepo.fetchTrayDetailById(trayId);
-          if (!fetchRes.success || fetchRes.data == null) {
-            throw Exception('Failed to fetch tray detail for ${tray.primaryTrayModel.trayCode}: ${fetchRes.message}');
-          }
-
-          final rawData = fetchRes.data as Map<String, dynamic>;
-          // The actual flat record is usually nested under 'trayDetail' key
-          final trayDetailMap = rawData['trayDetail'] as Map<String, dynamic>? ?? rawData;
-          
-          // Prepare a clean DTO containing ONLY mutable business fields.
-          // IMPORTANT: Removed 'id' from body as it is already in the URL.
-          final Map<String, dynamic> cleanDto = {
-            'trayCode': trayDetailMap['trayCode'] ?? tray.primaryTrayModel.trayCode,
-            'description': trayDetailMap['description'] ?? tray.primaryTrayModel.description,
-            'trayQuantity': overrideQty.toInt(),
-            'active': true,
-            'isReAssigned': true,
-            'trayType': trayDetailMap['trayType'] ?? 0,
-            'productGrade': tray.productionProgress.productGrade ?? trayDetailMap['productGrade'] ?? 0,
-            'productNature': tray.productionProgress.productNature ?? trayDetailMap['productNature'] ?? 0,
-            'shiftId': tray.productionProgress.shiftId ?? trayDetailMap['shiftId'],
-            'planLineId': trayDetailMap['planLineId'],
-            'resourceId': trayDetailMap['resourceId'],
-            'workOrderHeaderId': tray.workOrderHeader.id,
-            'workOrderLineId': tray.workOrderLine.id,
-            'knitItemId': tray.item.id,
-            'locatorId': tray.productionProgress.locatorId ?? trayDetailMap['locatorId'],
-            'batchHeaderId': widget.batchHeaderId,
-            'batchLineId': newBatchLineId, // Using singular 'Id' as seen in other screens
-            'concurrencyStamp': trayDetailMap['concurrencyStamp'],
-          };
-
-          debugPrint('🚀 Sending TrayDetail Update: $cleanDto');
-
-          final trayDetailRes = await batchRepo.updateTrayDetails(trayId, cleanDto);
-          if (!trayDetailRes.success) {
-            throw Exception(
-              'Failed to update tray detail for ${tray.primaryTrayModel.trayCode}: ${trayDetailRes.message}',
-            );
-          }
-        }
-
-
-
-        // Step 3: Fetch old batch line entries for this tray and deactivate them
-        final oldLinesRes = await batchRepo.fetchBatchLinesByProgressId(
-          progressId,
-        );
-        if (oldLinesRes.success && oldLinesRes.data != null) {
-          final oldLines = oldLinesRes.data as List<Map<String, dynamic>>;
-          for (final oldLineWrapper in oldLines) {
-            final oldLine =
-                oldLineWrapper['batchLines'] as Map<String, dynamic>? ??
-                oldLineWrapper;
-
-            final oldId = oldLine['id'] as int?;
-            final activeRaw = oldLine['active'] ?? oldLine['isActive'];
-            final bool isActive = activeRaw == true || activeRaw == 1;
-            final reAssignedRaw =
-                oldLine['isReAssigned'] ??
-                oldLine['isreAssigned'] ??
-                oldLine['isReassigned'];
-            final bool isReassigned =
-                reAssignedRaw == true || reAssignedRaw == 1;
-
-            // Only deactivate old entries that are NOT the newly created re-assigned one
-            if (oldId != null && !isReassigned && isActive) {
-              // Clean Business DTO for deactivation: Preserve all fields while setting active = false
-              final Map<String, dynamic> cleanOldLineDto = {
-                'planDate': oldLine['planDate'],
-                'transactionDate': oldLine['transactionDate'],
-                'primaryQuantity': (oldLine['primaryQuantity'] as num?)?.toDouble() ?? 0,
-                'primaryUOM': oldLine['primaryUOM'],
-                'secondaryQuantity': (oldLine['secondaryQuantity'] as num?)?.toDouble() ?? 0,
-                'secondaryUOM': oldLine['secondaryUOM'],
-                'batchLineCode': oldLine['batchLineCode'],
-                'active': false,
-                'isActive': false, // Some APIs use both
-                'isReAssigned': false,
-                'batchHeaderId': oldLine['batchHeaderId'],
-                'progressId': oldLine['progressId'],
-                'wipTransactionId': oldLine['wipTransactionId'],
-                'workOrderHeaderId': oldLine['workOrderHeaderId'] ?? oldLineWrapper['workOrderHeader']?['id'],
-                'workOrderLineId': oldLine['workOrderLineId'] ?? oldLineWrapper['workOrderLine']?['id'],
-                'itemId': oldLine['itemId'] ?? oldLineWrapper['item']?['id'],
-                'trayId': oldLine['trayId'] ?? oldLineWrapper['tray']?['id'],
-                'locatorId': oldLine['locatorId'],
-                'processedItemId': oldLine['processedItemId'],
-                'concurrencyStamp': oldLine['concurrencyStamp'],
-              };
-
-              final updateRes = await batchRepo.updateBatchLine(oldId, cleanOldLineDto);
-              if (!updateRes.success) {
-                throw Exception(
-                  'Failed to deactivate history tray line ($oldId): ${updateRes.message}',
-                );
-              }
-            }
+        if (tray.primaryTrayModel.id != null) {
+          final tRes = await _batchRepo.fetchTrayDetailById(tray.primaryTrayModel.id!);
+          if (tRes.success) {
+            final tData = tRes.data['trayDetail'] ?? tRes.data;
+            await _batchRepo.updateTrayDetails(tray.primaryTrayModel.id!, {
+              ...tData,
+              'trayQuantity': qty.toInt(),
+              'batchHeaderId': widget.batchHeaderId,
+              'isReAssigned': true,
+            });
           }
         }
       }
 
-      // After batch line re-assignments: run the standard batch handover
-      // PUT each tray transactionType→3, then POST new production progress for next operation
-      final processingRepo = ProcessingRepo();
-      final trayRes = await processingRepo.fetchProductionProgress({
-        'BatchHeaderId': widget.batchHeaderId.toString(),
-        'OperationId': widget.currentOperationId.toString(),
-        'TransactionType': '2',
-      });
-
-      if (trayRes.success && trayRes.data != null) {
-        final batchTrays =
-            trayRes.data as List<ProductionProgressResponseModel>;
-        for (final t in batchTrays) {
-          final currentPp = t.productionProgress;
-          final updatedJson = currentPp.toJson();
-          updatedJson['transactionType'] = 3;
-          final ures = await processingRepo.updateProductionProgress(
-            currentPp.id!,
-            updatedJson,
+      // --- Step 3: Handover (Production Progress) ---
+      for (final originalTray in _trays) {
+        if (originalTray.productionProgress.id != null) {
+          await _processingRepo.updateProductionProgress(
+              originalTray.productionProgress.id!,
+              {...originalTray.productionProgress.toJson(), 'transactionType': 3}
           );
-          if (!ures.success) {
-            throw Exception(
-              'Failed to update progress to completed: ${ures.message}',
-            );
-          }
+        }
+      }
 
-          final nextJson = currentPp.toJson();
-          nextJson['transactionType'] = 2;
-          nextJson.remove('id');
-          nextJson.remove('progressCode');
-          nextJson.remove('concurrencyStamp');
-          if (widget.nextOperationId != null) {
-            nextJson['operationId'] = widget.nextOperationId;
-          } else {
-            nextJson['wipStatus'] = 1;
-          }
-          final cres = await processingRepo.createProductionProgress(nextJson);
-          if (!cres.success) {
-            throw Exception(
-              'Failed to create handover record: ${cres.message}',
-            );
-          }
+      for (final scannedTray in allScannedTrays) {
+        final double newQty = _trayOverrideQuantities[scannedTray.primaryTrayModel.trayCode?.toLowerCase() ?? ''] ?? 0;
+        final base = _trays.first.productionProgress;
+
+        Map<String, dynamic> nextJson = {
+          "transactionType": 2,
+          "batchHeaderId": widget.batchHeaderId,
+          "primaryTrayId": scannedTray.primaryTrayModel.id,
+          "primaryQuantity": newQty,
+
+          // 🔥 FIX 1: Spelling changed to 'processedItemId' for QA visibility
+          // 🔥 FIX 2: itemId ko processItem logic se update kiya
+          "processedItemId": scannedTray.processedItem?.id ?? scannedTray.item.id,
+
+          "operationId": widget.nextOperationId ?? base.operationId,
+          "previousOperationId": base.operationId,
+          "wipStatus": widget.nextOperationId != null ? 0 : 1,
+
+          "shiftId": scannedTray.productionProgress.shiftId ?? base.shiftId,
+          "machineId": scannedTray.productionProgress.machineId ?? base.machineId,
+          "workOrderHeaderId": scannedTray.workOrderHeader.id,
+          "workOrderLineId": scannedTray.workOrderLine.id,
+          "itemId": scannedTray.item.id,
+          "locatorId": base.locatorId ?? 3,
+          "primaryUOM": base.primaryUOM,
+          "secondaryUOM": base.secondaryUOM,
+          "transactionDate": DateTime.now().toIso8601String(),
+          "operatorDescription": "system",
+        };
+
+        final cres = await _processingRepo.createProductionProgress(nextJson);
+        if (!cres.success) {
+          throw Exception('Handover failed for Tray: ${scannedTray.primaryTrayModel.trayCode}');
         }
       }
 
       setState(() => _isLoading = false);
-      if (mounted) {
-        await showDialog(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Success'),
-            content: const Text('Trays saved successfully to the batch!'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-        if (mounted) Navigator.pop(context, true);
-      }
+      if (mounted) _showSuccess();
+
     } catch (e) {
       setState(() => _isLoading = false);
-      if (mounted) {
-        await showDialog(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Error'),
-            content: Text(e.toString()),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-      }
+      debugPrint("❌ Save Changes Error: $e");
+      _showDialog('Error', e.toString());
     }
+  }
+
+  void _showDialog(String title, String msg) {
+    showDialog(context: context, builder: (ctx) => AlertDialog(title: Text(title), content: Text(msg), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))]));
+  }
+
+  void _showSuccess() {
+    showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text('Success'), content: const Text('Batch updated and submitted!'), actions: [TextButton(onPressed: () {
+      Navigator.pop(ctx);
+      Navigator.pop(context, true);
+    }, child: const Text('OK'))]));
   }
 }
 
@@ -1193,15 +584,5 @@ class _WorkOrderSummary {
   final String componentDescription;
   final int trayCount;
   final double cumulativePieces;
-
-  _WorkOrderSummary({
-    required this.id,
-    required this.description,
-    required this.componentDescription,
-    required this.trayCount,
-    required this.cumulativePieces,
-  });
-
-  String get dropdownLabel =>
-      '$description - $componentDescription - $trayCount Trays - ${cumulativePieces.toInt()} Pcs';
+  _WorkOrderSummary({required this.id, required this.description, required this.componentDescription, required this.trayCount, required this.cumulativePieces});
 }
