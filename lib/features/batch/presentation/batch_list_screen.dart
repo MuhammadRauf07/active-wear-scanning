@@ -15,13 +15,14 @@ class BatchListScreen extends StatefulWidget {
   State<BatchListScreen> createState() => _BatchListScreenState();
 }
 
-class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProviderStateMixin {
+class _BatchListScreenState extends State<BatchListScreen>
+    with SingleTickerProviderStateMixin {
   final _batchRepo = BatchRepo();
   bool _isLoading = true;
-  
+
   List<BatchHeaderResponseModel> _unlockedBatches = [];
   List<BatchHeaderResponseModel> _lockedBatches = [];
-  
+
   // Maps batchHeaderId → raw batch-line records linked to that batch
   Map<int, List<Map<String, dynamic>>> _groupedBatchLinesByHeader = {};
 
@@ -33,7 +34,7 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
     _tabController = TabController(length: 2, vsync: this);
     _fetchAndGroupBatches();
   }
-  
+
   @override
   void dispose() {
     _tabController.dispose();
@@ -48,9 +49,15 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
 
     if (mounted && headerResult.success) {
       final headerData = headerResult.data as List<Map<String, dynamic>>? ?? [];
-      final headers = headerData.map((e) => BatchHeaderResponseModel.fromJson(e)).toList();
-      _unlockedBatches = headers.where((h) => h.batchHeader.lockFlag == false).toList();
-      _lockedBatches = headers.where((h) => h.batchHeader.lockFlag == true).toList();
+      final headers = headerData
+          .map((e) => BatchHeaderResponseModel.fromJson(e))
+          .toList();
+      _unlockedBatches = headers
+          .where((h) => h.batchHeader.lockFlag == false)
+          .toList();
+      _lockedBatches = headers
+          .where((h) => h.batchHeader.lockFlag == true)
+          .toList();
 
       // Group batch-lines by batchHeaderId — this IS populated correctly
       final Map<int, List<Map<String, dynamic>>> grouped = {};
@@ -62,7 +69,9 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
           if (id != null) grouped.putIfAbsent(id, () => []).add(line);
         }
       }
-      debugPrint('📊 Grouped batch-lines: ${grouped.map((k, v) => MapEntry(k, v.length))}');
+      debugPrint(
+        '📊 Grouped batch-lines: ${grouped.map((k, v) => MapEntry(k, v.length))}',
+      );
 
       setState(() {
         _groupedBatchLinesByHeader = grouped;
@@ -71,16 +80,17 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
     } else {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error: Failed to fetch batches')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error: Failed to fetch batches')),
+        );
       }
     }
   }
 
-
   void _navigateToAddBatch() async {
     final result = await Navigator.push(
-      context, 
-      MaterialPageRoute(builder: (context) => const BatchScanningScreen())
+      context,
+      MaterialPageRoute(builder: (context) => const BatchScanningScreen()),
     );
     if (result == true) {
       _fetchAndGroupBatches();
@@ -89,13 +99,14 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
 
   void _navigateToEditBatch(BatchHeaderResponseModel batchHeaderModel) async {
     final result = await Navigator.push(
-      context, 
+      context,
       MaterialPageRoute(
         builder: (context) => BatchScanningScreen(
           existingBatch: batchHeaderModel,
-          preloadedTrays: const [], // Edit screen loads its own trays from batch-lines
-        )
-      )
+          preloadedTrays:
+              const [], // Edit screen loads its own trays from batch-lines
+        ),
+      ),
     );
     if (result == true) {
       _fetchAndGroupBatches();
@@ -107,10 +118,18 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Batch?'),
-        content: Text('Are you sure you want to delete batch ${header.batchHeader.batchHeaderCode}?'),
+        content: Text(
+          'Are you sure you want to delete batch ${header.batchHeader.batchHeaderCode}?',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete', style: TextStyle(color: Colors.red))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
         ],
       ),
     );
@@ -129,14 +148,24 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
 
     // 2. Delete the Batch Header
     final res = await _batchRepo.deleteBatchHeader(headerId);
-    
+
     setState(() => _isLoading = false);
 
     if (res.success) {
       _fetchAndGroupBatches();
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Batch permanently deleted!'), backgroundColor: Colors.green));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Batch permanently deleted!'),
+          backgroundColor: Colors.green,
+        ),
+      );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete Failed: ${res.message}'), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Delete Failed: ${res.message}'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -146,14 +175,19 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
       builder: (ctx) => AlertDialog(
         title: const Text('Issue Batch?'),
         content: Text(
-          'Are you sure you want to issue batch ${header.batchHeader.batchHeaderCode}?\n\n'
-          ,
+          'Are you sure you want to issue batch ${header.batchHeader.batchHeaderCode}?\n\n',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Issue Batch', style: TextStyle(color: Colors.orange)),
+            child: const Text(
+              'Issue Batch',
+              style: TextStyle(color: Colors.orange),
+            ),
           ),
         ],
       ),
@@ -180,7 +214,10 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
     if (!lockRes.success) {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Issue Failed: ${lockRes.message}'), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text('Issue Failed: ${lockRes.message}'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
@@ -188,7 +225,8 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
     // ── Step 1b: POST batch-header-routings (once per batch) ────────────────
     final lines = _groupedBatchLinesByHeader[headerId] ?? [];
     final firstLine = lines.isNotEmpty ? lines.first : null;
-    final firstItemId = (firstLine?['batchLines'] as Map<String, dynamic>?)?['itemId'] as int?;
+    final firstItemId =
+        (firstLine?['batchLines'] as Map<String, dynamic>?)?['itemId'] as int?;
 
     if (firstItemId != null) {
       final routingRes = await _batchRepo.fetchItemRoutings(firstItemId);
@@ -198,16 +236,21 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
           final rMap = r as Map;
           final routingCode = rMap['itemRouting']?['routingCode']?.toString();
           final operationId = rMap['itemRouting']?['operationId'] as int?;
+          final sequence = rMap['itemRouting']?['seq'] as int?;
+
           if (routingCode != null && operationId != null) {
             final res = await _batchRepo.postBatchHeaderRouting({
               'code': routingCode,
               'batchHeaderId': headerId,
               'operationId': operationId,
+              'seq': sequence,
               'isActive': true,
             });
-            debugPrint(res.success
-                ? '✅ BatchHeaderRouting posted: code=$routingCode opId=$operationId'
-                : '❌ BatchHeaderRouting failed: code=$routingCode → ${res.message}');
+            debugPrint(
+              res.success
+                  ? '✅ BatchHeaderRouting posted: code=$routingCode opId=$operationId'
+                  : '❌ BatchHeaderRouting failed: code=$routingCode → ${res.message}',
+            );
           }
         }
       }
@@ -246,7 +289,10 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
       final workOrderLineId = bl['workOrderLineId'] as int?;
       final colorDescription = bh.colorDescription;
       if (workOrderLineId != null && colorDescription != null) {
-        final woRes = await _batchRepo.fetchWorkOrderLineDetails(workOrderLineId, colorDescription);
+        final woRes = await _batchRepo.fetchWorkOrderLineDetails(
+          workOrderLineId,
+          colorDescription,
+        );
         if (woRes.success && woRes.data != null) {
           final woItems = woRes.data as List;
           if (woItems.isNotEmpty) {
@@ -259,7 +305,9 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
             }
           }
         }
-        debugPrint('📦 Lock: workOrderLineId=$workOrderLineId processedItemId=$processedItemId');
+        debugPrint(
+          '📦 Lock: workOrderLineId=$workOrderLineId processedItemId=$processedItemId',
+        );
       }
 
       final primaryQty = (bl['primaryQuantity'] as num?)?.toDouble() ?? 0;
@@ -290,7 +338,7 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
         'locatorId': 10,
         'batchHeaderId': headerId,
         'batchLinesId': bl['id'],
-        'processItemd': processedItemId,
+        'processedItemId': processedItemId,
       };
 
       final wipRes = await _batchRepo.postWipTransaction(wipData);
@@ -298,7 +346,9 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
         successCount++;
         debugPrint('✅ WIP issued for tray ${bl["trayId"]}');
       } else {
-        debugPrint('❌ WIP issue failed for tray ${bl["trayId"]}: ${wipRes.message}');
+        debugPrint(
+          '❌ WIP issue failed for tray ${bl["trayId"]}: ${wipRes.message}',
+        );
       }
 
       // ── Step 2b: POST new production-progress with min operationId ────────
@@ -334,7 +384,7 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
       final progRes = await _batchRepo.postProductionProgress(progressData);
       if (progRes.success) {
         debugPrint('✅ ProductionProgress issued for tray ${bl["trayId"]}');
-        
+
         // ── Step 2c: Update the BatchLine itself to reflect the new locator ──
         final blId = bl['id'] as int?;
         if (blId != null) {
@@ -357,13 +407,16 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
             'itemId': bl['itemId'],
             'trayId': bl['trayId'],
             'locatorId': 10, // Transition to Processing
-            'processedItemId': bl['processedItemId'],
+            'processItemId':
+                bl['processItemId'], // Send original value to keep it unchanged
             'concurrencyStamp': bl['concurrencyStamp'],
           };
           await _batchRepo.updateBatchLine(blId, cleanBlDto);
         }
       } else {
-        debugPrint('❌ ProductionProgress issue failed for tray ${bl["trayId"]}: ${progRes.message}');
+        debugPrint(
+          '❌ ProductionProgress issue failed for tray ${bl["trayId"]}: ${progRes.message}',
+        );
         if (context.mounted) {
           AppLoader.hide();
           await showDialog(
@@ -371,9 +424,16 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
             builder: (ctx) => AlertDialog(
               title: const Text('Production Progress API Failed'),
               content: SingleChildScrollView(
-                child: Text('Tray ${bl["trayId"]} failed to post progress: ${progRes.message}'),
+                child: Text(
+                  'Tray ${bl["trayId"]} failed to post progress: ${progRes.message}',
+                ),
               ),
-              actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('OK'),
+                ),
+              ],
             ),
           );
           AppLoader.show();
@@ -385,8 +445,10 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
       if (trayId != null) {
         final trayRes = await _batchRepo.fetchTrayDetailById(trayId);
         if (trayRes.success && trayRes.data != null) {
-          final trayMap = Map<String, dynamic>.from(trayRes.data as Map<String, dynamic>);
-          
+          final trayMap = Map<String, dynamic>.from(
+            trayRes.data as Map<String, dynamic>,
+          );
+
           trayMap['shiftId'] = null;
           trayMap['planLineId'] = null;
           trayMap['resourceId'] = null;
@@ -403,7 +465,9 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
           if (updateRes.success) {
             debugPrint('✅ TrayDetails emptied for reusable tray=$trayId');
           } else {
-            debugPrint('❌ TrayDetails empty failed for tray=$trayId: ${updateRes.message}');
+            debugPrint(
+              '❌ TrayDetails empty failed for tray=$trayId: ${updateRes.message}',
+            );
           }
         }
       }
@@ -413,7 +477,9 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
     _fetchAndGroupBatches();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Batch issued! $successCount/${lines.length} WIP transactions posted.'),
+        content: Text(
+          'Batch issued! $successCount/${lines.length} WIP transactions posted.',
+        ),
         backgroundColor: Colors.green,
       ),
     );
@@ -442,7 +508,7 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
                 onPressed: _navigateToAddBatch,
               ),
             ),
-            
+
             // Segmented Control Tab Bar
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -468,17 +534,17 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
                 ),
               ),
             ),
-            
+
             Expanded(
-              child: _isLoading 
-                ? const Center(child: CircularProgressIndicator()) 
-                : TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildBatchList(_unlockedBatches, isLocked: false),
-                      _buildBatchList(_lockedBatches, isLocked: true),
-                    ],
-                  ),
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildBatchList(_unlockedBatches, isLocked: false),
+                        _buildBatchList(_lockedBatches, isLocked: true),
+                      ],
+                    ),
             ),
           ],
         ),
@@ -486,18 +552,23 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
     );
   }
 
-  Widget _buildBatchList(List<BatchHeaderResponseModel> batches, {required bool isLocked}) {
+  Widget _buildBatchList(
+    List<BatchHeaderResponseModel> batches, {
+    required bool isLocked,
+  }) {
     if (batches.isEmpty) {
       return Center(
         child: Text(
           isLocked ? 'No batch is issued' : 'No draft batches found.',
-          style: TextStyle(fontSize: 14, color: Colors.grey.shade500)
+          style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
         ),
       );
     }
 
     // Sort heavily newest first
-    batches.sort((a, b) => (b.batchHeader.id ?? 0).compareTo((a.batchHeader.id ?? 0)));
+    batches.sort(
+      (a, b) => (b.batchHeader.id ?? 0).compareTo((a.batchHeader.id ?? 0)),
+    );
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(12),
@@ -509,16 +580,68 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
               decoration: BoxDecoration(
                 color: Colors.grey.shade100,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(6),
+                ),
                 border: Border.all(color: Colors.grey.shade300),
               ),
               child: Row(
                 children: [
-                  Expanded(flex: 3, child: Text('BATCH ID', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
-                  Expanded(flex: 3, child: Text('MACHINE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
-                  Expanded(flex: 2, child: Text('COLOR', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
-                  Expanded(flex: 2, child: Text('TRAYS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
-                  Expanded(flex: 2, child: Text('WEIGHT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
+                  Expanded(
+                    flex: 3,
+                    child: Text(
+                      'BATCH ID',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 3,
+                    child: Text(
+                      'MACHINE',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      'COLOR',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      'TRAYS',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      'WEIGHT',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ),
                   if (!isLocked) const SizedBox(width: 120),
                 ],
               ),
@@ -528,21 +651,32 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
               final batchId = header.batchHeader.batchHeaderCode ?? "Undef";
               final machineBrand = header.machine?.brand ?? 'Unknown';
               final colorDesc = header.batchHeader.colorDescription ?? '-';
-              
+
               final headerDatabaseId = header.batchHeader.id ?? 0;
-              final traysLength = _groupedBatchLinesByHeader[headerDatabaseId]?.length ?? 0;
+              final traysLength =
+                  _groupedBatchLinesByHeader[headerDatabaseId]?.length ?? 0;
 
               // Cumulative weight: sum(primaryQuantity × pieceWeight) for all lines in this batch
               double totalWeight = 0;
-              for (final line in (_groupedBatchLinesByHeader[headerDatabaseId] ?? [])) {
-                final qty = (line['batchLines']?['primaryQuantity'] as num?)?.toDouble() ?? 0;
-                final pw = (line['item']?['pieceWeight'] as num?)?.toDouble() ?? 0;
+              for (final line
+                  in (_groupedBatchLinesByHeader[headerDatabaseId] ?? [])) {
+                final qty =
+                    (line['batchLines']?['primaryQuantity'] as num?)
+                        ?.toDouble() ??
+                    0;
+                final pw =
+                    (line['item']?['pieceWeight'] as num?)?.toDouble() ?? 0;
                 totalWeight += qty * pw;
               }
-              final weightDisplay = totalWeight > 0 ? '${totalWeight.toStringAsFixed(2)} kg' : '-';
+              final weightDisplay = totalWeight > 0
+                  ? '${totalWeight.toStringAsFixed(2)} kg'
+                  : '-';
 
               return Container(
-                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 16,
+                  horizontal: 12,
+                ),
                 decoration: BoxDecoration(
                   border: Border(
                     left: BorderSide(color: Colors.grey.shade300),
@@ -551,76 +685,127 @@ class _BatchListScreenState extends State<BatchListScreen> with SingleTickerProv
                   ),
                   color: index.isEven ? Colors.white : Colors.grey.shade50,
                 ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: Text(batchId, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87)),
-                      ),
-                      Expanded(
-                        flex: 3,
-                        child: Text(machineBrand, style: const TextStyle(fontSize: 12, color: Colors.black87), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      ),
-                      Expanded(
-                        flex: 2,
-                        child: Text(colorDesc, style: const TextStyle(fontSize: 12, color: Colors.black87), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      ),
-                      Expanded(
-                        flex: 2,
-                        child: Text("$traysLength", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue)),
-                      ),
-                      Expanded(
-                        flex: 2,
-                        child: Text(weightDisplay, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.black87)),
-                      ),
-                      if (!isLocked)
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Edit button
-                            GestureDetector(
-                              onTap: () => _navigateToEditBatch(header),
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.grey.shade300),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Icon(Icons.edit, size: 18, color: Colors.blue.shade400),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            // Delete button
-                            GestureDetector(
-                              onTap: () => _deleteBatch(header),
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.grey.shade300),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Icon(Icons.cancel, size: 18, color: Colors.red.shade400),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            // Lock / Issue Batch button (right)
-                            GestureDetector(
-                              onTap: () => _lockBatch(header),
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.orange.shade200),
-                                  color: Colors.orange.shade50,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: const Icon(Icons.lock_outline, size: 18, color: Colors.orange),
-                              ),
-                            ),
-                          ],
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: Text(
+                        batchId,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
                         ),
-                    ],
-                  ),
-                );
+                      ),
+                    ),
+                    Expanded(
+                      flex: 3,
+                      child: Text(
+                        machineBrand,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.black87,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        colorDesc,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.black87,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        "$traysLength",
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        weightDisplay,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ),
+                    if (!isLocked)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Edit button
+                          GestureDetector(
+                            onTap: () => _navigateToEditBatch(header),
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey.shade300),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Icon(
+                                Icons.edit,
+                                size: 18,
+                                color: Colors.blue.shade400,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Delete button
+                          GestureDetector(
+                            onTap: () => _deleteBatch(header),
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey.shade300),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Icon(
+                                Icons.cancel,
+                                size: 18,
+                                color: Colors.red.shade400,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Lock / Issue Batch button (right)
+                          GestureDetector(
+                            onTap: () => _lockBatch(header),
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: Colors.orange.shade200,
+                                ),
+                                color: Colors.orange.shade50,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Icon(
+                                Icons.lock_outline,
+                                size: 18,
+                                color: Colors.orange,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              );
             }),
           ],
         ),

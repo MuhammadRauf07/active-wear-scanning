@@ -20,25 +20,21 @@ class GBSReceivingRepo {
   //   }
   // }
   Future<PlexApiResult> getProductionProgress({Map<String, String>? params}) async {
-    // 1. Agar params nahi hain, toh default Knitting Floor (2) dhoondein
     final Map<String, String> p = params ?? {
       'LocatorId': '2',
-      'GbsFlag': 'false',
-      'TransactionType': '2',
-      'MaxResultCount': '1000', // Taake saara data load ho jaye
+      'TransactionType': '1',
+      'MaxResultCount': '1000',
     };
     final queryString = Uri(queryParameters: p).query;
 
-    // 2. Query parameters ko GET call mein pass karein
     final result = await _api.getList(
       '/api/app/production-progresses',
-      query: p, // 👈 Yeh line zaroori hai
+      query: p,
     );
 
     if (!result.success || result.data == null) return result;
 
     try {
-      // ABP API aksar 'items' ke andar list bhejti hai, usay handle karein
       final List rawData = result.data is Map ? result.data['items'] : result.data;
 
       final productionProgress = rawData
@@ -57,6 +53,11 @@ class GBSReceivingRepo {
     print("ProductionProgressData :: ${data.toString()}");
 
     await _api.post('/api/app/w-iPTransactions', body: data);
+  }
+
+  Future<PlexApiResult> saveProductionProgress(Map<String, dynamic> data) async {
+    final result = await _api.post('/api/app/production-progresses', body: data);
+    return result;
   }
 
   Future<PlexApiResult> updateProductionProgress(int id, Map<String, dynamic> data) async {

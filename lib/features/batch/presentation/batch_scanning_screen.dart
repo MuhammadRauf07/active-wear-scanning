@@ -240,13 +240,6 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
           // Fallback: Agar null ho toh knitItemId use karein
           processedItemId = detail['knitItemId'] ?? tray.item?.id ?? 0;
         }
-        // if (processIdRaw is Map) {
-        //    processedItemId = processIdRaw['id'];
-        // } else if (processIdRaw is int) {
-        //    processedItemId = processIdRaw;
-        // } else {
-        //    return 'Invalid tray data: processedItemId missing in API response';
-        // }
 
         // ── Item Routing Validation (after color validation) ─────────────────
         final itemDefId = tray.productionProgress.itemId;
@@ -328,8 +321,6 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     AppLoader.show();
 
     // ── Determine batchHeaderId ──────────────────────────────────────────────
-    // EDIT mode: batch already exists, reuse its ID
-    // CREATE mode: POST new batch header first
     int batchHeaderId;
     final bool isEditMode = widget.existingBatch != null;
 

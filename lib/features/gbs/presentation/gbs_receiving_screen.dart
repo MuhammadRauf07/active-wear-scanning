@@ -34,6 +34,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
         _onInitialDataFetch();
       }
     });
+    _fetchLatestTraysSilently();
   }
 
   Future<void> _onInitialDataFetch() async {
@@ -46,16 +47,26 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
     final apiResult = await _trayScanningRepo.getProductionProgress(
       params: {
         'LocatorId': '2',
-        'GbsFlag': 'false',
-        'TransactionType': '2',
-        'MaxResultCount': '1000', // Taake saara data load ho jaye
+        'MaxResultCount': '1000',
       },
     );
     if (mounted && apiResult.success && apiResult.data != null) {
+      final List<ProductionProgressResponseModel> allTrays = apiResult.data as List<ProductionProgressResponseModel>;
+      
+      // 🕵️ DEBUG LOGGING
+      debugPrint("🔍 RAW API SUCCESS. Total items from server: ${allTrays.length}");
+      for (var tray in allTrays) {
+        debugPrint("📋 Tray Code: ${tray.primaryTrayModel.trayCode} | Locator: ${tray.productionProgress.locatorId} | Type: ${tray.productionProgress.transactionType} | GBS: ${tray.productionProgress.gbsFlag}");
+      }
+
       setState(() {
-        availableTrayForGbs = apiResult.data as List<ProductionProgressResponseModel>;
-        debugPrint("🔄 GBS Data Refreshed: ${availableTrayForGbs.length} trays");
+        // Local filtering: Any tray at Locator 2 is receivable
+        availableTrayForGbs = allTrays.toList();
+        
+        debugPrint("🔄 GBS Data Refreshed: ${availableTrayForGbs.length} matching trays found.");
       });
+    } else {
+      debugPrint("❌ API FAIL OR NULL: ${apiResult.message}");
     }
   }
 
@@ -73,39 +84,8 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
     setState(() {});
   }
 
-  // String? _validateTrayForReceiving(String scannedCode) {
-  //   final code = scannedCode.trim().toLowerCase();
-  //   if (code.isEmpty) return 'Invalid tray code';
-  //
-  //   final alreadyScanned = _scannedTrays.any((t) => t.trayCode.trim().toLowerCase() == code);
-  //   if (alreadyScanned) return 'Already assigned';
-  //
-  //   final match = availableTrayForGbs.where((t) {
-  //     final String tCode = (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase();
-  //     final String pCode = (t.productionProgress.progressCode ?? '').trim().toLowerCase();
-  //     return tCode == code || pCode == code || tCode.endsWith(code) || code.endsWith(tCode);
-  //   }).firstOrNull;
-  //
-  //   if (match == null) return 'Tray not available';
-  //
-  //   setState(() {
-  //     _scannedTrays.add(
-  //       GBSScannedTray(
-  //         itemDescription: match.item.description,
-  //         componentDescription: match.item.componentDescription ?? '',
-  //         sizeDescription: match.item.sizeDescription ?? '',
-  //         workOrderCode: match.workOrderHeader.workOrderCode,
-  //         primaryQuantity: match.productionProgress.primaryQuantity?.toString() ?? '0',
-  //         trayCode: scannedCode.trim(),
-  //         trayUpdateId: match.primaryTrayModel.id,
-  //         trayConcurrencyStamp: match.primaryTrayModel.concurrencyStamp,
-  //       ),
-  //     );
-  //   });
-  //   return null;
-  // }
   String? _validateTrayForReceiving(String scannedCode) {
-    // 1. Scanned code ko normalize karein
+
     final code = scannedCode.trim().toLowerCase();
     if (code.isEmpty) return 'Invalid tray code';
 
@@ -114,34 +94,26 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
 
     // 2. Flexible Matching Logic
     final match = availableTrayForGbs.where((t) {
-      // API se aane wala trayCode: "00000014-01"
       final String tCode = (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase();
-      // API se aane wala progressCode: "KNT-234-30-000473"
       final String pCode = (t.productionProgress.progressCode ?? '').trim().toLowerCase();
 
-      // A. Direct Match (Exact)
       if (tCode == code || pCode == code) return true;
 
-      // B. Smart Match: Hyphens aur Leading Zeros hata kar check karein
-      // Taake "14-01" ya "1401" bhi "00000014-01" se match ho jaye
       String cleanTCode = tCode.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').replaceAll(RegExp(r'^0+'), '');
       String cleanScanned = code.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').replaceAll(RegExp(r'^0+'), '');
 
       if (cleanTCode.isNotEmpty && cleanTCode == cleanScanned) return true;
 
-      // C. EndsWith (Fallback)
       if (tCode.endsWith(code) && code.length > 3) return true;
 
       return false;
     }).firstOrNull;
 
     if (match == null) {
-      // Debugging console ke liye
       debugPrint("❌ No Match! Scanned: '$code' | memory mein: ${availableTrayForGbs.map((e) => e.primaryTrayModel.trayCode).toList()}");
       return 'Tray not available';
     }
 
-    // 3. Agar match mil jaye toh state update karein
     setState(() {
       _scannedTrays.add(
         GBSScannedTray(
@@ -202,34 +174,40 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
         };
 
         await _trayScanningRepo.postWipTransactions(wipPayload);
-
-        // Production Progress Update Payload
-        Map<String, dynamic> updateData = {
+        Map<String, dynamic> updateProductionEntry = {
+          "id": currentTrayData.productionProgress.id,
+          "concurrencyStamp": currentTrayData.productionProgress.concurrencyStamp,
           "subOperation": "GBS Received",
           "date": DateTime.now().toIso8601String(),
-          "transactionType": currentTrayData.productionProgress.transactionType ?? 1,
+          "transactionType": 1, // Formal Handover
           "operatorDescription": "system",
-          "primaryQuantity": currentTrayData.productionProgress.primaryQuantity ?? 0,
-          "primaryUOM": currentTrayData.productionProgress.primaryUOM ?? 0,
+          "primaryQuantity": currentTrayData.productionProgress.primaryQuantity,
+          "primaryUOM": currentTrayData.productionProgress.primaryUOM,
+          "secondaryQuantity": currentTrayData.productionProgress.secondaryQuantity,
+          "secondaryUOM": currentTrayData.productionProgress.secondaryUOM,
           "wipStatus": currentTrayData.productionProgress.wipStatus ?? 0,
-          "gbsFlag": true,
-          "pbsFlag": currentTrayData.productionProgress.pbsFlag ?? false,
-          "operationId": currentTrayData.operation.id,
-          "workOrderHeaderId": currentTrayData.workOrderHeader.id,
-          "workOrderLineId": currentTrayData.workOrderLine.id,
-          "itemId": currentTrayData.item.id,
-          "shiftId": currentTrayData.shift.id,
-          "primaryTrayId": currentTrayData.primaryTrayModel.id,
-          "machineId": currentTrayData.machineModel.id,
-          "locatorId": 3,
-          "processedItemId": currentTrayData.processedItem?.id ?? currentTrayData.item.id,
-          "concurrencyStamp": currentTrayData.productionProgress.concurrencyStamp,
+          "gbsFlag": true, // Requirement: 1 (true)
+          "pbsFlag": false, // Requirement: false
+          "progressCode": currentTrayData.productionProgress.progressCode,
+          "productGrade": currentTrayData.productionProgress.productGrade,
+          "productNature": currentTrayData.productionProgress.productNature,
+          "operationId": currentTrayData.productionProgress.operationId,
+          "workOrderHeaderId": currentTrayData.productionProgress.workOrderHeaderId,
+          "workOrderLineId": currentTrayData.productionProgress.workOrderLineId,
+          "itemId": currentTrayData.productionProgress.itemId,
+          "shiftId": currentTrayData.productionProgress.shiftId,
+          "primaryTrayId": currentTrayData.productionProgress.primaryTrayId,
+          "secondaryTrayId": currentTrayData.productionProgress.secondaryTrayId,
+          "machineId": currentTrayData.productionProgress.machineId,
+          "planHeaderId": currentTrayData.productionProgress.planHeaderId,
+          "locatorId": 3, // Move to Batching Floor
+          "batchHeaderId": currentTrayData.productionProgress.batchHeaderId,
         };
 
         if (currentTrayData.productionProgress.id != null) {
           await _trayScanningRepo.updateProductionProgress(
-              currentTrayData.productionProgress.id!,
-              updateData
+            currentTrayData.productionProgress.id!,
+            updateProductionEntry,
           );
         }
 

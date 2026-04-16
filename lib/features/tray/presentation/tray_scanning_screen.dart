@@ -303,6 +303,36 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   void saveTrayAndProductionProgress() async {
     AppLoader.show();
     for (int i = 0; i < _scannedTrays.length; i++) {
+      // 1. Re-fetch the latest tray detail to get the current concurrencyStamp
+      final trayResFetch = await _trayScanningRepo.fetchTrayById(
+        _scannedTrays[i].trayUpdateId!,
+      );
+
+      if (!trayResFetch.success || trayResFetch.data == null) {
+        if (mounted) {
+          AppLoader.hide();
+          await showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Save Failed'),
+              content: Text(
+                'Could not refresh tray details for ${_scannedTrays[i].trayCode}: ${trayResFetch.message}',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+
+      final latestTray = trayResFetch.data as TrayDetailsModel;
+      final latestTrayDetail = latestTray.trayDetails;
+
       Map<String, dynamic> planData = {
         'description': _selectedPlanLine!.item.description,
         'trayCode': _scannedTrays[i].trayCode,
@@ -314,46 +344,51 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
         'knitItemId': _selectedPlanLine!.planLine.itemId,
         "locatorId": 2,
         "active": true,
-        "trayQuantity": (double.tryParse(_quantityControllers[i].text) ?? 0.0)
+        "trayQuantity": (double.tryParse(_quantityControllers[i].text) ?? 5.0)
             .toInt(),
-        'concurrencyStamp': _scannedTrays[i].trayConcurrencyStamp,
+        'concurrencyStamp': latestTrayDetail?.concurrencyStamp,
       };
 
       Map<String, dynamic> productionProgressData = {
         "subOperation": "Knitting",
         "date": DateTime.now().toIso8601String(),
-        "transactionType": 1,
+        "transactionType": 2,
         "operatorDescription": "system",
-        "primaryQuantity": (double.tryParse(_quantityControllers[i].text) ?? 5.0).toInt(),
+        "primaryQuantity":
+            (double.tryParse(_quantityControllers[i].text) ?? 5.0),
         "primaryUOM": _selectedPlanLine!.planLine.primaryUOM ?? 0,
-        "secondaryQuantity": ((_selectedPlanLine!.item.perGarmentTube) * (double.tryParse(_quantityControllers[i].text) ?? 5.0)).toInt(),
+        "secondaryQuantity":
+            (_selectedPlanLine!.item.perGarmentTube) *
+            (double.tryParse(_quantityControllers[i].text) ?? 5.0),
         "secondaryUOM": _selectedPlanLine!.planLine.secondaryUOM ?? 0,
         "wipStatus": 0,
-        "gbsFlag": false,
-        "pbsFlag": false,
+        "gbsFlag": false, // Waiting for GBS
+        "pbsFlag": false, // false as per requirement
         "productGrade": 0,
         "productNature": 0,
-        "isFirstProcess": false, // New Field
-        "isLastProcess": false,  // New Field
-        "lotMakingFlag": false,  // New Field
-        "reworkFlag": false,     // New Field
+        "isLastProcess": false,
+        "lotMakingFlag": false,
+        "reworkFlag": false,
         "operationId": _selectedPlanLine!.operation.id,
         "workOrderHeaderId": _selectedPlanLine!.workOrderHeader.id,
         "workOrderLineId": _selectedPlanLine!.workOrderLine.id,
         "itemId": _selectedPlanLine!.planLine.itemId,
-        "processedItemId": _selectedPlanLine!.planLine.itemId,
         "shiftId": _selectedPlanLine!.planLine.shiftId,
-        "primaryTrayId": _scannedTrays[i].trayUpdateId,
-        "secondaryTrayId": _scannedTrays[i].trayUpdateId, // Null ki jagah ID bhejain
+        "primaryTrayId": latestTrayDetail?.id,
+        "secondaryTrayId": latestTrayDetail?.id,
         "machineId": _selectedPlanLine!.planLine.resourceId,
         "locatorId": 2,
-        if (_selectedPlanLine!.planLine.planHeaderId != 0 && _selectedPlanLine!.planLine.planHeaderId != null)
-          "planHeaderId": _selectedPlanLine!.planLine.planHeaderId,
       };
+
+      if (_selectedPlanLine!.planLine.planHeaderId != 0 &&
+          _selectedPlanLine!.planLine.planHeaderId != null) {
+        productionProgressData["planHeaderId"] =
+            _selectedPlanLine!.planLine.planHeaderId;
+      }
 
       final trayRes = await _trayScanningRepo.updateTrayDetails(
         planData,
-        _scannedTrays[i].trayUpdateId!,
+        latestTrayDetail!.id!,
       );
       final progRes = await _trayScanningRepo.saveProductionProgress(
         productionProgressData,
@@ -382,7 +417,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
             ),
           );
         }
-        return; // Stop if any tray fails
+        return;
       }
     }
 
