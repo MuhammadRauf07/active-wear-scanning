@@ -122,6 +122,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
           sizeDescription: match.item.sizeDescription ?? '',
           workOrderCode: match.workOrderHeader.workOrderCode,
           primaryQuantity: match.productionProgress.primaryQuantity?.toString() ?? '0',
+          pieceWeight: match.item.pieceWeight ?? 0.0,
           trayCode: scannedCode.trim(),
           trayUpdateId: match.primaryTrayModel.id,
           trayConcurrencyStamp: match.primaryTrayModel.concurrencyStamp,
@@ -370,9 +371,10 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
       child: Row(
         children: [
           Expanded(flex: 3, child: Text('TRAY CODE', style: _tableHeaderStyle)),
-          Expanded(flex: 5, child: Text('ITEM DESC', style: _tableHeaderStyle)),
-          Expanded(flex: 2, child: Text('QTY', style: _tableHeaderStyle)),
-          const SizedBox(width: 36),
+          Expanded(flex: 4, child: Text('ITEM DESC', style: _tableHeaderStyle)),
+          Expanded(flex: 2, child: Text('QTY', textAlign: TextAlign.center, style: _tableHeaderStyle)),
+          Expanded(flex: 2, child: Text('WEIGHT', textAlign: TextAlign.center, style: _tableHeaderStyle)),
+          const SizedBox(width: 40), // Consistent trailing space
         ],
       ),
     );
@@ -385,11 +387,22 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
       child: Row(
         children: [
           Expanded(flex: 3, child: Text(tray.trayCode, style: const TextStyle(fontSize: 13))),
-          Expanded(flex: 5, child: Text(tray.itemDescription, style: const TextStyle(fontSize: 11), maxLines: 2, overflow: TextOverflow.ellipsis)),
-          Expanded(flex: 2, child: Text(tray.primaryQuantity, style: const TextStyle(fontSize: 13))),
-          GestureDetector(
-            onTap: () => _onRemoveTray(index),
-            child: Icon(Icons.cancel, size: 20, color: Colors.red.shade400),
+          Expanded(flex: 4, child: Text(tray.itemDescription, style: const TextStyle(fontSize: 11), maxLines: 2, overflow: TextOverflow.ellipsis)),
+          Expanded(flex: 2, child: Text(tray.primaryQuantity, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
+          Expanded(
+            flex: 2,
+            child: Text(
+              '${((double.tryParse(tray.primaryQuantity) ?? 0.0) * tray.pieceWeight).toStringAsFixed(2)} kg',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.blue),
+            ),
+          ),
+          SizedBox(
+            width: 40,
+            child: GestureDetector(
+              onTap: () => _onRemoveTray(index),
+              child: Icon(Icons.cancel, size: 20, color: Colors.red.shade400),
+            ),
           ),
         ],
       ),
