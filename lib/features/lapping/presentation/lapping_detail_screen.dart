@@ -176,6 +176,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
             locatorId: trayMap['locatorId'] ?? 2,
             primaryQuantity: inputPcs,
             transactionType: 2,
+            processedItemId: refTray.productionProgress.processedItemId, // ✅ FIXED: Preserve inner ID
           ),
           operation: refTray.operation,
           shift: refTray.shift,
@@ -183,6 +184,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
           workOrderHeader: refTray.workOrderHeader,
           workOrderLine: refTray.workOrderLine,
           item: refTray.item,
+          processedItem: refTray.processedItem, // ✅ FIXED: Preserve processedItem
           primaryTrayModel: PrimaryTrayModel(
             id: trayMap['id'],
             trayCode: trayMap['trayCode'],
@@ -525,7 +527,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
           "trayId": tray.primaryTrayModel.id,
           "isReAssigned": true,
           // Batch Lines uses 'processItemId'
-          "processItemId": tray.processedItem?.id ?? tray.item.id,
+          "processItemId": tray.productionProgress.processedItemId ?? tray.item.id, // ✅ FIXED
           "active": true,
         });
 
@@ -544,6 +546,26 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
       }
 
       // --- Step 3: Handover (Production Progress) ---
+      // Fetch dynamic locatorId for the handover (next step)
+      int nextLocatorId = 3; // Default fallback (GBS)
+      final base = _trays.isNotEmpty ? _trays.first.productionProgress : null;
+      final handoverOpId = widget.nextOperationId ?? base?.operationId;
+
+      if (handoverOpId != null) {
+        final locRes = await _batchRepo.fetchLocators(operationId: handoverOpId);
+        if (locRes.success && locRes.data != null) {
+          final locList = locRes.data as List;
+          final matchingEntry = locList.cast<Map>().firstWhere(
+                (entry) => (entry['operation']?['id'] ?? entry['locator']?['operationId'])?.toString() == handoverOpId.toString(),
+            orElse: () => {},
+          );
+          if (matchingEntry.isNotEmpty) {
+            nextLocatorId = matchingEntry['locator']?['id'] as int? ?? 3;
+            debugPrint('✅ Lapping Handover: Op=$handoverOpId -> Loc=$nextLocatorId');
+          }
+        }
+      }
+
       for (final originalTray in _trays) {
         if (originalTray.productionProgress.id != null) {
           await _processingRepo.updateProductionProgress(
@@ -555,7 +577,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
 
       for (final scannedTray in allScannedTrays) {
         final double newQty = _trayOverrideQuantities[scannedTray.primaryTrayModel.trayCode?.toLowerCase() ?? ''] ?? 0;
-        final base = _trays.first.productionProgress;
+        final baseProgress = base!;
 
         Map<String, dynamic> nextJson = {
           "transactionType": 2,
@@ -565,20 +587,22 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
 
           // 🔥 FIX 1: Spelling changed to 'processedItemId' for QA visibility
           // 🔥 FIX 2: itemId ko processItem logic se update kiya
-          "processedItemId": scannedTray.processedItem?.id ?? scannedTray.item.id,
+          "processedItemId": scannedTray.productionProgress.processedItemId ?? scannedTray.item.id, // ✅ FIXED
 
-          "operationId": widget.nextOperationId ?? base.operationId,
-          "previousOperationId": base.operationId,
+          "operationId": widget.nextOperationId ?? baseProgress.operationId,
+          "previousOperationId": baseProgress.operationId,
           "wipStatus": widget.nextOperationId != null ? 0 : 1,
+          "gbsFlag": false, // ✅ FIXED: Reset flags for processing
+          "pbsFlag": false, // ✅ FIXED: Reset flags for processing
 
-          "shiftId": scannedTray.productionProgress.shiftId ?? base.shiftId,
-          "machineId": scannedTray.productionProgress.machineId ?? base.machineId,
+          "shiftId": scannedTray.productionProgress.shiftId ?? baseProgress.shiftId,
+          "machineId": scannedTray.productionProgress.machineId ?? baseProgress.machineId,
           "workOrderHeaderId": scannedTray.workOrderHeader.id,
           "workOrderLineId": scannedTray.workOrderLine.id,
           "itemId": scannedTray.item.id,
-          "locatorId": base.locatorId ?? 3,
-          "primaryUOM": base.primaryUOM,
-          "secondaryUOM": base.secondaryUOM,
+          "locatorId": nextLocatorId,
+          "primaryUOM": baseProgress.primaryUOM,
+          "secondaryUOM": baseProgress.secondaryUOM,
           "transactionDate": DateTime.now().toIso8601String(),
           "operatorDescription": "system",
         };

@@ -44,4 +44,9 @@ class ProcessingRepo {
   Future<PlexApiResult> createProductionProgress(Map<String, dynamic> data) async {
     return await _api.post('/api/app/production-progresses', body: data);
   }
+
+  Future<PlexApiResult> fetchLocators({int? operationId}) async {
+    final query = operationId != null ? {'OperationId': operationId.toString()} : <String, dynamic>{};
+    return await _api.getList('/api/app/locators', query: query);
+  }
 }

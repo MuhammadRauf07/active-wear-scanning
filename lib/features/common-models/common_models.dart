@@ -60,6 +60,8 @@ class ProductionProgress {
   final int? wipStatus;
   final bool? gbsFlag;
   final bool? pbsFlag;
+  final bool? isLastProcess; // ✅ Added
+  final bool? reworkFlag; // ✅ Added
   final String? progressCode;
   final int? productGrade;
   final int? productNature;
@@ -94,6 +96,8 @@ class ProductionProgress {
     this.wipStatus,
     this.gbsFlag,
     this.pbsFlag,
+    this.isLastProcess, // ✅ Added
+    this.reworkFlag, // ✅ Added
     this.progressCode,
     this.productGrade,
     this.productNature,
@@ -130,6 +134,8 @@ class ProductionProgress {
       wipStatus: int.tryParse(json['wipStatus']?.toString() ?? ''),
       gbsFlag: json['gbsFlag'],
       pbsFlag: json['pbsFlag'],
+      isLastProcess: json['isLastProcess'], // ✅ Added
+      reworkFlag: json['reworkFlag'], // ✅ Added
       progressCode: json['progressCode'],
       productGrade: int.tryParse(json['productGrade']?.toString() ?? ''),
       productNature: int.tryParse(json['productNature']?.toString() ?? ''),
@@ -167,6 +173,8 @@ class ProductionProgress {
       'wipStatus': wipStatus,
       'gbsFlag': gbsFlag,
       'pbsFlag': pbsFlag,
+      'isLastProcess': isLastProcess, // ✅ Added
+      'reworkFlag': reworkFlag, // ✅ Added
       'progressCode': progressCode,
       'productGrade': productGrade,
       'productNature': productNature,

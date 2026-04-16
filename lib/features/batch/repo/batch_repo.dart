@@ -190,4 +190,10 @@ class BatchRepo {
     final result = await _api.post('/api/app/batch-header-routings', body: data);
     return result;
   }
+
+  Future<PlexApiResult> fetchLocators({int? operationId}) async {
+    final query = operationId != null ? {'OperationId': operationId.toString()} : <String, dynamic>{};
+    final result = await _api.getList('/api/app/locators', query: query);
+    return result;
+  }
 }

@@ -313,6 +313,33 @@ class _BatchListScreenState extends State<BatchListScreen>
       final primaryQty = (bl['primaryQuantity'] as num?)?.toDouble() ?? 0;
       final secondaryQty = (bl['secondaryQuantity'] as num?)?.toDouble() ?? 0;
 
+      // ── Fetch dynamic locatorId based on operationId ─────────────────────
+      int dynamicLocatorId = 10; // Default fallback
+      final targetOpId = minOpId ?? progress?['operationId'];
+      if (targetOpId != null) {
+        final locRes = await _batchRepo.fetchLocators(operationId: targetOpId);
+        if (locRes.success && locRes.data != null) {
+          final locList = locRes.data as List;
+          // Use .toString() comparison to avoid int vs String mismatch
+          final matchingEntry = locList.cast<Map>().firstWhere(
+            (entry) => (entry['operation']?['id'] ?? entry['locator']?['operationId'])?.toString() == targetOpId.toString(),
+            orElse: () => {},
+          );
+          
+          if (matchingEntry.isNotEmpty) {
+            final locId = matchingEntry['locator']?['id'];
+            if (locId != null) {
+              dynamicLocatorId = locId as int;
+              debugPrint('✅ Found Dynamic Locator: Op=$targetOpId -> Loc=$dynamicLocatorId');
+            }
+          } else {
+            debugPrint('⚠️ No matching locator found in list for Op=$targetOpId. Using default 10.');
+          }
+        } else {
+          debugPrint('❌ Fetch Locators Failed: ${locRes.message}. Using default 10.');
+        }
+      }
+
       final wipData = {
         'subOperation': 'Batch Issue',
         'transactionDate': DateTime.now().toIso8601String(),
@@ -335,7 +362,7 @@ class _BatchListScreenState extends State<BatchListScreen>
         'primaryTrayId': bl['trayId'],
         'machineId': progress?['machineId'] ?? bh.machineId,
         'planHeaderId': progress?['planHeaderId'],
-        'locatorId': 10,
+        'locatorId': dynamicLocatorId,
         'batchHeaderId': headerId,
         'batchLinesId': bl['id'],
         'processedItemId': processedItemId,
@@ -375,7 +402,7 @@ class _BatchListScreenState extends State<BatchListScreen>
         'primaryTrayId': bl['trayId'],
         'machineId': progress?['machineId'] ?? bh.machineId,
         'planHeaderId': progress?['planHeaderId'],
-        'locatorId': 10,
+        'locatorId': dynamicLocatorId,
         'batchHeaderId': headerId,
         'batchLinesId': bl['id'],
         'processedItemId': processedItemId,
@@ -406,7 +433,7 @@ class _BatchListScreenState extends State<BatchListScreen>
             'workOrderLineId': bl['workOrderLineId'],
             'itemId': bl['itemId'],
             'trayId': bl['trayId'],
-            'locatorId': 10, // Transition to Processing
+            'locatorId': dynamicLocatorId, // Transition to dynamic locator based on op
             'processItemId':
                 bl['processItemId'], // Send original value to keep it unchanged
             'concurrencyStamp': bl['concurrencyStamp'],
