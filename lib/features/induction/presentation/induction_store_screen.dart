@@ -3,28 +3,36 @@ import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/content_card.dart';
 import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
 import 'package:active_wear_scanning/core/widgets/section_header.dart';
+import 'package:active_wear_scanning/core/widgets/scanner_always_open.dart';
 import 'package:active_wear_scanning/features/gbs/model/gbs_scanned_tray.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
-import 'package:active_wear_scanning/features/gbs/repo/gbs_receiving_repo.dart';
+import 'package:active_wear_scanning/features/induction/repo/induction_repo.dart';
 import 'package:flutter/material.dart';
 import 'package:plex/plex_di/plex_dependency_injection.dart';
-import '../../../core/widgets/scanner_always_open.dart';
 
-class GBSReceivingScreen extends StatefulWidget {
-  const GBSReceivingScreen({super.key});
+class InductionStoreScreen extends StatefulWidget {
+  const InductionStoreScreen({super.key});
 
   @override
-  State<GBSReceivingScreen> createState() => _GBSReceivingScreenState();
+  State<InductionStoreScreen> createState() => _InductionStoreScreenState();
 }
 
-class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
+class _InductionStoreScreenState extends State<InductionStoreScreen> {
   final List<GBSScannedTray> _scannedTrays = [];
-  final _trayScanningRepo = fromPlex<GBSReceivingRepo>();
-  List<ProductionProgressResponseModel> availableTrayForGbs = [];
+  final _inductionRepo = fromPlex<InductionRepo>();
+  List<ProductionProgressResponseModel> _availableTrays = [];
 
   static const _inputAndButtonHeight = 42.0;
-  static final _labelStyle = const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87);
-  static final _tableHeaderStyle = TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700);
+  static final _labelStyle = const TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w500,
+    color: Colors.black87,
+  );
+  static final _tableHeaderStyle = TextStyle(
+    fontSize: 12,
+    fontWeight: FontWeight.w600,
+    color: Colors.grey.shade700,
+  );
 
   @override
   void initState() {
@@ -34,222 +42,179 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
         _onInitialDataFetch();
       }
     });
-    _fetchLatestTraysSilently();
   }
 
   Future<void> _onInitialDataFetch() async {
     AppLoader.show();
-    await _fetchLatestTraysSilently();
+    await _fetchAvailableTrays();
     AppLoader.hide();
   }
 
-  Future<void> _fetchLatestTraysSilently() async {
-    final apiResult = await _trayScanningRepo.getProductionProgress(
-      params: {
-        'LocatorId': '2',
-        'MaxResultCount': '1000',
-      },
-    );
-    if (mounted && apiResult.success && apiResult.data != null) {
-      final List<ProductionProgressResponseModel> allTrays = apiResult.data as List<ProductionProgressResponseModel>;
-      
-      // 🕵️ DEBUG LOGGING
-      debugPrint("🔍 RAW API SUCCESS. Total items from server: ${allTrays.length}");
-      for (var tray in allTrays) {
-        debugPrint("📋 Tray Code: ${tray.primaryTrayModel.trayCode} | Locator: ${tray.productionProgress.locatorId} | Type: ${tray.productionProgress.transactionType} | GBS: ${tray.productionProgress.gbsFlag}");
-      }
-
+  Future<void> _fetchAvailableTrays() async {
+    final res = await _inductionRepo.getProductionProgress();
+    if (mounted && res.success && res.data != null) {
       setState(() {
-        // Local filtering: Any tray at Locator 2 is receivable
-        availableTrayForGbs = allTrays.toList();
-        
-        debugPrint("🔄 GBS Data Refreshed: ${availableTrayForGbs.length} matching trays found.");
+        _availableTrays = res.data as List<ProductionProgressResponseModel>;
       });
-    } else {
-      debugPrint("❌ API FAIL OR NULL: ${apiResult.message}");
+      debugPrint(
+        "🔍 Induction: Found ${_availableTrays.length} matching trays.",
+      );
     }
   }
 
   Future<void> _onScanTray() async {
-    await _fetchLatestTraysSilently();
+    await _fetchAvailableTrays();
     if (!mounted) return;
 
     await ScannerAlwaysOpen.show(
       context,
-      title: 'GBS Tray Receiving',
+      title: 'Induction Store Scan',
       onResult: (scannedCode) {
-        return _validateTrayForReceiving(scannedCode);
+        return _validateTrayForInduction(scannedCode);
       },
     );
     setState(() {});
   }
 
-  String? _validateTrayForReceiving(String scannedCode) {
-
+  String? _validateTrayForInduction(String scannedCode) {
     final code = scannedCode.trim().toLowerCase();
     if (code.isEmpty) return 'Invalid tray code';
 
-    final alreadyScanned = _scannedTrays.any((t) => t.trayCode.trim().toLowerCase() == code);
-    if (alreadyScanned) return 'Already assigned';
+    final alreadyScanned = _scannedTrays.any(
+      (t) => t.trayCode.trim().toLowerCase() == code,
+    );
+    if (alreadyScanned) return 'Already scanned';
 
-    // 2. Flexible Matching Logic
-    final match = availableTrayForGbs.where((t) {
-      final String tCode = (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase();
-      final String pCode = (t.productionProgress.progressCode ?? '').trim().toLowerCase();
-
-      if (tCode == code || pCode == code) return true;
-
-      String cleanTCode = tCode.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').replaceAll(RegExp(r'^0+'), '');
-      String cleanScanned = code.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').replaceAll(RegExp(r'^0+'), '');
-
-      if (cleanTCode.isNotEmpty && cleanTCode == cleanScanned) return true;
-
-      if (tCode.endsWith(code) && code.length > 3) return true;
-
-      return false;
-    }).firstOrNull;
-
-    if (match == null) {
-      debugPrint("❌ No Match! Scanned: '$code' | memory mein: ${availableTrayForGbs.map((e) => e.primaryTrayModel.trayCode).toList()}");
-      return 'Tray not available';
-    }
-
-    setState(() {
-      _scannedTrays.add(
-        GBSScannedTray(
-          itemDescription: match.item.description ?? '-',
-          componentDescription: match.item.componentDescription ?? '',
-          sizeDescription: match.item.sizeDescription ?? '',
-          workOrderCode: match.workOrderHeader.workOrderCode ?? '-', // ✅ Added
-          primaryQuantity: match.productionProgress.primaryQuantity?.toStringAsFixed(0) ?? '0',
-          pieceWeight: match.item.pieceWeight ?? 0.0,
-          trayCode: scannedCode.trim(),
-          trayUpdateId: match.primaryTrayModel.id,
-          trayConcurrencyStamp: match.primaryTrayModel.concurrencyStamp,
-        ),
-      );
+    final matchIndex = _availableTrays.indexWhere((t) {
+      final tCode = (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase();
+      final pCode = (t.productionProgress.progressCode ?? '')
+          .trim()
+          .toLowerCase();
+      return tCode == code || pCode == code;
     });
-    return null;
-  }
 
-  /// MAIN SAVE LOGIC (Fixed Black Screen & Added ProcessedItem)
-  Future<void> saveWipTransactionsAndUpdateTray() async {
-    if (_scannedTrays.isEmpty) return;
-
-    AppLoader.show();
-    bool isAllSuccess = true;
-
-    try {
-      for (int i = 0; i < _scannedTrays.length; i++) {
-        final currentTrayData = availableTrayForGbs.where(
-                (t) => t.productionProgress.primaryTrayId == _scannedTrays[i].trayUpdateId
-        ).firstOrNull;
-
-        if (currentTrayData == null) continue;
-
-        // WIP Transaction Payload
-        Map<String, dynamic> wipPayload = {
-          "subOperation": "GBS Receiving",
-          "transactionDate": DateTime.now().toIso8601String(),
-          "transactionType": 1,
-          "uom": currentTrayData.workOrderLine.uom ?? 0,
-          "operatorDescription": "system",
-          "primaryQuantity": currentTrayData.productionProgress.primaryQuantity ?? 0,
-          "secondaryQuantity": currentTrayData.productionProgress.secondaryQuantity ?? 0,
-          "primaryUOM": currentTrayData.productionProgress.primaryUOM ?? 0,
-          "secondaryUOM": currentTrayData.productionProgress.secondaryUOM ?? 0,
-          "code": currentTrayData.item.code ?? "",
-          "productGrade": currentTrayData.productionProgress.productGrade ?? 0,
-          "productNature": currentTrayData.productionProgress.productNature ?? 0,
-          "progressId": currentTrayData.productionProgress.id,
-          "operationId": currentTrayData.operation.id,
-          "workOrderHeaderId": currentTrayData.workOrderHeader.id,
-          "workOrderLineId": currentTrayData.workOrderLine.id,
-          "itemId": currentTrayData.item.id,
-          "shiftId": currentTrayData.shift.id,
-          "primaryTrayId": currentTrayData.primaryTrayModel.id,
-          "machineId": currentTrayData.machineModel.id,
-          "planHeaderId": currentTrayData.planHeader?.id,
-          "locatorId": 3,
-          "processedItemId": currentTrayData.processedItem?.id ?? currentTrayData.item.id,
-        };
-
-        await _trayScanningRepo.postWipTransactions(wipPayload);
-        Map<String, dynamic> updateProductionEntry = {
-          "id": currentTrayData.productionProgress.id,
-          "concurrencyStamp": currentTrayData.productionProgress.concurrencyStamp,
-          "subOperation": "GBS Received",
-          "date": DateTime.now().toIso8601String(),
-          "transactionType": 1, // Formal Handover
-          "operatorDescription": "system",
-          "primaryQuantity": currentTrayData.productionProgress.primaryQuantity,
-          "primaryUOM": currentTrayData.productionProgress.primaryUOM,
-          "secondaryQuantity": currentTrayData.productionProgress.secondaryQuantity,
-          "secondaryUOM": currentTrayData.productionProgress.secondaryUOM,
-          "wipStatus": currentTrayData.productionProgress.wipStatus ?? 0,
-          "gbsFlag": true, // Requirement: 1 (true)
-          "pbsFlag": false, // Requirement: false
-          "progressCode": currentTrayData.productionProgress.progressCode,
-          "productGrade": currentTrayData.productionProgress.productGrade,
-          "productNature": currentTrayData.productionProgress.productNature,
-          "operationId": currentTrayData.productionProgress.operationId,
-          "workOrderHeaderId": currentTrayData.productionProgress.workOrderHeaderId,
-          "workOrderLineId": currentTrayData.productionProgress.workOrderLineId,
-          "itemId": currentTrayData.productionProgress.itemId,
-          "shiftId": currentTrayData.productionProgress.shiftId,
-          "primaryTrayId": currentTrayData.productionProgress.primaryTrayId,
-          "secondaryTrayId": currentTrayData.productionProgress.secondaryTrayId,
-          "machineId": currentTrayData.productionProgress.machineId,
-          "planHeaderId": currentTrayData.productionProgress.planHeaderId,
-          "locatorId": 3, // Move to Batching Floor
-          "batchHeaderId": currentTrayData.productionProgress.batchHeaderId,
-        };
-
-        if (currentTrayData.productionProgress.id != null) {
-          await _trayScanningRepo.updateProductionProgress(
-            currentTrayData.productionProgress.id!,
-            updateProductionEntry,
-          );
-        }
-
-        // Tray Detail Update
-        if (_scannedTrays[i].trayUpdateId != null) {
-          final getTrayRes = await _trayScanningRepo.fetchTrayDetailById(_scannedTrays[i].trayUpdateId!);
-          if (getTrayRes.success && getTrayRes.data != null) {
-            Map<String, dynamic> rawTrayPayload = Map<String, dynamic>.from(
-                getTrayRes.data.containsKey('trayDetail') ? getTrayRes.data['trayDetail'] : getTrayRes.data
-            );
-            rawTrayPayload["locatorId"] = 3;
-            rawTrayPayload.removeWhere((key, value) => ["creatorId", "creationTime", "lastModifierId", "lastModificationTime"].contains(key));
-            await _trayScanningRepo.updateTrayDetails(rawTrayPayload, _scannedTrays[i].trayUpdateId!);
-          }
-        }
-      }
-    } catch (e) {
-      isAllSuccess = false;
-      debugPrint("❌ GBS Save Error: $e");
-    } finally {
-      AppLoader.hide();
-      if (mounted) {
-        if (isAllSuccess) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Saved Successfully")));
-          // Delay to allow SnackBar and Loader cleanup
-          Future.delayed(const Duration(milliseconds: 400), () {
-            if (mounted) Navigator.of(context).pop(true);
-          });
-        } else {
-          _showError("Failed to save some trays. Please check logs.");
-        }
-      }
+    if (matchIndex == -1) {
+      return 'Tray not eligible for Induction';
     }
+
+    final match = _availableTrays[matchIndex];
+
+    _scannedTrays.add(
+      GBSScannedTray(
+        trayCode: match.primaryTrayModel.trayCode ?? '-',
+        workOrderCode: match.workOrderHeader.workOrderCode ?? '-', // ✅ Added
+        itemDescription: match.item.description ?? '-',
+        primaryQuantity: (match.productionProgress.primaryQuantity ?? 0).toStringAsFixed(0),
+        pieceWeight: match.item.pieceWeight ?? 0.0,
+        trayUpdateId: match.primaryTrayModel.id,
+        trayConcurrencyStamp: match.primaryTrayModel.concurrencyStamp,
+      ),
+    );
+
+    return null;
   }
 
   void _onRemoveTray(int index) {
     setState(() => _scannedTrays.removeAt(index));
   }
 
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $message'), backgroundColor: Colors.red));
+  Future<void> _onSave() async {
+    if (_scannedTrays.isEmpty) return;
+
+    AppLoader.show(message: 'Saving Induction Data...');
+    bool isAllSuccess = true;
+
+    try {
+      for (var scannedTray in _scannedTrays) {
+        // Correct lookup pattern as per GBS module
+        final currentTrayMatch = _availableTrays
+            .where((t) => t.primaryTrayModel.id == scannedTray.trayUpdateId)
+            .firstOrNull;
+
+        if (currentTrayMatch == null) continue;
+
+        final currentTrayData = currentTrayMatch;
+
+        // 1. Post WIP Transaction as per requirement
+        Map<String, dynamic> wipPayload = {
+          "subOperation": "Induction Store",
+          "transactionDate": DateTime.now().toIso8601String(),
+          "transactionType": 1,
+          "uom": currentTrayData.workOrderLine.uom ?? 0,
+          "operatorDescription": "system",
+          "primaryQuantity":
+              currentTrayData.productionProgress.primaryQuantity ?? 0,
+          "secondaryQuantity":
+              currentTrayData.productionProgress.secondaryQuantity ?? 0,
+          "primaryUOM": currentTrayData.productionProgress.primaryUOM ?? 0,
+          "secondaryUOM": currentTrayData.productionProgress.secondaryUOM ?? 0,
+          "code": currentTrayData.item.code ?? "",
+          "productGrade": currentTrayData.productionProgress.productGrade ?? 0,
+          "productNature":
+              currentTrayData.productionProgress.productNature ?? 0,
+          "progressId": currentTrayData.productionProgress.id,
+          "operationId": currentTrayData.productionProgress.operationId,
+          "workOrderHeaderId": currentTrayData.workOrderHeader.id,
+          "workOrderLineId": currentTrayData.workOrderLine.id,
+          "itemId": currentTrayData.item.id,
+          "shiftId": currentTrayData.shift.id,
+          "primaryTrayId": currentTrayData.primaryTrayModel.id,
+          "machineId": currentTrayData.machineModel.id,
+          "planHeaderId":
+              currentTrayData.productionProgress.planHeaderId ??
+              currentTrayData.planHeader?.id,
+          "locatorId": 11,
+          "batchHeaderId": currentTrayData
+              .productionProgress
+              .batchHeaderId, // Sourced from progress
+          "batchLineId": currentTrayData
+              .productionProgress
+              .batchLinesId, // Sourced from progress
+          "processitemd":
+              currentTrayData.productionProgress.processedItemId ??
+              currentTrayData.item.id, // Renamed to processitemd
+        };
+
+        await _inductionRepo.postWipTransactions(wipPayload);
+
+        // 2. Update Production Progress
+        Map<String, dynamic> updatePayload = currentTrayData.productionProgress
+            .toJson();
+        updatePayload['pbsFlag'] = true; // Mark as inducted
+        updatePayload['locatorId'] = 11; // Sync locator
+        updatePayload['date'] = DateTime.now().toIso8601String();
+
+        final res = await _inductionRepo.updateProductionProgress(
+          currentTrayData.productionProgress.id!,
+          updatePayload,
+        );
+
+        if (!res.success)
+          throw Exception('Failed to update tray ${scannedTray.trayCode}');
+      }
+    } catch (e) {
+      isAllSuccess = false;
+      debugPrint("❌ Induction Save Error: $e");
+    } finally {
+      AppLoader.hide();
+      if (mounted) {
+        if (isAllSuccess) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Induction Saved Successfully")),
+          );
+          Future.delayed(const Duration(milliseconds: 400), () {
+            if (mounted) Navigator.of(context).pop(true);
+          });
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Failed to save some trays"),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 
   @override
@@ -259,11 +224,10 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
       body: AppLoaderContextAttach(
         child: SafeArea(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               CustomInspectionHeader(
-                heading: 'GBS Receiving',
-                subtitle: 'Scan trays to receive them in GBS',
+                heading: 'Induction Store',
+                subtitle: 'Scan Trays for Induction Store',
                 isShowBackIcon: true,
                 topPadding: 0,
                 horizontalPadding: 12,
@@ -272,7 +236,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
                   borderColor: Colors.blue,
                   textColor: Colors.blue,
                   buttonHeight: 42,
-                  onPressed: saveWipTransactionsAndUpdateTray,
+                  onPressed: _onSave,
                 ),
               ),
               Expanded(
@@ -280,7 +244,8 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
                   padding: const EdgeInsets.all(12),
                   child: Column(
                     children: [
-                      _buildScannedTraysSection()
+                      _buildScannedTraysSection(),
+                      const SizedBox(height: 20),
                     ],
                   ),
                 ),
@@ -292,11 +257,14 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
     );
   }
 
-  Widget _buildTrayScannerSection() {
+  Widget _buildScannerSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionHeader(title: 'Tray Scanner', subtitle: 'Scan tray barcodes to receive them in GBS'),
+        const SectionHeader(
+          title: 'Tray Scanner',
+          subtitle: 'Scan tray barcodes for induction',
+        ),
         const SizedBox(height: 12),
         ContentCard(
           child: Column(
@@ -309,10 +277,19 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
                   Expanded(
                     child: Container(
                       height: _inputAndButtonHeight,
-                      decoration: BoxDecoration(border: Border.all(color: Colors.blue), borderRadius: BorderRadius.circular(6)),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.blue),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       alignment: Alignment.centerLeft,
-                      child: Text('Ready for scan...', style: TextStyle(color: Colors.grey.shade400, fontSize: 14)),
+                      child: Text(
+                        'Ready for scan...',
+                        style: TextStyle(
+                          color: Colors.grey.shade400,
+                          fontSize: 14,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -338,7 +315,10 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionHeader(title: 'Received Trays', subtitle: 'Scan tray barcodes to receive them in GBS'),
+        const SectionHeader(
+          title: 'Scanned Trays',
+          subtitle: 'Scan a tray barcode to start induction',
+        ),
         const SizedBox(height: 12),
         ContentCard(
           padding: EdgeInsets.zero,
@@ -350,7 +330,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Received Trays (${_scannedTrays.length})', 
+                      'Scanned Trays (${_scannedTrays.length})', 
                       style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)
                     ),
                     Row(
@@ -386,11 +366,13 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
                 ),
               ),
               _buildTrayTableHeader(),
-              if (!hasTrays) _buildEmptyState()
-              else ...List.generate(_scannedTrays.length, (index) {
-                final reversedIndex = _scannedTrays.length - 1 - index;
-                return _buildTrayRow(reversedIndex, _scannedTrays[reversedIndex]);
-              }),
+              if (!hasTrays)
+                _buildEmptyState()
+              else
+                ...List.generate(_scannedTrays.length, (index) {
+                   final reversedIndex = _scannedTrays.length - 1 - index;
+                   return _buildTrayRow(reversedIndex, _scannedTrays[reversedIndex], index);
+                }),
             ],
           ),
         ),
@@ -419,7 +401,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
     );
   }
 
-  Widget _buildTrayRow(int index, GBSScannedTray tray) {
+  Widget _buildTrayRow(int index, GBSScannedTray tray, int displayIndex) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
       decoration: BoxDecoration(
@@ -428,13 +410,27 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
           right: BorderSide(color: Colors.grey.shade300),
           bottom: BorderSide(color: Colors.grey.shade300),
         ),
-        color: index.isEven ? Colors.white : Colors.grey.shade50,
+        color: displayIndex.isEven ? Colors.white : Colors.grey.shade50,
       ),
       child: Row(
         children: [
-          Expanded(flex: 3, child: Text(tray.trayCode, style: const TextStyle(fontSize: 13, color: Colors.black87))),
-          Expanded(flex: 3, child: Text(tray.workOrderCode, style: const TextStyle(fontSize: 12, color: Colors.black87))),
-          Expanded(flex: 4, child: Text(tray.itemDescription, style: const TextStyle(fontSize: 11, color: Colors.black87), maxLines: 2, overflow: TextOverflow.ellipsis)),
+          Expanded(
+            flex: 3,
+            child: Text(tray.trayCode, style: const TextStyle(fontSize: 13, color: Colors.black87)),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(tray.workOrderCode, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+          ),
+          Expanded(
+            flex: 4,
+            child: Text(
+              tray.itemDescription,
+              style: const TextStyle(fontSize: 11, color: Colors.black87),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
           Expanded(
             flex: 2,
             child: Align(

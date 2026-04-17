@@ -87,9 +87,18 @@ class AppLoader {
   }
 
   static void hide() {
-    if (_isDialogVisible && Navigator.of(_context!).canPop()) {
-      Navigator.of(_context!).pop();
-      _isDialogVisible = false;
+    try {
+      if (_isDialogVisible && _context != null) {
+        // Safe check to see if context is still valid
+        final navigator = Navigator.of(_context!, rootNavigator: true);
+        if (navigator.canPop()) {
+          navigator.pop();
+        }
+        _isDialogVisible = false;
+      }
+    } catch (e) {
+      debugPrint('⚠️ AppLoader hide error: $e');
+      _isDialogVisible = false; // Reset anyway
     }
   }
 }

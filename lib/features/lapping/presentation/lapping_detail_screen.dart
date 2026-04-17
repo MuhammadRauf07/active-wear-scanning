@@ -40,6 +40,13 @@ class LappingDetailScreen extends StatefulWidget {
 }
 
 class _LappingDetailScreenState extends State<LappingDetailScreen> {
+  static const _inputAndButtonHeight = 44.0;
+  static final _tableHeaderStyle = TextStyle(
+    fontSize: 12,
+    fontWeight: FontWeight.w600,
+    color: Colors.grey.shade700,
+  );
+  
   final _processingRepo = ProcessingRepo();
   final _batchRepo = BatchRepo();
   bool _isLoading = false;
@@ -65,7 +72,9 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchBatchData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchBatchData();
+    });
   }
 
   Future<void> _fetchBatchData() async {
@@ -277,10 +286,12 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
           child: Text('Select Work Order Line', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87)),
         ),
         ContentCard(
+          padding: EdgeInsets.zero,
           child: Column(
             children: [
               _buildTableHeader(),
-              ..._workOrders.values.map((wo) {
+              ...List.generate(_workOrders.values.length, (index) {
+                final wo = _workOrders.values.elementAt(index);
                 final isSelected = _selectedWorkOrderId == wo.id;
                 final reassigned = (_scannedTraysByWO[wo.id] ?? []).fold<double>(0, (sum, t) =>
                 sum + (_trayOverrideQuantities[t.primaryTrayModel.trayCode?.toLowerCase() ?? ''] ?? 0));
@@ -288,24 +299,34 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
                 return InkWell(
                   onTap: () => setState(() => _selectedWorkOrderId = wo.id),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                     decoration: BoxDecoration(
-                      color: isSelected ? Colors.blue.withOpacity(0.05) : Colors.transparent,
-                      border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+                      color: isSelected ? Colors.blue.withOpacity(0.05) : (index.isEven ? Colors.white : Colors.grey.shade50),
+                      border: Border(
+                        left: BorderSide(color: Colors.grey.shade300),
+                        right: BorderSide(color: Colors.grey.shade300),
+                        bottom: BorderSide(color: Colors.grey.shade300),
+                      ),
                     ),
                     child: Row(
                       children: [
-                        Expanded(flex: 3, child: Text(wo.description, style: const TextStyle(fontSize: 12))),
-                        Expanded(flex: 6, child: Text(wo.componentDescription, style: const TextStyle(fontSize: 11))),
-                        Expanded(flex: 2, child: Text('${wo.trayCount}', style: const TextStyle(fontSize: 12))),
+                        Expanded(flex: 3, child: Text(wo.description, style: const TextStyle(fontSize: 12, color: Colors.black87))),
+                        Expanded(flex: 6, child: Text(wo.componentDescription, style: const TextStyle(fontSize: 11, color: Colors.black87))),
+                        Expanded(flex: 2, child: Text('${wo.trayCount}', style: const TextStyle(fontSize: 12, color: Colors.black87))),
                         Expanded(flex: 2, child: Text('${wo.cumulativePieces.toInt()}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue))),
                         Expanded(flex: 2, child: Text(reassigned > 0 ? '${reassigned.toInt()}' : '-', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: reassigned > 0 ? Colors.green : Colors.grey))),
-                        Radio<String>(value: wo.id, groupValue: _selectedWorkOrderId, activeColor: Colors.blue, onChanged: (val) => setState(() => _selectedWorkOrderId = val)),
+                        Radio<String>(
+                          value: wo.id, 
+                          groupValue: _selectedWorkOrderId, 
+                          activeColor: Colors.blue, 
+                          visualDensity: VisualDensity.compact,
+                          onChanged: (val) => setState(() => _selectedWorkOrderId = val)
+                        ),
                       ],
                     ),
                   ),
                 );
-              }).toList(),
+              }),
             ],
           ),
         ),
@@ -315,16 +336,20 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
 
   Widget _buildTableHeader() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-      color: Colors.grey.shade100,
-      child: const Row(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Row(
         children: [
-          Expanded(flex: 3, child: Text('WORK ORDER', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 6, child: Text('ITEM DESC', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('TRAYS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('TOTAL', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('RE-ASGN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green))),
-          SizedBox(width: 32),
+          Expanded(flex: 3, child: Text('WORK ORDER', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 6, child: Text('ITEM DESC', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('TRAYS', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('TOTAL', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('RE-ASGN', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green))),
+          const SizedBox(width: 32),
         ],
       ),
     );
@@ -424,30 +449,64 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
     return Padding(
       padding: const EdgeInsets.only(top: 12.0),
       child: ContentCard(
+        padding: EdgeInsets.zero,
         child: Column(
           children: [
             _buildScannedHeader(),
-            ...traysToShow.map((t) {
+            ...List.generate(traysToShow.length, (index) {
+              final t = traysToShow[index];
               final trayKey = t.primaryTrayModel.trayCode?.toLowerCase() ?? '';
               final qty = _trayOverrideQuantities[trayKey] ?? 0;
               final pw = t.item.pieceWeight ?? 0;
               return Container(
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade200))),
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                decoration: BoxDecoration(
+                  border: Border(
+                    left: BorderSide(color: Colors.grey.shade300),
+                    right: BorderSide(color: Colors.grey.shade300),
+                    bottom: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  color: index.isEven ? Colors.white : Colors.grey.shade50,
+                ),
                 child: Row(
                   children: [
-                    Expanded(flex: 3, child: Text(t.primaryTrayModel.trayCode ?? '-', style: const TextStyle(fontSize: 12))),
-                    Expanded(flex: 3, child: Text(t.processedItem?.description ?? t.item.description ?? '-', style: const TextStyle(fontSize: 11))),
-                    Expanded(flex: 2, child: Text(qty.toString(), style: const TextStyle(fontSize: 12))),
-                    Expanded(flex: 2, child: Text('${(qty * pw).toStringAsFixed(2)} kg', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue))),
-                    IconButton(
-                        icon: const Icon(Icons.cancel, color: Colors.red, size: 18),
-                        onPressed: () {
+                    Expanded(flex: 3, child: Text(t.primaryTrayModel.trayCode ?? '-', style: const TextStyle(fontSize: 13, color: Colors.black87))),
+                    Expanded(flex: 4, child: Text(t.processedItem?.description ?? t.item.description ?? '-', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Colors.black87))),
+                    Expanded(
+                      flex: 2, 
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            qty.toStringAsFixed(0),
+                            style: const TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(flex: 2, child: Text('${(qty * pw).toStringAsFixed(2)} kg', style: const TextStyle(fontSize: 13, color: Colors.black87))),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                        onTap: () {
                           setState(() {
                             _scannedTraysByWO[_selectedWorkOrderId]?.remove(t);
                             _trayOverrideQuantities.remove(trayKey);
                           });
-                        }),
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Icon(Icons.cancel, size: 18, color: Colors.red.shade400),
+                        ),
+                    ),
                   ],
                 ),
               );
@@ -460,15 +519,19 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
 
   Widget _buildScannedHeader() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-      color: Colors.grey.shade100,
-      child: const Row(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Row(
         children: [
-          Expanded(flex: 3, child: Text('TRAY CODE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 3, child: Text('ITEM DESC', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('QTY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('WEIGHT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
-          SizedBox(width: 36),
+          Expanded(flex: 3, child: Text('TRAY CODE', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 4, child: Text('ITEM DESC', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('QUANTITY', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('WEIGHT', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          const SizedBox(width: 44),
         ],
       ),
     );
@@ -510,6 +573,8 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
       }
 
       // --- Step 2: Create New Batch Lines & Update Tray Details ---
+      final Map<int, int> trayToBatchLineId = {}; // ✅ To store new IDs for Step 3
+
       for (final tray in allScannedTrays) {
         final double qty = _trayOverrideQuantities[tray.primaryTrayModel.trayCode?.toLowerCase() ?? ''] ?? 0;
 
@@ -517,7 +582,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
         final String compositeKey = '${tray.workOrderHeader.id}_${tray.processedItem?.description ?? tray.item.description}';
         final activeSummary = _workOrders[compositeKey];
 
-        await _batchRepo.createBatchLine({
+        final blRes = await _batchRepo.createBatchLine({
           "primaryQuantity": qty,
           "batchHeaderId": widget.batchHeaderId,
           "progressId": tray.productionProgress.id,
@@ -526,10 +591,17 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
           "itemId": tray.item.id,
           "trayId": tray.primaryTrayModel.id,
           "isReAssigned": true,
-          // Batch Lines uses 'processItemId'
-          "processItemId": tray.productionProgress.processedItemId ?? tray.item.id, // ✅ FIXED
+          "processItemId": tray.productionProgress.processedItemId ?? tray.item.id,
           "active": true,
         });
+
+        if (blRes.success && blRes.data != null) {
+          final blId = blRes.data['id'] ?? blRes.data['batchLine']?['id'] ?? blRes.data;
+          if (blId is int && tray.primaryTrayModel.id != null) {
+            trayToBatchLineId[tray.primaryTrayModel.id!] = blId;
+            debugPrint('✅ Created BatchLine $blId for Tray ${tray.primaryTrayModel.trayCode}');
+          }
+        }
 
         if (tray.primaryTrayModel.id != null) {
           final tRes = await _batchRepo.fetchTrayDetailById(tray.primaryTrayModel.id!);
@@ -582,6 +654,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
         Map<String, dynamic> nextJson = {
           "transactionType": 2,
           "batchHeaderId": widget.batchHeaderId,
+          "batchLinesId": trayToBatchLineId[scannedTray.primaryTrayModel.id], // ✅ RESTORED Traceability
           "primaryTrayId": scannedTray.primaryTrayModel.id,
           "primaryQuantity": newQty,
 

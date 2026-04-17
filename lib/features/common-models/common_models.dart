@@ -84,6 +84,8 @@ class ProductionProgress {
   final String? creatorId;
   final int? id;
 
+  var batchLinesId;
+
   ProductionProgress({
     this.subOperation,
     this.date,
@@ -113,6 +115,7 @@ class ProductionProgress {
     this.planHeaderId,
     this.locatorId,
     this.batchHeaderId,
+    this.batchLinesId, // ✅ Added
     this.concurrencyStamp,
     this.lastModificationTime,
     this.lastModifierId,
@@ -151,6 +154,7 @@ class ProductionProgress {
       planHeaderId: int.tryParse(json['planHeaderId']?.toString() ?? ''),
       locatorId: int.tryParse(json['locatorId']?.toString() ?? ''),
       batchHeaderId: int.tryParse(json['batchHeaderId']?.toString() ?? ''),
+      batchLinesId: int.tryParse(json['batchLinesId']?.toString() ?? ''), // ✅ Added
       concurrencyStamp: json['concurrencyStamp'],
       lastModificationTime: json['lastModificationTime'] != null ? DateTime.parse(json['lastModificationTime']) : null,
       lastModifierId: json['lastModifierId'],
@@ -190,6 +194,7 @@ class ProductionProgress {
       'planHeaderId': planHeaderId,
       'locatorId': locatorId,
       'batchHeaderId': batchHeaderId,
+      'batchLinesId': batchLinesId, // ✅ Added
       'concurrencyStamp': concurrencyStamp,
       'id': id,
     };

@@ -53,6 +53,38 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
 
   static const _inputAndButtonHeight = 42.0;
 
+  static final _tableHeaderStyle = TextStyle(
+    fontSize: 12,
+    fontWeight: FontWeight.w600,
+    color: Colors.grey.shade700,
+  );
+
+  InputDecoration _inputDecoration({
+    required String hintText,
+    bool isDense = false,
+    EdgeInsets? contentPadding,
+    double borderRadius = 6.0,
+  }) {
+    return InputDecoration(
+      hintText: hintText,
+      hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+      isDense: isDense,
+      contentPadding: contentPadding,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(borderRadius),
+        borderSide: const BorderSide(color: Colors.blue),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(borderRadius),
+        borderSide: BorderSide(color: Colors.grey.shade300),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(borderRadius),
+        borderSide: const BorderSide(color: Colors.blue, width: 1.5),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -401,50 +433,9 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
       
       String? updatedConcurrencyStamp = tray.productionProgress.concurrencyStamp;
 
-      // ① Update productionProgress.batchHeaderId (always, even in edit)
-      if (progressId != null) {
-        final prodPayload = <String, dynamic>{
-          "subOperation": tray.productionProgress.subOperation,
-          "date": DateTime.now().toIso8601String(),
-          "transactionType": tray.productionProgress.transactionType,
-          "operatorDescription": "system",
-          "primaryQuantity": tray.productionProgress.primaryQuantity,
-          "primaryUOM": tray.productionProgress.primaryUOM,
-          "secondaryQuantity": tray.productionProgress.secondaryQuantity,
-          "secondaryUOM": tray.productionProgress.secondaryUOM,
-          "wipStatus": tray.productionProgress.wipStatus,
-          "gbsFlag": true,
-          "pbsFlag": true,
-          "progressCode": tray.productionProgress.progressCode,
-          "batchHeaderId": batchHeaderId,
-          "operationId": tray.operation.id,
-          "workOrderHeaderId": tray.workOrderHeader.id,
-          "workOrderLineId": tray.workOrderLine.id,
-          "itemId": tray.item.id,
-          "shiftId": tray.shift.id,
-          "primaryTrayId": trayId,
-          "code": tray.item.code,
-          "machineId": _selectedMachine?.resource?.id ?? tray.machineModel.id,
-          "planHeaderId": tray.planHeader?.id,
-          "locatorId": 3,
-          "concurrencyStamp": updatedConcurrencyStamp,
-        };
-
-
-        final prodRes = await _batchRepo.updateProductionProgress(progressId, prodPayload);
-        debugPrint(prodRes.success
-            ? '✅ Progress $progressId → batchHeaderId=$batchHeaderId'
-            : '❌ Progress $progressId failed: ${prodRes.message}');
-            
-        if (prodRes.success && prodRes.data != null) {
-          final resData = prodRes.data as Map<String, dynamic>;
-          if (resData.containsKey('concurrencyStamp')) {
-            updatedConcurrencyStamp = resData['concurrencyStamp'];
-          }
-        }
-      }
-
-      // ② POST batch-line (skip if already linked for this progress)
+      // ① Resolve batchLineId (Create if not already linked, else use existing)
+      int? batchLineId;
+      
       if (progressId != null && !alreadyLinkedProgressIds.contains(progressId)) {
         // Lookup wipTransactionId — backend DTO requires it as non-nullable FK
         int? wipTransactionId;
@@ -478,15 +469,15 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
             "processItemId": pItemId,
           });
 
-          if (lineRes.success) {
-            debugPrint('✅ BatchLine saved: tray=$trayId batch=$batchHeaderId');
-            
-            // Extract batchLineId from the new batch record response
+          if (lineRes.success && lineRes.data != null) {
+            debugPrint('✅ BatchLine API Response: ${lineRes.data}');
             final dynamic responseData = lineRes.data;
-            int? batchLineId;
             if (responseData is Map<String, dynamic>) {
-              batchLineId = responseData['id'] as int?;
+              // Now assigning to the OUTER scope batchLineId
+              batchLineId = (responseData['id'] as int?) ?? 
+                            (responseData['batchLines']?['id'] as int?);
             }
+            debugPrint('🎯 Resolved batchLineId: $batchLineId');
             
             // Update the tray-details record with both IDs
             if (trayId != null) {
@@ -494,35 +485,69 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
               if (trayRes.success && trayRes.data != null) {
                 final trayMap = Map<String, dynamic>.from(trayRes.data as Map<String, dynamic>);
                 trayMap['batchHeaderId'] = batchHeaderId;
-                if (batchLineId != null) {
-                  trayMap['batchLineId'] = batchLineId;
-                }
+                if (batchLineId != null) trayMap['batchLinesId'] = batchLineId; // ✅ Fixed key (Plural)
                 
                 final updateRes = await _batchRepo.updateTrayDetails(trayId, trayMap);
                 if (updateRes.success) {
-                  debugPrint('✅ TrayDetails updated: tray=$trayId batchHeaderId=$batchHeaderId batchLineId=$batchLineId');
-                } else {
-                  debugPrint('❌ TrayDetails update failed: tray=$trayId error=${updateRes.message}');
+                  debugPrint('✅ TrayDetails updated: tray=$trayId batchLineId=$batchLineId');
                 }
               }
             }
           } else {
-            // Show full server error in scrollable dialog — never silently fail
+            // Show full server error
             AppLoader.hide();
             await showDialog(
               context: context,
               builder: (ctx) => AlertDialog(
                 title: Text('BatchLine Error (tray $trayId)'),
-                content: SingleChildScrollView(
-                  child: Text(lineRes.message.isNotEmpty ? lineRes.message : 'Unknown server error'),
-                ),
+                content: SingleChildScrollView(child: Text(lineRes.message.isNotEmpty ? lineRes.message : 'Unknown server error')),
                 actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
               ),
             );
             AppLoader.show();
           }
-        } else {
-          debugPrint('⚠ No WIP found for progress $progressId — batch-line skipped');
+        }
+      } else {
+        // Use existing ID if already linked
+        batchLineId = tray.productionProgress.batchLinesId;
+      }
+
+      // ③ Update productionProgress with both IDs (always ensure sync)
+      if (progressId != null) {
+        final prodPayload = <String, dynamic>{
+          "subOperation": tray.productionProgress.subOperation,
+          "date": DateTime.now().toIso8601String(),
+          "transactionType": tray.productionProgress.transactionType,
+          "operatorDescription": "system",
+          "primaryQuantity": tray.productionProgress.primaryQuantity,
+          "primaryUOM": tray.productionProgress.primaryUOM,
+          "secondaryQuantity": tray.productionProgress.secondaryQuantity,
+          "secondaryUOM": tray.productionProgress.secondaryUOM,
+          "wipStatus": tray.productionProgress.wipStatus,
+          "gbsFlag": true,
+          "pbsFlag": true,
+          "progressCode": tray.productionProgress.progressCode,
+          "batchHeaderId": batchHeaderId,
+          "batchLinesId": batchLineId, // ✅ Syncing batchLineId
+          "operationId": tray.operation.id,
+          "workOrderHeaderId": tray.workOrderHeader.id,
+          "workOrderLineId": tray.workOrderLine.id,
+          "itemId": tray.item.id,
+          "shiftId": tray.shift.id,
+          "primaryTrayId": trayId,
+          "code": tray.item.code,
+          "machineId": _selectedMachine?.resource?.id ?? tray.machineModel.id,
+          "planHeaderId": tray.planHeader?.id,
+          "locatorId": 3,
+          "concurrencyStamp": updatedConcurrencyStamp,
+        };
+
+        final prodRes = await _batchRepo.updateProductionProgress(progressId, prodPayload);
+        if (prodRes.success && prodRes.data != null) {
+          final resData = prodRes.data as Map<String, dynamic>;
+          if (resData.containsKey('concurrencyStamp')) {
+            updatedConcurrencyStamp = resData['concurrencyStamp'];
+          }
         }
       }
     }
@@ -539,23 +564,6 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
 
 
 
-  InputDecoration _inputDecoration({required String hintText, bool isDense = false, EdgeInsetsGeometry? contentPadding, double borderRadius = 6}) {
-    final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(borderRadius),
-      borderSide: const BorderSide(color: Colors.blue),
-    );
-
-    return InputDecoration(
-      hintText: hintText,
-      hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-      prefixIcon: isDense ? null : Icon(Icons.qr_code_scanner, size: 20, color: Colors.grey.shade400),
-      border: border,
-      focusedBorder: border,
-      enabledBorder: border,
-      isDense: isDense,
-      contentPadding: contentPadding ?? const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -696,41 +704,12 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                                   ),
                                   Row(
                                     children: [
-                                      // Cumulative weight badge
-                                      Builder(builder: (_) {
-                                        double total = 0;
-                                        for (int i = 0; i < _scannedTrays.length; i++) {
-                                          final qty = _scannedTrays[i].productionProgress.primaryQuantity ?? 0;
-                                          final pw = _scannedTrays[i].item?.pieceWeight;
-                                          if (pw != null && pw > 0) total += qty * pw;
-                                        }
-                                        if (total == 0) return const SizedBox.shrink();
-                                        return Container(
-                                          margin: const EdgeInsets.only(right: 10),
-                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                          decoration: BoxDecoration(
-                                            color: Colors.blue.shade50,
-                                            border: Border.all(color: Colors.blue.shade200),
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(Icons.scale_outlined, size: 16, color: Colors.blue.shade700),
-                                              const SizedBox(width: 6),
-                                              Text(
-                                                '${total.toStringAsFixed(2)} kg',
-                                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.blue.shade700),
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                      }),
                                       SizedBox(
-                                        width: 120,
+                                        width: 100, // Reduced width for standard look
                                         height: _inputAndButtonHeight,
                                         child: TextField(
                                           controller: _overrideQuantityController,
+                                          textAlign: TextAlign.center,
                                           decoration: _inputDecoration(
                                             hintText: 'Pcs/tray',
                                             isDense: true,
@@ -754,94 +733,12 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                                 ],
                               ),
                               const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  Expanded(flex: 2, child: Text('TRAY CODE', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
-                                  Expanded(flex: 2, child: Text('WO', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
-                                  Expanded(flex: 3, child: Text('ITEM DESC', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
-                                  Expanded(flex: 2, child: Text('QUANTITY', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
-                                  Expanded(flex: 2, child: Text('WEIGHT', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
-                                  const SizedBox(width: 44),
-                                ],
-                              ),
+                               _buildTrayTableHeader(),
                               if (_scannedTrays.isEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 24),
-                                  child: Center(
-                                    child: Text('No scanned trays yet. Start by scanning a tray barcode.', style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
-                                  ),
-                                )
+                                _buildEmptyState()
                               else
                                 ...List.generate(_scannedTrays.length, (index) {
-                                  return Padding(
-                                    padding: const EdgeInsets.only(top: 12),
-                                    child: Row(
-                                      children: [
-                                        Expanded(
-                                          flex: 2,
-                                          child: Text(
-                                            _scannedTrays[index].primaryTrayModel?.trayCode ?? '',
-                                            style: const TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.normal)
-                                          ),
-                                        ),
-                                        Expanded(
-                                          flex: 2,
-                                          child: Text(
-                                            _scannedTrays[index].workOrderHeader!.workOrderCode,
-                                            style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.normal)
-                                          ),
-                                        ),
-                                        Expanded(
-                                          flex: 3,
-                                          child: Text(
-                                            _scannedTrays[index].item!.description,
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(fontSize: 11, color: Colors.black87, fontWeight: FontWeight.normal)
-                                          ),
-                                        ),
-                                        Expanded(
-                                          flex: 2,
-                                          child: Text(
-                                            '${(_scannedTrays[index].productionProgress.primaryQuantity ?? 0).toStringAsFixed(0)} pcs',
-                                            style: const TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.normal)
-                                          ),
-                                        ),
-                                        Expanded(
-                                          flex: 2,
-                                          child: Builder(builder: (_) {
-                                            final qty = _scannedTrays[index].productionProgress.primaryQuantity ?? 0;
-                                            final pw = _scannedTrays[index].item?.pieceWeight;
-                                            if (pw == null || pw == 0) {
-                                              return const Text('-', style: TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.normal));
-                                            }
-                                            final total = qty * pw;
-                                            return Text('${total.toStringAsFixed(2)} kg', style: const TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.normal));
-                                          }),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        GestureDetector(
-                                          onTap: () {
-                                            setState(() {
-                                              final pid = _scannedTrays[index].productionProgress.id;
-                                              if (pid != null) _batchedProgressIds.remove(pid);
-                                              _quantityControllers[index].dispose();
-                                              _quantityControllers.removeAt(index);
-                                              _scannedTrays.removeAt(index);
-                                            });
-                                          },
-                                          child: Container(
-                                            padding: const EdgeInsets.all(8),
-                                            decoration: BoxDecoration(
-                                              border: Border.all(color: Colors.grey.shade300),
-                                              borderRadius: BorderRadius.circular(6),
-                                            ),
-                                            child: Icon(Icons.cancel, size: 18, color: Colors.red.shade400),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
+                                  return _buildTrayRow(index);
                                 }),
                             ],
                           ),
@@ -854,6 +751,130 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildTrayTableHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Row(
+        children: [
+          Expanded(flex: 3, child: Text('TRAY CODE', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 3, child: Text('WO', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 4, child: Text('ITEM DESC', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('QUANTITY', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('WEIGHT', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          const SizedBox(width: 44),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(6)),
+      ),
+      child: Center(
+        child: Text('No scanned trays yet. Start by scanning a tray barcode.', style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
+      ),
+    );
+  }
+
+  Widget _buildTrayRow(int index) {
+    final tray = _scannedTrays[index];
+    final trayId = tray.primaryTrayModel.id;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      decoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(color: Colors.grey.shade300),
+          right: BorderSide(color: Colors.grey.shade300),
+          bottom: BorderSide(color: Colors.grey.shade300),
+        ),
+        color: index.isEven ? Colors.white : Colors.grey.shade50,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: Text(
+              tray.primaryTrayModel?.trayCode ?? '',
+              style: const TextStyle(fontSize: 13, color: Colors.black87)
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              tray.workOrderHeader!.workOrderCode,
+              style: const TextStyle(fontSize: 12, color: Colors.black87)
+            ),
+          ),
+          Expanded(
+            flex: 4,
+            child: Text(
+              tray.item!.description,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11, color: Colors.black87)
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  (tray.productionProgress.primaryQuantity ?? 0).toStringAsFixed(0),
+                  style: const TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.w600)
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Builder(builder: (_) {
+              final qty = tray.productionProgress.primaryQuantity ?? 0;
+              final pw = tray.item?.pieceWeight;
+              if (pw == null || pw == 0) return const Text('-', style: TextStyle(fontSize: 13));
+              return Text('${(qty * pw).toStringAsFixed(2)} kg', style: const TextStyle(fontSize: 13, color: Colors.black87));
+            }),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                final pid = tray.productionProgress.id;
+                if (pid != null) _batchedProgressIds.remove(pid);
+                _quantityControllers[index].dispose();
+                _quantityControllers.removeAt(index);
+                _scannedTrays.removeAt(index);
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Icon(Icons.cancel, size: 18, color: Colors.red.shade400),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -4,8 +4,10 @@ import 'package:active_wear_scanning/features/batch/presentation/batch_list_scre
 import 'package:active_wear_scanning/features/gbs/presentation/gbs_receiving_screen.dart';
 import 'package:active_wear_scanning/features/header/order_header_screen.dart';
 import 'package:active_wear_scanning/features/processing/presentation/processing_screen.dart';
+import 'package:active_wear_scanning/features/induction/presentation/induction_store_screen.dart';
 import 'package:active_wear_scanning/features/scanning_sections/presentation/widgets/section_card.dart';
 import 'package:active_wear_scanning/features/tray/presentation/tray_scanning_screen.dart';
+import 'package:active_wear_scanning/features/wip/presentation/wip_screen.dart';
 import 'package:flutter/material.dart';
 
 class ScanningSectionsScreen extends StatelessWidget {
@@ -76,7 +78,6 @@ class ScanningSectionsScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
                     Row(
                       children: [
                         SectionCard(
@@ -90,7 +91,32 @@ class ScanningSectionsScreen extends StatelessWidget {
                           },
                         ),
                         const SizedBox(width: 12),
-                        const Expanded(child: SizedBox()), // Empty half to keep sizing consistent
+                        SectionCard(
+                          title: 'Induction Store',
+                          subtitle: 'Scan Trays for Induction Store',
+                          sectionCode: 'TRAY',
+                          progressValue: 0.75,
+                          isShowProgress: true,
+                          onTap: () {
+                            Navigator.push(context, MaterialPageRoute(builder: (context) => const InductionStoreScreen()));
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        SectionCard(
+                          title: 'WIP',
+                          subtitle: 'Work In Progress',
+                          sectionCode: 'WIP',
+                          progressValue: 1.0,
+                          isShowProgress: true,
+                          onTap: () {
+                            Navigator.push(context, MaterialPageRoute(builder: (context) => const WIPScreen()));
+                          },
+                        ),
+                        const Expanded(child: SizedBox()),
                       ],
                     ),
                   ],

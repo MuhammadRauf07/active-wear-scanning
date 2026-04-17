@@ -20,6 +20,8 @@ class SectionCard extends StatelessWidget {
         return Icons.inventory_2;
       case 'SCAN':
         return Icons.qr_code_scanner;
+      case 'WIP':
+        return Icons.insights;
       default:
         return Icons.folder_open;
     }

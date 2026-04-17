@@ -1,5 +1,6 @@
 import 'package:active_wear_scanning/core/config/app_config.dart';
 import 'package:active_wear_scanning/features/gbs/repo/gbs_receiving_repo.dart';
+import 'package:active_wear_scanning/features/induction/repo/induction_repo.dart';
 import 'package:active_wear_scanning/features/scanning_sections/presentation/scanning_sections_screen.dart';
 import 'package:active_wear_scanning/features/tray/repo/tray_scanning_repo.dart';
 import 'package:active_wear_scanning/features/user/model/active_wear_user.dart';
@@ -22,6 +23,7 @@ void main() {
   injectSingleton(UserRepo());
   injectSingleton(TrayScanningRepo());
   injectSingleton(GBSReceivingRepo());
+  injectSingleton(InductionRepo());
 
   runApp(
     PlexApp(

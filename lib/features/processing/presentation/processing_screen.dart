@@ -41,8 +41,10 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      AppLoader.show(message: 'Loading Processing...');
-      _isLoaderShown = true;
+      if (mounted) {
+        AppLoader.show(message: 'Loading Processing...');
+        _isLoaderShown = true;
+      }
     });
     _fetchOperations();
   }
