@@ -6,6 +6,7 @@ import 'package:active_wear_scanning/features/batch/presentation/batch_scanning_
 import 'package:active_wear_scanning/features/batch/repo/batch_repo.dart';
 
 import 'package:active_wear_scanning/features/batch/model/batch_header_model.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 class BatchListScreen extends StatefulWidget {
@@ -32,7 +33,9 @@ class _BatchListScreenState extends State<BatchListScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _fetchAndGroupBatches();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchAndGroupBatches();
+    });
   }
 
   @override
@@ -43,6 +46,7 @@ class _BatchListScreenState extends State<BatchListScreen>
 
   Future<void> _fetchAndGroupBatches() async {
     setState(() => _isLoading = true);
+    AppLoader.show(context, message: 'Loading Batch History...');
 
     final headerResult = await _batchRepo.fetchBatchHeaders();
     final batchLinesResult = await _batchRepo.fetchBatchLines();
@@ -77,8 +81,10 @@ class _BatchListScreenState extends State<BatchListScreen>
         _groupedBatchLinesByHeader = grouped;
         _isLoading = false;
       });
+      AppLoader.hide(context);
     } else {
       if (mounted) {
+        AppLoader.hide(context);
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Error: Failed to fetch batches')),
@@ -563,15 +569,13 @@ class _BatchListScreenState extends State<BatchListScreen>
             ),
 
             Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : TabBarView(
-                      controller: _tabController,
-                      children: [
-                        _buildBatchList(_unlockedBatches, isLocked: false),
-                        _buildBatchList(_lockedBatches, isLocked: true),
-                      ],
-                    ),
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildBatchList(_unlockedBatches, isLocked: false),
+                  _buildBatchList(_lockedBatches, isLocked: true),
+                ],
+              ),
             ),
           ],
         ),

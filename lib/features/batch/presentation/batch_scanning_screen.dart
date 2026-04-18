@@ -10,6 +10,7 @@ import 'package:active_wear_scanning/features/batch/model/batch_color_model.dart
 import 'package:active_wear_scanning/features/batch/model/batch_header_model.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:active_wear_scanning/features/batch/repo/batch_repo.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 class BatchScanningScreen extends StatefulWidget {
@@ -88,10 +89,12 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchMachines();
-    _fetchColors();
-    _fetchProductionProgresses();
-    _fetchBatchedProgressIds();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchMachines();
+      _fetchColors();
+      _fetchProductionProgresses();
+      _fetchBatchedProgressIds();
+    });
   }
 
   Future<void> _loadExistingBatchTrays(List<ProductionProgressResponseModel> allProgresses) async {
@@ -167,6 +170,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
 
   Future<void> _fetchMachines() async {
     setState(() => _isLoading = true);
+    AppLoader.show(context, message: 'Loading Machines...');
     final result = await _batchRepo.fetchBatchMachines();
     
     if (!mounted) return;
@@ -182,8 +186,10 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
           if (match.isNotEmpty) _selectedMachine = match.first;
         }
       });
+      AppLoader.hide(context);
     } else {
       setState(() => _isLoading = false);
+      AppLoader.hide(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: ${result.message}')),
       );
@@ -192,6 +198,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
 
   Future<void> _fetchColors() async {
     setState(() => _isLoadingColors = true);
+    AppLoader.show(context, message: 'Fetching Colors...');
     final result = await _batchRepo.fetchBatchColors();
     
     if (!mounted) return;
@@ -207,8 +214,10 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
            if(match.isNotEmpty) _selectedColor = match.first;
          }
       });
+      AppLoader.hide(context);
     } else {
       setState(() => _isLoadingColors = false);
+      AppLoader.hide(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: ${result.message}')),
       );
@@ -617,12 +626,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                               ],
                             ),
                             const SizedBox(height: 8),
-                            if (_isLoading)
-                              const Padding(
-                                padding: EdgeInsets.all(16.0),
-                                child: Center(child: CircularProgressIndicator()),
-                              )
-                            else
+                            if (!_isLoading)
                               CustomExpandedAsyncDropdown<BatchMachineModel>(
                                 hint: "Select from list...",
                                 width: double.infinity,
@@ -655,12 +659,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87),
                               ),
                               const SizedBox(height: 8),
-                              if (_isLoadingColors)
-                                const Padding(
-                                  padding: EdgeInsets.all(16.0),
-                                  child: Center(child: CircularProgressIndicator()),
-                                )
-                              else
+                              if (!_isLoadingColors)
                                 CustomExpandedAsyncDropdown<BatchColorModel>(
                                   hint: "Select color...",
                                   width: double.infinity,

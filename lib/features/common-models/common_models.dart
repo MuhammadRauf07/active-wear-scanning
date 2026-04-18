@@ -713,6 +713,7 @@ class TrayDetail {
   final String? lastModifierId;
   final DateTime? creationTime;
   final String? creatorId;
+  final bool? isReAssigned;
   final int? id;
 
   TrayDetail({
@@ -737,6 +738,7 @@ class TrayDetail {
     this.lastModifierId,
     this.creationTime,
     this.creatorId,
+    this.isReAssigned,
     this.id,
   });
 
@@ -763,6 +765,7 @@ class TrayDetail {
       lastModifierId: json['lastModifierId'],
       creationTime: json['creationTime'] != null ? DateTime.parse(json['creationTime']) : null,
       creatorId: json['creatorId'],
+      isReAssigned: json['isReAssigned'] == true,
       id: int.tryParse(json['id']?.toString() ?? ''),
     );
   }

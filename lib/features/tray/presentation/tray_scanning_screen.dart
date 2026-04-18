@@ -24,21 +24,16 @@ class TrayScanningScreen extends StatefulWidget {
 }
 
 class _TrayScanningScreenState extends State<TrayScanningScreen> {
-  // ─── Dependencies & State ────────────────────────────────────────────────
-
   final _trayScanningRepo = fromPlex<TrayScanningRepo>();
   String _machineBarcode = '';
   final List<ScannedTray> _scannedTrays = [];
   final List<TextEditingController> _quantityControllers = [];
   final _overrideQuantityController = TextEditingController();
 
-  /// Work order details loaded after scanning machine barcode. Null until scan.
   List<PlanLineResponseModel>? _planLines;
   List<TrayDetailsModel> availableTraysDetail = [];
   List<ProductionProgressResponseModel> existingProductionProgresses = [];
   PlanLineResponseModel? _selectedPlanLine;
-
-  // ─── Styles ───────────────────────────────────────────────────────────────
 
   static const _inputAndButtonHeight = 42.0;
   static const _borderColor = Colors.blue;
@@ -55,8 +50,6 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     color: Colors.grey.shade700,
   );
 
-  // ─── Lifecycle ────────────────────────────────────────────────────────────
-
   @override
   void dispose() {
     _overrideQuantityController.dispose();
@@ -66,26 +59,20 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     super.dispose();
   }
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────
-
-  /// Returns the default quantity per tray from the loaded plan.
-  /// Returns empty string if no plan is loaded.
   String _getPlanQuantityPerTray() {
-    if (_planLines == null || _planLines!.isEmpty) return '';
+    if (_selectedPlanLine == null) return '';
     final quantity = _selectedPlanLine!.planLine.quantityPerTray;
     return quantity == quantity.roundToDouble()
         ? quantity.round().toString()
         : quantity.toString();
   }
 
-  /// Returns the quantity to pre-fill for new trays. User override takes priority over plan value.
   String _getDefaultQuantityForNewTray() {
     final override = _overrideQuantityController.text.trim();
     if (override.isNotEmpty) return override;
     return _getPlanQuantityPerTray();
   }
 
-  /// Validates scanned tray against availableTraysDetail. Returns null if valid, error message if invalid.
   String? _validateTrayForScan(String scannedCode) {
     if (_selectedPlanLine == null) return 'Please select a work order first';
     final code = scannedCode.trim();
@@ -95,9 +82,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     if (alreadyScanned) return 'Already assigned';
 
     final available = availableTraysDetail.where((t) {
-      final trayCodeFromApi = (t.trayDetails?.trayCode ?? '')
-          .trim()
-          .toLowerCase();
+      final trayCodeFromApi = (t.trayDetails?.trayCode ?? '').trim().toLowerCase();
       final scannedCodeClean = code.toLowerCase();
       return trayCodeFromApi == scannedCodeClean;
     }).toList();
@@ -106,22 +91,22 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
     final trayDetail = available.first.trayDetails;
     if (trayDetail?.active != true) return 'Tray is not active';
+    if (trayDetail?.isReAssigned == true) {
+      return 'Tray is already reassigned in Lapping and cannot be bound again.';
+    }
 
-    // Check if the tray has been logically emptied (ready for reuse)
     final bool isEmptied =
         trayDetail?.locatorId == null ||
         trayDetail?.trayQuantity == "0" ||
         trayDetail?.trayQuantity == 0;
 
     final alreadyInProduction = existingProductionProgresses.any(
-      (t) =>
-          (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase() ==
-          code.toLowerCase(),
+      (t) => (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase() == code.toLowerCase(),
     );
 
-    // Only block if it's in production AND hasn't been emptied out
-    if (alreadyInProduction && !isEmptied)
+    if (alreadyInProduction && !isEmptied) {
       return 'Tray already scanned (Exists in Production Progress)';
+    }
 
     setState(() {
       _scannedTrays.add(
@@ -131,24 +116,16 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
           trayConcurrencyStamp: trayDetail.concurrencyStamp,
         ),
       );
-      final controller = TextEditingController(
-        text: _getDefaultQuantityForNewTray(),
-      );
-      controller.addListener(
-        () => setState(() {}),
-      ); // live weight recalculation
+      final controller = TextEditingController(text: _getDefaultQuantityForNewTray());
+      controller.addListener(() => setState(() {}));
       _quantityControllers.add(controller);
     });
 
     return null;
   }
 
-  /// Only includes non-empty values.
-  Map<String, dynamic> _buildPlanLineDetailsMap(
-    PlanLineResponseModel planLine,
-  ) {
+  Map<String, dynamic> _buildPlanLineDetailsMap(PlanLineResponseModel planLine) {
     final result = <String, dynamic>{};
-
     void addField(String key, IconData icon, String label, String? value) {
       if (value != null && value.trim().isNotEmpty && value.trim() != 'null') {
         result[key] = {'icon': icon, 'label': label, 'value': value};
@@ -160,287 +137,180 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     final workOrder = planLine.workOrderHeader;
     final item = planLine.item;
 
-    addField(
-      'Plan Date',
-      Icons.calendar_today,
-      'Plan Date',
-      plan.planDate.toString(),
-    );
-    addField(
-      'Knitting Tube',
-      Icons.precision_manufacturing,
-      'Knitting Tube',
-      plan.primaryPlanQuantity.toString(),
-    );
-    addField(
-      'Pcs Per Tray',
-      Icons.grid_view,
-      'Pcs Per Tray',
-      plan.quantityPerTray.toString(),
-    );
-    addField(
-      'Garment Pcs',
-      Icons.checkroom,
-      'Garment Pcs',
-      plan.secondaryPlanQuantity.toString(),
-    );
+    addField('Plan Date', Icons.calendar_today, 'Plan Date', plan.planDate.toString());
+    addField('Knitting Tube', Icons.precision_manufacturing, 'Knitting Tube', plan.primaryPlanQuantity.toString());
+    addField('Pcs Per Tray', Icons.grid_view, 'Pcs Per Tray', plan.quantityPerTray.toString());
+    addField('Garment Pcs', Icons.checkroom, 'Garment Pcs', plan.secondaryPlanQuantity.toString());
     addField('Shift Code', Icons.schedule, 'Shift Code', shift.code.toString());
-    addField(
-      'Work Order Code',
-      Icons.assignment,
-      'Work Order Code',
-      workOrder.workOrderCode,
-    );
-    addField(
-      'Work Order Date',
-      Icons.event,
-      'Work Order Date',
-      workOrder.workOrderDate,
-    );
-    addField(
-      'Item Description',
-      Icons.description,
-      'Item Description',
-      item.description,
-    );
+    addField('Work Order Code', Icons.assignment, 'Work Order Code', workOrder.workOrderCode);
+    addField('Work Order Date', Icons.event, 'Work Order Date', workOrder.workOrderDate);
+    addField('Item Description', Icons.description, 'Item Description', item.description);
 
     return result;
   }
 
-  // ─── User Actions ─────────────────────────────────────────────────────────
-
-  /// Opens barcode scanner for tray. On success, validates and adds tray if eligible.
   Future<void> _onScanTray() async {
     await Future.delayed(const Duration(milliseconds: 300));
     await ScannerAlwaysOpen.show(
       context,
       title: 'Scan Trays',
       onResult: (scannedCode) {
-        debugPrint("DEBUG: Scanned code received: $scannedCode");
-        final String? validationError = _validateTrayForScan(scannedCode);
-
-        return validationError;
+        return _validateTrayForScan(scannedCode);
       },
     );
   }
 
-  /// Opens barcode scanner for machine. On success, loads work order from API.
   Future<void> _onScanMachineBarcode() async {
-    AppLoader.show(context);
-
     final scannedCode = await BarcodeScannerDialog.show(
       context,
       title: 'Scan Barcode',
     );
 
-    if (scannedCode == null || !mounted) {
-      AppLoader.hide(context); // Ensure loader hides if scan is cancelled
-      return;
-    }
+    if (scannedCode == null || !mounted) return;
 
     setState(() {
       _machineBarcode = scannedCode;
-      _planLines = null; // Reset previous data
-      _selectedPlanLine = null; // Reset selection
+      _planLines = null;
+      _selectedPlanLine = null;
     });
 
-    final apiResult = await _trayScanningRepo.loadWorkOrderBySerialNumber(
-      scannedCode,
-    );
-    final trayDetailsModel = await _trayScanningRepo
-        .fetchAvailableTrayDetails();
-    final progressResult = await _trayScanningRepo.fetchProductionProgress();
+    AppLoader.show(context, message: 'Loading Machine Data...');
+    try {
+      final apiResult = await _trayScanningRepo.loadWorkOrderBySerialNumber(scannedCode);
+      final trayDetailsModel = await _trayScanningRepo.fetchAvailableTrayDetails();
+      final progressResult = await _trayScanningRepo.fetchProductionProgress();
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    if (apiResult.success && apiResult.data != null) {
-      setState(() {
-        // Cast the data to our list
-        _planLines = List<PlanLineResponseModel>.from(apiResult.data);
-
-        if (progressResult.success && progressResult.data != null) {
-          existingProductionProgresses =
-              progressResult.data as List<ProductionProgressResponseModel>;
-        }
-
-        if (trayDetailsModel.data != null) {
-          availableTraysDetail = (trayDetailsModel.data as List)
-              .map((item) => item as TrayDetailsModel)
-              .toList();
-          debugPrint(
-            "API LOADED: ${availableTraysDetail.length} trays available for validation.",
-          );
-        }
-        //availableTraysDetail = trayDetailsModel.data as List<TrayDetailsModel>;
-
-        // Logic: Auto-select if only 1 item exists
-        if (_planLines!.length == 1) {
-          _selectedPlanLine = _planLines!.first;
-          _overrideQuantityController.text = _getPlanQuantityPerTray();
-        }
-      });
-    } else {
-      _showError(apiResult.message ?? "No data found");
+      if (apiResult.success && apiResult.data != null) {
+        setState(() {
+          _planLines = List<PlanLineResponseModel>.from(apiResult.data);
+          if (progressResult.success && progressResult.data != null) {
+            existingProductionProgresses = progressResult.data as List<ProductionProgressResponseModel>;
+          }
+          if (trayDetailsModel.data != null) {
+            availableTraysDetail = (trayDetailsModel.data as List).map((item) => item as TrayDetailsModel).toList();
+          }
+          if (_planLines!.length == 1) {
+            _selectedPlanLine = _planLines!.first;
+            _overrideQuantityController.text = _getPlanQuantityPerTray();
+          }
+        });
+      } else {
+        _showError(apiResult.message ?? "No data found");
+      }
+    } catch (e) {
+      debugPrint('Error loading machine data: $e');
+      _showError(e.toString());
+    } finally {
+      if (mounted) AppLoader.hide(context);
     }
-
-    AppLoader.hide(context);
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('Error: $message')));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $message'), backgroundColor: Colors.red));
   }
 
   void _showSuccessMessage(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('Success: $message')));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Success: $message'), backgroundColor: Colors.green));
   }
-
-  /// Save API ────────────────────────────────────────────────────────────────
 
   void saveTrayAndProductionProgress() async {
-    AppLoader.show(context);
-    for (int i = 0; i < _scannedTrays.length; i++) {
-      // 1. Re-fetch the latest tray detail to get the current concurrencyStamp
-      final trayResFetch = await _trayScanningRepo.fetchTrayById(
-        _scannedTrays[i].trayUpdateId!,
-      );
-
-      if (!trayResFetch.success || trayResFetch.data == null) {
-        if (mounted) {
-          AppLoader.hide(context);
-          await showDialog(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('Save Failed'),
-              content: Text(
-                'Could not refresh tray details for ${_scannedTrays[i].trayCode}: ${trayResFetch.message}',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('OK'),
-                ),
-              ],
-            ),
-          );
+    if (_scannedTrays.isEmpty) return;
+    AppLoader.show(context, message: 'Saving Changes...');
+    try {
+      for (int i = 0; i < _scannedTrays.length; i++) {
+        final trayResFetch = await _trayScanningRepo.fetchTrayById(_scannedTrays[i].trayUpdateId!);
+        if (!trayResFetch.success || trayResFetch.data == null) {
+          throw Exception('Could not refresh tray details for ${_scannedTrays[i].trayCode}: ${trayResFetch.message}');
         }
-        return;
-      }
 
-      final latestTray = trayResFetch.data as TrayDetailsModel;
-      final latestTrayDetail = latestTray.trayDetails;
+        final latestTray = trayResFetch.data as TrayDetailsModel;
+        final latestTrayDetail = latestTray.trayDetails;
 
-      Map<String, dynamic> planData = {
-        'description': _selectedPlanLine!.item.description,
-        'trayCode': _scannedTrays[i].trayCode,
-        'shiftId': _selectedPlanLine!.shift.id,
-        'planLineId': _selectedPlanLine!.planLine.id,
-        'resourceId': _selectedPlanLine!.resource.id,
-        'workOrderHeaderId': _selectedPlanLine!.workOrderHeader.id,
-        'workOrderLineId': _selectedPlanLine!.workOrderLine.id,
-        'knitItemId': _selectedPlanLine!.planLine.itemId,
-        "locatorId": 2,
-        "active": true,
-        "trayQuantity": (double.tryParse(_quantityControllers[i].text) ?? 5.0)
-            .toInt(),
-        'concurrencyStamp': latestTrayDetail?.concurrencyStamp,
-      };
+        Map<String, dynamic> planData = {
+          'description': _selectedPlanLine!.item.description,
+          'trayCode': _scannedTrays[i].trayCode,
+          'shiftId': _selectedPlanLine!.shift.id,
+          'planLineId': _selectedPlanLine!.planLine.id,
+          'resourceId': _selectedPlanLine!.resource.id,
+          'workOrderHeaderId': _selectedPlanLine!.workOrderHeader.id,
+          'workOrderLineId': _selectedPlanLine!.workOrderLine.id,
+          'knitItemId': _selectedPlanLine!.planLine.itemId,
+          "locatorId": 2,
+          "active": true,
+          "trayQuantity": (double.tryParse(_quantityControllers[i].text) ?? 5.0).toInt(),
+          'concurrencyStamp': latestTrayDetail?.concurrencyStamp,
+        };
 
-      Map<String, dynamic> productionProgressData = {
-        "subOperation": "Knitting",
-        "date": DateTime.now().toIso8601String(),
-        "transactionType": 2,
-        "operatorDescription": "system",
-        "primaryQuantity":
-            (double.tryParse(_quantityControllers[i].text) ?? 5.0),
-        "primaryUOM": _selectedPlanLine!.planLine.primaryUOM ?? 0,
-        "secondaryQuantity":
-            (_selectedPlanLine!.item.perGarmentTube) *
-            (double.tryParse(_quantityControllers[i].text) ?? 5.0),
-        "secondaryUOM": _selectedPlanLine!.planLine.secondaryUOM ?? 0,
-        "wipStatus": 0,
-        "gbsFlag": false, // Waiting for GBS
-        "pbsFlag": false, // false as per requirement
-        "productGrade": 0,
-        "productNature": 0,
-        "isLastProcess": false,
-        "lotMakingFlag": false,
-        "reworkFlag": false,
-        "operationId": _selectedPlanLine!.operation.id,
-        "workOrderHeaderId": _selectedPlanLine!.workOrderHeader.id,
-        "workOrderLineId": _selectedPlanLine!.workOrderLine.id,
-        "itemId": _selectedPlanLine!.planLine.itemId,
-        "shiftId": _selectedPlanLine!.planLine.shiftId,
-        "primaryTrayId": latestTrayDetail?.id,
-        "secondaryTrayId": latestTrayDetail?.id,
-        "machineId": _selectedPlanLine!.planLine.resourceId,
-        "locatorId": 2,
-      };
+        Map<String, dynamic> productionProgressData = {
+          "subOperation": "Knitting",
+          "date": DateTime.now().toIso8601String(),
+          "transactionType": 2,
+          "operatorDescription": "system",
+          "primaryQuantity": (double.tryParse(_quantityControllers[i].text) ?? 5.0),
+          "primaryUOM": _selectedPlanLine!.planLine.primaryUOM ?? 0,
+          "secondaryQuantity": (_selectedPlanLine!.item.perGarmentTube) * (double.tryParse(_quantityControllers[i].text) ?? 5.0),
+          "secondaryUOM": _selectedPlanLine!.planLine.secondaryUOM ?? 0,
+          "wipStatus": 0,
+          "gbsFlag": false,
+          "pbsFlag": false,
+          "productGrade": 0,
+          "productNature": 0,
+          "isLastProcess": false,
+          "lotMakingFlag": false,
+          "reworkFlag": false,
+          "operationId": _selectedPlanLine!.operation.id,
+          "workOrderHeaderId": _selectedPlanLine!.workOrderHeader.id,
+          "workOrderLineId": _selectedPlanLine!.workOrderLine.id,
+          "itemId": _selectedPlanLine!.planLine.itemId,
+          "shiftId": _selectedPlanLine!.planLine.shiftId,
+          "primaryTrayId": latestTrayDetail?.id,
+          "secondaryTrayId": latestTrayDetail?.id,
+          "machineId": _selectedPlanLine!.planLine.resourceId,
+          "locatorId": 2,
+        };
 
-      if (_selectedPlanLine!.planLine.planHeaderId != 0 &&
-          _selectedPlanLine!.planLine.planHeaderId != null) {
-        productionProgressData["planHeaderId"] =
-            _selectedPlanLine!.planLine.planHeaderId;
-      }
-
-      final trayRes = await _trayScanningRepo.updateTrayDetails(
-        planData,
-        latestTrayDetail!.id!,
-      );
-      final progRes = await _trayScanningRepo.saveProductionProgress(
-        productionProgressData,
-      );
-
-      if (!trayRes.success || !progRes.success) {
-        if (mounted) {
-          AppLoader.hide(context);
-          String error = "";
-          if (!trayRes.success)
-            error = "Tray Update Failed: ${trayRes.message}";
-          if (!progRes.success)
-            error = "Production Progress Failed: ${progRes.message}";
-
-          await showDialog(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('Save Failed'),
-              content: Text(error),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('OK'),
-                ),
-              ],
-            ),
-          );
+        if (_selectedPlanLine!.planLine.planHeaderId != 0 && _selectedPlanLine!.planLine.planHeaderId != null) {
+          productionProgressData["planHeaderId"] = _selectedPlanLine!.planLine.planHeaderId;
         }
-        return;
-      }
-    }
 
-    AppLoader.hide(context);
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Saved successfully!')));
-      setState(() {
-        _scannedTrays.clear();
-        _quantityControllers.clear();
-      });
-      Navigator.pop(context);
+        final trayRes = await _trayScanningRepo.updateTrayDetails(planData, latestTrayDetail!.id!);
+        final progRes = await _trayScanningRepo.saveProductionProgress(productionProgressData);
+
+        if (!trayRes.success || !progRes.success) {
+          throw Exception(trayRes.message ?? progRes.message ?? 'Unknown error saving tray');
+        }
+      }
+
+      if (mounted) {
+        _showSuccessMessage('Saved successfully!');
+        setState(() {
+          _scannedTrays.clear();
+          _quantityControllers.clear();
+          _machineBarcode = '';
+          _planLines = null;
+          _selectedPlanLine = null;
+        });
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      debugPrint('Save Error: $e');
+      _showError(e.toString());
+    } finally {
+      if (mounted) AppLoader.hide(context);
     }
   }
-
-  // ─── Build ────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
+        child: ExcludeSemantics(
+          excluding: false, 
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -474,10 +344,10 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
             ],
           ),
         ),
-      );
+      ),
+    );
   }
 
-  /// Section 1: Machine barcode input + work order details.
   Widget _buildMachineScannerSection() {
     final locked = _scannedTrays.isNotEmpty;
     return Column(
@@ -554,9 +424,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                     : _machineBarcode,
                 style: TextStyle(
                   fontSize: 14,
-                  color: _machineBarcode.isEmpty
-                      ? Colors.grey.shade400
-                      : Colors.black87,
+                  color: _machineBarcode.isEmpty ? Colors.grey.shade400 : Colors.black87,
                 ),
               ),
             ),
@@ -566,10 +434,8 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     );
   }
 
-  /// Section 2: List of scanned trays with quantity inputs.
   Widget _buildScannedTraysSection() {
     final hasTrays = _scannedTrays.isNotEmpty;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -599,10 +465,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                           decoration: _inputDecoration(
                             hintText: 'Pcs/tray',
                             isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 13,
-                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 13),
                             borderRadius: 4,
                           ),
                           keyboardType: TextInputType.number,
@@ -647,42 +510,12 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       ),
       child: Row(
         children: [
-          Expanded(
-            flex: 3,
-            child: Text(
-              'TRAY CODE',
-              style: _tableHeaderStyle.copyWith(letterSpacing: 1.1),
-            ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(
-              'WO',
-              style: _tableHeaderStyle.copyWith(letterSpacing: 1.1),
-            ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(
-              'ITEM DESC',
-              style: _tableHeaderStyle.copyWith(letterSpacing: 1.1),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              'QUANTITY',
-              style: _tableHeaderStyle.copyWith(letterSpacing: 1.1),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              'WEIGHT',
-              style: _tableHeaderStyle.copyWith(letterSpacing: 1.1),
-            ),
-          ),
-          const SizedBox(width: 40), // Space for the delete icon
+          Expanded(flex: 3, child: Text('TRAY CODE', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
+          Expanded(flex: 3, child: Text('WO', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
+          Expanded(flex: 3, child: Text('ITEM DESC', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
+          Expanded(flex: 2, child: Text('QUANTITY', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
+          Expanded(flex: 2, child: Text('WEIGHT', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
+          const SizedBox(width: 40),
         ],
       ),
     );
@@ -703,7 +536,6 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   Widget _buildTrayRow(int index, ScannedTray tray) {
     final isEmpty = tray.trayCode.isEmpty;
     final displayCode = isEmpty ? '-' : tray.trayCode;
-    final textColor = isEmpty ? Colors.grey.shade400 : Colors.black;
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
@@ -713,32 +545,22 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
           right: BorderSide(color: Colors.grey.shade300),
           bottom: BorderSide(color: Colors.grey.shade300),
         ),
-        // Alternate row colors for better readability
         color: index.isEven ? Colors.white : Colors.grey.shade50,
       ),
       child: Row(
         children: [
-          // Tray Code Column
           Expanded(
             flex: 3,
             child: Text(
               displayCode,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.normal,
-                color: isEmpty ? Colors.grey : Colors.black87,
-              ),
+              style: TextStyle(fontSize: 13, color: isEmpty ? Colors.grey : Colors.black87),
             ),
           ),
           Expanded(
             flex: 3,
             child: Text(
               _selectedPlanLine?.workOrderHeader.workOrderCode ?? "-",
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.normal,
-                color: isEmpty ? Colors.grey : Colors.black87,
-              ),
+              style: TextStyle(fontSize: 12, color: isEmpty ? Colors.grey : Colors.black87),
             ),
           ),
           Expanded(
@@ -747,11 +569,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
               _selectedPlanLine?.item.description ?? "-",
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.normal,
-                color: isEmpty ? Colors.grey : Colors.black87,
-              ),
+              style: TextStyle(fontSize: 11, color: isEmpty ? Colors.grey : Colors.black87),
             ),
           ),
           Expanded(
@@ -759,24 +577,17 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
             child: Align(
               alignment: Alignment.centerLeft,
               child: SizedBox(
-                width: 55, // Slim text field
+                width: 55,
                 height: 35,
                 child: TextField(
                   controller: _quantityControllers[index],
                   keyboardType: TextInputType.number,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                   decoration: InputDecoration(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    focusedBorder: const OutlineInputBorder(
-                      borderSide: BorderSide(color: Colors.blue, width: 1.5),
-                    ),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                    focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.blue, width: 1.5)),
                   ),
                 ),
               ),
@@ -786,28 +597,10 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
             flex: 2,
             child: Builder(
               builder: (_) {
-                final qty =
-                    double.tryParse(_quantityControllers[index].text) ?? 0;
+                final qty = double.tryParse(_quantityControllers[index].text) ?? 0;
                 final pw = _selectedPlanLine?.item.pieceWeight;
-                if (pw == null || pw == 0) {
-                  return Text(
-                    '-',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.normal,
-                      color: isEmpty ? Colors.grey : Colors.black87,
-                    ),
-                  );
-                }
-                final total = qty * pw;
-                return Text(
-                  '${total.toStringAsFixed(2)} kg',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.normal,
-                    color: isEmpty ? Colors.grey : Colors.black87,
-                  ),
-                );
+                if (pw == null || pw == 0) return const Text('-', style: TextStyle(fontSize: 13));
+                return Text('${(qty * pw).toStringAsFixed(2)} kg', style: const TextStyle(fontSize: 13));
               },
             ),
           ),
@@ -820,7 +613,13 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
   Widget _buildDeleteTrayButton(int index) {
     return GestureDetector(
-      onTap: () => _onDeleteTray(index),
+      onTap: () {
+        setState(() {
+          _quantityControllers[index].dispose();
+          _quantityControllers.removeAt(index);
+          _scannedTrays.removeAt(index);
+        });
+      },
       child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
@@ -832,19 +631,8 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     );
   }
 
-  void _onDeleteTray(int index) {
-    setState(() {
-      _quantityControllers[index].dispose();
-      _quantityControllers.removeAt(index);
-      _scannedTrays.removeAt(index);
-    });
-  }
-
   Widget _buildWorkOrderDropdown() {
-    /// Only show if we actually have data from the scan
-    if (_planLines == null || _planLines!.isEmpty)
-      return const SizedBox.shrink();
-
+    if (_planLines == null || _planLines!.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(top: 16.0),
       child: Column(
@@ -859,9 +647,8 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
             borderColor: Colors.blue,
             items: _planLines,
             selectedValue: _selectedPlanLine,
-            itemAsString: (plan) =>
-                "${plan.workOrderHeader.workOrderCode} - ${plan.item.description}",
-            onChanged: (PlanLineResponseModel? newValue) {
+            itemAsString: (plan) => "${plan.workOrderHeader.workOrderCode} - ${plan.item.description}",
+            onChanged: (newValue) {
               setState(() {
                 _selectedPlanLine = newValue;
                 if (_selectedPlanLine != null) {
@@ -875,7 +662,6 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     );
   }
 
-  /// Shared input decoration to reduce duplication.
   InputDecoration _inputDecoration({
     required String hintText,
     bool isDense = false,
@@ -886,20 +672,15 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       borderRadius: BorderRadius.circular(borderRadius),
       borderSide: const BorderSide(color: _borderColor),
     );
-
     return InputDecoration(
       hintText: hintText,
       hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-      prefixIcon: isDense
-          ? null
-          : Icon(Icons.qr_code_scanner, size: 20, color: Colors.grey.shade400),
+      prefixIcon: isDense ? null : Icon(Icons.qr_code_scanner, size: 20, color: Colors.grey.shade400),
       border: border,
       focusedBorder: border,
       enabledBorder: border,
       isDense: isDense,
-      contentPadding:
-          contentPadding ??
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      contentPadding: contentPadding ?? const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
     );
   }
 }

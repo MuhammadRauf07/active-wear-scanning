@@ -231,49 +231,53 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: Column(
-          children: [
-            CustomInspectionHeader(
-              heading: 'Lapping Details',
-              subtitle: widget.batchCode,
-              isShowBackIcon: true,
-              topPadding: 10,
-              horizontalPadding: 12,
-              buttonLabel: 'Submit',
-              callBack: _saveChanges,
-            ),
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : SingleChildScrollView(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    DynamicInfoDisplay(
-                      items: {
-                        'batch': {'icon': Icons.qr_code, 'label': 'Batch ID', 'value': widget.batchCode},
-                        'machine': {'icon': Icons.precision_manufacturing, 'label': 'Machine', 'value': widget.machine},
-                        'color': {'icon': Icons.palette, 'label': 'Color', 'value': widget.color},
-                        'weight': {'icon': Icons.scale, 'label': 'Req Weight', 'value': '${widget.totalWeight.toStringAsFixed(2)} kg'},
-                        'trays': {'icon': Icons.layers, 'label': 'Active Trays', 'value': '${widget.trayCount} trays'},
-                      },
-                    ),
-                    const SizedBox(height: 20),
-                    _buildWorkOrderSelection(),
-                    if (_selectedWorkOrderId != null) ...[
-                      const SizedBox(height: 24),
-                      const SectionHeader(title: 'Scan Trays', subtitle: 'Verify and assign trays to the selected work order'),
-                      const SizedBox(height: 12),
-                      _buildScannerUI(), // Unified Scanner & Table Layout
-                    ],
-                  ],
-                ),
+        child: ExcludeSemantics(
+          excluding: _isLoading,
+          child: Column(
+            children: [
+              CustomInspectionHeader(
+                heading: 'Lapping Details',
+                subtitle: widget.batchCode,
+                isShowBackIcon: true,
+                topPadding: 10,
+                horizontalPadding: 12,
+                buttonLabel: 'Submit',
+                callBack: _saveChanges,
               ),
-            ),
-          ],
+              Expanded(
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : SingleChildScrollView(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            DynamicInfoDisplay(
+                              items: {
+                                'batch': {'icon': Icons.qr_code, 'label': 'Batch ID', 'value': widget.batchCode},
+                                'machine': {'icon': Icons.precision_manufacturing, 'label': 'Machine', 'value': widget.machine},
+                                'color': {'icon': Icons.palette, 'label': 'Color', 'value': widget.color},
+                                'weight': {'icon': Icons.scale, 'label': 'Req Weight', 'value': '${widget.totalWeight.toStringAsFixed(2)} kg'},
+                                'trays': {'icon': Icons.layers, 'label': 'Active Trays', 'value': '${widget.trayCount} trays'},
+                              },
+                            ),
+                            const SizedBox(height: 20),
+                            _buildWorkOrderSelection(),
+                            if (_selectedWorkOrderId != null) ...[
+                              const SizedBox(height: 24),
+                              const SectionHeader(title: 'Scan Trays', subtitle: 'Verify and assign trays to the selected work order'),
+                              const SizedBox(height: 12),
+                              _buildScannerUI(), // Unified Scanner & Table Layout
+                            ],
+                          ],
+                        ),
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
+
     );
   }
 
@@ -560,25 +564,21 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
 
     setState(() => _isLoading = true);
     try {
-      // Correctly gather all manually scanned/assigned trays from all Work Orders
+      // Only process newly reassigned trays
       final assignedTrays = _scannedTraysByWO.values.expand((list) => list).toList();
-      final allScannedTrays = [..._trays, ...assignedTrays];
+      final allScannedTrays = assignedTrays;
 
-      // --- Step 1: Deactivate Old Batch Lines ---
-      final batchLinesRes = await _batchRepo.fetchBatchLines(batchHeaderId: widget.batchHeaderId);
-      if (batchLinesRes.success && batchLinesRes.data != null) {
-        for (var line in (batchLinesRes.data as List)) {
-          final bl = line['batchLines'] ?? line;
-          if (bl['id'] != null && (bl['active'] == true || bl['isActive'] == true)) {
-            await _batchRepo.updateBatchLine(bl['id'], {...bl, 'active': false, 'isActive': false});
-          }
-        }
+      if (allScannedTrays.isEmpty) {
+        AppLoader.hide(context);
+        setState(() => _isLoading = false);
+        _showDialog('No Changes', 'No new trays were reassigned.');
+        return;
       }
 
       // --- Step 2 & 3: Sequential Processing (Audit -> BatchLine -> Progress) ---
       // Determine Handover Location
       int nextLocatorId = 3; 
-      final baseProgress = allScannedTrays.isNotEmpty ? allScannedTrays.first.productionProgress : null;
+      final baseProgress = allScannedTrays.first.productionProgress;
       final handoverOpId = widget.nextOperationId ?? baseProgress?.operationId;
 
       if (handoverOpId != null) {

@@ -8,6 +8,7 @@ import 'package:active_wear_scanning/features/common-models/common_models.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:active_wear_scanning/features/processing/repo/processing_repo.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../../lapping/presentation/lapping_detail_screen.dart';
 
@@ -46,7 +47,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
   bool _showTrays = false;
   bool _isLoadingTrays = false;
   List<ProductionProgressResponseModel> _trays = [];
-  bool _hasPreviousProcess = false; // ✅ Added to track rework capability
+  bool _hasPreviousProcess = false;
 
   static final _tableHeaderStyle = TextStyle(
     fontSize: 12,
@@ -54,65 +55,21 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
     color: Colors.grey.shade700,
   );
 
-  // Rework State
   bool _isReworkMode = false;
   final Set<int> _selectedReworkTrayIds = {};
   int? _reworkTargetOpId;
   String? _reworkTargetOpName;
 
-  Future<void> _fetchTraysIfNeeded() async {
-    if (_trays.isNotEmpty) return;
-
-    AppLoader.show(context, message: 'Please wait...');
-    setState(() {
-      _isLoadingTrays = true;
-    });
-
-    final res = await _processingRepo.fetchProductionProgress({
-      'BatchHeaderId': widget.batchHeaderId.toString(),
-      'OperationId': widget.currentOperationId.toString(),
-      'TransactionType': '2',
-    });
-    AppLoader.hide(context);
-    if (res.success && res.data != null) {
-      if (mounted) {
-        setState(() {
-          _trays = res.data as List<ProductionProgressResponseModel>;
-          _isLoadingTrays = false;
-        });
-      }
-    } else {
-      if (mounted) {
-        setState(() => _isLoadingTrays = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading trays: ${res.message}')),
-        );
-      }
-    }
-  }
-
-  Future<void> _toggleTrayDetails() async {
-    if (_showTrays) {
-      setState(() => _showTrays = false);
-      return;
-    }
-
-    setState(() => _showTrays = true);
-    await _fetchTraysIfNeeded();
-  }
-
   @override
   void initState() {
     super.initState();
-    _checkReworkCapability(); // ✅ Initial check
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _fetchTraysIfNeeded(); // ✅ Fetch after mount to avoid build errors
+    _checkReworkCapability();
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _fetchTraysIfNeeded();
     });
   }
 
   Future<void> _checkReworkCapability() async {
-    // We already fetch operations in _showReworkDialog, 
-    // but to know if to HIDE the button initially, we can do a quick check here.
     final res = await _processingRepo.fetchProcessingOperations();
     if (res.success && res.data != null) {
       final allOps = res.data as List<Operation>;
@@ -128,6 +85,45 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
     }
   }
 
+  Future<void> _fetchTraysIfNeeded() async {
+    if (_trays.isNotEmpty) return;
+
+    AppLoader.show(context, message: 'Loading Trays...');
+    setState(() => _isLoadingTrays = true);
+
+    try {
+      final res = await _processingRepo.fetchProductionProgress({
+        'BatchHeaderId': widget.batchHeaderId.toString(),
+        'OperationId': widget.currentOperationId.toString(),
+        'TransactionType': '2',
+      });
+      if (res.success && res.data != null) {
+        if (mounted) {
+          setState(() {
+            _trays = res.data as List<ProductionProgressResponseModel>;
+            _isLoadingTrays = false;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading trays: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingTrays = false);
+        AppLoader.hide(context);
+      }
+    }
+  }
+
+  Future<void> _toggleTrayDetails() async {
+    if (_showTrays) {
+      setState(() => _showTrays = false);
+      return;
+    }
+    setState(() => _showTrays = true);
+    await _fetchTraysIfNeeded();
+  }
+
   @override
   Widget build(BuildContext context) {
     final isLapping = widget.operationName.toLowerCase().contains('lapping');
@@ -136,7 +132,9 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: Column(
+        child: ExcludeSemantics(
+          excluding: _isLoadingTrays,
+          child: Column(
             children: [
               CustomInspectionHeader(
                 heading: 'Batch Details',
@@ -146,342 +144,133 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                 horizontalPadding: 12,
               ),
               Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SectionHeader(
-                        title: 'Batch Overview',
-                        subtitle: 'Detailed information and actions for this batch',
-                      ),
-                      const SizedBox(height: 12),
-                      ContentCard(
-                        child: Column(
-                          children: [
-                            DynamicInfoDisplay(
-                              items: {
-                                'batch': {
-                                  'icon': Icons.qr_code,
-                                  'label': 'Batch ID',
-                                  'value': widget.batchCode,
+                child: AbsorbPointer(
+                  absorbing: _isLoadingTrays,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SectionHeader(
+                          title: 'Batch Overview',
+                          subtitle: 'Detailed information and actions for this batch',
+                        ),
+                        const SizedBox(height: 12),
+                        ContentCard(
+                          child: Column(
+                            children: [
+                              DynamicInfoDisplay(
+                                items: {
+                                  'batch': {'icon': Icons.qr_code, 'label': 'Batch ID', 'value': widget.batchCode},
+                                  'machine': {'icon': Icons.precision_manufacturing, 'label': 'Machine', 'value': widget.machine},
+                                  'color': {'icon': Icons.palette, 'label': 'Color', 'value': widget.color},
+                                  'weight': {'icon': Icons.scale, 'label': 'Total Weight', 'value': '${widget.totalWeight.toStringAsFixed(2)} kg'},
+                                  'trays': {'icon': Icons.layers, 'label': 'Tray Count', 'value': '${widget.trayCount} trays'},
+                                  'operation': {'icon': Icons.settings_applications, 'label': 'Current Process', 'value': widget.operationName},
+                                  'is_rework': {'icon': Icons.sync_problem, 'label': 'Is Rework', 'value': isReworkBatch ? 'Yes' : 'No'},
+                                  if (_reworkTargetOpName != null)
+                                    'rework_to': {'icon': Icons.subdirectory_arrow_left, 'label': 'Rework To', 'value': _reworkTargetOpName!},
                                 },
-                                'machine': {
-                                  'icon': Icons.precision_manufacturing,
-                                  'label': 'Machine',
-                                  'value': widget.machine,
-                                },
-                                'color': {
-                                  'icon': Icons.palette,
-                                  'label': 'Color',
-                                  'value': widget.color,
-                                },
-                                'weight': {
-                                  'icon': Icons.scale,
-                                  'label': 'Total Weight',
-                                  'value': '${widget.totalWeight.toStringAsFixed(2)} kg',
-                                },
-                                'trays': {
-                                  'icon': Icons.layers,
-                                  'label': 'Tray Count',
-                                  'value': '${widget.trayCount} trays',
-                                },
-                                'operation': {
-                                  'icon': Icons.settings_applications,
-                                  'label': 'Current Process',
-                                  'value': widget.operationName,
-                                },
-                                'next_operation': {
-                                  'icon': Icons.next_plan,
-                                  'label': 'Next Process',
-                                  'value': widget.nextOperationId == null
-                                      ? 'N/A (It\'s a last process)'
-                                      : widget.nextOperationName,
-                                },
-                                'is_rework': {
-                                  'icon': Icons.sync_problem,
-                                  'label': 'Is Rework',
-                                  'value': (_trays.any((t) => t.productionProgress.reworkFlag == true)) ? 'Yes' : 'No',
-                                },
-                                'rework_to': {
-                                  'icon': Icons.subdirectory_arrow_left,
-                                  'label': 'Rework To',
-                                  'value': _reworkTargetOpName ?? 'N/A',
-                                },
-                              },
-                            ),
-                            const Divider(height: 32),
-                            // Row(
-                            //   children: [
-                            //     Expanded(
-                            //       child: CustomOutlinedButton(
-                            //         label: _showTrays ? 'Hide Trays' : 'Show Trays',
-                            //         borderColor: Colors.blue,
-                            //         textColor: _showTrays ? Colors.white : Colors.blue,
-                            //         fillColor: _showTrays ? Colors.blue : Colors.transparent,
-                            //         onPressed: _toggleTrayDetails,
-                            //       ),
-                            //     ),
-                            //     if (!widget.operationName.toLowerCase().contains('lapping')) ...[
-                            //       const SizedBox(width: 8),
-                            //       Expanded(
-                            //         child: CustomOutlinedButton(
-                            //           label: 'Rework',
-                            //           borderColor: Colors.orange,
-                            //           textColor: Colors.orange,
-                            //           onPressed: () {
-                            //             ScaffoldMessenger.of(context).showSnackBar(
-                            //               const SnackBar(content: Text('Rework action initiated')),
-                            //             );
-                            //           },
-                            //         ),
-                            //       ),
-                            //       const SizedBox(width: 8),
-                            //       Expanded(
-                            //         child: CustomOutlinedButton(
-                            //           label: 'Submit',
-                            //           borderColor: Colors.green,
-                            //           textColor: Colors.green,
-                            //           onPressed: _confirmSubmit,
-                            //         ),
-                            //       ),
-                            //     ],
-                            //   ],
-                            // ),
-                            Row(
-                              children: [
-                                // 1. Show Trays (Always there for all stages)
-                                Expanded(
-                                  child: CustomOutlinedButton(
-                                    label: _showTrays ? 'Hide Trays' : 'Show Trays',
-                                    borderColor: Colors.blue,
-                                    textColor: _showTrays ? Colors.white : Colors.blue,
-                                    fillColor: _showTrays ? Colors.blue : Colors.transparent,
-                                    onPressed: _toggleTrayDetails,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-
-                                if (isLapping) ...[
-                                  // --- Lapping Specific Actions ---
-
-
-                                  // 2. Rework Button (Always there for Lapping as per request)
-                                  Expanded(
-                                    child: CustomOutlinedButton(
-                                      label: 'Rework',
-                                      borderColor: Colors.orange,
-                                      textColor: Colors.orange,
-                                      onPressed: _showReworkDialog,
-                                    ),
-                                  ),
-                                  
-                                  const SizedBox(width: 8),
-
-                                  // 3. Conditional Re-assign or Submit
-                                  if (!isReworkBatch)
-                                    // Value 0 (Normal): Show Re-assign
+                              ),
+                              const Divider(height: 32),
+                              SizedBox(
+                                height: 48,
+                                child: Row(
+                                  children: [
                                     Expanded(
+                                      flex: 2,
                                       child: CustomOutlinedButton(
-                                        label: 'Re-assign Trays',
-                                        borderColor: Colors.green,
-                                        textColor: Colors.green,
-                                        onPressed: () async {
-                                          final result = await Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (context) => LappingDetailScreen(
-                                                batchHeaderId: widget.batchHeaderId,
-                                                batchCode: widget.batchCode,
-                                                machine: widget.machine,
-                                                color: widget.color,
-                                                trayCount: widget.trayCount,
-                                                totalWeight: widget.totalWeight,
-                                                currentOperationId: widget.currentOperationId,
-                                                nextOperationId: widget.nextOperationId,
-                                                nextOperationName: widget.nextOperationName,
-                                              ),
-                                            ),
-                                          );
-                                          if (mounted && result == true) {
-                                            Navigator.pop(context, true);
-                                          }
-                                        },
-                                      ),
-                                    )
-                                  else
-                                    // Value 1 (Rework): Show Submit
-                                    Expanded(
-                                      child: CustomOutlinedButton(
-                                        label: 'Submit',
+                                        label: _showTrays ? 'Hide' : 'Trays',
                                         borderColor: Colors.blue,
-                                        textColor: Colors.blue,
-                                        onPressed: _confirmSubmit,
+                                        textColor: _showTrays ? Colors.white : Colors.blue,
+                                        fillColor: _showTrays ? Colors.blue : Colors.white,
+                                        onPressed: _toggleTrayDetails,
                                       ),
                                     ),
-                                ]
-                                else ...[
-                                  // --- Standard Submit/Rework Actions ---
-                                  if (_hasPreviousProcess) ...[
-                                    Expanded(
-                                      child: CustomOutlinedButton(
-                                        label: _isReworkMode ? 'Cancel Rework' : 'Rework',
-                                        borderColor: _isReworkMode ? Colors.red : Colors.orange,
-                                        textColor: _isReworkMode ? Colors.red : Colors.orange,
-                                        onPressed: () {
-                                          if (_isReworkMode) {
-                                            if (mounted) {
+                                    const SizedBox(width: 4),
+                                    if (_hasPreviousProcess) ...[
+                                      Expanded(
+                                        flex: 3,
+                                        child: CustomOutlinedButton(
+                                          label: _isReworkMode ? 'Cancel' : 'Rework',
+                                          borderColor: _isReworkMode ? Colors.red : Colors.orange,
+                                          textColor: _isReworkMode ? Colors.red : Colors.orange,
+                                          onPressed: () {
+                                            if (_isReworkMode) {
                                               setState(() {
                                                 _isReworkMode = false;
                                                 _selectedReworkTrayIds.clear();
-                                                _reworkTargetOpName = null;
                                                 _reworkTargetOpId = null;
+                                                _reworkTargetOpName = null;
                                               });
+                                            } else {
+                                              _showReworkDialog();
                                             }
-                                          } else {
-                                            _showReworkDialog();
-                                          }
-                                        },
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                    ],
+                                    if (isLapping && !isReworkBatch) ...[
+                                      Expanded(
+                                        flex: 3,
+                                        child: CustomOutlinedButton(
+                                          label: 'Re-assign',
+                                          borderColor: Colors.teal,
+                                          textColor: Colors.teal,
+                                          onPressed: () async {
+                                            final result = await Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (context) => LappingDetailScreen(
+                                                  batchHeaderId: widget.batchHeaderId,
+                                                  batchCode: widget.batchCode,
+                                                  machine: widget.machine,
+                                                  color: widget.color,
+                                                  trayCount: widget.trayCount,
+                                                  totalWeight: widget.totalWeight,
+                                                  currentOperationId: widget.currentOperationId,
+                                                  nextOperationId: widget.nextOperationId,
+                                                  nextOperationName: widget.nextOperationName,
+                                                ),
+                                              ),
+                                            );
+                                            if (mounted && result == true) {
+                                              Navigator.pop(context, true);
+                                            }
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                    ],
+                                    Expanded(
+                                      flex: 3,
+                                      child: CustomOutlinedButton(
+                                        label: 'Submit',
+                                        borderColor: (isLapping && !isReworkBatch && !_isReworkMode) ? Colors.grey.shade400 : Colors.green,
+                                        textColor: (isLapping && !isReworkBatch && !_isReworkMode) ? Colors.grey.shade400 : Colors.green,
+                                        onPressed: (isLapping && !isReworkBatch && !_isReworkMode) ? null : _confirmSubmit,
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
                                   ],
-                                  Expanded(
-                                    child: CustomOutlinedButton(
-                                      label: 'Submit',
-                                      borderColor: Colors.green,
-                                      textColor: Colors.green,
-                                      onPressed: _confirmSubmit,
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (_showTrays) ...[
-                        const SizedBox(height: 20),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const SectionHeader(
-                              title: 'Internal Trays',
-                              subtitle: 'View and manage trays in this operation',
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        _buildTrayTable(),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-    );
-  }
-
-  void _showReworkDialog() async {
-    AppLoader.show(context, message: 'Fetching previous operations...');
-    final res = await _processingRepo.fetchProcessingOperations();
-    AppLoader.hide(context);
-
-    if (!res.success || res.data == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to load operations')));
-      }
-      return;
-    }
-
-    final fetchedOps = res.data as List<Operation>;
-    
-    // Apply standard filtering like ProcessingScreen
-    final allOps = fetchedOps.where((op) {
-      if (op.identifierRef == null) return false;
-      if (op.processNature != 1) return false;
-      return int.tryParse(op.identifierRef!) != null;
-    }).toList();
-
-    // Find current op info to filter previous ones
-    final currentOp = allOps.firstWhere(
-      (o) => o.id == widget.currentOperationId, 
-      orElse: () => Operation(code: '', name: '', description: '', identifierRef: '0', concurrencyStamp: '', creationTime: '', lastModificationTime: '', creatorId: '', lastModifierId: '', id: 0)
-    );
-    final currentSeq = int.tryParse(currentOp.identifierRef ?? '0') ?? 0;
-
-    final prevOps = allOps.where((op) {
-      final seq = int.tryParse(op.identifierRef ?? '999') ?? 999;
-      return seq < currentSeq;
-    }).toList();
-
-    if (prevOps.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No previous operations found for rework.')));
-      }
-      return;
-    }
-
-    if (!mounted) return;
-
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Container(
-          width: 300, // Fixed width for cleaner look
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 10),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Select Rework Target',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              Flexible(
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: prevOps.length,
-                  separatorBuilder: (context, index) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final op = prevOps[index];
-                    return InkWell(
-                      onTap: () {
-                        Navigator.pop(context);
-                        if (mounted) {
-                          setState(() {
-                            _isReworkMode = true;
-                            _reworkTargetOpId = op.id;
-                            _reworkTargetOpName = op.name;
-                            _selectedReworkTrayIds.clear();
-                            _showTrays = true; // Ensure UI section is open
-                          });
-                          _fetchTraysIfNeeded(); // Use non-toggling fetch
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        alignment: Alignment.center,
-                        child: Text(
-                          op.name,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.blueAccent,
-                            fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                    );
-                  },
+                        if (_showTrays) ...[
+                          const SizedBox(height: 20),
+                          const SectionHeader(
+                            title: 'Internal Trays',
+                            subtitle: 'View and manage trays in this operation',
+                          ),
+                          const SizedBox(height: 12),
+                          _buildTrayTable(),
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
               ),
             ],
           ),
@@ -490,23 +279,74 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
     );
   }
 
+  void _showReworkDialog() async {
+    AppLoader.show(context, message: 'Fetching previous operations...');
+    final res = await _processingRepo.fetchProcessingOperations();
+    AppLoader.hide(context);
+
+    if (!res.success || res.data == null) return;
+
+    final fetchedOps = res.data as List<Operation>;
+    final allOps = fetchedOps.where((op) {
+      if (op.identifierRef == null) return false;
+      if (op.processNature != 1) return false;
+      return int.tryParse(op.identifierRef!) != null;
+    }).toList();
+
+    final currentOp = allOps.firstWhere((o) => o.id == widget.currentOperationId, orElse: () => allOps.first);
+    final currentSeq = int.tryParse(currentOp.identifierRef ?? '0') ?? 0;
+
+    final prevOps = allOps.where((op) {
+      final seq = int.tryParse(op.identifierRef ?? '999') ?? 999;
+      return seq < currentSeq;
+    }).toList();
+
+    if (prevOps.isEmpty || !mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rework Target'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: prevOps.length,
+            separatorBuilder: (_, __) => const Divider(),
+            itemBuilder: (context, i) {
+              final op = prevOps[i];
+              return ListTile(
+                title: Text(op.name),
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() {
+                    _isReworkMode = true;
+                    _reworkTargetOpId = op.id;
+                    _reworkTargetOpName = op.name;
+                    _showTrays = true;
+                  });
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   void _confirmSubmit() {
-    String message = 'Are you sure you want to submit batch? This will move all trays to the designated workflow stage.';
-    
+    String msg = 'Proceed with batch submission?';
     if (_isReworkMode) {
-      final reworkCount = _selectedReworkTrayIds.length;
-      final normalCount = _trays.length - reworkCount;
-      message = 'Rework Assignment:\n• $reworkCount trays returning to $_reworkTargetOpName\n• $normalCount trays proceeding to standard flow.';
+      msg = '${_selectedReworkTrayIds.length} trays will return to $_reworkTargetOpName.\nOthers will proceed to standard flow.';
     }
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Confirm Submission'),
-        content: Text(message),
+        title: const Text('Confirm'),
+        content: Text(msg),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
@@ -520,271 +360,133 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
   }
 
   Future<void> _submitBatch() async {
-    AppLoader.show(context);
-
-    // Ensure trays are loaded
-    if (_trays.isEmpty) {
-      final res = await _processingRepo.fetchProductionProgress({
-        'BatchHeaderId': widget.batchHeaderId.toString(),
-        'OperationId': widget.currentOperationId.toString(),
-        'TransactionType': '2',
-      });
-      if (res.success && res.data != null) {
-        setState(() {
-          _trays = res.data as List<ProductionProgressResponseModel>;
-        });
-      } else {
-        AppLoader.hide(context);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content:
-                  Text('Failed to fetch trays for submission: ${res.message}')));
-        }
-        return;
-      }
-    }
-
+    AppLoader.show(context, message: 'Submitting...');
     try {
-      // Fetch dynamic locatorId for handover
-      int handoverLocatorId = 10; // Default fallback
       final targetOpId = widget.nextOperationId ?? widget.currentOperationId;
+      int nextLocatorId = 10;
       final locRes = await _processingRepo.fetchLocators(operationId: targetOpId);
       if (locRes.success && locRes.data != null) {
         final locList = locRes.data as List;
-        final matchingEntry = locList.cast<Map>().firstWhere(
-          (entry) => (entry['operation']?['id'] ?? entry['locator']?['operationId'])?.toString() == targetOpId.toString(),
+        final match = locList.cast<Map>().firstWhere(
+          (e) => (e['operation']?['id'] ?? e['locator']?['operationId'])?.toString() == targetOpId.toString(),
           orElse: () => {},
         );
-        if (matchingEntry.isNotEmpty) {
-          handoverLocatorId = matchingEntry['locator']?['id'] as int? ?? 10;
-          debugPrint('✅ Processing Handover: Op=$targetOpId -> Loc=$handoverLocatorId');
-        }
+        if (match.isNotEmpty) nextLocatorId = match['locator']?['id'] as int? ?? 10;
       }
 
       for (final t in _trays) {
-        final currentPp = t.productionProgress;
-        final updatedJson = currentPp.toJson();
-        final isSelectedForRework = _isReworkMode && _selectedReworkTrayIds.contains(currentPp.id);
+        final pp = t.productionProgress;
+        final json = pp.toJson();
+        final isRework = _isReworkMode && _selectedReworkTrayIds.contains(pp.id);
 
-        if (isSelectedForRework) {
-          // --- REWORK SUBMISSION (Return to Previous Op) ---
-          debugPrint('🔄 Reworking Tray: ${t.primaryTrayModel.trayCode} back to $_reworkTargetOpName');
-          
-          // 1. Mark current record as handed over (Type 3)
-          updatedJson['transactionType'] = 3;
-          updatedJson['reworkFlag'] = true; // Mark as rework
-          final putRes = await _processingRepo.updateProductionProgress(currentPp.id!, updatedJson);
-          if (!putRes.success) throw Exception('Rework failed for tray ${t.primaryTrayModel.trayCode}');
+        if (isRework) {
+          json['transactionType'] = 3;
+          json['reworkFlag'] = true;
+          await _processingRepo.updateProductionProgress(pp.id!, json);
 
-          // 2. Resolve Locator for Rework Target
-          int reworkLocatorId = 10;
-          final locRes = await _processingRepo.fetchLocators(operationId: _reworkTargetOpId!);
-          if (locRes.success && locRes.data != null) {
-            final locList = locRes.data as List;
-            final match = locList.cast<Map>().firstWhere(
-              (e) => (e['operation']?['id'] ?? e['locator']?['operationId'])?.toString() == _reworkTargetOpId.toString(),
+          int rewLoc = 10;
+          final rewRes = await _processingRepo.fetchLocators(operationId: _reworkTargetOpId!);
+          if (rewRes.success && rewRes.data != null) {
+            final rl = rewRes.data as List;
+            final rm = rl.cast<Map>().firstWhere(
+                  (e) => (e['operation']?['id'] ?? e['locator']?['operationId'])?.toString() == _reworkTargetOpId.toString(),
               orElse: () => {},
             );
-            if (match.isNotEmpty) reworkLocatorId = match['locator']?['id'] as int? ?? 10;
+            if (rm.isNotEmpty) rewLoc = rm['locator']?['id'] as int? ?? 10;
           }
 
-          // 3. Create new record at Rework Operation
-          final nextModelJson = currentPp.toJson();
-          nextModelJson['transactionType'] = 2;
-          nextModelJson.remove('id');
-          nextModelJson.remove('progressCode');
-          nextModelJson['batchHeaderId'] = widget.batchHeaderId;
-          nextModelJson['batchLinesId'] = currentPp.batchLinesId; // ✅ Carry over batchLinesId
-          nextModelJson['locatorId'] = reworkLocatorId;
-          nextModelJson['operationId'] = _reworkTargetOpId;
-          nextModelJson['reworkFlag'] = true; // Carry over flag
-          nextModelJson['gbsFlag'] = false;
-          nextModelJson['pbsFlag'] = false;
-          nextModelJson['wipStatus'] = 0; // Reset for new op
-          nextModelJson['date'] = DateTime.now().toIso8601String(); // ✅ Refresh date
-
-          final postRes = await _processingRepo.createProductionProgress(nextModelJson);
-          if (!postRes.success) throw Exception('Failed to return tray to previous op');
-
+          final newJ = pp.toJson();
+          newJ.remove('id');
+          newJ.remove('progressCode');
+          newJ.addAll({
+            'transactionType': 2,
+            'reworkFlag': true,
+            'operationId': _reworkTargetOpId,
+            'locatorId': rewLoc,
+            'date': DateTime.now().toIso8601String(),
+          });
+          await _processingRepo.createProductionProgress(newJ);
         } else if (widget.nextOperationId != null) {
-          // --- STANDARD HANDOVER (Op A -> Op B) ---
-          updatedJson['transactionType'] = 3;
-          final putRes = await _processingRepo.updateProductionProgress(currentPp.id!, updatedJson);
-          if (!putRes.success) throw Exception('Update failed for tray ${t.primaryTrayModel.trayCode}');
+          json['transactionType'] = 3;
+          await _processingRepo.updateProductionProgress(pp.id!, json);
 
-          // Resolve Locator for Next Op
-          int nextLocatorId = 10;
-          final locRes = await _processingRepo.fetchLocators(operationId: widget.nextOperationId!);
-          if (locRes.success && locRes.data != null) {
-            final locList = locRes.data as List;
-            final match = locList.cast<Map>().firstWhere(
-              (e) => (e['operation']?['id'] ?? e['locator']?['operationId'])?.toString() == widget.nextOperationId.toString(),
-              orElse: () => {},
-            );
-            if (match.isNotEmpty) nextLocatorId = match['locator']?['id'] as int? ?? 10;
-          }
-
-          final nextModelJson = currentPp.toJson();
-          nextModelJson['transactionType'] = 2;
-          nextModelJson.remove('id');
-          nextModelJson.remove('progressCode');
-          nextModelJson['batchHeaderId'] = widget.batchHeaderId;
-          nextModelJson['batchLinesId'] = currentPp.batchLinesId; // ✅ Carry over batchLinesId
-          nextModelJson['locatorId'] = nextLocatorId;
-          nextModelJson['operationId'] = widget.nextOperationId;
-          nextModelJson['gbsFlag'] = false;
-          nextModelJson['pbsFlag'] = false;
-          nextModelJson['wipStatus'] = 0; // Reset for new op
-          nextModelJson['date'] = DateTime.now().toIso8601String(); // ✅ Refresh date
-
-          final postRes = await _processingRepo.createProductionProgress(nextModelJson);
-          if (!postRes.success) throw Exception('Handover failed for tray ${t.primaryTrayModel.trayCode}');
-
+          final newJ = pp.toJson();
+          newJ.remove('id');
+          newJ.remove('progressCode');
+          newJ.addAll({
+            'transactionType': 2,
+            'operationId': widget.nextOperationId,
+            'locatorId': nextLocatorId,
+            'date': DateTime.now().toIso8601String(),
+          });
+          await _processingRepo.createProductionProgress(newJ);
         } else {
-          // --- FINAL PROCESS SUBMISSION ---
-          updatedJson['transactionType'] = 3;
-          updatedJson['wipStatus'] = 1;
-          updatedJson['isLastProcess'] = true;
-          updatedJson['gbsFlag'] = false;
-          updatedJson['pbsFlag'] = false;
-
-          final putRes = await _processingRepo.updateProductionProgress(currentPp.id!, updatedJson);
-          if (!putRes.success) throw Exception('Finalize failed for tray ${t.primaryTrayModel.trayCode}');
+          json['transactionType'] = 3;
+          json['wipStatus'] = 1;
+          await _processingRepo.updateProductionProgress(pp.id!, json);
         }
       }
 
-      AppLoader.hide(context);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Batch submitted successfully!')));
-        Navigator.pop(context, true); // Return true to indicate change
+        AppLoader.hide(context);
+        Navigator.pop(context, true);
       }
     } catch (e) {
       AppLoader.hide(context);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
 
   Widget _buildTrayTable() {
-    if (_isLoadingTrays) {
-      return const SizedBox.shrink(); // Loader handled by AppLoader
-    }
-
-    if (_trays.isEmpty) {
-      return const ContentCard(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Center(child: Text('No trays found', style: TextStyle(color: Colors.grey))),
-        ),
-      );
-    }
+    if (_trays.isEmpty) return const Center(child: Text('No trays found'));
 
     return ContentCard(
       padding: EdgeInsets.zero,
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
-              border: Border.all(color: Colors.grey.shade300),
-            ),
+            padding: const EdgeInsets.all(10),
+            color: Colors.grey.shade100,
             child: Row(
               children: [
-                Expanded(flex: 3, child: Text('TRAY CODE', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-                Expanded(flex: 3, child: Text('WO', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-                Expanded(flex: 4, child: Text('ITEM DESC', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-                Expanded(flex: 2, child: Text('QUANTITY', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-                Expanded(flex: 2, child: Text('WEIGHT', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+                Expanded(flex: 3, child: Text('TRAY', style: _tableHeaderStyle)),
+                Expanded(flex: 4, child: Text('ITEM', style: _tableHeaderStyle)),
+                Expanded(flex: 2, child: Text('QTY', style: _tableHeaderStyle)),
                 if (_isReworkMode)
-                  Expanded(
-                    flex: 1, 
-                    child: Checkbox(
-                      value: _selectedReworkTrayIds.length == _trays.length && _trays.isNotEmpty,
-                      activeColor: Colors.orange,
-                      onChanged: (val) {
-                        setState(() {
-                          if (val == true) {
-                            _selectedReworkTrayIds.addAll(_trays.map((t) => t.productionProgress.id!).whereType<int>());
-                          } else {
-                            _selectedReworkTrayIds.clear();
-                          }
-                        });
-                      },
-                    ),
-                  )
+                  const Expanded(flex: 1, child: SizedBox.shrink())
                 else
                   const SizedBox(width: 44),
               ],
             ),
           ),
-          ...List.generate(_trays.length, (index) {
-            final t = _trays[index];
-            final qty = t.productionProgress.primaryQuantity ?? 0;
-            final pw = t.item.pieceWeight ?? 0;
-            final trayId = t.productionProgress.id ?? 0;
-            final isSelected = _selectedReworkTrayIds.contains(trayId);
-
-            return Container(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-              decoration: BoxDecoration(
-                border: Border(
-                  left: BorderSide(color: Colors.grey.shade300),
-                  right: BorderSide(color: Colors.grey.shade300),
-                  bottom: BorderSide(color: Colors.grey.shade300),
-                ),
-                color: isSelected 
-                    ? Colors.orange.withOpacity(0.05) 
-                    : (index.isEven ? Colors.white : Colors.grey.shade50),
-              ),
-              child: Row(
+          ..._trays.map((t) {
+            final isSel = _selectedReworkTrayIds.contains(t.productionProgress.id);
+            return ListTile(
+              dense: true,
+              title: Row(
                 children: [
-                  Expanded(flex: 3, child: Text(t.primaryTrayModel.trayCode ?? '-', style: const TextStyle(fontSize: 13, color: Colors.black87))),
-                  Expanded(flex: 3, child: Text(t.workOrderHeader.workOrderCode ?? '-', style: const TextStyle(fontSize: 12, color: Colors.black87))),
-                  Expanded(flex: 4, child: Text(t.item.description ?? '-', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Colors.black87))),
-                  Expanded(
-                    flex: 2, 
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade300),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          qty.toStringAsFixed(0),
-                          style: const TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Expanded(flex: 2, child: Text('${(qty * pw).toStringAsFixed(2)} kg', style: const TextStyle(fontSize: 13, color: Colors.black87))),
-                  if (_isReworkMode)
-                    Expanded(
-                      flex: 1,
-                      child: Checkbox(
-                        value: isSelected,
-                        activeColor: Colors.orange,
-                        onChanged: (val) {
-                          setState(() {
-                            if (val == true) {
-                              _selectedReworkTrayIds.add(trayId);
-                            } else {
-                              _selectedReworkTrayIds.remove(trayId);
-                            }
-                          });
-                        },
-                      ),
-                    )
-                  else
-                    const SizedBox(width: 44),
+                  Expanded(flex: 3, child: Text(t.primaryTrayModel.trayCode ?? '-')),
+                  Expanded(flex: 4, child: Text(t.item.description ?? '-', maxLines: 1)),
+                  Expanded(flex: 2, child: Text(t.productionProgress.primaryQuantity?.toStringAsFixed(0) ?? '0')),
                 ],
               ),
+              trailing: _isReworkMode
+                  ? Checkbox(
+                      value: isSel,
+                      activeColor: Colors.orange,
+                      onChanged: (v) {
+                        setState(() {
+                          if (v == true) {
+                            _selectedReworkTrayIds.add(t.productionProgress.id!);
+                          } else {
+                            _selectedReworkTrayIds.remove(t.productionProgress.id);
+                          }
+                        });
+                      },
+                    )
+                  : null,
             );
           }),
         ],
