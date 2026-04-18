@@ -38,9 +38,9 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
   }
 
   Future<void> _onInitialDataFetch() async {
-    AppLoader.show();
+    AppLoader.show(context);
     await _fetchLatestTraysSilently();
-    AppLoader.hide();
+    AppLoader.hide(context);
   }
 
   Future<void> _fetchLatestTraysSilently() async {
@@ -136,7 +136,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
   Future<void> saveWipTransactionsAndUpdateTray() async {
     if (_scannedTrays.isEmpty) return;
 
-    AppLoader.show();
+    AppLoader.show(context);
     bool isAllSuccess = true;
 
     try {
@@ -229,7 +229,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
       isAllSuccess = false;
       debugPrint("❌ GBS Save Error: $e");
     } finally {
-      AppLoader.hide();
+      AppLoader.hide(context);
       if (mounted) {
         if (isAllSuccess) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Saved Successfully")));
@@ -256,8 +256,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: AppLoaderContextAttach(
-        child: SafeArea(
+      body: SafeArea(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -288,7 +287,6 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
             ],
           ),
         ),
-      ),
     );
   }
 

@@ -226,7 +226,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
   /// Opens barcode scanner for machine. On success, loads work order from API.
   Future<void> _onScanMachineBarcode() async {
-    AppLoader.show();
+    AppLoader.show(context);
 
     final scannedCode = await BarcodeScannerDialog.show(
       context,
@@ -234,7 +234,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     );
 
     if (scannedCode == null || !mounted) {
-      AppLoader.hide(); // Ensure loader hides if scan is cancelled
+      AppLoader.hide(context); // Ensure loader hides if scan is cancelled
       return;
     }
 
@@ -283,7 +283,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       _showError(apiResult.message ?? "No data found");
     }
 
-    AppLoader.hide();
+    AppLoader.hide(context);
   }
 
   void _showError(String message) {
@@ -301,7 +301,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   /// Save API ────────────────────────────────────────────────────────────────
 
   void saveTrayAndProductionProgress() async {
-    AppLoader.show();
+    AppLoader.show(context);
     for (int i = 0; i < _scannedTrays.length; i++) {
       // 1. Re-fetch the latest tray detail to get the current concurrencyStamp
       final trayResFetch = await _trayScanningRepo.fetchTrayById(
@@ -310,7 +310,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
       if (!trayResFetch.success || trayResFetch.data == null) {
         if (mounted) {
-          AppLoader.hide();
+          AppLoader.hide(context);
           await showDialog(
             context: context,
             builder: (ctx) => AlertDialog(
@@ -396,7 +396,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
       if (!trayRes.success || !progRes.success) {
         if (mounted) {
-          AppLoader.hide();
+          AppLoader.hide(context);
           String error = "";
           if (!trayRes.success)
             error = "Tray Update Failed: ${trayRes.message}";
@@ -421,7 +421,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       }
     }
 
-    AppLoader.hide();
+    AppLoader.hide(context);
     if (mounted) {
       ScaffoldMessenger.of(
         context,
@@ -440,8 +440,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: AppLoaderContextAttach(
-        child: SafeArea(
+      body: SafeArea(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -475,8 +474,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 
   /// Section 1: Machine barcode input + work order details.

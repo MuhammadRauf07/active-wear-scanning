@@ -445,7 +445,7 @@ class _BatchListScreenState extends State<BatchListScreen>
           '❌ ProductionProgress issue failed for tray ${bl["trayId"]}: ${progRes.message}',
         );
         if (context.mounted) {
-          AppLoader.hide();
+          AppLoader.hide(context);
           await showDialog(
             context: context,
             builder: (ctx) => AlertDialog(
@@ -463,7 +463,7 @@ class _BatchListScreenState extends State<BatchListScreen>
               ],
             ),
           );
-          AppLoader.show();
+          AppLoader.show(context);
         }
       }
 

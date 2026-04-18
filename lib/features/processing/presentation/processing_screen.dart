@@ -42,7 +42,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        AppLoader.show(message: 'Loading Processing...');
+        AppLoader.show(context, message: 'Loading Processing...');
         _isLoaderShown = true;
       }
     });
@@ -51,7 +51,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
 
   @override
   void dispose() {
-    if (_isLoaderShown) AppLoader.hide();
+    if (_isLoaderShown) AppLoader.hide(context);
     _batchBarcodeController.dispose();
     super.dispose();
   }
@@ -106,7 +106,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
         }
       } else {
         if (mounted) {
-          if (_isLoaderShown) { AppLoader.hide(); _isLoaderShown = false; }
+          if (_isLoaderShown) { AppLoader.hide(context); _isLoaderShown = false; }
           setState(() {
             _isLoadingOperations = false;
             _isInitialLoading = false;
@@ -116,7 +116,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
       }
     } catch (e) {
       if (mounted) {
-        if (_isLoaderShown) { AppLoader.hide(); _isLoaderShown = false; }
+        if (_isLoaderShown) { AppLoader.hide(context); _isLoaderShown = false; }
         setState(() {
           _isLoadingOperations = false;
           _isInitialLoading = false;
@@ -153,7 +153,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
     await Future.wait(futures);
     // Both operations and counts are now ready — hide loader and show the screen
     if (mounted) {
-      if (_isLoaderShown) { AppLoader.hide(); _isLoaderShown = false; }
+      if (_isLoaderShown) { AppLoader.hide(context); _isLoaderShown = false; }
       setState(() => _isInitialLoading = false);
     }
   }
@@ -233,8 +233,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: AppLoaderContextAttach(
-        child: SafeArea(
+      body: SafeArea(
         child: Column(
           children: [
             const CustomInspectionHeader(
@@ -424,7 +423,6 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
           ],
         ),
       ),
-    ),
     );
   }
 

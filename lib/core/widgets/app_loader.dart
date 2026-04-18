@@ -3,34 +3,16 @@ import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
-class AppLoaderContextAttach extends StatelessWidget {
-  final Widget child;
-
-  const AppLoaderContextAttach({required this.child, super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      AppLoader.attachContext(context);
-    });
-    return child;
-  }
-}
-
 class AppLoader {
   static final AppLoader _instance = AppLoader._internal();
-  static BuildContext? _context;
   static bool _isDialogVisible = false;
 
   AppLoader._internal();
 
   factory AppLoader() => _instance;
 
-  static void attachContext(BuildContext context) {
-    _context = context;
-  }
-
-  static void show({
+  static void show(
+    BuildContext context, {
     String message = 'Please wait...',
     Widget? customIndicator,
     Color backgroundColor = Colors.white,
@@ -40,11 +22,11 @@ class AppLoader {
     TextStyle? textStyle,
     BorderRadiusGeometry borderRadius = const BorderRadius.all(Radius.circular(12)),
   }) {
-    if (_context == null || _isDialogVisible) return;
+    if (!context.mounted || _isDialogVisible) return;
     _isDialogVisible = true;
 
     showGeneralDialog(
-      context: _context!,
+      context: context,
       barrierDismissible: false,
       barrierLabel: "Loader",
       barrierColor: Colors.black.withValues(alpha: 0.25),
@@ -86,11 +68,10 @@ class AppLoader {
     );
   }
 
-  static void hide() {
+  static void hide(BuildContext context) {
     try {
-      if (_isDialogVisible && _context != null) {
-        // Safe check to see if context is still valid
-        final navigator = Navigator.of(_context!, rootNavigator: true);
+      if (_isDialogVisible && context.mounted) {
+        final navigator = Navigator.of(context, rootNavigator: true);
         if (navigator.canPop()) {
           navigator.pop();
         }
@@ -98,7 +79,7 @@ class AppLoader {
       }
     } catch (e) {
       debugPrint('⚠️ AppLoader hide error: $e');
-      _isDialogVisible = false; // Reset anyway
+      _isDialogVisible = false;
     }
   }
 }

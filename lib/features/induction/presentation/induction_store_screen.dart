@@ -45,9 +45,9 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
   }
 
   Future<void> _onInitialDataFetch() async {
-    AppLoader.show();
+    AppLoader.show(context);
     await _fetchAvailableTrays();
-    AppLoader.hide();
+    AppLoader.hide(context);
   }
 
   Future<void> _fetchAvailableTrays() async {
@@ -121,7 +121,7 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
   Future<void> _onSave() async {
     if (_scannedTrays.isEmpty) return;
 
-    AppLoader.show(message: 'Saving Induction Data...');
+    AppLoader.show(context, message: 'Saving Induction Data...');
     bool isAllSuccess = true;
 
     try {
@@ -196,7 +196,7 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
       isAllSuccess = false;
       debugPrint("❌ Induction Save Error: $e");
     } finally {
-      AppLoader.hide();
+      AppLoader.hide(context);
       if (mounted) {
         if (isAllSuccess) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -221,8 +221,7 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: AppLoaderContextAttach(
-        child: SafeArea(
+      body: SafeArea(
           child: Column(
             children: [
               CustomInspectionHeader(
@@ -253,7 +252,6 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
             ],
           ),
         ),
-      ),
     );
   }
 

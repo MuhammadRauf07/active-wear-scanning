@@ -350,7 +350,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
       return;
     }
 
-    AppLoader.show();
+    AppLoader.show(context);
 
     // ── Determine batchHeaderId ──────────────────────────────────────────────
     int batchHeaderId;
@@ -373,7 +373,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
       });
 
       if (!headerResponse.success) {
-        AppLoader.hide();
+        AppLoader.hide(context);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Header Failed: ${headerResponse.message}')));
         return;
       }
@@ -398,7 +398,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
       }
 
       if (extractedId == null || extractedId == 0) {
-        AppLoader.hide();
+        AppLoader.hide(context);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Could not resolve batch ID. Try again.'),
           duration: Duration(seconds: 6),
@@ -495,7 +495,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
             }
           } else {
             // Show full server error
-            AppLoader.hide();
+            AppLoader.hide(context);
             await showDialog(
               context: context,
               builder: (ctx) => AlertDialog(
@@ -504,7 +504,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                 actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
               ),
             );
-            AppLoader.show();
+            AppLoader.show(context);
           }
         }
       } else {
@@ -558,7 +558,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
       if (pid != null) _batchedProgressIds.add(pid);
     }
 
-    AppLoader.hide();
+    AppLoader.hide(context);
     Navigator.pop(context, true);
   }
 
@@ -569,9 +569,8 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: AppLoaderContextAttach(
-        child: SafeArea(
-          child: Column(
+      body: SafeArea(
+        child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               CustomInspectionHeader(
@@ -751,7 +750,6 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
             ],
           ),
         ),
-      ),
     );
   }
 

@@ -165,9 +165,9 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
     matchedTray = _trays.where((t) => t.primaryTrayModel.trayCode?.toLowerCase() == trayCode).firstOrNull;
 
     if (matchedTray == null) {
-      AppLoader.show(message: "Searching system trays...");
+      AppLoader.show(context, message: "Searching system trays...");
       final trayRes = await _batchRepo.fetchTrayDetailByCode(trayCode);
-      AppLoader.hide();
+      AppLoader.hide(context);
 
       if (trayRes.success && trayRes.data != null) {
         final trayMap = trayRes.data.containsKey('trayDetail') ? trayRes.data['trayDetail'] : trayRes.data;
@@ -559,8 +559,11 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
     }
 
     setState(() => _isLoading = true);
-
     try {
+      // Correctly gather all manually scanned/assigned trays from all Work Orders
+      final assignedTrays = _scannedTraysByWO.values.expand((list) => list).toList();
+      final allScannedTrays = [..._trays, ...assignedTrays];
+
       // --- Step 1: Deactivate Old Batch Lines ---
       final batchLinesRes = await _batchRepo.fetchBatchLines(batchHeaderId: widget.batchHeaderId);
       if (batchLinesRes.success && batchLinesRes.data != null) {
@@ -572,56 +575,11 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
         }
       }
 
-      // --- Step 2: Create New Batch Lines & Update Tray Details ---
-      final Map<int, int> trayToBatchLineId = {}; // ✅ To store new IDs for Step 3
-
-      for (final tray in allScannedTrays) {
-        final double qty = _trayOverrideQuantities[tray.primaryTrayModel.trayCode?.toLowerCase() ?? ''] ?? 0;
-
-        // Correcting the reference: Composite key use karein jo validation mein set hui thi
-        final String compositeKey = '${tray.workOrderHeader.id}_${tray.processedItem?.description ?? tray.item.description}';
-        final activeSummary = _workOrders[compositeKey];
-
-        final blRes = await _batchRepo.createBatchLine({
-          "primaryQuantity": qty,
-          "batchHeaderId": widget.batchHeaderId,
-          "progressId": tray.productionProgress.id,
-          "workOrderHeaderId": tray.workOrderHeader.id,
-          "workOrderLineId": tray.workOrderLine.id,
-          "itemId": tray.item.id,
-          "trayId": tray.primaryTrayModel.id,
-          "isReAssigned": true,
-          "processItemId": tray.productionProgress.processedItemId ?? tray.item.id,
-          "active": true,
-        });
-
-        if (blRes.success && blRes.data != null) {
-          final blId = blRes.data['id'] ?? blRes.data['batchLine']?['id'] ?? blRes.data;
-          if (blId is int && tray.primaryTrayModel.id != null) {
-            trayToBatchLineId[tray.primaryTrayModel.id!] = blId;
-            debugPrint('✅ Created BatchLine $blId for Tray ${tray.primaryTrayModel.trayCode}');
-          }
-        }
-
-        if (tray.primaryTrayModel.id != null) {
-          final tRes = await _batchRepo.fetchTrayDetailById(tray.primaryTrayModel.id!);
-          if (tRes.success) {
-            final tData = tRes.data['trayDetail'] ?? tRes.data;
-            await _batchRepo.updateTrayDetails(tray.primaryTrayModel.id!, {
-              ...tData,
-              'trayQuantity': qty.toInt(),
-              'batchHeaderId': widget.batchHeaderId,
-              'isReAssigned': true,
-            });
-          }
-        }
-      }
-
-      // --- Step 3: Handover (Production Progress) ---
-      // Fetch dynamic locatorId for the handover (next step)
-      int nextLocatorId = 3; // Default fallback (GBS)
-      final base = _trays.isNotEmpty ? _trays.first.productionProgress : null;
-      final handoverOpId = widget.nextOperationId ?? base?.operationId;
+      // --- Step 2 & 3: Sequential Processing (Audit -> BatchLine -> Progress) ---
+      // Determine Handover Location
+      int nextLocatorId = 3; 
+      final baseProgress = allScannedTrays.isNotEmpty ? allScannedTrays.first.productionProgress : null;
+      final handoverOpId = widget.nextOperationId ?? baseProgress?.operationId;
 
       if (handoverOpId != null) {
         final locRes = await _batchRepo.fetchLocators(operationId: handoverOpId);
@@ -633,52 +591,99 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
           );
           if (matchingEntry.isNotEmpty) {
             nextLocatorId = matchingEntry['locator']?['id'] as int? ?? 3;
-            debugPrint('✅ Lapping Handover: Op=$handoverOpId -> Loc=$nextLocatorId');
           }
         }
       }
 
-      for (final originalTray in _trays) {
-        if (originalTray.productionProgress.id != null) {
-          await _processingRepo.updateProductionProgress(
-              originalTray.productionProgress.id!,
-              {...originalTray.productionProgress.toJson(), 'transactionType': 3}
-          );
-        }
-      }
-
       for (final scannedTray in allScannedTrays) {
-        final double newQty = _trayOverrideQuantities[scannedTray.primaryTrayModel.trayCode?.toLowerCase() ?? ''] ?? 0;
-        final baseProgress = base!;
-
-        Map<String, dynamic> nextJson = {
-          "transactionType": 2,
+        final double trayQty = _trayOverrideQuantities[scannedTray.primaryTrayModel.trayCode?.toLowerCase() ?? ''] ?? 0;
+        
+        // 1. Post WIP Transaction (Seeding the audit trail)
+        Map<String, dynamic> wipPayload = {
+          "transactionDate": DateTime.now().toIso8601String(),
+          "transactionType": 2, // Handover
+          "operatorDescription": "system",
+          "primaryQuantity": trayQty,
+          "primaryUOM": scannedTray.productionProgress.primaryUOM ?? 4,
+          "progressId": scannedTray.productionProgress.id, 
+          "operationId": handoverOpId,
+          "locatorId": nextLocatorId,
           "batchHeaderId": widget.batchHeaderId,
-          "batchLinesId": trayToBatchLineId[scannedTray.primaryTrayModel.id], // ✅ RESTORED Traceability
+          "itemId": scannedTray.item.id,
           "primaryTrayId": scannedTray.primaryTrayModel.id,
-          "primaryQuantity": newQty,
+          "workOrderHeaderId": scannedTray.workOrderHeader.id,
+          "workOrderLineId": scannedTray.workOrderLine.id,
+        };
+        
+        final wipRes = await _batchRepo.postWipTransaction(wipPayload);
+        int? wipId;
+        if (wipRes.success && wipRes.data != null) {
+          wipId = wipRes.data['id'] ?? wipRes.data['wipTransaction']?['id'] ?? wipRes.data;
+        }
 
-          // 🔥 FIX 1: Spelling changed to 'processedItemId' for QA visibility
-          // 🔥 FIX 2: itemId ko processItem logic se update kiya
-          "processedItemId": scannedTray.productionProgress.processedItemId ?? scannedTray.item.id, // ✅ FIXED
-
-          "operationId": widget.nextOperationId ?? baseProgress.operationId,
-          "previousOperationId": baseProgress.operationId,
-          "wipStatus": widget.nextOperationId != null ? 0 : 1,
-          "gbsFlag": false, // ✅ FIXED: Reset flags for processing
-          "pbsFlag": false, // ✅ FIXED: Reset flags for processing
-
-          "shiftId": scannedTray.productionProgress.shiftId ?? baseProgress.shiftId,
-          "machineId": scannedTray.productionProgress.machineId ?? baseProgress.machineId,
+        // 2. Create Batch Line (Linked to WIP Transaction)
+        final blRes = await _batchRepo.createBatchLine({
+          "batchHeaderId": widget.batchHeaderId,
+          "progressId": scannedTray.productionProgress.id,
+          "wipTransactionId": wipId, // ✅ CRITICAL LINK
           "workOrderHeaderId": scannedTray.workOrderHeader.id,
           "workOrderLineId": scannedTray.workOrderLine.id,
           "itemId": scannedTray.item.id,
+          "primaryUomId": scannedTray.productionProgress.primaryUOM ?? 4,
+          "primaryQuantity": trayQty,
+          "active": true,
+        });
+
+        int? blId;
+        if (blRes.success && blRes.data != null) {
+          blId = blRes.data['id'] ?? blRes.data['batchLine']?['id'] ?? blRes.data;
+          
+          // 3. Update Tray Detail with new Batch Line
+          final tRes = await _batchRepo.fetchTrayDetailById(scannedTray.primaryTrayModel.id!);
+          if (tRes.success) {
+            final tData = tRes.data['trayDetail'] ?? tRes.data;
+            await _batchRepo.updateTrayDetails(scannedTray.primaryTrayModel.id!, {
+              ...tData,
+              'trayQuantity': trayQty.toInt(),
+              'batchHeaderId': widget.batchHeaderId,
+              'batchLinesId': blId,
+              'isReAssigned': true,
+            });
+          }
+        }
+
+        // 4. Close old Production Progress
+        if (scannedTray.productionProgress.id != null) {
+          await _processingRepo.updateProductionProgress(
+            scannedTray.productionProgress.id!,
+            {...scannedTray.productionProgress.toJson(), 'transactionType': 3}
+          );
+        }
+
+        // 5. Create New Production Progress (The Handover)
+        Map<String, dynamic> nextJson = scannedTray.productionProgress.toJson();
+        nextJson.remove('id');
+        nextJson.remove('progressCode');
+        nextJson.remove('concurrencyStamp');
+        
+        nextJson.addAll({
+          "transactionType": 2,
+          "batchHeaderId": widget.batchHeaderId,
+          "batchLinesId": blId,
+          "primaryTrayId": scannedTray.primaryTrayModel.id,
+          "primaryQuantity": trayQty,
+          "operationId": handoverOpId,
           "locatorId": nextLocatorId,
-          "primaryUOM": baseProgress.primaryUOM,
-          "secondaryUOM": baseProgress.secondaryUOM,
-          "transactionDate": DateTime.now().toIso8601String(),
+          "wipStatus": widget.nextOperationId != null ? 0 : 1,
+          "gbsFlag": false,
+          "pbsFlag": false,
+          "date": DateTime.now().toIso8601String(),
           "operatorDescription": "system",
-        };
+        });
+
+        if (nextJson['processedItemId'] == null || nextJson['processedItemId'] == 0) {
+          nextJson['processedItemId'] = scannedTray.item.id;
+        }
 
         final cres = await _processingRepo.createProductionProgress(nextJson);
         if (!cres.success) {

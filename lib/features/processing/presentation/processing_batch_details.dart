@@ -63,7 +63,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
   Future<void> _fetchTraysIfNeeded() async {
     if (_trays.isNotEmpty) return;
 
-    AppLoader.show(message: 'Please wait...');
+    AppLoader.show(context, message: 'Please wait...');
     setState(() {
       _isLoadingTrays = true;
     });
@@ -73,8 +73,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
       'OperationId': widget.currentOperationId.toString(),
       'TransactionType': '2',
     });
-
-    AppLoader.hide();
+    AppLoader.hide(context);
     if (res.success && res.data != null) {
       if (mounted) {
         setState(() {
@@ -136,9 +135,8 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
 
     return Scaffold(
       backgroundColor: Colors.white,
-      body: AppLoaderContextAttach(
-        child: SafeArea(
-          child: Column(
+      body: SafeArea(
+        child: Column(
             children: [
               CustomInspectionHeader(
                 heading: 'Batch Details',
@@ -383,14 +381,13 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
             ],
           ),
         ),
-      ),
     );
   }
 
   void _showReworkDialog() async {
-    AppLoader.show(message: 'Fetching previous operations...');
+    AppLoader.show(context, message: 'Fetching previous operations...');
     final res = await _processingRepo.fetchProcessingOperations();
-    AppLoader.hide();
+    AppLoader.hide(context);
 
     if (!res.success || res.data == null) {
       if (mounted) {
@@ -523,7 +520,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
   }
 
   Future<void> _submitBatch() async {
-    AppLoader.show();
+    AppLoader.show(context);
 
     // Ensure trays are loaded
     if (_trays.isEmpty) {
@@ -537,7 +534,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
           _trays = res.data as List<ProductionProgressResponseModel>;
         });
       } else {
-        AppLoader.hide();
+        AppLoader.hide(context);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content:
@@ -603,6 +600,8 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
           nextModelJson['reworkFlag'] = true; // Carry over flag
           nextModelJson['gbsFlag'] = false;
           nextModelJson['pbsFlag'] = false;
+          nextModelJson['wipStatus'] = 0; // Reset for new op
+          nextModelJson['date'] = DateTime.now().toIso8601String(); // ✅ Refresh date
 
           final postRes = await _processingRepo.createProductionProgress(nextModelJson);
           if (!postRes.success) throw Exception('Failed to return tray to previous op');
@@ -635,6 +634,8 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
           nextModelJson['operationId'] = widget.nextOperationId;
           nextModelJson['gbsFlag'] = false;
           nextModelJson['pbsFlag'] = false;
+          nextModelJson['wipStatus'] = 0; // Reset for new op
+          nextModelJson['date'] = DateTime.now().toIso8601String(); // ✅ Refresh date
 
           final postRes = await _processingRepo.createProductionProgress(nextModelJson);
           if (!postRes.success) throw Exception('Handover failed for tray ${t.primaryTrayModel.trayCode}');
@@ -652,14 +653,14 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
         }
       }
 
-      AppLoader.hide();
+      AppLoader.hide(context);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Batch submitted successfully!')));
         Navigator.pop(context, true); // Return true to indicate change
       }
     } catch (e) {
-      AppLoader.hide();
+      AppLoader.hide(context);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));

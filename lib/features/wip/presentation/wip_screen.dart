@@ -16,9 +16,8 @@ class WIPScreen extends StatefulWidget {
 class _WIPScreenState extends State<WIPScreen> {
   final _wipRepo = WipRepo();
   List<LocatorResponse> _locators = [];
-  LocatorResponse? _selectedLocator;
-  List<WIPEntry> _wipEntries = [];
-  bool _isLoading = false;
+  Map<int, List<WIPEntry>> _locatorData = {};
+  Map<int, bool> _loadingDetails = {};
 
   static final _labelStyle = const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87);
   static final _tableHeaderStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700);
@@ -32,9 +31,9 @@ class _WIPScreenState extends State<WIPScreen> {
   }
 
   Future<void> _fetchInitialData() async {
-    AppLoader.show(message: 'Loading Locators...');
+    AppLoader.show(context, message: 'Loading Locators...');
     final result = await _wipRepo.fetchLocators();
-    AppLoader.hide();
+    AppLoader.hide(context);
 
     if (result.success && result.data != null) {
       if (mounted) {
@@ -44,7 +43,7 @@ class _WIPScreenState extends State<WIPScreen> {
           _locators = allLocs.where((l) {
             final wh = l.locator.logicalWH?.toUpperCase() ?? '';
             return wh.contains('FLOOR');
-          }).toList();
+          }).toList().reversed.toList();
         });
       }
     } else {
@@ -53,16 +52,21 @@ class _WIPScreenState extends State<WIPScreen> {
   }
 
   Future<void> _fetchWipData(int locatorId) async {
-    setState(() => _isLoading = true);
-    final result = await _wipRepo.fetchWipDetails(locatorId);
-    setState(() => _isLoading = false);
+    // If we have data and it's not empty, skip unless user manually refreshes (could add later)
+    if (_locatorData.containsKey(locatorId) && _locatorData[locatorId]!.isNotEmpty) return;
 
-    if (result.success && result.data != null) {
+    setState(() => _loadingDetails[locatorId] = true);
+    final result = await _wipRepo.fetchWipDetails(locatorId);
+
+    if (mounted) {
       setState(() {
-        _wipEntries = result.data as List<WIPEntry>;
+        _loadingDetails[locatorId] = false;
+        if (result.success && result.data != null) {
+          _locatorData[locatorId] = result.data as List<WIPEntry>;
+        } else {
+          _showError(result.message);
+        }
       });
-    } else {
-      _showError(result.message);
     }
   }
 
@@ -74,110 +78,121 @@ class _WIPScreenState extends State<WIPScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final deptCode = _selectedLocator?.department.code.toUpperCase() ?? '';
-    final isKnitting = deptCode == 'KNITTING';
-    final isProcessing = deptCode == 'PROCESSING';
-
     return Scaffold(
       backgroundColor: Colors.white,
-      body: AppLoaderContextAttach(
-        child: SafeArea(
-          child: Column(
-            children: [
-              CustomInspectionHeader(
-                heading: 'WIP',
-                subtitle: 'Work In Progress Monitoring',
-                isShowBackIcon: true,
-                topPadding: 0,
-                horizontalPadding: 16,
+      body: SafeArea(
+        child: Column(
+          children: [
+            CustomInspectionHeader(
+              heading: 'WIP',
+              subtitle: 'Work In Progress Monitoring',
+              isShowBackIcon: true,
+              topPadding: 0,
+              horizontalPadding: 16,
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: SectionHeader(
+                title: 'Stores & Locators',
+                subtitle: 'Expand a locator to view physical inventory in that area',
               ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    children: [
-                      _buildSelectorSection(),
-                      const SizedBox(height: 20),
-                      if (_selectedLocator != null) ...[
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            SectionHeader(
-                              title: 'WIP Details',
-                              subtitle: '${_selectedLocator?.locator.description} Inventory',
-                            ),
-                            if (_isLoading)
-                              const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Expanded(
-                          child: ContentCard(
-                            padding: EdgeInsets.zero,
-                            child: Column(
-                              children: [
-                                _buildTableHeader(isKnitting, isProcessing),
-                                Expanded(
-                                  child: _wipEntries.isEmpty
-                                      ? _buildEmptyState()
-                                      : ListView.builder(
-                                          itemCount: _wipEntries.length,
-                                          itemBuilder: (context, index) => _buildDataRow(index, _wipEntries[index], isKnitting, isProcessing),
-                                        ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ] else
-                        Expanded(child: _buildWelcomeState()),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+            Expanded(
+              child: _locators.isEmpty
+                  ? _buildEmptyLocatorsState()
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: _locators.length,
+                      itemBuilder: (context, index) => _buildLocatorExpansionItem(_locators[index]),
+                    ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildSelectorSection() {
-    return ContentCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Select Locator', style: _labelStyle),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.blue.shade100),
-              borderRadius: BorderRadius.circular(8),
-              color: Colors.blue.shade50.withValues(alpha: 0.3),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<LocatorResponse>(
-                isExpanded: true,
-                hint: const Text('Choose a store/locator'),
-                value: _selectedLocator,
-                items: _locators.map((loc) {
-                  return DropdownMenuItem(
-                    value: loc,
-                    child: Text('${loc.locator.description} (${loc.department.name})'),
-                  );
-                }).toList(),
-                onChanged: (val) {
-                  setState(() => _selectedLocator = val);
-                  if (val != null) _fetchWipData(val.locator.id);
-                },
-              ),
-            ),
+  Widget _buildLocatorExpansionItem(LocatorResponse loc) {
+    final locatorId = loc.locator.id;
+    final data = _locatorData[locatorId] ?? [];
+    final isLoading = _loadingDetails[locatorId] ?? false;
+    final deptCode = loc.department.code.toUpperCase();
+    final isKnitting = deptCode == 'KNITTING';
+    final isProcessing = deptCode == 'PROCESSING';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.blue.shade50),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blue.shade100.withValues(alpha: 0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
+        ],
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          onExpansionChanged: (expanded) {
+            if (expanded) _fetchWipData(locatorId);
+          },
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.warehouse_outlined, size: 20, color: Colors.blue.shade700),
+          ),
+          title: Text(
+            loc.locator.description,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87),
+          ),
+          subtitle: Text(
+            'Dept: ${loc.department.name}',
+            style: TextStyle(fontSize: 12, color: Colors.blue.shade400, fontWeight: FontWeight.w500),
+          ),
+          trailing: isLoading
+              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+              : Icon(Icons.keyboard_arrow_down, color: Colors.blue.shade200),
+          children: [
+            if (data.isEmpty && !isLoading)
+              Padding(
+                padding: const EdgeInsets.all(32),
+                child: _buildEmptyState(),
+              )
+            else ...[
+              const Divider(height: 1),
+              _buildTableHeader(isKnitting, isProcessing),
+              ...List.generate(data.length, (idx) {
+                return _buildDataRow(idx, data[idx], isKnitting, isProcessing);
+              }),
+              const SizedBox(height: 12),
+            ]
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyLocatorsState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.location_off_outlined, size: 64, color: Colors.blue.shade50),
+          const SizedBox(height: 16),
+          const Text('No stores or locators found with "FLOOR" logical warehouse.', style: TextStyle(color: Colors.black54)),
         ],
       ),
     );
   }
+
 
   Widget _buildTableHeader(bool isKnitting, bool isProcessing) {
     return Container(
@@ -232,16 +247,4 @@ class _WIPScreenState extends State<WIPScreen> {
     );
   }
 
-  Widget _buildWelcomeState() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.search_rounded, size: 64, color: Colors.blue.shade100),
-          const SizedBox(height: 16),
-          const Text('Select a locator to view WIP details', style: TextStyle(fontSize: 16, color: Colors.black54)),
-        ],
-      ),
-    );
-  }
 }
