@@ -26,6 +26,7 @@ class WipRepo {
   Future<PlexApiResult> fetchWipDetails(int locatorId) async {
     final result = await _api.getList('/api/app/production-progresses', query: {
       'LocatorId': locatorId.toString(),
+      'TransactionType': '2',
       'MaxResultCount': '1000',
       'logicalWH': 'FLOOR'
     });

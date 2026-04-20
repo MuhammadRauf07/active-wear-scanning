@@ -56,7 +56,8 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
               final isProcessing = op.processNature == 1;
               final isNumeric = RegExp(r'^\d+$').hasMatch(op.code);
               return isProcessing && isNumeric;
-            }).toList();
+            }).toList()
+              ..sort((a, b) => int.parse(a.code).compareTo(int.parse(b.code)));
           });
         }
         await _fetchAllBatchCounts();

@@ -264,8 +264,8 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
                             const SizedBox(height: 20),
                             _buildWorkOrderSelection(),
                             if (_selectedWorkOrderId != null) ...[
-                              const SizedBox(height: 24),
-                              const SectionHeader(title: 'Scan Trays', subtitle: 'Verify and assign trays to the selected work order'),
+                              // const SizedBox(height: 24),
+                              // const SectionHeader(title: 'Scan Trays', subtitle: 'Verify and assign trays to the selected work order'),
                               const SizedBox(height: 12),
                               _buildScannerUI(), // Unified Scanner & Table Layout
                             ],

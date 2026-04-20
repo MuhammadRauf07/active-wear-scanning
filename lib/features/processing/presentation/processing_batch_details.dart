@@ -178,7 +178,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                                 child: Row(
                                   children: [
                                     Expanded(
-                                      flex: 2,
+                                      flex: 3,
                                       child: CustomOutlinedButton(
                                         label: _showTrays ? 'Hide' : 'Trays',
                                         borderColor: Colors.blue,
@@ -447,46 +447,51 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             color: Colors.grey.shade100,
             child: Row(
               children: [
-                Expanded(flex: 3, child: Text('TRAY', style: _tableHeaderStyle)),
-                Expanded(flex: 4, child: Text('ITEM', style: _tableHeaderStyle)),
-                Expanded(flex: 2, child: Text('QTY', style: _tableHeaderStyle)),
-                if (_isReworkMode)
-                  const Expanded(flex: 1, child: SizedBox.shrink())
-                else
-                  const SizedBox(width: 44),
+                Expanded(flex: 2, child: Text('TRAY', style: _tableHeaderStyle)),
+                Expanded(flex: 3, child: Text('ITEM', style: _tableHeaderStyle)),
+                Expanded(flex: 1, child: Text('QTY', style: _tableHeaderStyle)),
+                Expanded(flex: 1, child: Text('WEIGHT', style: _tableHeaderStyle)),
+                if (_isReworkMode) const SizedBox(width: 44) else const SizedBox(width: 8),
               ],
             ),
           ),
           ..._trays.map((t) {
             final isSel = _selectedReworkTrayIds.contains(t.productionProgress.id);
-            return ListTile(
-              dense: true,
-              title: Row(
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
                 children: [
-                  Expanded(flex: 3, child: Text(t.primaryTrayModel.trayCode ?? '-')),
-                  Expanded(flex: 4, child: Text(t.item.description ?? '-', maxLines: 1)),
-                  Expanded(flex: 2, child: Text(t.productionProgress.primaryQuantity?.toStringAsFixed(0) ?? '0')),
+                  Expanded(flex: 2, child: Text(t.primaryTrayModel.trayCode ?? '-', style: const TextStyle(fontSize: 13))),
+                  Expanded(flex: 3, child: Text(t.item.description ?? '-', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
+                  Expanded(flex: 1, child: Text(t.productionProgress.primaryQuantity?.toStringAsFixed(0) ?? '0', style: const TextStyle(fontSize: 13))),
+                  Expanded(flex: 1, child: Text('${((t.productionProgress.primaryQuantity ?? 0) * (t.item.pieceWeight ?? 0)).toStringAsFixed(2)} kg', style: const TextStyle(fontSize: 13))),
+                  if (_isReworkMode)
+
+                    SizedBox(
+                      width: 44,
+                      child: Checkbox(
+                        visualDensity: VisualDensity.compact,
+                        value: isSel,
+                        activeColor: Colors.orange,
+                        onChanged: (v) {
+                          setState(() {
+                            if (v == true) {
+                              _selectedReworkTrayIds.add(t.productionProgress.id!);
+                            } else {
+                              _selectedReworkTrayIds.remove(t.productionProgress.id);
+                            }
+                          });
+                        },
+                      ),
+                    )
+                  else
+                    const SizedBox(width: 8),
                 ],
               ),
-              trailing: _isReworkMode
-                  ? Checkbox(
-                      value: isSel,
-                      activeColor: Colors.orange,
-                      onChanged: (v) {
-                        setState(() {
-                          if (v == true) {
-                            _selectedReworkTrayIds.add(t.productionProgress.id!);
-                          } else {
-                            _selectedReworkTrayIds.remove(t.productionProgress.id);
-                          }
-                        });
-                      },
-                    )
-                  : null,
             );
           }),
         ],

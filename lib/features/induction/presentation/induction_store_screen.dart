@@ -333,22 +333,22 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
                     ),
                     Row(
                       children: [
-                        SizedBox(
-                          width: 100,
-                          height: _inputAndButtonHeight,
-                          child: TextField(
-                            readOnly: true,
-                            textAlign: TextAlign.center,
-                            decoration: InputDecoration(
-                              hintText: 'Pcs/tray',
-                              hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
-                              isDense: true,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 13),
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: Colors.grey.shade300)),
-                              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: Colors.grey.shade300)),
-                            ),
-                          ),
-                        ),
+                        // SizedBox(
+                        //   width: 100,
+                        //   height: _inputAndButtonHeight,
+                        //   child: TextField(
+                        //     readOnly: true,
+                        //     textAlign: TextAlign.center,
+                        //     decoration: InputDecoration(
+                        //       hintText: 'Pcs/tray',
+                        //       hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+                        //       isDense: true,
+                        //       contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 13),
+                        //       border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: Colors.grey.shade300)),
+                        //       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: Colors.grey.shade300)),
+                        //     ),
+                        //   ),
+                        // ),
                         const SizedBox(width: 8),
                         CustomOutlinedButton(
                           label: 'Scan Tray',
