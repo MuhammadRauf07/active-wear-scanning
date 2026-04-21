@@ -6,7 +6,7 @@ class LappingRepo {
   final ApiService _api = ApiService();
   Future<PlexApiResult> fetchTrayDetailByCode(String trayCode) async {
     final result = await _api.getList(
-        '/api/app/tray-details',
+        '/api/app/tray-details?MaxResultCount=1000',
         query: {'TrayCode': trayCode}
     );
 

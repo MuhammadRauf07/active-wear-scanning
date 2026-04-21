@@ -88,7 +88,7 @@ class _WIPScreenState extends State<WIPScreen> {
         }
       } else {
         // Group by Batch No + Color
-        final batch = t.productionProgress.progressCode ?? '-';
+        final batch = t.batchHeader?.batchHeaderCode ?? t.productionProgress.batchHeaderId?.toString() ?? '-';
         final color = t.batchHeader?.colorDescription ?? '-';
         key = "${batch}_$color";
         

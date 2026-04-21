@@ -167,6 +167,8 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                                   'weight': {'icon': Icons.scale, 'label': 'Total Weight', 'value': '${widget.totalWeight.toStringAsFixed(2)} kg'},
                                   'trays': {'icon': Icons.layers, 'label': 'Tray Count', 'value': '${widget.trayCount} trays'},
                                   'operation': {'icon': Icons.settings_applications, 'label': 'Current Process', 'value': widget.operationName},
+                                  if (widget.nextOperationName.isNotEmpty && widget.nextOperationName != 'Completed')
+                                    'next_process': {'icon': Icons.arrow_forward_outlined, 'label': 'Next Process', 'value': widget.nextOperationName},
                                   'is_rework': {'icon': Icons.sync_problem, 'label': 'Is Rework', 'value': isReworkBatch ? 'Yes' : 'No'},
                                   if (_reworkTargetOpName != null)
                                     'rework_to': {'icon': Icons.subdirectory_arrow_left, 'label': 'Rework To', 'value': _reworkTargetOpName!},
@@ -423,6 +425,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
         } else {
           json['transactionType'] = 3;
           json['wipStatus'] = 1;
+          json['isLastProcess'] = true; // ✅ Flags tray as ready for Induction
           await _processingRepo.updateProductionProgress(pp.id!, json);
         }
       }

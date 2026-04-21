@@ -6,14 +6,18 @@ import 'package:flutter/foundation.dart';
 class InductionRepo {
   final ApiService _api = ApiService();
 
-  Future<PlexApiResult> getProductionProgress({Map<String, String>? params}) async {
+  Future<PlexApiResult> getProductionProgress({
+    Map<String, String>? params,
+  }) async {
     // Default filters for Induction Store as requested
-    final Map<String, String> p = params ?? {
-      'TransactionType': '3',
-      'PBSFlag': 'false',
-      'IsLastProcess': 'true',
-      'MaxResultCount': '1000',
-    };
+    final Map<String, String> p =
+        params ??
+        {
+          'TransactionType': '3',
+          'PBSFlag': 'false',
+          'IsLastProcess': 'true',
+          'MaxResultCount': '1000',
+        };
 
     final result = await _api.getList(
       '/api/app/production-progresses',
@@ -23,10 +27,16 @@ class InductionRepo {
     if (!result.success || result.data == null) return result;
 
     try {
-      final List rawData = result.data is Map ? (result.data['items'] ?? []) : result.data;
+      final List rawData = result.data is Map
+          ? (result.data['items'] ?? [])
+          : result.data;
 
       final productionProgress = rawData
-          .map((item) => ProductionProgressResponseModel.fromJson(Map<String, dynamic>.from(item)))
+          .map(
+            (item) => ProductionProgressResponseModel.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
           .toList();
 
       return PlexApiResult(true, 200, "Success", productionProgress);
@@ -36,8 +46,14 @@ class InductionRepo {
     }
   }
 
-  Future<PlexApiResult> updateProductionProgress(int id, Map<String, dynamic> data) async {
-    final result = await _api.put('/api/app/production-progresses/$id', body: data);
+  Future<PlexApiResult> updateProductionProgress(
+    int id,
+    Map<String, dynamic> data,
+  ) async {
+    final result = await _api.put(
+      '/api/app/production-progresses/$id',
+      body: data,
+    );
     return result;
   }
 
