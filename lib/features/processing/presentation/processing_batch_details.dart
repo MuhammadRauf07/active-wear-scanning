@@ -99,8 +99,11 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
       });
       if (res.success && res.data != null) {
         if (mounted) {
+          final list = res.data as List<ProductionProgressResponseModel>;
+          // Sort by trayCode consistently so order never changes between fetches
+          list.sort((a, b) => (a.primaryTrayModel.trayCode ?? '').compareTo(b.primaryTrayModel.trayCode ?? ''));
           setState(() {
-            _trays = res.data as List<ProductionProgressResponseModel>;
+            _trays = list;
             _isLoadingTrays = false;
           });
         }

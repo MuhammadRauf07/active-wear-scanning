@@ -104,6 +104,9 @@ class _BatchListScreenState extends State<BatchListScreen>
   }
 
   void _navigateToEditBatch(BatchHeaderResponseModel batchHeaderModel) async {
+    AppLoader.show(context, message: 'Loading Batch...');
+    await Future.delayed(const Duration(milliseconds: 300)); // Allow loader to render
+    AppLoader.hide(context);
     final result = await Navigator.push(
       context,
       MaterialPageRoute(

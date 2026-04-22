@@ -191,10 +191,10 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
           if (trayDetailsModel.data != null) {
             availableTraysDetail = (trayDetailsModel.data as List).map((item) => item as TrayDetailsModel).toList();
           }
-          if (_planLines!.length == 1) {
-            _selectedPlanLine = _planLines!.first;
-            _overrideQuantityController.text = _getPlanQuantityPerTray();
-          }
+          // if (_planLines!.length == 1) {
+          //   _selectedPlanLine = _planLines!.first;
+          //   _overrideQuantityController.text = _getPlanQuantityPerTray();
+          // }
         });
       } else {
         _showError(apiResult.message ?? "No data found");
@@ -641,7 +641,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
           Text('Select Work Order & Item Description', style: _labelStyle),
           const SizedBox(height: 8),
           CustomExpandedAsyncDropdown<PlanLineResponseModel>(
-            hint: "Select from list...",
+            hint: "Select from list",
             width: double.infinity,
             height: 48,
             borderColor: Colors.blue,

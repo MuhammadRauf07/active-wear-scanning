@@ -527,7 +527,10 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                             if (result == true) {
                               SchedulerBinding.instance.addPostFrameCallback((_) {
                                 if (mounted) {
-                                  setState(() { _selectedOperation = null; });
+                                  setState(() {
+                                    _selectedOperation = null;
+                                    _opBatchDetails.clear(); // Invalidate cache — prevents stale data on old op
+                                  });
                                   _fetchOperations();
                                 }
                               });
