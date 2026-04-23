@@ -137,10 +137,18 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
           if (bhRes.success && bhRes.data != null) {
             final bhFull = BatchHeaderResponseModel.fromJson(bhRes.data);
 
-            final machineCode =
-                bhFull.machine?.brand ??
-                bhFull.machine?.resourceCode ??
-                groupRecords.first.machineModel.brand ??
+            // Prefer batch header machine (the user-selected machine when creating the batch).
+            // When bhFull.machine is null (API returns machineId as scalar only), fetch by ID.
+            String? machineCode = bhFull.machine?.brand ?? bhFull.machine?.resourceCode;
+            if (machineCode == null && bhFull.batchHeader.machineId != null) {
+              final mRes = await _batchRepo.fetchMachineById(bhFull.batchHeader.machineId!);
+              if (mRes.success && mRes.data != null) {
+                final mData = mRes.data as Map<String, dynamic>;
+                final mJson = mData['resource'] ?? mData;
+                machineCode = mJson['brand']?.toString() ?? mJson['resourceCode']?.toString();
+              }
+            }
+            machineCode ??= groupRecords.first.machineModel.brand ??
                 groupRecords.first.machineModel.resourceCode ??
                 '-';
 
@@ -154,6 +162,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
             summaries.add(
               _BatchSummaryItem(
                 batchHeaderId: bhId,
+                machineId: bhFull.batchHeader.machineId,
                 batchCode: bhFull.batchHeader.batchHeaderCode ?? '-',
                 machine: machineCode,
                 color: bhFull.batchHeader.colorDescription ?? '-',
@@ -514,6 +523,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                                   batchHeaderId: s.batchHeaderId,
                                   currentOperationId: _selectedOperation!.id,
                                   batchCode: s.batchCode,
+                                  machineId: s.machineId,
                                   machine: s.machine,
                                   color: s.color,
                                   trayCount: s.trayCount,
@@ -561,6 +571,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
 
 class _BatchSummaryItem {
   final int batchHeaderId;
+  final int? machineId;
   final String batchCode;
   final String machine;
   final String color;
@@ -569,6 +580,7 @@ class _BatchSummaryItem {
 
   _BatchSummaryItem({
     required this.batchHeaderId,
+    this.machineId,
     required this.batchCode,
     required this.machine,
     required this.color,

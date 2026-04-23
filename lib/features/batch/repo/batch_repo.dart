@@ -163,6 +163,10 @@ class BatchRepo {
     }
   }
 
+  Future<PlexApiResult> fetchMachineById(int id) async {
+    return await _api.getObject('/api/app/resources/$id');
+  }
+
   Future<PlexApiResult> fetchWorkOrderLineDetails(int workOrderLineId, String colorDescription) async {
     final query = {
       'WorkOrderLineId': workOrderLineId.toString(),

@@ -633,9 +633,10 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
           "workOrderLineId": scannedTray.workOrderLine.id,
         });
 
-        // Ensure we purge any SQL-breaking strict IDs before first CREATE
-        nextJson.remove("batchHeaderId");
-        nextJson.remove("planHeaderId");
+        // Include batchHeaderId in the initial creation so the Handover PP is always
+        // grouped correctly in ProcessingScreen._fetchOpDetails (which groups by batchHeaderId).
+        nextJson['batchHeaderId'] = widget.batchHeaderId;
+        nextJson.remove("planHeaderId"); // Only planHeaderId needs purging
 
         final ppRes = await _processingRepo.createProductionProgress(nextJson);
         if (!ppRes.success) {
@@ -681,23 +682,27 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
         debugPrint('✅ Resolved targetProgressId: $targetProgressId');
 
         // --- 1b. MARK CURRENT LAPPING PROGRESS AS COMPLETED (transactionType=3) ---
-        // Query server directly for the real Lapping PP — scanned trays may be synthetic (id=null).
-        // No BatchHeaderId filter: the PP we want is tied by OperationId + trayId only.
+        // Query server with BOTH OperationId AND BatchHeaderId to target only this batch's lapping PP.
+        // Also exclude subOperation='Handover' to avoid closing the newly created handover record.
         {
           final lappingPpRes = await _processingRepo.fetchProductionProgress({
             'OperationId': widget.currentOperationId.toString(),
+            'BatchHeaderId': widget.batchHeaderId.toString(),
             'TransactionType': '2',
           });
           ProductionProgressResponseModel? realLappingPP;
           if (lappingPpRes.success && lappingPpRes.data != null) {
             final list = lappingPpRes.data as List<ProductionProgressResponseModel>;
+            // Exclude handover PPs — we only want the source lapping PP
             realLappingPP = list.where((r) =>
-              r.primaryTrayModel.id == scannedTray.primaryTrayModel.id
+              r.primaryTrayModel.id == scannedTray.primaryTrayModel.id &&
+              (r.productionProgress.subOperation ?? '').toLowerCase() != 'handover'
             ).firstOrNull;
           }
-          // Also check _trays as a second source
+          // Fallback: check _trays (loaded in initState from same batch)
           realLappingPP ??= _trays.where((t) =>
-            t.primaryTrayModel.id == scannedTray.primaryTrayModel.id
+            t.primaryTrayModel.id == scannedTray.primaryTrayModel.id &&
+            (t.productionProgress.subOperation ?? '').toLowerCase() != 'handover'
           ).firstOrNull;
 
           if (realLappingPP != null &&

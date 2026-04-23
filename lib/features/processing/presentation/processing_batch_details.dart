@@ -4,6 +4,7 @@ import 'package:active_wear_scanning/core/widgets/content_card.dart';
 import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
 import 'package:active_wear_scanning/core/widgets/dynamic_info_display.dart';
 import 'package:active_wear_scanning/core/widgets/section_header.dart';
+import 'package:active_wear_scanning/features/batch/repo/batch_repo.dart';
 import 'package:active_wear_scanning/features/common-models/common_models.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:active_wear_scanning/features/processing/repo/processing_repo.dart';
@@ -16,6 +17,7 @@ class ProcessingBatchDetailsScreen extends StatefulWidget {
   final int batchHeaderId;
   final int currentOperationId;
   final String batchCode;
+  final int? machineId;
   final String machine;
   final String color;
   final int trayCount;
@@ -29,6 +31,7 @@ class ProcessingBatchDetailsScreen extends StatefulWidget {
     required this.batchHeaderId,
     required this.currentOperationId,
     required this.batchCode,
+    this.machineId,
     required this.machine,
     required this.color,
     required this.trayCount,
@@ -44,9 +47,11 @@ class ProcessingBatchDetailsScreen extends StatefulWidget {
 
 class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScreen> {
   final _processingRepo = ProcessingRepo();
+  final _batchRepo = BatchRepo();
   bool _showTrays = false;
   bool _isLoadingTrays = false;
   List<ProductionProgressResponseModel> _trays = [];
+  double? _machineCapacity;
   bool _hasPreviousProcess = false;
 
   static final _tableHeaderStyle = TextStyle(
@@ -64,9 +69,27 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
   void initState() {
     super.initState();
     _checkReworkCapability();
+    _fetchMachineCapacity();
     SchedulerBinding.instance.addPostFrameCallback((_) {
       if (mounted) _fetchTraysIfNeeded();
     });
+  }
+
+  Future<void> _fetchMachineCapacity() async {
+    if (widget.machineId == null) return;
+    final res = await _batchRepo.fetchMachineById(widget.machineId!);
+    if (res.success && res.data != null) {
+      final mData = res.data as Map<String, dynamic>;
+      final mJson = mData['resource'] ?? mData;
+      final cap = mJson['capacity'];
+      if (cap != null) {
+        if (mounted) {
+          setState(() {
+            _machineCapacity = double.tryParse(cap.toString());
+          });
+        }
+      }
+    }
   }
 
   Future<void> _checkReworkCapability() async {
@@ -167,8 +190,8 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                                   'batch': {'icon': Icons.qr_code, 'label': 'Batch ID', 'value': widget.batchCode},
                                   'machine': {'icon': Icons.precision_manufacturing, 'label': 'Machine', 'value': widget.machine},
                                   'color': {'icon': Icons.palette, 'label': 'Color', 'value': widget.color},
-                                  'weight': {'icon': Icons.scale, 'label': 'Total Weight', 'value': '${widget.totalWeight.toStringAsFixed(2)} kg'},
-                                  'trays': {'icon': Icons.layers, 'label': 'Tray Count', 'value': '${widget.trayCount} trays'},
+                                  //'weight': {'icon': Icons.scale, 'label': 'Total Weight', 'value': '${widget.totalWeight.toStringAsFixed(2)} kg'},
+                                  //'trays': {'icon': Icons.layers, 'label': 'Tray Count', 'value': '${widget.trayCount} trays'},
                                   'operation': {'icon': Icons.settings_applications, 'label': 'Current Process', 'value': widget.operationName},
                                   if (widget.nextOperationName.isNotEmpty && widget.nextOperationName != 'Completed')
                                     'next_process': {'icon': Icons.arrow_forward_outlined, 'label': 'Next Process', 'value': widget.nextOperationName},
@@ -177,6 +200,8 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                                     'rework_to': {'icon': Icons.subdirectory_arrow_left, 'label': 'Rework To', 'value': _reworkTargetOpName!},
                                 },
                               ),
+                              const SizedBox(height: 16),
+                              _buildScanSummary(),
                               const Divider(height: 32),
                               SizedBox(
                                 height: 48,
@@ -502,6 +527,250 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
           }),
         ],
       ),
+    );
+  }
+
+  // ── Scan Summary ────────────────────────────────────────────────────────────
+  Widget _buildScanSummary() {
+    // ── Compute aggregates ──────────────────────────────────────────────────
+    double totalPcs = 0;
+    double totalWeight = 0;
+    final Map<String, List<ProductionProgressResponseModel>> byWO = {};
+
+    for (final t in _trays) {
+      final qty = t.productionProgress.primaryQuantity ?? 0;
+      final pw = t.item.pieceWeight ?? 0;
+      totalPcs += qty;
+      totalWeight += qty * pw;
+      final woCode = t.workOrderHeader?.workOrderCode ?? 'Unknown WO';
+      byWO.putIfAbsent(woCode, () => []).add(t);
+    }
+
+    final capacity = _machineCapacity;
+    final remaining = capacity != null ? (capacity - totalWeight) : null;
+    final isOverCapacity = remaining != null && remaining < 0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Header ────────────────────────────────────────────────────────
+        Row(
+          children: [
+            Icon(Icons.bar_chart_rounded, size: 16, color: Colors.blue.shade700),
+            const SizedBox(width: 6),
+            Text(
+              'Scan Summary',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Colors.blue.shade800,
+              ),
+            ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: isOverCapacity ? Colors.red.shade50 : Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                isOverCapacity ? 'Over Capacity' : 'Live',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: isOverCapacity ? Colors.red.shade700 : Colors.blue.shade700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        const Divider(height: 1),
+        const SizedBox(height: 12),
+
+        // ── Stat row: Trays / Pcs / Weight / Capacity / Remaining ──────────
+        IntrinsicHeight(
+          child: Row(
+            children: [
+              _statTile('Trays', '${_trays.length}', Icons.layers_outlined),
+              _verticalDivider(),
+              _statTile('Total Pcs', totalPcs.toStringAsFixed(0), Icons.format_list_numbered),
+              if (capacity != null && capacity > 0) ...[
+                _verticalDivider(),
+                _statTile('Capacity', capacity.toStringAsFixed(1), Icons.settings_input_component),
+                // _verticalDivider(),
+                // _statTile(
+                //   isOverCapacity ? 'Over By' : 'Remaining',
+                //   remaining!.abs().toStringAsFixed(1),
+                //   isOverCapacity ? Icons.warning_amber_rounded : Icons.hourglass_empty,
+                //   valueColor: isOverCapacity ? Colors.red.shade700 : Colors.blue.shade700,
+                // ),
+              ],
+              _verticalDivider(),
+              _statTile('Allocated Weight', totalWeight.toStringAsFixed(1), Icons.scale_outlined),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 12),
+        const Divider(height: 1),
+        const SizedBox(height: 4),
+
+        // ── WO-grouped expandable list ─────────────────────────────────────
+        ...byWO.entries.map((entry) {
+          final woCode = entry.key;
+          final woTrays = entry.value;
+          
+          // Group by Item within the WO
+          final Map<String, List<ProductionProgressResponseModel>> byItem = {};
+          double woPcs = 0;
+          double woWeight = 0;
+          for (final t in woTrays) {
+            final qty = t.productionProgress.primaryQuantity ?? 0;
+            final pw = t.item.pieceWeight ?? 0;
+            woPcs += qty;
+            woWeight += qty * pw;
+            final itemDesc = t.item.description;
+            byItem.putIfAbsent(itemDesc, () => []).add(t);
+          }
+
+          return Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              tilePadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+              childrenPadding: EdgeInsets.zero,
+              leading: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Icon(Icons.assignment_outlined, size: 16, color: Colors.blue.shade700),
+              ),
+              title: Text(
+                woCode,
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text(
+                '${woTrays.length} trays · ${woPcs.toStringAsFixed(0)} pcs · ${woWeight.toStringAsFixed(2)} kg',
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+              ),
+              children: [
+                // Sub-header
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  color: Colors.grey.shade100,
+                  child: Row(
+                    children: [
+                      Expanded(flex: 5, child: Text('ITEM', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade600))),
+                      Expanded(flex: 2, child: Text('TRAYS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade600))),
+                      Expanded(flex: 2, child: Text('PCS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade600))),
+                      Expanded(flex: 3, child: Text('WEIGHT', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade600))),
+                    ],
+                  ),
+                ),
+                ...byItem.entries.toList().asMap().entries.map((e) {
+                  final i = e.key;
+                  final itemEntry = e.value;
+                  final itemDesc = itemEntry.key;
+                  final itemTrays = itemEntry.value;
+                  
+                  double itemPcs = 0;
+                  double itemWeight = 0;
+                  for (final t in itemTrays) {
+                    final qty = t.productionProgress.primaryQuantity ?? 0;
+                    final pw = t.item.pieceWeight ?? 0;
+                    itemPcs += qty;
+                    itemWeight += qty * pw;
+                  }
+
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    color: i.isEven ? Colors.white : Colors.grey.shade50,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 5,
+                          child: Text(
+                            itemDesc,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 11, color: Colors.black87),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            '${itemTrays.length}',
+                            style: const TextStyle(fontSize: 12, color: Colors.black87),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            itemPcs.toStringAsFixed(0),
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 3,
+                          child: Text(
+                            '${itemWeight.toStringAsFixed(2)} kg',
+                            style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+                const SizedBox(height: 4),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _statTile(String label, String value, IconData icon, {Color? valueColor}) {
+    return Expanded(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: Colors.blue.shade600),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: valueColor ?? Colors.blue.shade900,
+            ),
+          ),
+          const SizedBox(height: 2),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            style: TextStyle(
+              fontSize: 9,
+              color: Colors.grey.shade600,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _verticalDivider() {
+    return Container(
+      width: 1,
+      color: Colors.grey.shade200,
+      margin: const EdgeInsets.symmetric(vertical: 4),
     );
   }
 }

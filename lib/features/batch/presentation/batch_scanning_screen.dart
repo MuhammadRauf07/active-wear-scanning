@@ -795,6 +795,12 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                       ),
                     ),
 
+                    // ── Real-time Scan Summary ──────────────────────────────
+                    if (_selectedColor != null && _scannedTrays.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      _buildScanSummary(),
+                    ],
+
                     // Scan Trays Section
                     if (_selectedColor != null) ...[
                       const SizedBox(height: 16),
@@ -875,7 +881,255 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     );
   }
 
+  // ── Scan Summary ────────────────────────────────────────────────────────────
+  Widget _buildScanSummary() {
+    // ── Compute aggregates ──────────────────────────────────────────────────
+    double totalPcs = 0;
+    double totalWeight = 0;
+    final Map<String, List<ProductionProgressResponseModel>> byWO = {};
+
+    for (final t in _scannedTrays) {
+      final qty = t.productionProgress.primaryQuantity ?? 0;
+      final pw = t.item?.pieceWeight ?? 0;
+      totalPcs += qty;
+      totalWeight += qty * pw;
+      final woCode = t.workOrderHeader?.workOrderCode ?? 'Unknown WO';
+      byWO.putIfAbsent(woCode, () => []).add(t);
+    }
+
+    final capacityRaw = _selectedMachine?.resource?.capacity;
+    final capacity = capacityRaw != null
+        ? double.tryParse(capacityRaw.toString())
+        : null;
+    final remaining = capacity != null ? (capacity - totalWeight) : null;
+    final isOverCapacity = remaining != null && remaining < 0;
+
+    return ContentCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header ────────────────────────────────────────────────────────
+          Row(
+            children: [
+              Icon(Icons.bar_chart_rounded, size: 16, color: Colors.blue.shade700),
+              const SizedBox(width: 6),
+              Text(
+                'Scan Summary',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.blue.shade800,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: isOverCapacity ? Colors.red.shade50 : Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                // child: Text(
+                //   isOverCapacity ? 'Over Capacity' : 'Live',
+                //   style: TextStyle(
+                //     fontSize: 10,
+                //     fontWeight: FontWeight.bold,
+                //     color: isOverCapacity ? Colors.red.shade700 : Colors.blue.shade700,
+                //   ),
+                // ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Divider(height: 1),
+          const SizedBox(height: 12),
+
+          // ── Stat row: Trays / Pcs / Weight / Capacity / Remaining ──────────
+          IntrinsicHeight(
+            child: Row(
+              children: [
+                _statTile('Trays', '${_scannedTrays.length}',Icons.layers_outlined),
+                _verticalDivider(),
+                _statTile('Total Pcs', totalPcs.toStringAsFixed(0), Icons.format_list_numbered),
+                if (capacity != null && capacity > 0) ...[
+                  _verticalDivider(),
+                  _statTile('Capacity', '${capacity.toStringAsFixed(1)}', Icons.settings_input_component),
+                  _verticalDivider(),
+                  _statTile('Allocated Weight', '${totalWeight.toStringAsFixed(1)}', Icons.scale_outlined),
+                  _verticalDivider(),
+                  _statTile(
+                    isOverCapacity ? 'Over By' : 'Remaining Weight',
+                    '${remaining!.abs().toStringAsFixed(1)}',
+                    isOverCapacity ? Icons.warning_amber_rounded : Icons.hourglass_empty,
+                    valueColor: isOverCapacity ? Colors.red.shade700 : Colors.blue.shade900,
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
+          const Divider(height: 1),
+          const SizedBox(height: 4),
+
+          // ── WO-grouped expandable list ─────────────────────────────────────
+          ...byWO.entries.map((entry) {
+            final woCode = entry.key;
+            final woTrays = entry.value;
+            
+            // Group by Item within the WO
+            final Map<String, List<ProductionProgressResponseModel>> byItem = {};
+            double woPcs = 0;
+            double woWeight = 0;
+            for (final t in woTrays) {
+              final qty = t.productionProgress.primaryQuantity ?? 0;
+              final pw = t.item?.pieceWeight ?? 0;
+              woPcs += qty;
+              woWeight += qty * pw;
+              final itemDesc = t.item?.description ?? 'Unknown Item';
+              byItem.putIfAbsent(itemDesc, () => []).add(t);
+            }
+
+            return Theme(
+              data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                tilePadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                childrenPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Icon(Icons.assignment_outlined, size: 16, color: Colors.blue.shade700),
+                ),
+                title: Text(
+                  woCode,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  '${woTrays.length} trays · ${woPcs.toStringAsFixed(0)} pcs · ${woWeight.toStringAsFixed(2)} kg',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                ),
+                children: [
+                  // Sub-header
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    color: Colors.grey.shade100,
+                    child: Row(
+                      children: [
+                        Expanded(flex: 5, child: Text('ITEM', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade600))),
+                        Expanded(flex: 2, child: Text('TRAYS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade600))),
+                        Expanded(flex: 2, child: Text('PCS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade600))),
+                        Expanded(flex: 3, child: Text('WEIGHT', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade600))),
+                      ],
+                    ),
+                  ),
+                  ...byItem.entries.toList().asMap().entries.map((e) {
+                    final i = e.key;
+                    final itemEntry = e.value;
+                    final itemDesc = itemEntry.key;
+                    final itemTrays = itemEntry.value;
+                    
+                    double itemPcs = 0;
+                    double itemWeight = 0;
+                    for (final t in itemTrays) {
+                      final qty = t.productionProgress.primaryQuantity ?? 0;
+                      final pw = t.item?.pieceWeight ?? 0;
+                      itemPcs += qty;
+                      itemWeight += qty * pw;
+                    }
+
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      color: i.isEven ? Colors.white : Colors.grey.shade50,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 5,
+                            child: Text(
+                              itemDesc,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 11, color: Colors.black87),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              '${itemTrays.length}',
+                              style: const TextStyle(fontSize: 12, color: Colors.black87),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              itemPcs.toStringAsFixed(0),
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 3,
+                            child: Text(
+                              '${itemWeight.toStringAsFixed(2)} kg',
+                              style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 4),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+  Widget _statTile(String label, String value, IconData icon, {Color? valueColor}) {
+    return Expanded(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: Colors.blue.shade600),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: valueColor ?? Colors.blue.shade900,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            style: TextStyle(
+              fontSize: 9,
+              color: Colors.grey.shade600,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _verticalDivider() {
+    return Container(
+      width: 1,
+      color: Colors.grey.shade200,
+      margin: const EdgeInsets.symmetric(vertical: 4),
+    );
+  }
+
   Widget _buildTrayTableHeader() {
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
       decoration: BoxDecoration(
