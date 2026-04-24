@@ -154,6 +154,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
   Widget build(BuildContext context) {
     final isLapping = widget.operationName.toLowerCase().contains('lapping');
     final isReworkBatch = _trays.isNotEmpty && _trays.any((t) => t.productionProgress.reworkFlag == true);
+    final isReassignedBatch = _trays.isNotEmpty && _trays.every((t) => t.primaryTrayModel.isReAssigned == true);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -195,7 +196,8 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                                   'operation': {'icon': Icons.settings_applications, 'label': 'Current Process', 'value': widget.operationName},
                                   if (widget.nextOperationName.isNotEmpty && widget.nextOperationName != 'Completed')
                                     'next_process': {'icon': Icons.arrow_forward_outlined, 'label': 'Next Process', 'value': widget.nextOperationName},
-                                  'is_rework': {'icon': Icons.sync_problem, 'label': 'Is Rework', 'value': isReworkBatch ? 'Yes' : 'No'},
+                                  if (!isLapping) 'is_rework': {'icon': Icons.sync_problem, 'label': 'Is Rework', 'value': isReworkBatch ? 'Yes' : 'No'},
+                                  'is_reassigned': {'icon': Icons.assignment_turned_in, 'label': 'Re-assigned', 'value': isReassignedBatch ? 'Yes' : 'No'},
                                   if (_reworkTargetOpName != null)
                                     'rework_to': {'icon': Icons.subdirectory_arrow_left, 'label': 'Rework To', 'value': _reworkTargetOpName!},
                                 },
@@ -218,7 +220,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                                       ),
                                     ),
                                     const SizedBox(width: 4),
-                                    if (_hasPreviousProcess) ...[
+                                    if (_hasPreviousProcess && !isLapping) ...[
                                       Expanded(
                                         flex: 3,
                                         child: CustomOutlinedButton(
@@ -241,7 +243,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                                       ),
                                       const SizedBox(width: 4),
                                     ],
-                                    if (isLapping && !isReworkBatch) ...[
+                                    if (isLapping && !isReassignedBatch) ...[
                                       Expanded(
                                         flex: 3,
                                         child: CustomOutlinedButton(
@@ -277,9 +279,9 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                                       flex: 3,
                                       child: CustomOutlinedButton(
                                         label: 'Submit',
-                                        borderColor: (isLapping && !isReworkBatch && !_isReworkMode) ? Colors.grey.shade400 : Colors.green,
-                                        textColor: (isLapping && !isReworkBatch && !_isReworkMode) ? Colors.grey.shade400 : Colors.green,
-                                        onPressed: (isLapping && !isReworkBatch && !_isReworkMode) ? null : _confirmSubmit,
+                                        borderColor: (isLapping && !isReassignedBatch && !_isReworkMode) ? Colors.grey.shade400 : Colors.green,
+                                        textColor: (isLapping && !isReassignedBatch && !_isReworkMode) ? Colors.grey.shade400 : Colors.green,
+                                        onPressed: (isLapping && !isReassignedBatch && !_isReworkMode) ? null : _confirmSubmit,
                                       ),
                                     ),
                                   ],

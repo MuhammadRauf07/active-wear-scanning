@@ -894,6 +894,7 @@ class PrimaryTrayModel {
   final String? lastModifierId;
   final DateTime? creationTime;
   final String? creatorId;
+  final bool? isReAssigned;
   final int? id;
 
   PrimaryTrayModel({
@@ -918,6 +919,7 @@ class PrimaryTrayModel {
     this.lastModifierId,
     this.creationTime,
     this.creatorId,
+    this.isReAssigned,
     this.id,
   });
 
@@ -944,6 +946,7 @@ class PrimaryTrayModel {
       lastModifierId: json['lastModifierId'],
       creationTime: json['creationTime'] != null ? DateTime.parse(json['creationTime']) : null,
       creatorId: json['creatorId'],
+      isReAssigned: json['isReAssigned'] == true,
       id: (json['id'] as num?)?.toInt(),
     );
   }

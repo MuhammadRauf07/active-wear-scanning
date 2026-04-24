@@ -8,6 +8,7 @@ import 'package:active_wear_scanning/features/induction/presentation/induction_s
 import 'package:active_wear_scanning/features/scanning_sections/presentation/widgets/section_card.dart';
 import 'package:active_wear_scanning/features/tray/presentation/tray_scanning_screen.dart';
 import 'package:active_wear_scanning/features/wip/presentation/wip_screen.dart';
+import 'package:active_wear_scanning/features/tray_tracking/presentation/tray_tracking_screen.dart';
 import 'package:flutter/material.dart';
 
 class ScanningSectionsScreen extends StatelessWidget {
@@ -116,7 +117,17 @@ class ScanningSectionsScreen extends StatelessWidget {
                             Navigator.push(context, MaterialPageRoute(builder: (context) => const WIPScreen()));
                           },
                         ),
-                        const Expanded(child: SizedBox()),
+                        const SizedBox(width: 12),
+                        SectionCard(
+                          title: 'Tray Tracking',
+                          subtitle: 'Track tray locations',
+                          sectionCode: 'TRACK',
+                          progressValue: 0.75,
+                          isShowProgress: true,
+                          onTap: () {
+                            Navigator.push(context, MaterialPageRoute(builder: (context) => const TrayTrackingScreen()));
+                          },
+                        ),
                       ],
                     ),
                   ],

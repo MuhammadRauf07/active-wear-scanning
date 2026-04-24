@@ -123,13 +123,14 @@ class _WIPScreenState extends State<WIPScreen> {
               topPadding: 0,
               horizontalPadding: 16,
             ),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 8, 16, 12),
-              child: SectionHeader(
-                title: 'Stores & Locators',
-                subtitle: 'Expand a locator to view physical inventory in that area',
-              ),
-            ),
+            const SizedBox(height: 12),
+            // const Padding(
+            //   padding: EdgeInsets.fromLTRB(16, 8, 16, 12),
+            //   child: SectionHeader(
+            //     title: 'Stores & Locators',
+            //     subtitle: 'Expand a locator to view physical inventory in that area',
+            //   ),
+            // ),
             Expanded(
               child: _locators.isEmpty
                   ? _buildEmptyLocatorsState()
@@ -361,7 +362,7 @@ class _WIPScreenState extends State<WIPScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // ── Premium Header ───────────────────────────────────
+                        // ── 1. Premium Header (STAY VISIBLE) ────────────────
                         Container(
                           padding: const EdgeInsets.fromLTRB(20, 16, 8, 16),
                           decoration: BoxDecoration(
@@ -406,51 +407,49 @@ class _WIPScreenState extends State<WIPScreen> {
                           ),
                         ),
 
-                        // ── Scrollable Content ───────────────────────────────
+                        // ── 2. Sticky Stat Cards (STAY VISIBLE) ──────────────
+                        Container(
+                          margin: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50.withValues(alpha: 0.4),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.blue.shade100),
+                          ),
+                          child: IntrinsicHeight(
+                            child: Row(
+                              children: [
+                                _statTile('Trays', '${group.trayCount}', Icons.layers_outlined),
+                                _verticalDivider(),
+                                _statTile('Total Pcs', totalPcs.toStringAsFixed(0), Icons.format_list_numbered),
+                                _verticalDivider(),
+                                _statTile('Weight', totalWeight.toStringAsFixed(1), Icons.scale_outlined),
+                                if (machineCapacity != null && machineCapacity > 0) ...[
+                                  _verticalDivider(),
+                                  _statTile(
+                                    isOverCapacity ? 'Over By' : 'Remaining',
+                                    remaining!.abs().toStringAsFixed(1),
+                                    isOverCapacity ? Icons.warning_amber_rounded : Icons.hourglass_empty,
+                                    valueColor: isOverCapacity ? Colors.red.shade700 : Colors.blue.shade700,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        // ── 3. Scrollable Body (Expansion Tiles + Tray Table) ─
                         Flexible(
                           child: SingleChildScrollView(
-                            padding: const EdgeInsets.all(20),
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // ── Stat Cards ───────────────────────────────────
-                                Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade50,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: Colors.grey.shade100),
-                                  ),
-                                  child: IntrinsicHeight(
-                                    child: Row(
-                                      children: [
-                                        _statTile('Trays', '${group.trayCount}', Icons.layers_outlined),
-                                        _verticalDivider(),
-                                        _statTile('Total Pcs', totalPcs.toStringAsFixed(0), Icons.format_list_numbered),
-                                        _verticalDivider(),
-                                        _statTile('Weight', totalWeight.toStringAsFixed(1), Icons.scale_outlined),
-                                        if (machineCapacity != null && machineCapacity > 0) ...[
-                                          _verticalDivider(),
-                                          _statTile('Capacity', machineCapacity.toStringAsFixed(1), Icons.settings_input_component),
-                                          _verticalDivider(),
-                                          _statTile(
-                                            isOverCapacity ? 'Over By' : 'Remaining',
-                                            remaining!.abs().toStringAsFixed(1),
-                                            isOverCapacity ? Icons.warning_amber_rounded : Icons.hourglass_empty,
-                                            valueColor: isOverCapacity ? Colors.red.shade700 : Colors.blue.shade700,
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 24),
-
-                                // ── Work Order Groups ────────────────────────────
+                                // ── Work Order Breakdown ─────────────────────────
                                 Text(
                                   'Work Order Breakdown',
-                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey.shade800),
+                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey.shade800),
                                 ),
                                 const SizedBox(height: 12),
                                 ...byWO.entries.map((woEntry) {
@@ -485,7 +484,7 @@ class _WIPScreenState extends State<WIPScreen> {
                                       child: ExpansionTile(
                                         backgroundColor: Colors.blue.shade50.withValues(alpha: 0.2),
                                         tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                                        title: Text(woCode, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87)),
+                                        title: Text(woCode, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87)),
                                         subtitle: Text(
                                           '${woTrays.length} trays • ${woPcs.toStringAsFixed(0)} pcs • ${woWeight.toStringAsFixed(1)} kg',
                                           style: TextStyle(fontSize: 11, color: Colors.blue.shade700, fontWeight: FontWeight.w500),
@@ -532,7 +531,7 @@ class _WIPScreenState extends State<WIPScreen> {
                                   );
                                 }),
 
-                                const SizedBox(height: 20),
+                                const SizedBox(height: 10),
                                 
                                 // ── Enhanced Toggle Button ───────────────────────
                                 InkWell(
@@ -568,7 +567,7 @@ class _WIPScreenState extends State<WIPScreen> {
                                   const SizedBox(height: 24),
                                   Text(
                                     'Individual Tray Records',
-                                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey.shade800),
+                                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey.shade800),
                                   ),
                                   const SizedBox(height: 12),
                                   Container(
@@ -600,7 +599,7 @@ class _WIPScreenState extends State<WIPScreen> {
                                             child: Row(
                                               children: [
                                                 Expanded(flex: 3, child: Text(t.primaryTrayModel.trayCode ?? '-', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500))),
-                                                Expanded(flex: 4, child: Text(t.item.description, style: TextStyle(fontSize: 11, color: Colors.grey.shade700), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                                Expanded(flex: 4, child: Text(t.item.description, style:  TextStyle(fontSize: 11, color: Colors.grey.shade700), maxLines: 1, overflow: TextOverflow.ellipsis)),
                                                 Expanded(flex: 2, child: Text(qty.toStringAsFixed(0), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
                                                 Expanded(flex: 3, child: Text('${wt.toStringAsFixed(1)} kg', style: TextStyle(fontSize: 11, color: Colors.grey.shade600))),
                                               ],
@@ -617,7 +616,7 @@ class _WIPScreenState extends State<WIPScreen> {
                         ),
                         
                         // ── Bottom Safe Space ────────────────────────────────
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 16),
                       ],
                     ),
                   ),
