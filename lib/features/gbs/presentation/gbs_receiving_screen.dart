@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/content_card.dart';
@@ -26,15 +27,59 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
   static final _labelStyle = const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87);
   static final _tableHeaderStyle = TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700);
 
+  // Bluetooth Scanner Support
+  final FocusNode _focusNode = FocusNode();
+  String _barcodeBuffer = '';
+  DateTime? _lastKeyPress;
+
   @override
   void initState() {
     super.initState();
+    _focusNode.requestFocus();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _onInitialDataFetch();
       }
     });
     _fetchLatestTraysSilently();
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _onKey(RawKeyEvent event) {
+    if (event is RawKeyDownEvent) {
+      final now = DateTime.now();
+      // If it's been more than 200ms since the last keypress, reset buffer.
+      // Scanners type very fast (usually <50ms between keys).
+      if (_lastKeyPress != null && now.difference(_lastKeyPress!).inMilliseconds > 200) {
+        _barcodeBuffer = '';
+      }
+      _lastKeyPress = now;
+
+      if (event.logicalKey == LogicalKeyboardKey.enter) {
+        if (_barcodeBuffer.isNotEmpty) {
+          final code = _barcodeBuffer;
+          _barcodeBuffer = '';
+          _processBluetoothScan(code);
+        }
+      } else if (event.character != null) {
+        _barcodeBuffer += event.character!;
+      }
+    }
+  }
+
+  void _processBluetoothScan(String scannedCode) {
+    final error = _validateTrayForReceiving(scannedCode);
+    if (error != null) {
+      _showError(error);
+    } else {
+      // Optionally show a success snackbar or play a sound
+      // ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tray $scannedCode scanned successfully')));
+    }
   }
 
   Future<void> _onInitialDataFetch() async {
@@ -256,7 +301,11 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
+      body: RawKeyboardListener(
+        focusNode: _focusNode,
+        autofocus: true,
+        onKey: _onKey,
+        child: SafeArea(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -287,6 +336,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
             ],
           ),
         ),
+      ),
     );
   }
 
