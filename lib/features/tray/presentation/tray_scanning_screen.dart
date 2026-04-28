@@ -231,11 +231,9 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
         final latestTrayDetail = latestTray.trayDetails;
 
         Map<String, dynamic> planData = {
-          'description': _selectedPlanLine!.item.description,
-          'trayCode': _scannedTrays[i].trayCode,
-          'shiftId': _selectedPlanLine!.shift.id,
+          'trayCode': latestTrayDetail?.trayCode,
+          'shiftId': _selectedPlanLine!.planLine.shiftId,
           'planLineId': _selectedPlanLine!.planLine.id,
-          'resourceId': _selectedPlanLine!.resource.id,
           'workOrderHeaderId': _selectedPlanLine!.workOrderHeader.id,
           'workOrderLineId': _selectedPlanLine!.workOrderLine.id,
           'knitItemId': _selectedPlanLine!.planLine.itemId,

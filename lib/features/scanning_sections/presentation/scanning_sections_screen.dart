@@ -45,7 +45,7 @@ class ScanningSectionsScreen extends StatelessWidget {
                           title: 'Tray Scanning',
                           subtitle: 'Scan trays for inventory',
                           sectionCode: 'TRAY',
-                          progressValue: 0.75,
+                          progressValue: 0.5,
                           isShowProgress: true,
                           onTap: () {
                             Navigator.push(context, MaterialPageRoute(builder: (context) => const TrayScanningScreen()));
@@ -60,7 +60,7 @@ class ScanningSectionsScreen extends StatelessWidget {
                           title: 'GBS Receiving',
                           subtitle: 'Scan trays for GBS Receiving',
                           sectionCode: 'TRAY',
-                          progressValue: 0.75,
+                          progressValue: 0.5,
                           isShowProgress: true,
                           onTap: () {
                             Navigator.push(context, MaterialPageRoute(builder: (context) => const GBSReceivingScreen()));
@@ -71,7 +71,7 @@ class ScanningSectionsScreen extends StatelessWidget {
                           title: 'Batch',
                           subtitle: 'Scan trays to create batch',
                           sectionCode: 'TRAY',
-                          progressValue: 0.75,
+                          progressValue: 0.5,
                           isShowProgress: true,
                           onTap: () {
                             Navigator.push(context, MaterialPageRoute(builder: (context) => const BatchListScreen()));
@@ -79,13 +79,14 @@ class ScanningSectionsScreen extends StatelessWidget {
                         ),
                       ],
                     ),
+                    SizedBox(height: 10),
                     Row(
                       children: [
                         SectionCard(
                           title: 'Processing',
                           subtitle: 'WIP transaction',
                           sectionCode: 'PROC',
-                          progressValue: 0.75,
+                          progressValue: 0.5,
                           isShowProgress: true,
                           onTap: () {
                             Navigator.push(context, MaterialPageRoute(builder: (context) => const ProcessingScreen()));
@@ -96,7 +97,7 @@ class ScanningSectionsScreen extends StatelessWidget {
                           title: 'Induction Store',
                           subtitle: 'Scan Trays for Induction Store',
                           sectionCode: 'TRAY',
-                          progressValue: 0.75,
+                          progressValue: 0.5,
                           isShowProgress: true,
                           onTap: () {
                             Navigator.push(context, MaterialPageRoute(builder: (context) => const InductionStoreScreen()));
@@ -111,7 +112,7 @@ class ScanningSectionsScreen extends StatelessWidget {
                           title: 'WIP',
                           subtitle: 'Work In Progress',
                           sectionCode: 'WIP',
-                          progressValue: 1.0,
+                          progressValue: 0.75,
                           isShowProgress: true,
                           onTap: () {
                             Navigator.push(context, MaterialPageRoute(builder: (context) => const WIPScreen()));
@@ -122,7 +123,7 @@ class ScanningSectionsScreen extends StatelessWidget {
                           title: 'Tray Tracking',
                           subtitle: 'Track tray locations',
                           sectionCode: 'TRACK',
-                          progressValue: 0.75,
+                          progressValue: 0.5,
                           isShowProgress: true,
                           onTap: () {
                             Navigator.push(context, MaterialPageRoute(builder: (context) => const TrayTrackingScreen()));

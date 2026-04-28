@@ -6,6 +6,7 @@ import 'package:active_wear_scanning/core/widgets/section_header.dart';
 import 'package:active_wear_scanning/core/widgets/scanner_always_open.dart';
 import 'package:active_wear_scanning/features/gbs/model/gbs_scanned_tray.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
+import 'package:active_wear_scanning/features/induction/model/induction_model.dart';
 import 'package:active_wear_scanning/features/induction/repo/induction_repo.dart';
 import 'package:flutter/material.dart';
 import 'package:plex/plex_di/plex_dependency_injection.dart';
@@ -20,7 +21,7 @@ class InductionStoreScreen extends StatefulWidget {
 class _InductionStoreScreenState extends State<InductionStoreScreen> {
   final List<GBSScannedTray> _scannedTrays = [];
   final _inductionRepo = fromPlex<InductionRepo>();
-  List<ProductionProgressResponseModel> _availableTrays = [];
+  List<InductionModel> _availableTrays = [];
 
   static const _inputAndButtonHeight = 42.0;
   static final _labelStyle = const TextStyle(
@@ -54,7 +55,7 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
     final res = await _inductionRepo.getProductionProgress();
     if (mounted && res.success && res.data != null) {
       setState(() {
-        _availableTrays = res.data as List<ProductionProgressResponseModel>;
+        _availableTrays = res.data as List<InductionModel>;
       });
       debugPrint(
         "🔍 Induction: Found ${_availableTrays.length} matching trays.",

@@ -1,6 +1,7 @@
 import 'package:active_wear_scanning/core/api/plex-result/plex_api_result.dart';
 import 'package:active_wear_scanning/core/api/services/api_service.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
+import 'package:active_wear_scanning/features/induction/model/induction_model.dart';
 import 'package:flutter/foundation.dart';
 
 class InductionRepo {
@@ -33,7 +34,7 @@ class InductionRepo {
 
       final productionProgress = rawData
           .map(
-            (item) => ProductionProgressResponseModel.fromJson(
+            (item) => InductionModel.fromJson(
               Map<String, dynamic>.from(item),
             ),
           )

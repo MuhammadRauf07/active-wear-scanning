@@ -6,6 +6,8 @@ import 'package:active_wear_scanning/core/widgets/section_header.dart';
 import 'package:active_wear_scanning/features/batch/repo/batch_repo.dart';
 import 'package:active_wear_scanning/features/common-models/common_models.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
+import 'package:active_wear_scanning/features/lapping/model/lapping_model.dart';
+import 'package:active_wear_scanning/features/lapping/repo/lapping_repo.dart';
 import 'package:active_wear_scanning/features/processing/repo/processing_repo.dart';
 import 'package:flutter/material.dart';
 import 'package:active_wear_scanning/core/widgets/scanner_always_open.dart';
@@ -49,11 +51,12 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
   
   final _processingRepo = ProcessingRepo();
   final _batchRepo = BatchRepo();
+  final _lappingRepo = LappingRepo();
   bool _isLoading = false;
-  List<ProductionProgressResponseModel> _trays = [];
+  List<LappingModel> _trays = [];
   final Map<String, _WorkOrderSummary> _workOrders = {};
   String? _selectedWorkOrderId;
-  final Map<String, List<ProductionProgressResponseModel>> _scannedTraysByWO = {};
+  final Map<String, List<LappingModel>> _scannedTraysByWO = {};
 
   final _trayBarcodeController = TextEditingController();
   final _trayQtyController = TextEditingController();
@@ -80,14 +83,14 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
   Future<void> _fetchBatchData() async {
     setState(() => _isLoading = true);
 
-    final res = await _processingRepo.fetchProductionProgress({
+    final res = await _lappingRepo.fetchProductionProgress({
       'BatchHeaderId': widget.batchHeaderId.toString(),
       'TransactionType': '2',
     });
 
     if (res.success && res.data != null) {
-      final List<ProductionProgressResponseModel> fetchedTrays =
-      res.data as List<ProductionProgressResponseModel>;
+      final List<LappingModel> fetchedTrays =
+      res.data as List<LappingModel>;
 
       final Map<String, _WorkOrderSummary> summaries = {};
 
@@ -161,7 +164,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
       return 'Limit exceeded! Max: ${activeSummary.cumulativePieces}';
     }
 
-    ProductionProgressResponseModel? matchedTray;
+    LappingModel? matchedTray;
     matchedTray = _trays.where((t) => t.primaryTrayModel.trayCode?.toLowerCase() == trayCode).firstOrNull;
 
     if (matchedTray == null) {
@@ -178,7 +181,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
 
         final refTray = _trays.firstWhere((t) => '${t.workOrderHeader.id}_${t.processedItem?.description ?? t.item.description}' == _selectedWorkOrderId);
 
-        matchedTray = ProductionProgressResponseModel(
+        matchedTray = LappingModel(
           productionProgress: ProductionProgress(
             id: null,
             primaryTrayId: trayMap['id'],
@@ -685,14 +688,14 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
         // Query server with BOTH OperationId AND BatchHeaderId to target only this batch's lapping PP.
         // Also exclude subOperation='Handover' to avoid closing the newly created handover record.
         {
-          final lappingPpRes = await _processingRepo.fetchProductionProgress({
+          final lappingPpRes = await _lappingRepo.fetchProductionProgress({
             'OperationId': widget.currentOperationId.toString(),
             'BatchHeaderId': widget.batchHeaderId.toString(),
             'TransactionType': '2',
           });
-          ProductionProgressResponseModel? realLappingPP;
+          LappingModel? realLappingPP;
           if (lappingPpRes.success && lappingPpRes.data != null) {
-            final list = lappingPpRes.data as List<ProductionProgressResponseModel>;
+            final list = lappingPpRes.data as List<LappingModel>;
             // Exclude handover PPs — we only want the source lapping PP
             realLappingPP = list.where((r) =>
               r.primaryTrayModel.id == scannedTray.primaryTrayModel.id &&
@@ -710,7 +713,6 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
               realLappingPP.productionProgress.id! > 0) {
             final closeJson = realLappingPP.productionProgress.toJson();
             closeJson['transactionType'] = 3;
-            closeJson['wipStatus'] = 1;
             // Keep concurrencyStamp — ABP requires it on PUT
             final closeRes = await _processingRepo.updateProductionProgress(
               realLappingPP.productionProgress.id!, closeJson,

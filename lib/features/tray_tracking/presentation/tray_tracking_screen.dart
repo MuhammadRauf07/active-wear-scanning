@@ -2,10 +2,11 @@ import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/content_card.dart';
 import 'package:active_wear_scanning/core/widgets/dynamic_info_display.dart';
-import 'package:active_wear_scanning/core/widgets/scanner_always_open.dart';
+import 'package:active_wear_scanning/core/widgets/barcode_scanner_dialog.dart';
 import 'package:active_wear_scanning/core/widgets/section_header.dart';
+import 'package:active_wear_scanning/features/tray_tracking/model/tray_tracking_model.dart';
 import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
-import 'package:active_wear_scanning/features/batch/repo/batch_repo.dart';
+import 'package:active_wear_scanning/features/tray_tracking/repo/tray_tracking_repo.dart';
 import 'package:active_wear_scanning/features/common-models/common_models.dart';
 import 'package:flutter/material.dart';
 
@@ -18,17 +19,17 @@ class TrayTrackingScreen extends StatefulWidget {
 
 class _TrayTrackingScreenState extends State<TrayTrackingScreen> {
   static const _inputAndButtonHeight = 44.0;
-  final _batchRepo = BatchRepo();
+  final _trayTrackingRepo = TrayTrackingRepo();
   final _trayCodeController = TextEditingController();
   bool _isLoading = false;
-   TrayDetail? _trayDetail;
-   String? _batchCode;
-   String? _color;
-   String? _locatorName;
-   String? _machineName;
-   String? _itemDescription;
-   String? _workOrderDescription;
-   String? _errorMessage;
+  TrayDetail? _trayDetail;
+  String? _batchCode;
+  String? _color;
+  String? _locatorName;
+  String? _machineName;
+  String? _itemDescription;
+  String? _workOrderDescription;
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -45,17 +46,17 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> {
       _trayCodeController.text = code;
     });
 
-    final res = await _batchRepo.fetchTrayDetailByCode(code.trim());
+    final res = await _trayTrackingRepo.fetchTrayDetailByCode(code.trim());
     
     setState(() => _isLoading = false);
 
     if (res.success && res.data != null) {
       setState(() {
-        final data = res.data is Map ? res.data as Map : {};
-        final trayMap = data['trayDetail'] ?? data;
-        _trayDetail = TrayDetail.fromJson(Map<String, dynamic>.from(trayMap));
-        
-        final batchMap = data['batchHeader'];
+      final data = res.data is Map ? res.data as Map : {};
+      final trayMap = data['trayDetail'] ?? data;
+      _trayDetail = TrayTrackingDetailModel.fromJson(Map<String, dynamic>.from(trayMap));
+      
+      final batchMap = data['batchHeader'];
         if (batchMap is Map) {
           _batchCode = batchMap['batchHeaderCode'];
           _color = batchMap['colorDescription'];
@@ -85,14 +86,15 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> {
     }
   }
 
-  void _openScanner() {
-    ScannerAlwaysOpen.show(
+  void _openScanner() async {
+    final code = await BarcodeScannerDialog.show(
       context,
       title: 'Track Tray',
-      onResult: (code) async {
-        return await _onTrayScanned(code);
-      },
     );
+    
+    if (code != null && code.isNotEmpty) {
+      _onTrayScanned(code);
+    }
   }
 
   @override
@@ -225,22 +227,16 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Text(
-                              'ACTIVE TRAY',
-                              style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5),
-                            ),
-                          ),
-                          _buildStatusBadge(),
-                        ],
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Text(
+                          'ACTIVE TRAY',
+                          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+                        ),
                       ),
                       const SizedBox(height: 20),
                       Text(
@@ -278,6 +274,13 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> {
           child: Column(
             children: [
               _buildPathNode(
+                icon: Icons.description_outlined,
+                title: 'Item Description',
+                value: _itemDescription ?? '-',
+                color: Colors.blue,
+                isLast: false,
+              ),
+              _buildPathNode(
                 icon: Icons.assignment_outlined,
                 title: 'Work Order',
                 value: _workOrderDescription ?? 'Not assigned',
@@ -286,9 +289,16 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> {
               ),
               _buildPathNode(
                 icon: Icons.badge_outlined,
-                title: 'Batch Context',
-                value: '${_batchCode ?? "-"} (${_color ?? "-"})',
+                title: 'Batch Code',
+                value: _batchCode ?? "-",
                 color: Colors.purple,
+                isLast: false,
+              ),
+              _buildPathNode(
+                icon: Icons.palette_outlined,
+                title: 'Color',
+                value: _color ?? "-",
+                color: Colors.pink,
                 isLast: false,
               ),
               _buildPathNode(
@@ -301,43 +311,18 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> {
               _buildPathNode(
                 icon: Icons.location_on_outlined,
                 title: 'Current Locator',
-                value: _locatorName ?? 'In Transit',
+                value: _locatorName ?? '-',
                 color: Colors.orange,
-                isLast: true,
+                isLast: false,
                 isHighlight: true,
               ),
-            ],
-          ),
-        ),
-        
-        const SizedBox(height: 24),
-        
-        // 3. ITEM INTEL
-        ContentCard(
-          padding: const EdgeInsets.all(20),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(Icons.description_outlined, color: Colors.blue.shade700),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('ITEM DETAILS', style: TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    Text(
-                      _itemDescription ?? '-',
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
-                    ),
-                  ],
-                ),
+              _buildPathNode(
+                icon: Icons.assignment_turned_in_outlined,
+                title: 'Is Reassigned',
+                value: _trayDetail?.isReAssigned == true ? 'YES' : 'NO',
+                color: _trayDetail?.isReAssigned == true ? Colors.green : Colors.grey,
+                isLast: true,
+                isHighlight: _trayDetail?.isReAssigned == true,
               ),
             ],
           ),
