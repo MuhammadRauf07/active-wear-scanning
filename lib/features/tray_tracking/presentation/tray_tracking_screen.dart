@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/content_card.dart';
@@ -31,10 +32,41 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> {
   String? _workOrderDescription;
   String? _errorMessage;
 
+  final FocusNode _focusNode = FocusNode();
+  String _barcodeBuffer = '';
+  DateTime? _lastKeyPress;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.requestFocus();
+  }
+
   @override
   void dispose() {
+    _focusNode.dispose();
     _trayCodeController.dispose();
     super.dispose();
+  }
+
+  void _onKey(RawKeyEvent event) {
+    if (event is RawKeyDownEvent) {
+      final now = DateTime.now();
+      if (_lastKeyPress != null && now.difference(_lastKeyPress!).inMilliseconds > 200) {
+        _barcodeBuffer = '';
+      }
+      _lastKeyPress = now;
+
+      if (event.logicalKey == LogicalKeyboardKey.enter) {
+        if (_barcodeBuffer.isNotEmpty) {
+          final code = _barcodeBuffer;
+          _barcodeBuffer = '';
+          _onTrayScanned(code);
+        }
+      } else if (event.character != null) {
+        _barcodeBuffer += event.character!;
+      }
+    }
   }
 
   Future<String?> _onTrayScanned(String code) async {
@@ -101,8 +133,12 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Column(
+      body: RawKeyboardListener(
+        focusNode: _focusNode,
+        autofocus: true,
+        onKey: _onKey,
+        child: SafeArea(
+          child: Column(
           children: [
             CustomInspectionHeader(
               heading: 'Tray Tracking',
@@ -189,6 +225,7 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

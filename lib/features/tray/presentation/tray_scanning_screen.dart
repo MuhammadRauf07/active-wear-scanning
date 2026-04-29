@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/barcode_scanner_dialog.dart';
@@ -50,13 +51,61 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     color: Colors.grey.shade700,
   );
 
+  // Bluetooth Scanner Support
+  final FocusNode _focusNode = FocusNode();
+  String _barcodeBuffer = '';
+  DateTime? _lastKeyPress;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.requestFocus();
+  }
+
   @override
   void dispose() {
+    _focusNode.dispose();
     _overrideQuantityController.dispose();
     for (final controller in _quantityControllers) {
       controller.dispose();
     }
     super.dispose();
+  }
+
+  void _onKey(RawKeyEvent event) {
+    if (event is RawKeyDownEvent) {
+      final now = DateTime.now();
+      if (_lastKeyPress != null && now.difference(_lastKeyPress!).inMilliseconds > 200) {
+        _barcodeBuffer = '';
+      }
+      _lastKeyPress = now;
+
+      if (event.logicalKey == LogicalKeyboardKey.enter) {
+        if (_barcodeBuffer.isNotEmpty) {
+          final code = _barcodeBuffer;
+          _barcodeBuffer = '';
+          _processBluetoothScan(code);
+        }
+      } else if (event.character != null) {
+        _barcodeBuffer += event.character!;
+      }
+    }
+  }
+
+  void _processBluetoothScan(String scannedCode) {
+    final code = scannedCode.trim();
+    if (code.isEmpty) return;
+
+    if (_machineBarcode.isEmpty) {
+      // Treat as machine scan
+      _fetchMachineData(code);
+    } else {
+      // Treat as tray scan
+      final error = _validateTrayForScan(code);
+      if (error != null) {
+        _showError(error);
+      }
+    }
   }
 
   String _getPlanQuantityPerTray() {
@@ -167,7 +216,10 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     );
 
     if (scannedCode == null || !mounted) return;
+    _fetchMachineData(scannedCode);
+  }
 
+  Future<void> _fetchMachineData(String scannedCode) async {
     setState(() {
       _machineBarcode = scannedCode;
       _planLines = null;
@@ -198,10 +250,16 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
         });
       } else {
         _showError(apiResult.message ?? "No data found");
+        setState(() {
+          _machineBarcode = ''; // Reset if failed so BT scanner can try again
+        });
       }
     } catch (e) {
       debugPrint('Error loading machine data: $e');
       _showError(e.toString());
+      setState(() {
+        _machineBarcode = '';
+      });
     } finally {
       if (mounted) AppLoader.hide(context);
     }
@@ -241,6 +299,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
           "active": true,
           "trayQuantity": (double.tryParse(_quantityControllers[i].text) ?? 5.0).toInt(),
           'concurrencyStamp': latestTrayDetail?.concurrencyStamp,
+          "resourceId": _selectedPlanLine!.resource.id,
         };
 
         Map<String, dynamic> productionProgressData = {
@@ -306,7 +365,11 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
+      body: RawKeyboardListener(
+        focusNode: _focusNode,
+        autofocus: true,
+        onKey: _onKey,
+        child: SafeArea(
         child: ExcludeSemantics(
           excluding: false, 
           child: Column(
@@ -341,6 +404,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
               ),
             ],
           ),
+        ),
         ),
       ),
     );

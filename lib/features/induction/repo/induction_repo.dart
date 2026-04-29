@@ -62,4 +62,12 @@ class InductionRepo {
     debugPrint("InductionWipData: ${data.toString()}");
     await _api.post('/api/app/w-iPTransactions', body: data);
   }
+
+  Future<PlexApiResult> fetchTrayDetailById(int id) async {
+    return await _api.getObject('/api/app/tray-details/$id');
+  }
+
+  Future<PlexApiResult> updateTrayDetails(int id, Map<String, dynamic> data) async {
+    return await _api.put('/api/app/tray-details/$id', body: data);
+  }
 }

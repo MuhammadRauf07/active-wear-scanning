@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/content_card.dart';
@@ -35,14 +36,57 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
     color: Colors.grey.shade700,
   );
 
+  final FocusNode _focusNode = FocusNode();
+  String _barcodeBuffer = '';
+  DateTime? _lastKeyPress;
+
   @override
   void initState() {
     super.initState();
+    _focusNode.requestFocus();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _onInitialDataFetch();
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _onKey(RawKeyEvent event) {
+    if (event is RawKeyDownEvent) {
+      final now = DateTime.now();
+      if (_lastKeyPress != null && now.difference(_lastKeyPress!).inMilliseconds > 200) {
+        _barcodeBuffer = '';
+      }
+      _lastKeyPress = now;
+
+      if (event.logicalKey == LogicalKeyboardKey.enter) {
+        if (_barcodeBuffer.isNotEmpty) {
+          final code = _barcodeBuffer;
+          _barcodeBuffer = '';
+          _processBluetoothScan(code);
+        }
+      } else if (event.character != null) {
+        _barcodeBuffer += event.character!;
+      }
+    }
+  }
+
+  void _processBluetoothScan(String scannedCode) {
+    final code = scannedCode.trim();
+    if (code.isEmpty) return;
+
+    final error = _validateTrayForInduction(code);
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $error'), backgroundColor: Colors.red));
+    } else {
+      setState(() {});
+    }
   }
 
   Future<void> _onInitialDataFetch() async {
@@ -55,7 +99,8 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
     final res = await _inductionRepo.getProductionProgress();
     if (mounted && res.success && res.data != null) {
       setState(() {
-        _availableTrays = res.data as List<InductionModel>;
+        final allTrays = res.data as List<InductionModel>;
+        _availableTrays = allTrays.where((t) => t.productionProgress.locatorId != 11).toList();
       });
       debugPrint(
         "🔍 Induction: Found ${_availableTrays.length} matching trays.",
@@ -182,6 +227,7 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
         Map<String, dynamic> updatePayload = currentTrayData.productionProgress
             .toJson();
         updatePayload['pbsFlag'] = true; // Mark as inducted
+        updatePayload['pBSFlag'] = true; // Added to ensure ABP picks it up if case-sensitive
         updatePayload['locatorId'] = 11; // Sync locator
         updatePayload['date'] = DateTime.now().toIso8601String();
 
@@ -192,6 +238,18 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
 
         if (!res.success)
           throw Exception('Failed to update tray ${scannedTray.trayCode}');
+
+        // 3. Update Tray Details API
+        final trayRes = await _inductionRepo.fetchTrayDetailById(currentTrayData.primaryTrayModel.id!);
+        if (trayRes.success) {
+          final tData = trayRes.data.containsKey('trayDetail') ? trayRes.data['trayDetail'] : trayRes.data;
+          Map<String, dynamic> trayUpd = Map<String, dynamic>.from(tData);
+          trayUpd["locatorId"] = 11; // Update locator for Induction Store
+          // Remove audit fields if they cause PUT issues
+          trayUpd.removeWhere((key, value) => ["creatorId", "creationTime", "lastModifierId", "lastModificationTime"].contains(key));
+          
+          await _inductionRepo.updateTrayDetails(currentTrayData.primaryTrayModel.id!, trayUpd);
+        }
       }
     } catch (e) {
       isAllSuccess = false;
@@ -222,7 +280,11 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
+      body: RawKeyboardListener(
+        focusNode: _focusNode,
+        autofocus: true,
+        onKey: _onKey,
+        child: SafeArea(
           child: Column(
             children: [
               CustomInspectionHeader(
@@ -253,6 +315,7 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
             ],
           ),
         ),
+      ),
     );
   }
 

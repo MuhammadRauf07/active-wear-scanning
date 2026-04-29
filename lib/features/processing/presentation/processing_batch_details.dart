@@ -257,6 +257,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                                                 builder: (context) => LappingDetailScreen(
                                                   batchHeaderId: widget.batchHeaderId,
                                                   batchCode: widget.batchCode,
+                                                  machineId: widget.machineId,
                                                   machine: widget.machine,
                                                   color: widget.color,
                                                   trayCount: widget.trayCount,

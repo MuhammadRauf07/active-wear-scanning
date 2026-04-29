@@ -1,3 +1,5 @@
+import 'package:flutter/services.dart';
+import 'package:flutter/services.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/content_card.dart';
@@ -16,6 +18,7 @@ import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
 class LappingDetailScreen extends StatefulWidget {
   final int batchHeaderId;
   final String batchCode;
+  final int? machineId;
   final String machine;
   final String color;
   final int trayCount;
@@ -28,6 +31,7 @@ class LappingDetailScreen extends StatefulWidget {
     super.key,
     required this.batchHeaderId,
     required this.batchCode,
+    required this.machineId,
     required this.machine,
     required this.color,
     required this.trayCount,
@@ -64,8 +68,13 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
 
   final Map<String, double> _trayOverrideQuantities = {};
 
+  final FocusNode _focusNode = FocusNode();
+  String _barcodeBuffer = '';
+  DateTime? _lastKeyPress;
+
   @override
   void dispose() {
+    _focusNode.dispose();
     _trayBarcodeController.dispose();
     _trayQtyController.dispose();
     _trayFocusNode.dispose();
@@ -75,9 +84,48 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _focusNode.requestFocus();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _fetchBatchData();
     });
+  }
+
+  void _onKey(RawKeyEvent event) {
+    if (event is RawKeyDownEvent) {
+      final now = DateTime.now();
+      if (_lastKeyPress != null && now.difference(_lastKeyPress!).inMilliseconds > 200) {
+        _barcodeBuffer = '';
+      }
+      _lastKeyPress = now;
+
+      if (event.logicalKey == LogicalKeyboardKey.enter) {
+        if (_barcodeBuffer.isNotEmpty) {
+          final code = _barcodeBuffer;
+          _barcodeBuffer = '';
+          _processBluetoothScan(code);
+        }
+      } else if (event.character != null) {
+        _barcodeBuffer += event.character!;
+      }
+    }
+  }
+
+  Future<void> _processBluetoothScan(String scannedCode) async {
+    final code = scannedCode.trim();
+    if (code.isEmpty) return;
+
+    if (_selectedWorkOrderId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a Work Order first')));
+      return;
+    }
+    
+    AppLoader.show(context, message: 'Validating Tray...');
+    final error = await _onTrayScanned(code);
+    AppLoader.hide(context);
+    
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $error'), backgroundColor: Colors.red));
+    }
   }
 
   Future<void> _fetchBatchData() async {
@@ -233,8 +281,12 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
-        child: ExcludeSemantics(
+      body: RawKeyboardListener(
+        focusNode: _focusNode,
+        autofocus: true,
+        onKey: _onKey,
+        child: SafeArea(
+          child: ExcludeSemantics(
           excluding: _isLoading,
           child: Column(
             children: [
@@ -280,7 +332,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
           ),
         ),
       ),
-
+      ),
     );
   }
 
@@ -403,6 +455,10 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
                       controller: _trayQtyController,
                       keyboardType: TextInputType.number,
                       textAlign: TextAlign.center,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) {
+                        FocusScope.of(context).unfocus();
+                      },
                       decoration: InputDecoration(
                         hintText: 'Pcs',
                         contentPadding: EdgeInsets.zero,
@@ -777,6 +833,14 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
           trayUpd["trayQuantity"] = trayQty.toInt();
           trayUpd["batchHeaderId"] = widget.batchHeaderId;
           trayUpd["isReAssigned"] = true;
+          if (widget.machineId != null) {
+            trayUpd["resourceId"] = widget.machineId;
+          }
+          trayUpd["workOrderHeaderId"] = scannedTray.workOrderHeader.id;
+          trayUpd["workOrderLineId"] = scannedTray.workOrderLine.id;
+          trayUpd["knitItemId"] = scannedTray.processedItem?.id ?? scannedTray.productionProgress.processedItemId ?? scannedTray.item.id;
+          trayUpd["locatorId"] = nextLocatorId;
+          
           if (blId != null) {
              trayUpd["batchLinesId"] = blId; 
           }

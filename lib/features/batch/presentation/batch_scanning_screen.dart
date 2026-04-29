@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/content_card.dart';
@@ -59,6 +60,10 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     color: Colors.grey.shade700,
   );
 
+  final FocusNode _focusNode = FocusNode();
+  String _barcodeBuffer = '';
+  DateTime? _lastKeyPress;
+
   InputDecoration _inputDecoration({
     required String hintText,
     bool isDense = false,
@@ -88,6 +93,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
   @override
   void initState() {
     super.initState();
+    _focusNode.requestFocus();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _fetchMachines();
       _fetchColors();
@@ -172,6 +178,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
 
   @override
   void dispose() {
+    _focusNode.dispose();
     _overrideQuantityController.dispose();
     for (final controller in _quantityControllers) {
       controller.dispose();
@@ -239,12 +246,60 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     }
   }
 
+  void _onKey(RawKeyEvent event) {
+    if (event is RawKeyDownEvent) {
+      final now = DateTime.now();
+      if (_lastKeyPress != null && now.difference(_lastKeyPress!).inMilliseconds > 200) {
+        _barcodeBuffer = '';
+      }
+      _lastKeyPress = now;
+
+      if (event.logicalKey == LogicalKeyboardKey.enter) {
+        if (_barcodeBuffer.isNotEmpty) {
+          final code = _barcodeBuffer;
+          _barcodeBuffer = '';
+          _processBluetoothScan(code);
+        }
+      } else if (event.character != null) {
+        _barcodeBuffer += event.character!;
+      }
+    }
+  }
+
+  Future<void> _processBluetoothScan(String scannedCode) async {
+    final code = scannedCode.trim();
+    if (code.isEmpty) return;
+
+    if (_selectedMachine == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error: Please select a machine first')));
+      return;
+    }
+    
+    AppLoader.show(context, message: 'Validating Tray...');
+    final error = await _validateTrayForScan(code);
+    AppLoader.hide(context);
+    
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $error'), backgroundColor: Colors.red));
+    }
+  }
+
   Future<void> _onScanTray() async {
+    if (_selectedMachine == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error: Please select a machine first')));
+      return;
+    }
     await Future.delayed(const Duration(milliseconds: 300));
     await ScannerAlwaysOpen.show(
       context,
       title: 'Scan Trays',
       onResult: (scannedCode) async {
+        return await _validateTrayForScan(scannedCode);
+      },
+    );
+  }
+
+  Future<String?> _validateTrayForScan(String scannedCode) async {
         final code = scannedCode.trim();
         if (code.isEmpty) return 'Invalid tray code';
         if (_selectedColor == null) return 'Please select a batch Color first';
@@ -400,8 +455,6 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
         });
 
         return null; // OK
-      },
-    );
   }
 
   Future<void> _saveBatchChanges() async {
@@ -674,8 +727,12 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Column(
+      body: RawKeyboardListener(
+        focusNode: _focusNode,
+        autofocus: true,
+        onKey: _onKey,
+        child: SafeArea(
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             CustomInspectionHeader(
@@ -877,6 +934,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }
