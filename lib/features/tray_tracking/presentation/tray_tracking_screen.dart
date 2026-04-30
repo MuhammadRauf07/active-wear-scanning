@@ -2,7 +2,6 @@ import 'package:flutter/services.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/content_card.dart';
-import 'package:active_wear_scanning/core/widgets/dynamic_info_display.dart';
 import 'package:active_wear_scanning/core/widgets/barcode_scanner_dialog.dart';
 import 'package:active_wear_scanning/core/widgets/section_header.dart';
 import 'package:active_wear_scanning/features/tray_tracking/model/tray_tracking_model.dart';
@@ -19,7 +18,6 @@ class TrayTrackingScreen extends StatefulWidget {
 }
 
 class _TrayTrackingScreenState extends State<TrayTrackingScreen> {
-  static const _inputAndButtonHeight = 44.0;
   final _trayTrackingRepo = TrayTrackingRepo();
   final _trayCodeController = TextEditingController();
   bool _isLoading = false;
@@ -276,9 +274,47 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> {
                         ),
                       ),
                       const SizedBox(height: 20),
-                      Text(
-                        _trayDetail?.trayCode ?? '-',
-                        style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -0.5),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _trayDetail?.trayCode ?? '-',
+                              style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -0.5),
+                            ),
+                          ),
+                          if (_locatorName != null && _locatorName!.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.amberAccent,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.amberAccent.withOpacity(0.4),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  )
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.location_on, color: Colors.blue.shade900, size: 24),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    _locatorName!.toUpperCase(),
+                                    style: TextStyle(
+                                      color: Colors.blue.shade900,
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
                       ),
                       const SizedBox(height: 8),
                       Row(
@@ -345,14 +381,14 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> {
                 color: Colors.teal,
                 isLast: false,
               ),
-              _buildPathNode(
-                icon: Icons.location_on_outlined,
-                title: 'Current Locator',
-                value: _locatorName ?? '-',
-                color: Colors.orange,
-                isLast: false,
-                isHighlight: true,
-              ),
+              // _buildPathNode(
+              //   icon: Icons.location_on_outlined,
+              //   title: 'Current Locator',
+              //   value: _locatorName ?? '-',
+              //   color: Colors.orange,
+              //   isLast: false,
+              //   isHighlight: true,
+              // ),
               _buildPathNode(
                 icon: Icons.assignment_turned_in_outlined,
                 title: 'Is Reassigned',

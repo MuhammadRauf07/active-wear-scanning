@@ -75,9 +75,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
   @override
   void dispose() {
     _focusNode.dispose();
-    _trayBarcodeController.dispose();
     _trayQtyController.dispose();
-    _trayFocusNode.dispose();
     super.dispose();
   }
 
@@ -260,8 +258,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
       _trayOverrideQuantities[trayCode] = inputPcs;
       _scannedTraysByWO.putIfAbsent(_selectedWorkOrderId!, () => []);
       _scannedTraysByWO[_selectedWorkOrderId!]!.add(matchedTray!);
-      _trayBarcodeController.clear();
-      _trayFocusNode.requestFocus();
+      _focusNode.requestFocus();
     });
     return null;
   }
@@ -286,9 +283,14 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
         autofocus: true,
         onKey: _onKey,
         child: SafeArea(
-          child: ExcludeSemantics(
-          excluding: _isLoading,
-          child: Column(
+          child: GestureDetector(
+            onTap: () {
+              FocusScope.of(context).requestFocus(_focusNode);
+            },
+            behavior: HitTestBehavior.opaque,
+            child: ExcludeSemantics(
+              excluding: _isLoading,
+              child: Column(
             children: [
               CustomInspectionHeader(
                 heading: 'Lapping Details',
@@ -330,6 +332,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
               ),
             ],
           ),
+        ),
         ),
       ),
       ),
@@ -457,7 +460,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
                       textAlign: TextAlign.center,
                       textInputAction: TextInputAction.done,
                       onSubmitted: (_) {
-                        FocusScope.of(context).unfocus();
+                        FocusScope.of(context).requestFocus(_focusNode);
                       },
                       decoration: InputDecoration(
                         hintText: 'Pcs',
@@ -740,48 +743,6 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
         }
         debugPrint('✅ Resolved targetProgressId: $targetProgressId');
 
-        // --- 1b. MARK CURRENT LAPPING PROGRESS AS COMPLETED (transactionType=3) ---
-        // Query server with BOTH OperationId AND BatchHeaderId to target only this batch's lapping PP.
-        // Also exclude subOperation='Handover' to avoid closing the newly created handover record.
-        {
-          final lappingPpRes = await _lappingRepo.fetchProductionProgress({
-            'OperationId': widget.currentOperationId.toString(),
-            'BatchHeaderId': widget.batchHeaderId.toString(),
-            'TransactionType': '2',
-          });
-          LappingModel? realLappingPP;
-          if (lappingPpRes.success && lappingPpRes.data != null) {
-            final list = lappingPpRes.data as List<LappingModel>;
-            // Exclude handover PPs — we only want the source lapping PP
-            realLappingPP = list.where((r) =>
-              r.primaryTrayModel.id == scannedTray.primaryTrayModel.id &&
-              (r.productionProgress.subOperation ?? '').toLowerCase() != 'handover'
-            ).firstOrNull;
-          }
-          // Fallback: check _trays (loaded in initState from same batch)
-          realLappingPP ??= _trays.where((t) =>
-            t.primaryTrayModel.id == scannedTray.primaryTrayModel.id &&
-            (t.productionProgress.subOperation ?? '').toLowerCase() != 'handover'
-          ).firstOrNull;
-
-          if (realLappingPP != null &&
-              realLappingPP.productionProgress.id != null &&
-              realLappingPP.productionProgress.id! > 0) {
-            final closeJson = realLappingPP.productionProgress.toJson();
-            closeJson['transactionType'] = 3;
-            // Keep concurrencyStamp — ABP requires it on PUT
-            final closeRes = await _processingRepo.updateProductionProgress(
-              realLappingPP.productionProgress.id!, closeJson,
-            );
-            if (!closeRes.success) {
-              debugPrint('⚠️ Step 1b close-lapping failed: ${closeRes.message}');
-            } else {
-              debugPrint('✅ Closed Lapping PP id=${realLappingPP.productionProgress.id}');
-            }
-          } else {
-            debugPrint('⚠️ No real Lapping PP found to close for tray ${scannedTray.primaryTrayModel.trayCode}');
-          }
-        }
 
         // --- 2. FETCH PREVIOUS WIP TRANSACTION (From the tray's state prior to Handover) ---
         int? wipId;
@@ -859,6 +820,37 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
             debugPrint('⚠️ Step 5 PP finalize failed (non-critical): ${finalRes.message}');
           } else {
             debugPrint('✅ Step 5 PP finalized with batchHeaderId=${widget.batchHeaderId}');
+          }
+        }
+      }
+
+      // --- 6. MARK ALL ORIGINAL LAPPING PROGRESS RECORDS AS COMPLETED (transactionType=3) ---
+      // We do this for ALL initial input trays (_trays) since the batch processing is now complete.
+      final lappingPpRes = await _lappingRepo.fetchProductionProgress({
+        'OperationId': widget.currentOperationId.toString(),
+        'BatchHeaderId': widget.batchHeaderId.toString(),
+        'TransactionType': '2',
+      });
+      List<LappingModel> traysToClose = [];
+      if (lappingPpRes.success && lappingPpRes.data != null) {
+        final list = lappingPpRes.data as List<LappingModel>;
+        traysToClose = list.where((r) => (r.productionProgress.subOperation ?? '').toLowerCase() != 'handover').toList();
+      }
+      if (traysToClose.isEmpty) {
+        traysToClose = _trays.where((t) => (t.productionProgress.subOperation ?? '').toLowerCase() != 'handover').toList();
+      }
+
+      for (final realLappingPP in traysToClose) {
+        if (realLappingPP.productionProgress.id != null && realLappingPP.productionProgress.id! > 0) {
+          final closeJson = realLappingPP.productionProgress.toJson();
+          closeJson['transactionType'] = 3;
+          final closeRes = await _processingRepo.updateProductionProgress(
+            realLappingPP.productionProgress.id!, closeJson,
+          );
+          if (!closeRes.success) {
+            debugPrint('⚠️ close-lapping failed: ${closeRes.message}');
+          } else {
+            debugPrint('✅ Closed Lapping PP id=${realLappingPP.productionProgress.id}');
           }
         }
       }
