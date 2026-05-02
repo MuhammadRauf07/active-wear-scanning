@@ -125,8 +125,29 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
           final list = res.data as List<ProductionProgressResponseModel>;
           // Sort by trayCode consistently so order never changes between fetches
           list.sort((a, b) => (a.primaryTrayModel.trayCode ?? '').compareTo(b.primaryTrayModel.trayCode ?? ''));
+
+          // Enrich each tray with color/size from item-defs API
+          final enrichedList = <ProductionProgressResponseModel>[];
+          for (final tray in list) {
+            final targetItemId = tray.productionProgress.processedItemId ?? tray.item.id;
+            if (targetItemId > 0) {
+              final itemRes = await _batchRepo.fetchItemDef(targetItemId);
+              if (itemRes.success && itemRes.data != null) {
+                final itemData = itemRes.data is Map ? itemRes.data as Map<String, dynamic> : {};
+                final colorDesc = itemData['colorDescription'] ?? tray.item.colorDescription ?? '';
+                final sizeDesc = itemData['sizeDescription'] ?? tray.item.sizeDescription ?? '';
+                final updatedItem = tray.item.copyWith(colorDescription: colorDesc, sizeDescription: sizeDesc);
+                enrichedList.add(tray.copyWith(item: updatedItem));
+              } else {
+                enrichedList.add(tray);
+              }
+            } else {
+              enrichedList.add(tray);
+            }
+          }
+
           setState(() {
-            _trays = list;
+            _trays = enrichedList;
             _isLoadingTrays = false;
           });
         }
@@ -486,7 +507,9 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
             child: Row(
               children: [
                 Expanded(flex: 2, child: Text('TRAY', style: _tableHeaderStyle)),
-                Expanded(flex: 3, child: Text('ITEM', style: _tableHeaderStyle)),
+                Expanded(flex: 2, child: Text('ITEM', style: _tableHeaderStyle)),
+                Expanded(flex: 1, child: Text('COLOR', style: _tableHeaderStyle)),
+                Expanded(flex: 1, child: Text('SIZE', style: _tableHeaderStyle)),
                 Expanded(flex: 1, child: Text('QTY', style: _tableHeaderStyle)),
                 Expanded(flex: 1, child: Text('WEIGHT', style: _tableHeaderStyle)),
                 if (_isReworkMode) const SizedBox(width: 44) else const SizedBox(width: 8),
@@ -500,7 +523,9 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
               child: Row(
                 children: [
                   Expanded(flex: 2, child: Text(t.primaryTrayModel.trayCode ?? '-', style: const TextStyle(fontSize: 13))),
-                  Expanded(flex: 3, child: Text(t.item.description ?? '-', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
+                  Expanded(flex: 2, child: Text(t.item.description ?? '-', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
+                  Expanded(flex: 1, child: Text(t.item.colorDescription?.isNotEmpty == true ? t.item.colorDescription! : '-', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+                  Expanded(flex: 1, child: Text(t.item.sizeDescription?.isNotEmpty == true ? t.item.sizeDescription! : '-', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
                   Expanded(flex: 1, child: Text(t.productionProgress.primaryQuantity?.toStringAsFixed(0) ?? '0', style: const TextStyle(fontSize: 13))),
                   Expanded(flex: 1, child: Text('${((t.productionProgress.primaryQuantity ?? 0) * (t.item.pieceWeight ?? 0)).toStringAsFixed(2)} kg', style: const TextStyle(fontSize: 13))),
                   if (_isReworkMode)

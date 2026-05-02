@@ -103,7 +103,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       // Treat as tray scan
       final error = _validateTrayForScan(code);
       if (error != null) {
-        _showError(error);
+        _showError(error as String);
       }
     }
   }
@@ -122,7 +122,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     return _getPlanQuantityPerTray();
   }
 
-  String? _validateTrayForScan(String scannedCode) {
+  Future<String?> _validateTrayForScan(String scannedCode) async {
     if (_selectedPlanLine == null) return 'Please select a work order first';
     final code = scannedCode.trim();
     if (code.isEmpty) return 'Invalid tray code';
@@ -157,12 +157,30 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       return 'Tray already scanned (Exists in Production Progress)';
     }
 
+    int targetItemId = _selectedPlanLine?.item.id ?? 0;
+    String colorDesc = _selectedPlanLine?.item.colorDescription ?? '';
+    String sizeDesc = _selectedPlanLine?.item.sizeDescription ?? '';
+
+    if (targetItemId > 0) {
+      AppLoader.show(context, message: "Fetching item details...");
+      final itemRes = await _trayScanningRepo.fetchItemDef(targetItemId);
+      AppLoader.hide(context);
+      
+      if (itemRes.success && itemRes.data != null) {
+        final itemData = itemRes.data is Map ? itemRes.data as Map<String, dynamic> : {};
+        if (itemData['colorDescription'] != null) colorDesc = itemData['colorDescription'];
+        if (itemData['sizeDescription'] != null) sizeDesc = itemData['sizeDescription'];
+      }
+    }
+
     setState(() {
       _scannedTrays.add(
         ScannedTray(
           trayCode: code,
           trayUpdateId: trayDetail!.id,
           trayConcurrencyStamp: trayDetail.concurrencyStamp,
+          colorDescription: colorDesc,
+          sizeDescription: sizeDesc,
         ),
       );
       final controller = TextEditingController(text: _getDefaultQuantityForNewTray());
@@ -572,9 +590,11 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       ),
       child: Row(
         children: [
-          Expanded(flex: 3, child: Text('TRAY CODE', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
-          Expanded(flex: 3, child: Text('WO', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
+          Expanded(flex: 2, child: Text('TRAY CODE', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
+          Expanded(flex: 2, child: Text('WO', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
           Expanded(flex: 3, child: Text('ITEM DESC', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
+          Expanded(flex: 2, child: Text('COLOR', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
+          Expanded(flex: 2, child: Text('SIZE', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
           Expanded(flex: 2, child: Text('QUANTITY', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
           Expanded(flex: 2, child: Text('WEIGHT', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
           const SizedBox(width: 40),
@@ -612,14 +632,14 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       child: Row(
         children: [
           Expanded(
-            flex: 3,
+            flex: 2,
             child: Text(
               displayCode,
               style: TextStyle(fontSize: 13, color: isEmpty ? Colors.grey : Colors.black87),
             ),
           ),
           Expanded(
-            flex: 3,
+            flex: 2,
             child: Text(
               _selectedPlanLine?.workOrderHeader.workOrderCode ?? "-",
               style: TextStyle(fontSize: 12, color: isEmpty ? Colors.grey : Colors.black87),
@@ -631,6 +651,20 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
               _selectedPlanLine?.item.description ?? "-",
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11, color: isEmpty ? Colors.grey : Colors.black87),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              tray.colorDescription.isNotEmpty ? tray.colorDescription : "-",
+              style: TextStyle(fontSize: 11, color: isEmpty ? Colors.grey : Colors.black87, fontWeight: FontWeight.w600),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              tray.sizeDescription.isNotEmpty ? tray.sizeDescription : "-",
               style: TextStyle(fontSize: 11, color: isEmpty ? Colors.grey : Colors.black87),
             ),
           ),

@@ -112,4 +112,9 @@ class TrayScanningRepo {
 
     return await _api.post('/api/app/production-progresses', body: data);
   }
+
+  Future<PlexApiResult> fetchItemDef(int id) async {
+    final result = await _api.getObject('/api/app/item-defs/$id');
+    return result;
+  }
 }

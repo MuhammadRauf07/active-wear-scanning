@@ -254,6 +254,43 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
       }
     }
 
+    // Fetch Color/Size from item-defs API using processedItemId ?? itemId
+    int targetItemId = matchedTray.productionProgress.processedItemId ?? matchedTray.item?.id ?? 0;
+    String colorDesc = matchedTray.item?.colorDescription ?? '';
+    String sizeDesc = matchedTray.item?.sizeDescription ?? '';
+
+    if (targetItemId > 0) {
+      AppLoader.show(context, message: 'Fetching item details...');
+      final itemRes = await _lappingRepo.fetchItemDef(targetItemId);
+      AppLoader.hide(context);
+      if (itemRes.success && itemRes.data != null) {
+        final itemData = itemRes.data is Map ? itemRes.data as Map<String, dynamic> : {};
+        if (itemData['colorDescription'] != null) colorDesc = itemData['colorDescription'];
+        if (itemData['sizeDescription'] != null) sizeDesc = itemData['sizeDescription'];
+      }
+    }
+
+    // Rebuild matchedTray with enriched item
+    if (matchedTray.item != null) {
+      final updatedItem = matchedTray.item!.copyWith(
+        colorDescription: colorDesc,
+        sizeDescription: sizeDesc,
+      );
+      matchedTray = LappingModel(
+        productionProgress: matchedTray.productionProgress,
+        operation: matchedTray.operation,
+        shift: matchedTray.shift,
+        machineModel: matchedTray.machineModel,
+        workOrderHeader: matchedTray.workOrderHeader,
+        workOrderLine: matchedTray.workOrderLine,
+        primaryTrayModel: matchedTray.primaryTrayModel,
+        item: updatedItem,
+        processedItem: matchedTray.processedItem,
+        planHeader: matchedTray.planHeader,
+        batchHeader: matchedTray.batchHeader,
+      );
+    }
+
     setState(() {
       _trayOverrideQuantities[trayCode] = inputPcs;
       _scannedTraysByWO.putIfAbsent(_selectedWorkOrderId!, () => []);
@@ -536,8 +573,10 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
                 ),
                 child: Row(
                   children: [
-                    Expanded(flex: 3, child: Text(t.primaryTrayModel.trayCode ?? '-', style: const TextStyle(fontSize: 13, color: Colors.black87))),
-                    Expanded(flex: 4, child: Text(t.processedItem?.description ?? t.item.description ?? '-', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Colors.black87))),
+                    Expanded(flex: 2, child: Text(t.primaryTrayModel.trayCode ?? '-', style: const TextStyle(fontSize: 13, color: Colors.black87))),
+                    Expanded(flex: 3, child: Text(t.processedItem?.description ?? t.item?.description ?? '-', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Colors.black87))),
+                    Expanded(flex: 2, child: Text(t.item?.colorDescription?.isNotEmpty == true ? t.item!.colorDescription! : '-', style: const TextStyle(fontSize: 11, color: Colors.black87, fontWeight: FontWeight.w600))),
+                    Expanded(flex: 2, child: Text(t.item?.sizeDescription?.isNotEmpty == true ? t.item!.sizeDescription! : '-', style: const TextStyle(fontSize: 11, color: Colors.black87))),
                     Expanded(
                       flex: 2, 
                       child: Align(
@@ -593,8 +632,10 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
       ),
       child: Row(
         children: [
-          Expanded(flex: 3, child: Text('TRAY CODE', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 4, child: Text('ITEM DESC', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('TRAY CODE', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 3, child: Text('ITEM DESC', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('COLOR', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('SIZE', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
           Expanded(flex: 2, child: Text('QUANTITY', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
           Expanded(flex: 2, child: Text('WEIGHT', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
           const SizedBox(width: 44),

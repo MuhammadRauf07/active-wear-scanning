@@ -505,6 +505,7 @@ class Item {
   final double perGarmentTube;
   final double? pieceWeight;
   final String? sizeDescription;
+  final String? colorDescription;
   final String? componentDescription;
   final int itemCategoryId;
   final String concurrencyStamp;
@@ -522,6 +523,7 @@ class Item {
     required this.perGarmentTube,
     this.pieceWeight,
     required this.sizeDescription,
+    this.colorDescription,
     required this.componentDescription,
     required this.itemCategoryId,
     required this.concurrencyStamp,
@@ -541,6 +543,7 @@ class Item {
       perGarmentTube: (json['perGarmentTube'] as num?)?.toDouble() ?? 0,
       pieceWeight: (json['pieceWeight'] as num?)?.toDouble(),
       sizeDescription: json['sizeDescription'] ?? '',
+      colorDescription: json['colorDescription'] ?? '',
       componentDescription: json['componentDescription'] ?? '',
       itemCategoryId: (json['itemCategoryId'] as num?)?.toInt() ?? 0,
       concurrencyStamp: json['concurrencyStamp'],
@@ -549,6 +552,44 @@ class Item {
       lastModificationTime: json['lastModificationTime'],
       creatorId: json['creatorId'],
       id: (json['id'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  Item copyWith({
+    String? code,
+    String? description,
+    bool? active,
+    double? sam,
+    double? perGarmentTube,
+    double? pieceWeight,
+    String? sizeDescription,
+    String? colorDescription,
+    String? componentDescription,
+    int? itemCategoryId,
+    String? concurrencyStamp,
+    bool? isDeleted,
+    String? creationTime,
+    String? lastModificationTime,
+    String? creatorId,
+    int? id,
+  }) {
+    return Item(
+      code: code ?? this.code,
+      description: description ?? this.description,
+      active: active ?? this.active,
+      sam: sam ?? this.sam,
+      perGarmentTube: perGarmentTube ?? this.perGarmentTube,
+      pieceWeight: pieceWeight ?? this.pieceWeight,
+      sizeDescription: sizeDescription ?? this.sizeDescription,
+      colorDescription: colorDescription ?? this.colorDescription,
+      componentDescription: componentDescription ?? this.componentDescription,
+      itemCategoryId: itemCategoryId ?? this.itemCategoryId,
+      concurrencyStamp: concurrencyStamp ?? this.concurrencyStamp,
+      isDeleted: isDeleted ?? this.isDeleted,
+      creationTime: creationTime ?? this.creationTime,
+      lastModificationTime: lastModificationTime ?? this.lastModificationTime,
+      creatorId: creatorId ?? this.creatorId,
+      id: id ?? this.id,
     );
   }
 }

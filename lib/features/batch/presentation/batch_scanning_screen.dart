@@ -444,11 +444,38 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
           }
         }
 
-        setState(() {
-          if (tray.primaryTrayModel?.id != null) {
-            _trayProcessedItemId[tray.primaryTrayModel!.id!] = processedItemId;
+
+
+        int targetItemId = processedItemId ?? tray.item?.id ?? 0;
+        String colorDesc = tray.item?.colorDescription ?? '';
+        String sizeDesc = tray.item?.sizeDescription ?? '';
+
+        if (targetItemId > 0) {
+          AppLoader.show(context, message: "Fetching item details...");
+          final itemRes = await _batchRepo.fetchItemDef(targetItemId);
+          AppLoader.hide(context);
+          
+          if (itemRes.success && itemRes.data != null) {
+            final itemData = itemRes.data is Map ? itemRes.data as Map<String, dynamic> : {};
+            if (itemData['colorDescription'] != null) colorDesc = itemData['colorDescription'];
+            if (itemData['sizeDescription'] != null) sizeDesc = itemData['sizeDescription'];
           }
-          _scannedTrays.add(tray);
+        }
+
+        ProductionProgressResponseModel finalTray = tray;
+        if (tray.item != null) {
+           final updatedItem = tray.item!.copyWith(
+              colorDescription: colorDesc,
+              sizeDescription: sizeDesc,
+           );
+           finalTray = tray.copyWith(item: updatedItem);
+        }
+
+        setState(() {
+          if (finalTray.primaryTrayModel?.id != null) {
+            _trayProcessedItemId[finalTray.primaryTrayModel!.id!] = processedItemId;
+          }
+          _scannedTrays.add(finalTray);
           _quantityControllers.add(
             TextEditingController(text: _overrideQuantityController.text),
           );
@@ -1198,7 +1225,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
       child: Row(
         children: [
           Expanded(
-            flex: 3,
+            flex: 2,
             child: Text(
               'TRAY CODE',
               style: _tableHeaderStyle.copyWith(
@@ -1208,7 +1235,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
             ),
           ),
           Expanded(
-            flex: 3,
+            flex: 2,
             child: Text(
               'WO',
               style: _tableHeaderStyle.copyWith(
@@ -1218,9 +1245,29 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
             ),
           ),
           Expanded(
-            flex: 4,
+            flex: 3,
             child: Text(
               'ITEM DESC',
+              style: _tableHeaderStyle.copyWith(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              'COLOR',
+              style: _tableHeaderStyle.copyWith(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              'SIZE',
               style: _tableHeaderStyle.copyWith(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
@@ -1286,25 +1333,39 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
       child: Row(
         children: [
           Expanded(
-            flex: 3,
+            flex: 2,
             child: Text(
               tray.primaryTrayModel?.trayCode ?? '',
               style: const TextStyle(fontSize: 13, color: Colors.black87),
             ),
           ),
           Expanded(
-            flex: 3,
+            flex: 2,
             child: Text(
               tray.workOrderHeader!.workOrderCode,
               style: const TextStyle(fontSize: 12, color: Colors.black87),
             ),
           ),
           Expanded(
-            flex: 4,
+            flex: 3,
             child: Text(
               tray.item!.description,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11, color: Colors.black87),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              tray.item!.colorDescription?.isNotEmpty == true ? tray.item!.colorDescription! : '-',
+              style: const TextStyle(fontSize: 11, color: Colors.black87, fontWeight: FontWeight.w600),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              tray.item!.sizeDescription?.isNotEmpty == true ? tray.item!.sizeDescription! : '-',
               style: const TextStyle(fontSize: 11, color: Colors.black87),
             ),
           ),

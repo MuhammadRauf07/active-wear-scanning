@@ -75,7 +75,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
   void _processBluetoothScan(String scannedCode) {
     final error = _validateTrayForReceiving(scannedCode);
     if (error != null) {
-      _showError(error);
+      _showError(error as String);
     } else {
       // Optionally show a success snackbar or play a sound
       // ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tray $scannedCode scanned successfully')));
@@ -129,7 +129,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
     setState(() {});
   }
 
-  String? _validateTrayForReceiving(String scannedCode) {
+  Future<String?> _validateTrayForReceiving(String scannedCode) async {
 
     final code = scannedCode.trim().toLowerCase();
     if (code.isEmpty) return 'Invalid tray code';
@@ -159,12 +159,29 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
       return 'Tray not available';
     }
 
+    int targetItemId = match.productionProgress.processedItemId ?? match.item.id;
+    String colorDesc = match.item.colorDescription ?? '';
+    String sizeDesc = match.item.sizeDescription ?? '';
+
+    if (targetItemId > 0) {
+      AppLoader.show(context, message: "Fetching item details...");
+      final itemRes = await _trayScanningRepo.fetchItemDef(targetItemId);
+      AppLoader.hide(context);
+      
+      if (itemRes.success && itemRes.data != null) {
+        final itemData = itemRes.data is Map ? itemRes.data as Map<String, dynamic> : {};
+        if (itemData['colorDescription'] != null) colorDesc = itemData['colorDescription'];
+        if (itemData['sizeDescription'] != null) sizeDesc = itemData['sizeDescription'];
+      }
+    }
+
     setState(() {
       _scannedTrays.add(
         GBSScannedTray(
           itemDescription: match.item.description ?? '-',
           componentDescription: match.item.componentDescription ?? '',
-          sizeDescription: match.item.sizeDescription ?? '',
+          sizeDescription: sizeDesc,
+          colorDescription: colorDesc,
           workOrderCode: match.workOrderHeader.workOrderCode ?? '-', // ✅ Added
           primaryQuantity: match.productionProgress.primaryQuantity?.toStringAsFixed(0) ?? '0',
           pieceWeight: match.item.pieceWeight ?? 0.0,
@@ -456,9 +473,11 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
       ),
       child: Row(
         children: [
-          Expanded(flex: 3, child: Text('TRAY CODE', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 3, child: Text('WO', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('TRAY CODE', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('WO', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
           Expanded(flex: 4, child: Text('ITEM DESC', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('COLOR', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('SIZE', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
           Expanded(flex: 2, child: Text('QUANTITY', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
           Expanded(flex: 2, child: Text('WEIGHT', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
           const SizedBox(width: 44),
@@ -480,9 +499,17 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
       ),
       child: Row(
         children: [
-          Expanded(flex: 3, child: Text(tray.trayCode, style: const TextStyle(fontSize: 13, color: Colors.black87))),
-          Expanded(flex: 3, child: Text(tray.workOrderCode, style: const TextStyle(fontSize: 12, color: Colors.black87))),
+          Expanded(flex: 2, child: Text(tray.trayCode, style: const TextStyle(fontSize: 13, color: Colors.black87))),
+          Expanded(flex: 2, child: Text(tray.workOrderCode, style: const TextStyle(fontSize: 12, color: Colors.black87))),
           Expanded(flex: 4, child: Text(tray.itemDescription, style: const TextStyle(fontSize: 11, color: Colors.black87), maxLines: 2, overflow: TextOverflow.ellipsis)),
+          Expanded(
+            flex: 2, 
+            child: Text(tray.colorDescription.isNotEmpty ? tray.colorDescription : '-', style: const TextStyle(fontSize: 11, color: Colors.black87, fontWeight: FontWeight.w600))
+          ),
+          Expanded(
+            flex: 2, 
+            child: Text(tray.sizeDescription.isNotEmpty ? tray.sizeDescription : '-', style: const TextStyle(fontSize: 11, color: Colors.black87))
+          ),
           Expanded(
             flex: 2,
             child: Align(

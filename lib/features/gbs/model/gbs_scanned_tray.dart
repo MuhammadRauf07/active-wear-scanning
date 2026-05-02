@@ -4,6 +4,7 @@ class GBSScannedTray {
   final String trayCode;
   final String workOrderCode;
   final String sizeDescription;
+  final String colorDescription;
   final String componentDescription;
   final String itemDescription;
   final String styleDescription;
@@ -17,6 +18,7 @@ class GBSScannedTray {
     this.trayCode = '',
     this.workOrderCode = '',
     this.sizeDescription = '',
+    this.colorDescription = '',
     this.componentDescription = '',
     this.itemDescription = '',
     this.styleDescription = '',

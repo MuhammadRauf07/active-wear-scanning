@@ -70,4 +70,9 @@ class InductionRepo {
   Future<PlexApiResult> updateTrayDetails(int id, Map<String, dynamic> data) async {
     return await _api.put('/api/app/tray-details/$id', body: data);
   }
+
+  Future<PlexApiResult> fetchItemDef(int id) async {
+    final result = await _api.getObject('/api/app/item-defs/$id');
+    return result;
+  }
 }

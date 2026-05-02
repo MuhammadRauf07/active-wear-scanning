@@ -43,4 +43,32 @@ class ProductionProgressResponseModel {
       batchHeader: json['batchHeader'] != null ? BatchHeaderModel.fromJson(json['batchHeader']) : null,
     );
   }
+
+  ProductionProgressResponseModel copyWith({
+    ProductionProgress? productionProgress,
+    Operation? operation,
+    Shift? shift,
+    MachineModel? machineModel,
+    WorkOrderHeader? workOrderHeader,
+    WorkOrderLine? workOrderLine,
+    PrimaryTrayModel? primaryTrayModel,
+    Item? item,
+    Item? processedItem,
+    PlanHeader? planHeader,
+    BatchHeaderModel? batchHeader,
+  }) {
+    return ProductionProgressResponseModel(
+      productionProgress: productionProgress ?? this.productionProgress,
+      operation: operation ?? this.operation,
+      shift: shift ?? this.shift,
+      machineModel: machineModel ?? this.machineModel,
+      workOrderHeader: workOrderHeader ?? this.workOrderHeader,
+      workOrderLine: workOrderLine ?? this.workOrderLine,
+      primaryTrayModel: primaryTrayModel ?? this.primaryTrayModel,
+      item: item ?? this.item,
+      processedItem: processedItem ?? this.processedItem,
+      planHeader: planHeader ?? this.planHeader,
+      batchHeader: batchHeader ?? this.batchHeader,
+    );
+  }
 }

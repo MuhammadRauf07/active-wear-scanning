@@ -96,4 +96,9 @@ class GBSReceivingRepo {
       return PlexApiResult(false, 500, e.toString(), null);
     }
   }
+
+  Future<PlexApiResult> fetchItemDef(int id) async {
+    final result = await _api.getObject('/api/app/item-defs/$id');
+    return result;
+  }
 }
