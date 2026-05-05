@@ -62,14 +62,43 @@ class _WIPScreenState extends State<WIPScreen> {
     final result = await _wipRepo.fetchWipDetails(locatorId);
 
     if (mounted) {
-      setState(() {
-        _loadingDetails[locatorId] = false;
-        if (result.success && result.data != null) {
-          _locatorTrays[locatorId] = result.data as List<ProductionProgressResponseModel>;
-        } else {
-          _showError(result.message);
+      if (result.success && result.data != null) {
+        final rawList = result.data as List<ProductionProgressResponseModel>;
+
+        // Enrich each tray with perGarmentTube from item-defs
+        final enrichedList = <ProductionProgressResponseModel>[];
+        for (final tray in rawList) {
+          final mainItemId = tray.item.id;
+          double perGarmentTube = tray.item.perGarmentTube ?? 0;
+          String colorDesc = tray.item.colorDescription ?? '';
+          String sizeDesc = tray.item.sizeDescription ?? '';
+
+          if (mainItemId > 0) {
+            final itemRes = await _batchRepo.fetchItemDef(mainItemId);
+            if (itemRes.success && itemRes.data != null) {
+              final d = itemRes.data is Map ? itemRes.data as Map<String, dynamic> : {};
+              if (d['perGarmentTube'] != null) perGarmentTube = (d['perGarmentTube'] as num).toDouble();
+              if (d['colorDescription'] != null) colorDesc = d['colorDescription'];
+              if (d['sizeDescription'] != null) sizeDesc = d['sizeDescription'];
+            }
+          }
+
+          final updatedItem = tray.item.copyWith(
+            perGarmentTube: perGarmentTube,
+            colorDescription: colorDesc,
+            sizeDescription: sizeDesc,
+          );
+          enrichedList.add(tray.copyWith(item: updatedItem));
         }
-      });
+
+        setState(() {
+          _loadingDetails[locatorId] = false;
+          _locatorTrays[locatorId] = enrichedList;
+        });
+      } else {
+        setState(() => _loadingDetails[locatorId] = false);
+        _showError(result.message);
+      }
     }
   }
 
@@ -578,30 +607,36 @@ class _WIPScreenState extends State<WIPScreen> {
                                     clipBehavior: Clip.antiAlias,
                                     child: Column(
                                       children: [
-                                        Container(
+                                         Container(
                                           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
                                           color: Colors.grey.shade50,
                                           child: Row(
                                             children: [
                                               Expanded(flex: 3, child: Text('TRAY CODE', style: _tableHeaderStyle)),
-                                              Expanded(flex: 4, child: Text('ITEM DESCRIPTION', style: _tableHeaderStyle)),
+                                              Expanded(flex: 3, child: Text('ITEM DESCRIPTION', style: _tableHeaderStyle)),
+                                              Expanded(flex: 2, child: Text('PCS/TUBE', style: _tableHeaderStyle)),
                                               Expanded(flex: 2, child: Text('TUBES', style: _tableHeaderStyle)),
-                                              Expanded(flex: 3, child: Text('WEIGHT', style: _tableHeaderStyle)),
+                                              Expanded(flex: 2, child: Text('PCS', style: _tableHeaderStyle)),
+                                              Expanded(flex: 2, child: Text('WEIGHT', style: _tableHeaderStyle)),
                                             ],
                                           ),
                                         ),
                                         ...group.trays.map((t) {
                                           final qty = t.productionProgress.primaryQuantity ?? 0;
                                           final wt = qty * (t.item.pieceWeight ?? 0);
+                                          final pgt = t.item.perGarmentTube ?? 0;
+                                          final garmentPcs = pgt > 0 ? qty * pgt : 0;
                                           return Container(
                                             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
                                             decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.grey.shade100))),
                                             child: Row(
                                               children: [
                                                 Expanded(flex: 3, child: Text(t.primaryTrayModel.trayCode ?? '-', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500))),
-                                                Expanded(flex: 4, child: Text(t.item.description, style:  TextStyle(fontSize: 11, color: Colors.grey.shade700), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                                Expanded(flex: 3, child: Text(t.item.description, style: TextStyle(fontSize: 11, color: Colors.grey.shade700), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                                Expanded(flex: 2, child: Text(pgt > 0 ? pgt.toStringAsFixed(0) : '-', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.indigo.shade700))),
                                                 Expanded(flex: 2, child: Text(qty.toStringAsFixed(0), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
-                                                Expanded(flex: 3, child: Text('${wt.toStringAsFixed(1)} g', style: TextStyle(fontSize: 11, color: Colors.grey.shade600))),
+                                                Expanded(flex: 2, child: Text(garmentPcs > 0 ? garmentPcs.toStringAsFixed(0) : '-', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.teal.shade700))),
+                                                Expanded(flex: 2, child: Text('${wt.toStringAsFixed(1)} g', style: TextStyle(fontSize: 11, color: Colors.grey.shade600))),
                                               ],
                                             ),
                                           );

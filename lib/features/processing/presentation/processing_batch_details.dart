@@ -126,24 +126,46 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
           // Sort by trayCode consistently so order never changes between fetches
           list.sort((a, b) => (a.primaryTrayModel.trayCode ?? '').compareTo(b.primaryTrayModel.trayCode ?? ''));
 
-          // Enrich each tray with color/size from item-defs API
+          // Enrich each tray with color/size/perGarmentTube from item-defs API
           final enrichedList = <ProductionProgressResponseModel>[];
           for (final tray in list) {
-            final targetItemId = tray.productionProgress.processedItemId ?? tray.item.id;
-            if (targetItemId > 0) {
-              final itemRes = await _batchRepo.fetchItemDef(targetItemId);
+            final mainItemId = tray.item.id; // Always use main item for display metadata
+            final processedItemId = tray.productionProgress.processedItemId;
+
+            String colorDesc = tray.item.colorDescription ?? '';
+            String sizeDesc = tray.item.sizeDescription ?? '';
+            double perGarmentTube = tray.item.perGarmentTube ?? 0;
+
+            if (mainItemId > 0) {
+              final itemRes = await _batchRepo.fetchItemDef(mainItemId);
               if (itemRes.success && itemRes.data != null) {
                 final itemData = itemRes.data is Map ? itemRes.data as Map<String, dynamic> : {};
-                final colorDesc = itemData['colorDescription'] ?? tray.item.colorDescription ?? '';
-                final sizeDesc = itemData['sizeDescription'] ?? tray.item.sizeDescription ?? '';
-                final updatedItem = tray.item.copyWith(colorDescription: colorDesc, sizeDescription: sizeDesc);
-                enrichedList.add(tray.copyWith(item: updatedItem));
-              } else {
-                enrichedList.add(tray);
+                // perGarmentTube always from main item
+                if (itemData['perGarmentTube'] != null) {
+                  perGarmentTube = (itemData['perGarmentTube'] as num).toDouble();
+                }
+                // color/size from main item if not null
+                if (itemData['colorDescription'] != null) colorDesc = itemData['colorDescription'];
+                if (itemData['sizeDescription'] != null) sizeDesc = itemData['sizeDescription'];
               }
-            } else {
-              enrichedList.add(tray);
             }
+
+            // If color is still empty, try processedItemId as fallback
+            if (colorDesc.isEmpty && processedItemId != null && processedItemId > 0) {
+              final processedRes = await _batchRepo.fetchItemDef(processedItemId);
+              if (processedRes.success && processedRes.data != null) {
+                final pd = processedRes.data is Map ? processedRes.data as Map<String, dynamic> : {};
+                if (pd['colorDescription'] != null) colorDesc = pd['colorDescription'];
+                if (sizeDesc.isEmpty && pd['sizeDescription'] != null) sizeDesc = pd['sizeDescription'];
+              }
+            }
+
+            final updatedItem = tray.item.copyWith(
+              colorDescription: colorDesc,
+              sizeDescription: sizeDesc,
+              perGarmentTube: perGarmentTube,
+            );
+            enrichedList.add(tray.copyWith(item: updatedItem));
           }
 
           setState(() {
@@ -510,7 +532,9 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                 Expanded(flex: 2, child: Text('ITEM DESCRIPTION', style: _tableHeaderStyle)),
                 Expanded(flex: 1, child: Text('COLOR', style: _tableHeaderStyle)),
                 Expanded(flex: 1, child: Text('SIZE', style: _tableHeaderStyle)),
+                Expanded(flex: 1, child: Text('PCS/TUBE', style: _tableHeaderStyle)),
                 Expanded(flex: 1, child: Text('TUBES', style: _tableHeaderStyle)),
+                Expanded(flex: 1, child: Text('PCS', style: _tableHeaderStyle)),
                 Expanded(flex: 1, child: Text('WEIGHT', style: _tableHeaderStyle)),
                 if (_isReworkMode) const SizedBox(width: 44) else const SizedBox(width: 8),
               ],
@@ -526,7 +550,14 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                   Expanded(flex: 2, child: Text(t.item.description ?? '-', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
                   Expanded(flex: 1, child: Text(t.item.colorDescription?.isNotEmpty == true ? t.item.colorDescription! : '-', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
                   Expanded(flex: 1, child: Text(t.item.sizeDescription?.isNotEmpty == true ? t.item.sizeDescription! : '-', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
+                  Expanded(flex: 1, child: Text((t.item.perGarmentTube ?? 0) > 0 ? t.item.perGarmentTube!.toStringAsFixed(0) : '-', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.indigo.shade700))),
                   Expanded(flex: 1, child: Text(t.productionProgress.primaryQuantity?.toStringAsFixed(0) ?? '0', style: const TextStyle(fontSize: 13))),
+                  Expanded(flex: 1, child: Builder(builder: (_) {
+                    final tubes = t.productionProgress.primaryQuantity ?? 0;
+                    final pgt = t.item.perGarmentTube ?? 0;
+                    final garmentPcs = pgt > 0 ? tubes * pgt : 0;
+                    return Text(garmentPcs > 0 ? garmentPcs.toStringAsFixed(0) : '-', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.teal.shade700));
+                  })),
                   Expanded(flex: 1, child: Text('${((t.productionProgress.primaryQuantity ?? 0) * (t.item.pieceWeight ?? 0)).toStringAsFixed(2)} g', style: const TextStyle(fontSize: 13))),
                   if (_isReworkMode)
 

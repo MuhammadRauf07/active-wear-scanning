@@ -145,6 +145,10 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
 
     final match = _availableTrays[matchIndex];
 
+    if ((match.primaryTrayModel.trayType ?? 0) != 1) {
+      return 'Invalid tray type.';
+    }
+
     int targetItemId = match.productionProgress.processedItemId ?? match.item.id;
     String colorDesc = match.item.colorDescription ?? '';
     String sizeDesc = match.item.sizeDescription ?? '';

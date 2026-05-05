@@ -213,6 +213,11 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
     LappingModel? matchedTray;
     matchedTray = _trays.where((t) => t.primaryTrayModel.trayCode?.toLowerCase() == trayCode).firstOrNull;
 
+    // trayType validation — only Type 1 trays allowed
+    if (matchedTray != null && (matchedTray.primaryTrayModel.trayType ?? 0) != 1) {
+      return 'Invalid tray type.';
+    }
+
     if (matchedTray == null) {
       AppLoader.show(context, message: "Searching system trays...");
       final trayRes = await _batchRepo.fetchTrayDetailByCode(trayCode);
@@ -254,19 +259,34 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
       }
     }
 
-    // Fetch Color/Size from item-defs API using processedItemId ?? itemId
-    int targetItemId = matchedTray.productionProgress.processedItemId ?? matchedTray.item?.id ?? 0;
+    // Fetch metadata from item-defs using main item ID
+    final mainItemId = matchedTray.item?.id ?? 0;
+    final processedItemId = matchedTray.productionProgress.processedItemId;
     String colorDesc = matchedTray.item?.colorDescription ?? '';
     String sizeDesc = matchedTray.item?.sizeDescription ?? '';
+    double perGarmentTube = matchedTray.item?.perGarmentTube ?? 0;
 
-    if (targetItemId > 0) {
+    if (mainItemId > 0) {
       AppLoader.show(context, message: 'Fetching item details...');
-      final itemRes = await _lappingRepo.fetchItemDef(targetItemId);
+      final itemRes = await _lappingRepo.fetchItemDef(mainItemId);
       AppLoader.hide(context);
       if (itemRes.success && itemRes.data != null) {
         final itemData = itemRes.data is Map ? itemRes.data as Map<String, dynamic> : {};
+        if (itemData['perGarmentTube'] != null) perGarmentTube = (itemData['perGarmentTube'] as num).toDouble();
         if (itemData['colorDescription'] != null) colorDesc = itemData['colorDescription'];
         if (itemData['sizeDescription'] != null) sizeDesc = itemData['sizeDescription'];
+      }
+    }
+
+    // If color still empty, try processedItemId as fallback
+    if (colorDesc.isEmpty && processedItemId != null && processedItemId > 0) {
+      AppLoader.show(context, message: 'Fetching color details...');
+      final processedRes = await _lappingRepo.fetchItemDef(processedItemId);
+      AppLoader.hide(context);
+      if (processedRes.success && processedRes.data != null) {
+        final pd = processedRes.data is Map ? processedRes.data as Map<String, dynamic> : {};
+        if (pd['colorDescription'] != null) colorDesc = pd['colorDescription'];
+        if (sizeDesc.isEmpty && pd['sizeDescription'] != null) sizeDesc = pd['sizeDescription'];
       }
     }
 
@@ -275,6 +295,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
       final updatedItem = matchedTray.item!.copyWith(
         colorDescription: colorDesc,
         sizeDescription: sizeDesc,
+        perGarmentTube: perGarmentTube,
       );
       matchedTray = LappingModel(
         productionProgress: matchedTray.productionProgress,
@@ -574,10 +595,10 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
                 child: Row(
                   children: [
                     Expanded(flex: 2, child: Text(t.primaryTrayModel.trayCode ?? '-', style: const TextStyle(fontSize: 13, color: Colors.black87))),
-                    Expanded(flex: 3, child: Text(t.processedItem?.description ?? t.item?.description ?? '-', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Colors.black87))),
+                    Expanded(flex: 4, child: Text(t.processedItem?.description ?? t.item?.description ?? '-', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Colors.black87))),
                     Expanded(flex: 2, child: Text(t.item?.colorDescription?.isNotEmpty == true ? t.item!.colorDescription! : '-', style: const TextStyle(fontSize: 11, color: Colors.black87, fontWeight: FontWeight.w600))),
                     Expanded(flex: 2, child: Text(t.item?.sizeDescription?.isNotEmpty == true ? t.item!.sizeDescription! : '-', style: const TextStyle(fontSize: 11, color: Colors.black87))),
-                    Expanded(
+                    Expanded(flex: 2, child: Text((t.item?.perGarmentTube ?? 0) > 0 ? t.item!.perGarmentTube!.toStringAsFixed(0) : '-', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.indigo.shade700))),                    Expanded(
                       flex: 2, 
                       child: Align(
                         alignment: Alignment.centerLeft,
@@ -594,6 +615,11 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
                         ),
                       ),
                     ),
+                    Expanded(flex: 2, child: Builder(builder: (_) {
+                      final pgt = t.item?.perGarmentTube ?? 0;
+                      final garmentPcs = pgt > 0 ? qty * pgt : 0;
+                      return Text(garmentPcs > 0 ? garmentPcs.toStringAsFixed(0) : '-', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.teal.shade700));
+                    })),
                     Expanded(flex: 2, child: Text('${(qty * pw).toStringAsFixed(2)} kg', style: const TextStyle(fontSize: 13, color: Colors.black87))),
                     const SizedBox(width: 8),
                     GestureDetector(
@@ -633,10 +659,12 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
       child: Row(
         children: [
           Expanded(flex: 2, child: Text('TRAY CODE', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 3, child: Text('ITEM DESCRIPTION', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 4, child: Text('ITEM DESCRIPTION', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
           Expanded(flex: 2, child: Text('COLOR', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
           Expanded(flex: 2, child: Text('SIZE', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('PCS/TUBE', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
           Expanded(flex: 2, child: Text('TUBES', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('PCS', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
           Expanded(flex: 2, child: Text('WEIGHT', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
           const SizedBox(width: 44),
         ],

@@ -140,6 +140,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
     final trayDetail = available.first.trayDetails;
     if (trayDetail?.active != true) return 'Tray is not active';
+    if ((trayDetail?.trayType ?? 0) != 1) return 'Invalid tray type.';
     if (trayDetail?.isReAssigned == true) {
       return 'Tray is already reassigned in Lapping and cannot be bound again.';
     }
@@ -311,6 +312,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
         Map<String, dynamic> planData = {
           'trayCode': latestTrayDetail?.trayCode,
+          'trayType': 1,
           'shiftId': _selectedPlanLine!.planLine.shiftId,
           'planLineId': _selectedPlanLine!.planLine.id,
           'workOrderHeaderId': _selectedPlanLine!.workOrderHeader.id,

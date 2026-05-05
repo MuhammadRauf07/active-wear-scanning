@@ -325,6 +325,9 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
 
         // Block if tray's progressId is already linked to any batch (via batch-liness)
         final tray = available.first;
+        if ((tray.primaryTrayModel?.trayType ?? 0) != 1) {
+          return 'Invalid tray type.';
+        }
         final progressId = tray.productionProgress.id;
         if (progressId != null && _batchedProgressIds.contains(progressId)) {
           return 'Tray already assigned to a batch';
@@ -446,8 +449,8 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
 
 
 
-        // Use main item ID for display metadata (color/size/pcs-per-tube)
-        // processedItemId is a component item used only for production progress — NOT for metadata
+        // Use main item ID for perGarmentTube (always correct)
+        // For color/size: try main item first, fall back to processedItemId if null
         int targetItemId = tray.item?.id ?? 0;
         String colorDesc = tray.item?.colorDescription ?? '';
         String sizeDesc = tray.item?.sizeDescription ?? '';
@@ -460,9 +463,21 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
           
           if (itemRes.success && itemRes.data != null) {
             final itemData = itemRes.data is Map ? itemRes.data as Map<String, dynamic> : {};
+            if (itemData['perGarmentTube'] != null) perGarmentTube = (itemData['perGarmentTube'] as num).toDouble();
             if (itemData['colorDescription'] != null) colorDesc = itemData['colorDescription'];
             if (itemData['sizeDescription'] != null) sizeDesc = itemData['sizeDescription'];
-            if (itemData['perGarmentTube'] != null) perGarmentTube = (itemData['perGarmentTube'] as num).toDouble();
+          }
+        }
+
+        // If color still empty, try processedItemId as fallback
+        if (colorDesc.isEmpty && processedItemId > 0) {
+          AppLoader.show(context, message: "Fetching color details...");
+          final processedRes = await _batchRepo.fetchItemDef(processedItemId);
+          AppLoader.hide(context);
+          if (processedRes.success && processedRes.data != null) {
+            final pd = processedRes.data is Map ? processedRes.data as Map<String, dynamic> : {};
+            if (pd['colorDescription'] != null) colorDesc = pd['colorDescription'];
+            if (sizeDesc.isEmpty && pd['sizeDescription'] != null) sizeDesc = pd['sizeDescription'];
           }
         }
 
@@ -1302,7 +1317,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
           Expanded(
             flex: 2,
             child: Text(
-              'GARMENT PCS',
+              'PCS',
               style: _tableHeaderStyle.copyWith(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,

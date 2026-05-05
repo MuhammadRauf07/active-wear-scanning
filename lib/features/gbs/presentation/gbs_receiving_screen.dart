@@ -159,6 +159,10 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
       return 'Tray not available';
     }
 
+    if ((match.primaryTrayModel.trayType ?? 0) != 1) {
+      return 'Invalid tray type.';
+    }
+
     int targetItemId = match.productionProgress.processedItemId ?? match.item.id;
     String colorDesc = match.item.colorDescription ?? '';
     String sizeDesc = match.item.sizeDescription ?? '';

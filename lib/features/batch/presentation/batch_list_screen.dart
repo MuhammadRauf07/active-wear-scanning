@@ -2,10 +2,12 @@ import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/content_card.dart';
 import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
+import 'package:active_wear_scanning/core/widgets/scanner_always_open.dart';
 import 'package:active_wear_scanning/features/batch/presentation/batch_scanning_screen.dart';
 import 'package:active_wear_scanning/features/batch/repo/batch_repo.dart';
-
 import 'package:active_wear_scanning/features/batch/model/batch_header_model.dart';
+import 'package:active_wear_scanning/features/tray/repo/tray_scanning_repo.dart';
+import 'package:active_wear_scanning/features/tray/model/tray_details_model.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
@@ -19,6 +21,7 @@ class BatchListScreen extends StatefulWidget {
 class _BatchListScreenState extends State<BatchListScreen>
     with SingleTickerProviderStateMixin {
   final _batchRepo = BatchRepo();
+  final _trayRepo = TrayScanningRepo();
   bool _isLoading = true;
 
   List<BatchHeaderResponseModel> _unlockedBatches = [];
@@ -26,6 +29,10 @@ class _BatchListScreenState extends State<BatchListScreen>
 
   // Maps batchHeaderId → raw batch-line records linked to that batch
   Map<int, List<Map<String, dynamic>>> _groupedBatchLinesByHeader = {};
+
+  // Trolley state: batchHeaderId → trolley trayDetail ID & tray code
+  final Map<int, int> _trolleyDetailIdByBatch = {};
+  final Map<int, String> _trolleyCodeByBatch = {};
 
   late TabController _tabController;
 
@@ -122,6 +129,49 @@ class _BatchListScreenState extends State<BatchListScreen>
     }
   }
 
+  Future<void> _scanTrolleyForBatch(int batchHeaderId) async {
+    await ScannerAlwaysOpen.show(
+      context,
+      title: 'Scan Trolly',
+      onResult: (scannedCode) async {
+        final code = scannedCode.trim().toLowerCase();
+        if (code.isEmpty) return 'Invalid trolly code';
+
+        AppLoader.show(context, message: 'Validating trolly...');
+        final result = await _trayRepo.fetchAvailableTrayDetails();
+        AppLoader.hide(context);
+
+        if (!result.success || result.data == null) {
+          return 'Failed to fetch tray details';
+        }
+
+        final allTrays = result.data as List<TrayDetailsModel>;
+        final matched = allTrays.where((t) {
+          return (t.trayDetails?.trayCode ?? '').trim().toLowerCase() == code;
+        }).toList();
+
+        if (matched.isEmpty) return 'Trolly not found';
+
+        final trayDetail = matched.first.trayDetails;
+        if (trayDetail?.active != true) return 'Trolly is not active';
+        if ((trayDetail?.trayType ?? 0) != 4) {
+          return 'Invalid tray type. Only Type 4 (Trolly) allowed.';
+        }
+
+        final trolleyId = trayDetail!.id!;
+        final trolleyCode = trayDetail.trayCode ?? code;
+
+        setState(() {
+          _trolleyDetailIdByBatch[batchHeaderId] = trolleyId;
+          _trolleyCodeByBatch[batchHeaderId] = trolleyCode;
+        });
+
+        Navigator.of(context).pop(); // close scanner after success
+        return null;
+      },
+    );
+  }
+
   Future<void> _deleteBatch(BatchHeaderResponseModel header) async {
     final bool? confirm = await showDialog<bool>(
       context: context,
@@ -179,6 +229,19 @@ class _BatchListScreenState extends State<BatchListScreen>
   }
 
   Future<void> _lockBatch(BatchHeaderResponseModel header) async {
+    final headerId = header.batchHeader.id!;
+
+    // ── Trolley guard: must scan trolley before locking ──────────────────────
+    if (!_trolleyDetailIdByBatch.containsKey(headerId)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please scan a Trolly before issuing this batch.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -205,7 +268,6 @@ class _BatchListScreenState extends State<BatchListScreen>
     if (confirm != true) return;
 
     setState(() => _isLoading = true);
-    final headerId = header.batchHeader.id!;
     final bh = header.batchHeader;
 
     // ── Step 1: Set lockFlag = true on batch header ──────────────────────────
@@ -217,6 +279,7 @@ class _BatchListScreenState extends State<BatchListScreen>
       'machineId': bh.machineId,
       'colorCode': bh.colorCodeId,
       'shiftId': bh.shiftId,
+      'trayDetailId': _trolleyDetailIdByBatch[headerId] ?? bh.trayDetailId,
       'concurrencyStamp': bh.concurrencyStamp,
     });
 
@@ -369,6 +432,7 @@ class _BatchListScreenState extends State<BatchListScreen>
         'itemId': bl['itemId'],
         'shiftId': progress?['shiftId'] ?? bh.shiftId,
         'primaryTrayId': bl['trayId'],
+        'secondaryTrayId': _trolleyDetailIdByBatch[headerId],
         'machineId': progress?['machineId'] ?? bh.machineId,
         'planHeaderId': progress?['planHeaderId'],
         'locatorId': dynamicLocatorId,
@@ -409,6 +473,7 @@ class _BatchListScreenState extends State<BatchListScreen>
         'itemId': bl['itemId'],
         'shiftId': progress?['shiftId'] ?? bh.shiftId,
         'primaryTrayId': bl['trayId'],
+        'secondaryTrayId': _trolleyDetailIdByBatch[headerId],
         'machineId': progress?['machineId'] ?? bh.machineId,
         'planHeaderId': progress?['planHeaderId'],
         'locatorId': dynamicLocatorId,
@@ -676,6 +741,18 @@ class _BatchListScreenState extends State<BatchListScreen>
                       ),
                     ),
                   ),
+                  if (!isLocked)
+                    Expanded(
+                      flex: 3,
+                      child: Text(
+                        'TROLLY',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ),
                   if (!isLocked) const SizedBox(width: 120),
                 ],
               ),
@@ -778,6 +855,39 @@ class _BatchListScreenState extends State<BatchListScreen>
                         ),
                       ),
                     ),
+                    if (!isLocked)
+                      Expanded(
+                        flex: 3,
+                        child: Builder(builder: (_) {
+                          final trolleyCode = _trolleyCodeByBatch[headerDatabaseId];
+                          if (trolleyCode != null) {
+                            return Text(
+                              trolleyCode,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.teal.shade700,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            );
+                          }
+                          return SizedBox(
+                              width: 110,
+                              child: CustomOutlinedButton(
+                                label: 'Scan Trolly',
+                                icon: Icons.qr_code_scanner,
+                                iconSize: 14,
+                                textSize: 11,
+                                borderColor: Colors.orange,
+                                fillColor: Colors.orange,
+                                textColor: Colors.white,
+                                buttonHeight: 34,
+                                onPressed: () => _scanTrolleyForBatch(headerDatabaseId),
+                              ),
+                            );
+                        }),
+                      ),
                     if (!isLocked)
                       Row(
                         mainAxisSize: MainAxisSize.min,

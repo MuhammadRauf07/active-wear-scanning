@@ -38,6 +38,7 @@ class BatchHeaderModel {
   final int? machineId;
   final int? colorCodeId;
   final int? shiftId;
+  final int? trayDetailId;
   final String? concurrencyStamp;
 
   BatchHeaderModel({
@@ -53,6 +54,7 @@ class BatchHeaderModel {
     this.machineId,
     this.colorCodeId,
     this.shiftId,
+    this.trayDetailId,
     this.concurrencyStamp,
   });
 
@@ -70,6 +72,7 @@ class BatchHeaderModel {
       machineId: json['machineId'],
       colorCodeId: json['colorCode'], // Mapping field correctly based on API
       shiftId: json['shiftId'],
+      trayDetailId: json['trayDetailId'] as int?,
       concurrencyStamp: json['concurrencyStamp'],
     );
   }
