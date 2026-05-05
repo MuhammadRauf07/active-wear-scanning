@@ -242,13 +242,13 @@ class _WIPScreenState extends State<WIPScreen> {
           if (isKnitting) ...[
             Expanded(flex: 3, child: Text('WORK ORDER', style: _tableHeaderStyle)),
             Expanded(flex: 3, child: Text('MACHINE', style: _tableHeaderStyle)),
-            Expanded(flex: 4, child: Text('ITEM DESC', style: _tableHeaderStyle)),
+            Expanded(flex: 4, child: Text('ITEM DESCRIPTION', style: _tableHeaderStyle)),
           ] else ...[
             Expanded(flex: 4, child: Text('BATCH NO', style: _tableHeaderStyle)),
             Expanded(flex: 4, child: Text('COLOR', style: _tableHeaderStyle)),
           ],
           Expanded(flex: 2, child: Text('TRAYS', style: _tableHeaderStyle)),
-          Expanded(flex: 2, child: Text('PCS', style: _tableHeaderStyle)),
+          Expanded(flex: 2, child: Text('TUBES', style: _tableHeaderStyle)),
           const SizedBox(width: 40), // Space for action button
         ],
       ),
@@ -419,9 +419,9 @@ class _WIPScreenState extends State<WIPScreen> {
                           child: IntrinsicHeight(
                             child: Row(
                               children: [
-                                _statTile('Trays', '${group.trayCount}', Icons.layers_outlined),
+                                _statTile('No. of Trays', '${group.trayCount}', Icons.layers_outlined),
                                 _verticalDivider(),
-                                _statTile('Total Pcs', totalPcs.toStringAsFixed(0), Icons.format_list_numbered),
+                                _statTile('Total Tubes', totalPcs.toStringAsFixed(0), Icons.format_list_numbered),
                                 _verticalDivider(),
                                 _statTile('Weight', totalWeight.toStringAsFixed(1), Icons.scale_outlined),
                                 if (machineCapacity != null && machineCapacity > 0) ...[
@@ -486,7 +486,7 @@ class _WIPScreenState extends State<WIPScreen> {
                                         tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                                         title: Text(woCode, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87)),
                                         subtitle: Text(
-                                          '${woTrays.length} trays • ${woPcs.toStringAsFixed(0)} pcs • ${woWeight.toStringAsFixed(1)} kg',
+                                          '${woTrays.length} Trays • ${woPcs.toStringAsFixed(0)} Tubes • ${woWeight.toStringAsFixed(1)} g',
                                           style: TextStyle(fontSize: 11, color: Colors.blue.shade700, fontWeight: FontWeight.w500),
                                         ),
                                         children: [
@@ -495,9 +495,9 @@ class _WIPScreenState extends State<WIPScreen> {
                                             color: Colors.grey.shade50,
                                             child: Row(
                                               children: [
-                                                Expanded(flex: 5, child: Text('ITEM', style: _tableHeaderStyle)),
+                                                Expanded(flex: 5, child: Text('ITEM DESCRIPTION', style: _tableHeaderStyle)),
                                                 Expanded(flex: 2, child: Text('TRAYS', style: _tableHeaderStyle)),
-                                                Expanded(flex: 2, child: Text('PCS', style: _tableHeaderStyle)),
+                                                Expanded(flex: 2, child: Text('TUBES', style: _tableHeaderStyle)),
                                                 Expanded(flex: 3, child: Text('WEIGHT', style: _tableHeaderStyle)),
                                               ],
                                             ),
@@ -520,7 +520,7 @@ class _WIPScreenState extends State<WIPScreen> {
                                                   Expanded(flex: 5, child: Text(itemDesc, style: const TextStyle(fontSize: 11, color: Colors.black87), maxLines: 2, overflow: TextOverflow.ellipsis)),
                                                   Expanded(flex: 2, child: Text('${itemTrays.length}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))),
                                                   Expanded(flex: 2, child: Text(iPcs.toStringAsFixed(0), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue))),
-                                                  Expanded(flex: 3, child: Text('${iWeight.toStringAsFixed(1)} kg', style: TextStyle(fontSize: 11, color: Colors.grey.shade700))),
+                                                  Expanded(flex: 3, child: Text('${iWeight.toStringAsFixed(1)} g', style: TextStyle(fontSize: 11, color: Colors.grey.shade700))),
                                                 ],
                                               ),
                                             );
@@ -583,9 +583,9 @@ class _WIPScreenState extends State<WIPScreen> {
                                           color: Colors.grey.shade50,
                                           child: Row(
                                             children: [
-                                              Expanded(flex: 3, child: Text('TRAY', style: _tableHeaderStyle)),
-                                              Expanded(flex: 4, child: Text('ITEM', style: _tableHeaderStyle)),
-                                              Expanded(flex: 2, child: Text('PCS', style: _tableHeaderStyle)),
+                                              Expanded(flex: 3, child: Text('TRAY CODE', style: _tableHeaderStyle)),
+                                              Expanded(flex: 4, child: Text('ITEM DESCRIPTION', style: _tableHeaderStyle)),
+                                              Expanded(flex: 2, child: Text('TUBES', style: _tableHeaderStyle)),
                                               Expanded(flex: 3, child: Text('WEIGHT', style: _tableHeaderStyle)),
                                             ],
                                           ),
@@ -601,7 +601,7 @@ class _WIPScreenState extends State<WIPScreen> {
                                                 Expanded(flex: 3, child: Text(t.primaryTrayModel.trayCode ?? '-', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500))),
                                                 Expanded(flex: 4, child: Text(t.item.description, style:  TextStyle(fontSize: 11, color: Colors.grey.shade700), maxLines: 1, overflow: TextOverflow.ellipsis)),
                                                 Expanded(flex: 2, child: Text(qty.toStringAsFixed(0), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
-                                                Expanded(flex: 3, child: Text('${wt.toStringAsFixed(1)} kg', style: TextStyle(fontSize: 11, color: Colors.grey.shade600))),
+                                                Expanded(flex: 3, child: Text('${wt.toStringAsFixed(1)} g', style: TextStyle(fontSize: 11, color: Colors.grey.shade600))),
                                               ],
                                             ),
                                           );

@@ -233,7 +233,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                                     Expanded(
                                       flex: 3,
                                       child: CustomOutlinedButton(
-                                        label: _showTrays ? 'Hide' : 'Trays',
+                                        label: _showTrays ? 'Hide Trays' : 'Show Trays',
                                         borderColor: Colors.blue,
                                         textColor: _showTrays ? Colors.white : Colors.blue,
                                         fillColor: _showTrays ? Colors.blue : Colors.white,
@@ -506,11 +506,11 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
             color: Colors.grey.shade100,
             child: Row(
               children: [
-                Expanded(flex: 2, child: Text('TRAY', style: _tableHeaderStyle)),
-                Expanded(flex: 2, child: Text('ITEM', style: _tableHeaderStyle)),
+                Expanded(flex: 2, child: Text('TRAY CODE', style: _tableHeaderStyle)),
+                Expanded(flex: 2, child: Text('ITEM DESCRIPTION', style: _tableHeaderStyle)),
                 Expanded(flex: 1, child: Text('COLOR', style: _tableHeaderStyle)),
                 Expanded(flex: 1, child: Text('SIZE', style: _tableHeaderStyle)),
-                Expanded(flex: 1, child: Text('QTY', style: _tableHeaderStyle)),
+                Expanded(flex: 1, child: Text('TUBES', style: _tableHeaderStyle)),
                 Expanded(flex: 1, child: Text('WEIGHT', style: _tableHeaderStyle)),
                 if (_isReworkMode) const SizedBox(width: 44) else const SizedBox(width: 8),
               ],
@@ -524,10 +524,10 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                 children: [
                   Expanded(flex: 2, child: Text(t.primaryTrayModel.trayCode ?? '-', style: const TextStyle(fontSize: 13))),
                   Expanded(flex: 2, child: Text(t.item.description ?? '-', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
-                  Expanded(flex: 1, child: Text(t.item.colorDescription?.isNotEmpty == true ? t.item.colorDescription! : '-', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+                  Expanded(flex: 1, child: Text(t.item.colorDescription?.isNotEmpty == true ? t.item.colorDescription! : '-', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
                   Expanded(flex: 1, child: Text(t.item.sizeDescription?.isNotEmpty == true ? t.item.sizeDescription! : '-', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
                   Expanded(flex: 1, child: Text(t.productionProgress.primaryQuantity?.toStringAsFixed(0) ?? '0', style: const TextStyle(fontSize: 13))),
-                  Expanded(flex: 1, child: Text('${((t.productionProgress.primaryQuantity ?? 0) * (t.item.pieceWeight ?? 0)).toStringAsFixed(2)} kg', style: const TextStyle(fontSize: 13))),
+                  Expanded(flex: 1, child: Text('${((t.productionProgress.primaryQuantity ?? 0) * (t.item.pieceWeight ?? 0)).toStringAsFixed(2)} g', style: const TextStyle(fontSize: 13))),
                   if (_isReworkMode)
 
                     SizedBox(
@@ -594,22 +594,22 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                 color: Colors.blue.shade800,
               ),
             ),
-            const Spacer(),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: isOverCapacity ? Colors.red.shade50 : Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                isOverCapacity ? 'Over Capacity' : 'Live',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: isOverCapacity ? Colors.red.shade700 : Colors.blue.shade700,
-                ),
-              ),
-            ),
+            // const Spacer(),
+            // Container(
+            //   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            //   decoration: BoxDecoration(
+            //     color: isOverCapacity ? Colors.red.shade50 : Colors.blue.shade50,
+            //     borderRadius: BorderRadius.circular(20),
+            //   ),
+            //   // child: Text(
+            //   //   isOverCapacity ? 'Over Capacity' : 'Live',
+            //   //   style: TextStyle(
+            //   //     fontSize: 10,
+            //   //     fontWeight: FontWeight.bold,
+            //   //     color: isOverCapacity ? Colors.red.shade700 : Colors.blue.shade700,
+            //   //   ),
+            //   // ),
+            // ),
           ],
         ),
         const SizedBox(height: 12),
@@ -620,9 +620,9 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
         IntrinsicHeight(
           child: Row(
             children: [
-              _statTile('Trays', '${_trays.length}', Icons.layers_outlined),
+              _statTile('No. of Trays', '${_trays.length}', Icons.layers_outlined),
               _verticalDivider(),
-              _statTile('Total Pcs', totalPcs.toStringAsFixed(0), Icons.format_list_numbered),
+              _statTile('Total Tubes', totalPcs.toStringAsFixed(0), Icons.format_list_numbered),
               if (capacity != null && capacity > 0) ...[
                 _verticalDivider(),
                 _statTile('Capacity', capacity.toStringAsFixed(1), Icons.settings_input_component),
@@ -680,7 +680,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
               ),
               subtitle: Text(
-                '${woTrays.length} trays · ${woPcs.toStringAsFixed(0)} pcs · ${woWeight.toStringAsFixed(2)} kg',
+                '${woTrays.length} trays · ${woPcs.toStringAsFixed(0)} tubes · ${woWeight.toStringAsFixed(2)} g',
                 style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
               ),
               children: [
@@ -690,9 +690,9 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                   color: Colors.grey.shade100,
                   child: Row(
                     children: [
-                      Expanded(flex: 5, child: Text('ITEM', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade600))),
+                      Expanded(flex: 5, child: Text('ITEM DESCRIPTION', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade600))),
                       Expanded(flex: 2, child: Text('TRAYS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade600))),
-                      Expanded(flex: 2, child: Text('PCS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade600))),
+                      Expanded(flex: 2, child: Text('TUBES', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade600))),
                       Expanded(flex: 3, child: Text('WEIGHT', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade600))),
                     ],
                   ),
@@ -743,7 +743,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                         Expanded(
                           flex: 3,
                           child: Text(
-                            '${itemWeight.toStringAsFixed(2)} kg',
+                            '${itemWeight.toStringAsFixed(2)} g',
                             style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
                           ),
                         ),

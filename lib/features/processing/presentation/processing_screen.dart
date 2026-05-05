@@ -404,7 +404,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                 ),
               ),
               Expanded(
-                flex: 3,
+                flex: 2,
                 child: Text(
                   'COLOR',
                   style: TextStyle(
@@ -468,7 +468,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                     ),
                   ),
                   Expanded(
-                    flex: 3,
+                    flex: 2,
                     child: Text(
                       s.color,
                       maxLines: 2,
@@ -494,7 +494,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                   Expanded(
                     flex: 2,
                     child: Text(
-                      '${s.totalWeight.toStringAsFixed(2)} kg',
+                      '${s.totalWeight.toStringAsFixed(2)} g',
                       style: const TextStyle(
                         fontSize: 13,
                         color: Colors.blue,

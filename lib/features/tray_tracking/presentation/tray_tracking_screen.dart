@@ -322,7 +322,7 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> {
                           Icon(Icons.inventory_2_outlined, color: Colors.white.withOpacity(0.8), size: 16),
                           const SizedBox(width: 8),
                           Text(
-                            'Quantity: ${_trayDetail?.trayQuantity ?? 0} units',
+                            'Quantity: ${_trayDetail?.trayQuantity ?? 0} tubes',
                             style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 14, fontWeight: FontWeight.w500),
                           ),
                         ],

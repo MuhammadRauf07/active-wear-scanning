@@ -5,6 +5,7 @@ class ScannedTray {
   final String? quantity;
   final String colorDescription;
   final String sizeDescription;
+  final double perGarmentTube;
 
   ScannedTray({
     this.trayCode = '',
@@ -13,5 +14,6 @@ class ScannedTray {
     this.trayConcurrencyStamp,
     this.colorDescription = '',
     this.sizeDescription = '',
+    this.perGarmentTube = 0,
   });
 }

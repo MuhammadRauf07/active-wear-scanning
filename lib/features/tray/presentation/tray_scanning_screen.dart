@@ -160,6 +160,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     int targetItemId = _selectedPlanLine?.item.id ?? 0;
     String colorDesc = _selectedPlanLine?.item.colorDescription ?? '';
     String sizeDesc = _selectedPlanLine?.item.sizeDescription ?? '';
+    double perGarmentTube = _selectedPlanLine?.item.perGarmentTube ?? 0;
 
     if (targetItemId > 0) {
       AppLoader.show(context, message: "Fetching item details...");
@@ -170,6 +171,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
         final itemData = itemRes.data is Map ? itemRes.data as Map<String, dynamic> : {};
         if (itemData['colorDescription'] != null) colorDesc = itemData['colorDescription'];
         if (itemData['sizeDescription'] != null) sizeDesc = itemData['sizeDescription'];
+        if (itemData['perGarmentTube'] != null) perGarmentTube = (itemData['perGarmentTube'] as num).toDouble();
       }
     }
 
@@ -181,6 +183,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
           trayConcurrencyStamp: trayDetail.concurrencyStamp,
           colorDescription: colorDesc,
           sizeDescription: sizeDesc,
+          perGarmentTube: perGarmentTube,
         ),
       );
       final controller = TextEditingController(text: _getDefaultQuantityForNewTray());
@@ -206,7 +209,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
     addField('Plan Date', Icons.calendar_today, 'Plan Date', plan.planDate.toString());
     addField('Knitting Tube', Icons.precision_manufacturing, 'Knitting Tube', plan.primaryPlanQuantity.toString());
-    addField('Pcs Per Tray', Icons.grid_view, 'Pcs Per Tray', plan.quantityPerTray.toString());
+    addField('Tubes Per Tray', Icons.grid_view, 'Tubes Per Tray', plan.quantityPerTray.toString());
     addField('Garment Pcs', Icons.checkroom, 'Garment Pcs', plan.secondaryPlanQuantity.toString());
     addField('Shift Code', Icons.schedule, 'Shift Code', shift.code.toString());
     addField('Work Order Code', Icons.assignment, 'Work Order Code', workOrder.workOrderCode);
@@ -543,7 +546,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                         child: TextField(
                           controller: _overrideQuantityController,
                           decoration: _inputDecoration(
-                            hintText: 'Pcs/tray',
+                            hintText: 'Tubes per tray',
                             isDense: true,
                             contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 13),
                             borderRadius: 4,
@@ -591,11 +594,13 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       child: Row(
         children: [
           Expanded(flex: 2, child: Text('TRAY CODE', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
-          Expanded(flex: 2, child: Text('WO', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
-          Expanded(flex: 3, child: Text('ITEM DESC', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
+          Expanded(flex: 2, child: Text('WORK ORDER', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
+          Expanded(flex: 3, child: Text('ITEM DESCRIPTION', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
           Expanded(flex: 2, child: Text('COLOR', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
           Expanded(flex: 2, child: Text('SIZE', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
-          Expanded(flex: 2, child: Text('QUANTITY', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
+          Expanded(flex: 2, child: Text('PCS/TUBE', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
+          Expanded(flex: 2, child: Text('TUBES', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
+          Expanded(flex: 2, child: Text('PCS', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
           Expanded(flex: 2, child: Text('WEIGHT', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
           const SizedBox(width: 40),
         ],
@@ -670,6 +675,13 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
           ),
           Expanded(
             flex: 2,
+            child: Text(
+              tray.perGarmentTube > 0 ? tray.perGarmentTube.toStringAsFixed(0) : '-',
+              style: TextStyle(fontSize: 12, color: isEmpty ? Colors.grey : Colors.indigo.shade700, fontWeight: FontWeight.w600),
+            ),
+          ),
+          Expanded(
+            flex: 2,
             child: Align(
               alignment: Alignment.centerLeft,
               child: SizedBox(
@@ -694,9 +706,26 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
             child: Builder(
               builder: (_) {
                 final qty = double.tryParse(_quantityControllers[index].text) ?? 0;
+                final garmentPcs = (tray.perGarmentTube > 0) ? (qty * tray.perGarmentTube) : 0;
+                return Text(
+                  garmentPcs > 0 ? garmentPcs.toStringAsFixed(0) : '-',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isEmpty ? Colors.grey : Colors.teal.shade700,
+                  ),
+                );
+              },
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Builder(
+              builder: (_) {
+                final qty = double.tryParse(_quantityControllers[index].text) ?? 0;
                 final pw = _selectedPlanLine?.item.pieceWeight;
                 if (pw == null || pw == 0) return const Text('-', style: TextStyle(fontSize: 13));
-                return Text('${(qty * pw).toStringAsFixed(2)} kg', style: const TextStyle(fontSize: 13));
+                return Text('${(qty * pw).toStringAsFixed(2)} g', style: const TextStyle(fontSize: 13));
               },
             ),
           ),

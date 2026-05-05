@@ -446,9 +446,12 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
 
 
 
-        int targetItemId = processedItemId ?? tray.item?.id ?? 0;
+        // Use main item ID for display metadata (color/size/pcs-per-tube)
+        // processedItemId is a component item used only for production progress — NOT for metadata
+        int targetItemId = tray.item?.id ?? 0;
         String colorDesc = tray.item?.colorDescription ?? '';
         String sizeDesc = tray.item?.sizeDescription ?? '';
+        double perGarmentTube = tray.item?.perGarmentTube ?? 0;
 
         if (targetItemId > 0) {
           AppLoader.show(context, message: "Fetching item details...");
@@ -459,6 +462,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
             final itemData = itemRes.data is Map ? itemRes.data as Map<String, dynamic> : {};
             if (itemData['colorDescription'] != null) colorDesc = itemData['colorDescription'];
             if (itemData['sizeDescription'] != null) sizeDesc = itemData['sizeDescription'];
+            if (itemData['perGarmentTube'] != null) perGarmentTube = (itemData['perGarmentTube'] as num).toDouble();
           }
         }
 
@@ -467,6 +471,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
            final updatedItem = tray.item!.copyWith(
               colorDescription: colorDesc,
               sizeDescription: sizeDesc,
+              perGarmentTube: perGarmentTube,
            );
            finalTray = tray.copyWith(item: updatedItem);
         }
@@ -1006,22 +1011,22 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                   color: Colors.blue.shade800,
                 ),
               ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: isOverCapacity ? Colors.red.shade50 : Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                // child: Text(
-                //   isOverCapacity ? 'Over Capacity' : 'Live',
-                //   style: TextStyle(
-                //     fontSize: 10,
-                //     fontWeight: FontWeight.bold,
-                //     color: isOverCapacity ? Colors.red.shade700 : Colors.blue.shade700,
-                //   ),
-                // ),
-              ),
+              // const Spacer(),
+              // Container(
+              //   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              //   decoration: BoxDecoration(
+              //     color: isOverCapacity ? Colors.red.shade50 : Colors.blue.shade50,
+              //     borderRadius: BorderRadius.circular(20),
+              //   ),
+              //   // child: Text(
+              //   //   isOverCapacity ? 'Over Capacity' : 'Live',
+              //   //   style: TextStyle(
+              //   //     fontSize: 10,
+              //   //     fontWeight: FontWeight.bold,
+              //   //     color: isOverCapacity ? Colors.red.shade700 : Colors.blue.shade700,
+              //   //   ),
+              //   // ),
+              // ),
             ],
           ),
           const SizedBox(height: 12),
@@ -1032,9 +1037,9 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
           IntrinsicHeight(
             child: Row(
               children: [
-                _statTile('Trays', '${_scannedTrays.length}',Icons.layers_outlined),
+                _statTile('No. of Trays', '${_scannedTrays.length}',Icons.layers_outlined),
                 _verticalDivider(),
-                _statTile('Total Pcs', totalPcs.toStringAsFixed(0), Icons.format_list_numbered),
+                _statTile('Total Tubes', totalPcs.toStringAsFixed(0), Icons.format_list_numbered),
                 if (capacity != null && capacity > 0) ...[
                   _verticalDivider(),
                   _statTile('Capacity', '${capacity.toStringAsFixed(1)}', Icons.settings_input_component),
@@ -1092,7 +1097,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                 ),
                 subtitle: Text(
-                  '${woTrays.length} trays · ${woPcs.toStringAsFixed(0)} pcs · ${woWeight.toStringAsFixed(2)} kg',
+                  '${woTrays.length} trays · ${woPcs.toStringAsFixed(0)} tubes · ${woWeight.toStringAsFixed(2)} g',
                   style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
                 ),
                 children: [
@@ -1102,9 +1107,9 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                     color: Colors.grey.shade100,
                     child: Row(
                       children: [
-                        Expanded(flex: 5, child: Text('ITEM', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade600))),
+                        Expanded(flex: 5, child: Text('ITEM DESCRIPTION', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade600))),
                         Expanded(flex: 2, child: Text('TRAYS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade600))),
-                        Expanded(flex: 2, child: Text('PCS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade600))),
+                        Expanded(flex: 2, child: Text('TUBES', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade600))),
                         Expanded(flex: 3, child: Text('WEIGHT', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade600))),
                       ],
                     ),
@@ -1155,7 +1160,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                           Expanded(
                             flex: 3,
                             child: Text(
-                              '${itemWeight.toStringAsFixed(2)} kg',
+                              '${itemWeight.toStringAsFixed(2)} g',
                               style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
                             ),
                           ),
@@ -1237,7 +1242,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
           Expanded(
             flex: 2,
             child: Text(
-              'WO',
+              'WORK ORDER',
               style: _tableHeaderStyle.copyWith(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
@@ -1247,7 +1252,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
           Expanded(
             flex: 3,
             child: Text(
-              'ITEM DESC',
+              'ITEM DESCRIPTION',
               style: _tableHeaderStyle.copyWith(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
@@ -1277,7 +1282,27 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
           Expanded(
             flex: 2,
             child: Text(
-              'QUANTITY',
+              'PCS/TUBE',
+              style: _tableHeaderStyle.copyWith(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              'TUBES',
+              style: _tableHeaderStyle.copyWith(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              'GARMENT PCS',
               style: _tableHeaderStyle.copyWith(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
@@ -1371,6 +1396,15 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
           ),
           Expanded(
             flex: 2,
+            child: Text(
+              (tray.item?.perGarmentTube ?? 0) > 0
+                  ? (tray.item!.perGarmentTube).toStringAsFixed(0)
+                  : '-',
+              style: TextStyle(fontSize: 12, color: Colors.indigo.shade700, fontWeight: FontWeight.w600),
+            ),
+          ),
+          Expanded(
+            flex: 2,
             child: Align(
               alignment: Alignment.centerLeft,
               child: Container(
@@ -1398,12 +1432,26 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
             flex: 2,
             child: Builder(
               builder: (_) {
+                final tubes = tray.productionProgress.primaryQuantity ?? 0;
+                final pgt = tray.item?.perGarmentTube ?? 0;
+                final garmentPcs = pgt > 0 ? tubes * pgt : 0;
+                return Text(
+                  garmentPcs > 0 ? garmentPcs.toStringAsFixed(0) : '-',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.teal.shade700),
+                );
+              },
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Builder(
+              builder: (_) {
                 final qty = tray.productionProgress.primaryQuantity ?? 0;
                 final pw = tray.item?.pieceWeight;
                 if (pw == null || pw == 0)
                   return const Text('-', style: TextStyle(fontSize: 13));
                 return Text(
-                  '${(qty * pw).toStringAsFixed(2)} kg',
+                  '${(qty * pw).toStringAsFixed(2)} g',
                   style: const TextStyle(fontSize: 13, color: Colors.black87),
                 );
               },

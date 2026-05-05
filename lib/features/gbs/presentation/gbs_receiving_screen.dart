@@ -162,6 +162,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
     int targetItemId = match.productionProgress.processedItemId ?? match.item.id;
     String colorDesc = match.item.colorDescription ?? '';
     String sizeDesc = match.item.sizeDescription ?? '';
+    double perGarmentTube = match.item.perGarmentTube;
 
     if (targetItemId > 0) {
       AppLoader.show(context, message: "Fetching item details...");
@@ -172,6 +173,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
         final itemData = itemRes.data is Map ? itemRes.data as Map<String, dynamic> : {};
         if (itemData['colorDescription'] != null) colorDesc = itemData['colorDescription'];
         if (itemData['sizeDescription'] != null) sizeDesc = itemData['sizeDescription'];
+        if (itemData['perGarmentTube'] != null) perGarmentTube = (itemData['perGarmentTube'] as num).toDouble();
       }
     }
 
@@ -182,9 +184,10 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
           componentDescription: match.item.componentDescription ?? '',
           sizeDescription: sizeDesc,
           colorDescription: colorDesc,
-          workOrderCode: match.workOrderHeader.workOrderCode ?? '-', // ✅ Added
+          workOrderCode: match.workOrderHeader.workOrderCode ?? '-',
           primaryQuantity: match.productionProgress.primaryQuantity?.toStringAsFixed(0) ?? '0',
           pieceWeight: match.item.pieceWeight ?? 0.0,
+          perGarmentTube: perGarmentTube,
           trayCode: scannedCode.trim(),
           trayUpdateId: match.primaryTrayModel.id,
           trayConcurrencyStamp: match.primaryTrayModel.concurrencyStamp,
@@ -474,11 +477,13 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
       child: Row(
         children: [
           Expanded(flex: 2, child: Text('TRAY CODE', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('WO', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 4, child: Text('ITEM DESC', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('WORK ORDER', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 3, child: Text('ITEM DESCRIPTION', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
           Expanded(flex: 2, child: Text('COLOR', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
           Expanded(flex: 2, child: Text('SIZE', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('QUANTITY', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('PCS/TUBE', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('TUBES', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('PCS', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
           Expanded(flex: 2, child: Text('WEIGHT', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
           const SizedBox(width: 44),
         ],
@@ -501,7 +506,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
         children: [
           Expanded(flex: 2, child: Text(tray.trayCode, style: const TextStyle(fontSize: 13, color: Colors.black87))),
           Expanded(flex: 2, child: Text(tray.workOrderCode, style: const TextStyle(fontSize: 12, color: Colors.black87))),
-          Expanded(flex: 4, child: Text(tray.itemDescription, style: const TextStyle(fontSize: 11, color: Colors.black87), maxLines: 2, overflow: TextOverflow.ellipsis)),
+          Expanded(flex: 3, child: Text(tray.itemDescription, style: const TextStyle(fontSize: 11, color: Colors.black87), maxLines: 2, overflow: TextOverflow.ellipsis)),
           Expanded(
             flex: 2, 
             child: Text(tray.colorDescription.isNotEmpty ? tray.colorDescription : '-', style: const TextStyle(fontSize: 11, color: Colors.black87, fontWeight: FontWeight.w600))
@@ -509,6 +514,13 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
           Expanded(
             flex: 2, 
             child: Text(tray.sizeDescription.isNotEmpty ? tray.sizeDescription : '-', style: const TextStyle(fontSize: 11, color: Colors.black87))
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              tray.perGarmentTube > 0 ? tray.perGarmentTube.toStringAsFixed(0) : '-',
+              style: TextStyle(fontSize: 12, color: Colors.indigo.shade700, fontWeight: FontWeight.w600),
+            ),
           ),
           Expanded(
             flex: 2,
@@ -529,8 +541,21 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
           ),
           Expanded(
             flex: 2,
+            child: Builder(
+              builder: (_) {
+                final tubes = double.tryParse(tray.primaryQuantity) ?? 0;
+                final garmentPcs = (tray.perGarmentTube > 0) ? (tubes * tray.perGarmentTube) : 0;
+                return Text(
+                  garmentPcs > 0 ? garmentPcs.toStringAsFixed(0) : '-',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.teal.shade700),
+                );
+              },
+            ),
+          ),
+          Expanded(
+            flex: 2,
             child: Text(
-              '${((double.tryParse(tray.primaryQuantity) ?? 0.0) * tray.pieceWeight).toStringAsFixed(2)} kg',
+              '${((double.tryParse(tray.primaryQuantity) ?? 0.0) * tray.pieceWeight).toStringAsFixed(2)} g',
               style: const TextStyle(fontSize: 13, color: Colors.black87),
             ),
           ),

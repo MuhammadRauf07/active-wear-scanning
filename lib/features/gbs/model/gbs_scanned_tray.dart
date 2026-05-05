@@ -11,6 +11,7 @@ class GBSScannedTray {
   final String locatorCode;
   final String primaryQuantity;
   final double pieceWeight;
+  final double perGarmentTube;
 
   GBSScannedTray({
     this.trayUpdateId,
@@ -25,5 +26,7 @@ class GBSScannedTray {
     this.locatorCode = '',
     this.primaryQuantity = '',
     this.pieceWeight = 0.0,
+    this.perGarmentTube = 0.0,
   });
 }
+

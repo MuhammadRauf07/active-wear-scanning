@@ -703,7 +703,7 @@ class _BatchListScreenState extends State<BatchListScreen>
                 totalWeight += qty * pw;
               }
               final weightDisplay = totalWeight > 0
-                  ? '${totalWeight.toStringAsFixed(2)} kg'
+                  ? '${totalWeight.toStringAsFixed(2)} g'
                   : '-';
 
               return Container(
