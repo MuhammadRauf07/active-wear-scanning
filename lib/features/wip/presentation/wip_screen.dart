@@ -5,6 +5,8 @@ import 'package:active_wear_scanning/core/widgets/section_header.dart';
 import 'package:active_wear_scanning/features/batch/repo/batch_repo.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:active_wear_scanning/features/wip/model/wip_model.dart';
+import 'package:active_wear_scanning/features/wip/model/wip_group.dart';
+import 'package:active_wear_scanning/features/wip/presentation/widgets/locator_expansion_item.dart';
 import 'package:active_wear_scanning/features/wip/repo/wip_repo.dart';
 import 'package:flutter/material.dart';
 
@@ -102,8 +104,8 @@ class _WIPScreenState extends State<WIPScreen> {
     }
   }
 
-  List<_WIPGroup> _groupTrays(List<ProductionProgressResponseModel> trays, bool isKnitting) {
-    final Map<String, _WIPGroup> groups = {};
+  List<WIPGroup> _groupTrays(List<ProductionProgressResponseModel> trays, bool isKnitting) {
+    final Map<String, WIPGroup> groups = {};
 
     for (final t in trays) {
       String key;
@@ -115,7 +117,7 @@ class _WIPScreenState extends State<WIPScreen> {
         key = "${wo}_${machine}_$item";
         
         if (!groups.containsKey(key)) {
-          groups[key] = _WIPGroup(title1: wo, title2: machine, subtitle: item, trays: []);
+          groups[key] = WIPGroup(title1: wo, title2: machine, subtitle: item, trays: []);
         }
       } else {
         // Group by Batch No + Color
@@ -124,7 +126,7 @@ class _WIPScreenState extends State<WIPScreen> {
         key = "${batch}_$color";
         
         if (!groups.containsKey(key)) {
-          groups[key] = _WIPGroup(title1: batch, title2: color, trays: []);
+          groups[key] = WIPGroup(title1: batch, title2: color, trays: []);
         }
       }
       groups[key]!.trays.add(t);
@@ -166,7 +168,25 @@ class _WIPScreenState extends State<WIPScreen> {
                   : ListView.builder(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       itemCount: _locators.length,
-                      itemBuilder: (context, index) => _buildLocatorExpansionItem(_locators[index]),
+                      itemBuilder: (context, index) {
+                        final loc = _locators[index];
+                        final locatorId = loc.locator.id;
+                        final trays = _locatorTrays[locatorId] ?? [];
+                        final isLoading = _loadingDetails[locatorId] ?? false;
+                        final deptCode = loc.department.code.toUpperCase();
+                        final isKnitting = deptCode == 'KNITTING';
+                        final groupedData = _groupTrays(trays, isKnitting);
+
+                        return LocatorExpansionItem(
+                          locator: loc,
+                          groupedData: groupedData,
+                          isLoading: isLoading,
+                          onExpansionChanged: (expanded) {
+                            if (expanded) _fetchWipData(locatorId);
+                          },
+                          onViewDetails: (group) => _showTrayDetailsDialog(group),
+                        );
+                      },
                     ),
             ),
           ],
@@ -175,75 +195,7 @@ class _WIPScreenState extends State<WIPScreen> {
     );
   }
 
-  Widget _buildLocatorExpansionItem(LocatorResponse loc) {
-    final locatorId = loc.locator.id;
-    final trays = _locatorTrays[locatorId] ?? [];
-    final isLoading = _loadingDetails[locatorId] ?? false;
-    final deptCode = loc.department.code.toUpperCase();
-    final isKnitting = deptCode == 'KNITTING';
-    final isProcessing = deptCode == 'PROCESSING';
-    
-    final groupedData = _groupTrays(trays, isKnitting);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.blue.shade50),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.blue.shade100.withValues(alpha: 0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          onExpansionChanged: (expanded) {
-            if (expanded) _fetchWipData(locatorId);
-          },
-          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          leading: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.blue.shade50,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.warehouse_outlined, size: 20, color: Colors.blue.shade700),
-          ),
-          title: Text(
-            loc.locator.description,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87),
-          ),
-          subtitle: Text(
-            'Dept: ${loc.department.name}',
-            style: TextStyle(fontSize: 12, color: Colors.blue.shade400, fontWeight: FontWeight.w500),
-          ),
-          trailing: isLoading
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-              : Icon(Icons.keyboard_arrow_down, color: Colors.blue.shade200),
-          children: [
-            if (groupedData.isEmpty && !isLoading)
-              Padding(
-                padding: const EdgeInsets.all(32),
-                child: _buildEmptyState(),
-              )
-            else ...[
-              const Divider(height: 1),
-              _buildTableHeader(isKnitting, isProcessing),
-              ...List.generate(groupedData.length, (idx) {
-                return _buildGroupRow(idx, groupedData[idx], isKnitting, isProcessing);
-              }),
-              const SizedBox(height: 12),
-            ]
-          ],
-        ),
-      ),
-    );
-  }
+  // Removed _buildLocatorExpansionItem as it was extracted to LocatorExpansionItem.
 
   Widget _buildEmptyLocatorsState() {
     return Center(
@@ -259,63 +211,9 @@ class _WIPScreenState extends State<WIPScreen> {
   }
 
 
-  Widget _buildTableHeader(bool isKnitting, bool isProcessing) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.blue.shade50,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-      ),
-      child: Row(
-        children: [
-          if (isKnitting) ...[
-            Expanded(flex: 3, child: Text('WORK ORDER', style: _tableHeaderStyle)),
-            Expanded(flex: 3, child: Text('MACHINE', style: _tableHeaderStyle)),
-            Expanded(flex: 4, child: Text('ITEM DESCRIPTION', style: _tableHeaderStyle)),
-          ] else ...[
-            Expanded(flex: 4, child: Text('BATCH NO', style: _tableHeaderStyle)),
-            Expanded(flex: 4, child: Text('COLOR', style: _tableHeaderStyle)),
-          ],
-          Expanded(flex: 2, child: Text('TRAYS', style: _tableHeaderStyle)),
-          Expanded(flex: 2, child: Text('TUBES', style: _tableHeaderStyle)),
-          const SizedBox(width: 40), // Space for action button
-        ],
-      ),
-    );
-  }
+  // Removed _buildTableHeader and _buildGroupRow as they were extracted to widgets.
 
-  Widget _buildGroupRow(int index, _WIPGroup group, bool isKnitting, bool isProcessing) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.grey.shade100)),
-        color: index.isEven ? Colors.white : Colors.blue.shade50.withValues(alpha: 0.1),
-      ),
-      child: Row(
-        children: [
-          if (isKnitting) ...[
-            Expanded(flex: 3, child: Text(group.title1, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))),
-            Expanded(flex: 3, child: Text(group.title2, style: const TextStyle(fontSize: 11))),
-            Expanded(flex: 4, child: Text(group.subtitle ?? '-', style: const TextStyle(fontSize: 11), maxLines: 2, overflow: TextOverflow.ellipsis)),
-          ] else ...[
-            Expanded(flex: 4, child: Text(group.title1, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))),
-            Expanded(flex: 4, child: Text(group.title2, style: const TextStyle(fontSize: 11))),
-          ],
-          Expanded(flex: 2, child: Text(group.trayCount.toString(), style: const TextStyle(fontSize: 12))),
-          Expanded(flex: 2, child: Text(group.totalPcs.toInt().toString(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue))),
-          IconButton(
-            icon: const Icon(Icons.list_alt_rounded, size: 20, color: Colors.blue),
-            onPressed: () => _showTrayDetailsDialog(group),
-            tooltip: 'View Tray Details',
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showTrayDetailsDialog(_WIPGroup group) async {
+  void _showTrayDetailsDialog(WIPGroup group) async {
     bool showTrays = false;
     double? fetchedCapacity;
     
@@ -705,28 +603,5 @@ class _WIPScreenState extends State<WIPScreen> {
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.inventory_2_outlined, size: 48, color: Colors.grey.shade300),
-          const SizedBox(height: 12),
-          Text('No WIP entries found in this locator', style: TextStyle(color: Colors.grey.shade500)),
-        ],
-      ),
-    );
-  }
-}
-
-class _WIPGroup {
-  final String title1;
-  final String title2;
-  final String? subtitle;
-  final List<ProductionProgressResponseModel> trays;
-
-  _WIPGroup({required this.title1, required this.title2, this.subtitle, required this.trays});
-
-  int get trayCount => trays.length;
-  double get totalPcs => trays.fold(0.0, (sum, t) => sum + (t.productionProgress.primaryQuantity ?? 0));
+  // Removed _buildEmptyState and _WIPGroup as they were extracted.
 }

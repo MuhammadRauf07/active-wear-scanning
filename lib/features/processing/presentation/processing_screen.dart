@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
+import 'package:active_wear_scanning/features/processing/model/batch_summary_item.dart';
+//import 'package:active_wear_scanning/features/processing/model/processing_model.dart';
+import 'package:active_wear_scanning/features/processing/presentation/processing_batch_details.dart';
+import 'package:active_wear_scanning/features/processing/presentation/widgets/batch_details_table.dart';
 import 'package:active_wear_scanning/features/batch/model/batch_header_model.dart';
+import 'package:active_wear_scanning/features/tray/repo/tray_scanning_repo.dart';
+import 'package:active_wear_scanning/features/tray/model/tray_details_model.dart';
 import '../../../core/widgets/section_header.dart';
 import '../../../core/widgets/content_card.dart';
 import '../../../core/widgets/custom_outlined_button.dart';
@@ -23,12 +29,14 @@ class ProcessingScreen extends StatefulWidget {
 class _ProcessingScreenState extends State<ProcessingScreen> {
   final _processingRepo = ProcessingRepo();
   final _batchRepo = BatchRepo();
+  final _trayRepo = TrayScanningRepo();
   final _batchBarcodeController = TextEditingController();
 
   List<Operation> _operations = [];
   Map<int, int> _opBatchCounts = {};
-  Map<int, List<_BatchSummaryItem>> _opBatchDetails = {};
+  Map<int, List<BatchSummaryItem>> _opBatchDetails = {};
   Map<int, bool> _loadingDetails = {};
+  Map<int, String> _trayIdToCode = {}; // trayDetailId → trayCode lookup
 
   Operation? _selectedOperation;
   bool _isLoadingOperations = false;
@@ -47,17 +55,29 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
       if (mounted) setState(() => _isLoadingOperations = true);
       AppLoader.show(context, message: 'Loading Operations...');
 
+      // Build tray lookup map once
+      final trayRes = await _trayRepo.fetchAvailableTrayDetails();
+      if (trayRes.success && trayRes.data != null) {
+        for (final t in trayRes.data as List<TrayDetailsModel>) {
+          final id = t.trayDetails?.id;
+          final code = t.trayDetails?.trayCode;
+          if (id != null && code != null) _trayIdToCode[id] = code;
+        }
+      }
+
       final res = await _processingRepo.fetchProcessingOperations();
       if (res.success && res.data != null) {
         final List<Operation> allOps = List<Operation>.from(res.data);
         if (mounted) {
           setState(() {
-            _operations = allOps.where((op) {
-              final isProcessing = op.processNature == 1;
-              final isNumeric = RegExp(r'^\d+$').hasMatch(op.code);
-              return isProcessing && isNumeric;
-            }).toList()
-              ..sort((a, b) => int.parse(a.code).compareTo(int.parse(b.code)));
+            _operations =
+                allOps.where((op) {
+                  final isProcessing = op.processNature == 1;
+                  final isNumeric = RegExp(r'^\d+$').hasMatch(op.code);
+                  return isProcessing && isNumeric;
+                }).toList()..sort(
+                  (a, b) => int.parse(a.code).compareTo(int.parse(b.code)),
+                );
           });
         }
         await _fetchAllBatchCounts();
@@ -128,7 +148,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
           }
         }
 
-        final List<_BatchSummaryItem> summaries = [];
+        final List<BatchSummaryItem> summaries = [];
         for (final entry in grouped.entries) {
           final bhId = entry.key;
           final groupRecords = entry.value;
@@ -139,16 +159,22 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
 
             // Prefer batch header machine (the user-selected machine when creating the batch).
             // When bhFull.machine is null (API returns machineId as scalar only), fetch by ID.
-            String? machineCode = bhFull.machine?.brand ?? bhFull.machine?.resourceCode;
+            String? machineCode =
+                bhFull.machine?.brand ?? bhFull.machine?.resourceCode;
             if (machineCode == null && bhFull.batchHeader.machineId != null) {
-              final mRes = await _batchRepo.fetchMachineById(bhFull.batchHeader.machineId!);
+              final mRes = await _batchRepo.fetchMachineById(
+                bhFull.batchHeader.machineId!,
+              );
               if (mRes.success && mRes.data != null) {
                 final mData = mRes.data as Map<String, dynamic>;
                 final mJson = mData['resource'] ?? mData;
-                machineCode = mJson['brand']?.toString() ?? mJson['resourceCode']?.toString();
+                machineCode =
+                    mJson['brand']?.toString() ??
+                    mJson['resourceCode']?.toString();
               }
             }
-            machineCode ??= groupRecords.first.machineModel.brand ??
+            machineCode ??=
+                groupRecords.first.machineModel.brand ??
                 groupRecords.first.machineModel.resourceCode ??
                 '-';
 
@@ -160,7 +186,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
             }
 
             summaries.add(
-              _BatchSummaryItem(
+              BatchSummaryItem(
                 batchHeaderId: bhId,
                 machineId: bhFull.batchHeader.machineId,
                 batchCode: bhFull.batchHeader.batchHeaderCode ?? '-',
@@ -168,6 +194,15 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                 color: bhFull.batchHeader.colorDescription ?? '-',
                 trayCount: groupRecords.length,
                 totalWeight: totalWeight,
+                trolleyCode: bhFull.batchHeader.trayDetailId != null
+                    ? _trayIdToCode[bhFull.batchHeader.trayDetailId]
+                    : null,
+                isStarted: groupRecords.any(
+                  (r) => r.productionProgress.isStarted == true,
+                ),
+                reworkFlag: groupRecords.any(
+                  (r) => r.productionProgress.reworkFlag == true,
+                ),
               ),
             );
           }
@@ -196,13 +231,12 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    bool isAnyLoading = _isLoadingOperations || _loadingDetails.values.any((e) => e);
+    bool isAnyLoading =
+        _isLoadingOperations || _loadingDetails.values.any((e) => e);
 
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        // Wrap EVERYTHING in ExcludeSemantics when loading is active 
-        // to prevent semantics tree infinite recursion crashes.
         child: ExcludeSemantics(
           excluding: isAnyLoading,
           child: Column(
@@ -224,9 +258,6 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
               Expanded(
                 child: AbsorbPointer(
                   absorbing: isAnyLoading,
-              // Expanded(
-              //   child: AbsorbPointer(
-              //     absorbing: isAnyLoading,
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(12),
                     child: Column(
@@ -243,92 +274,205 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                               ? const SizedBox(
                                   height: 140,
                                   child: Center(
-                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
                                   ),
                                 )
                               : _operations.isEmpty
-                                  ? Padding(
-                                      padding: const EdgeInsets.all(40),
-                                      child: Center(
-                                        child: Text(
-                                          'No operations found.',
-                                          style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
-                                        ),
+                              ? Padding(
+                                  padding: const EdgeInsets.all(40),
+                                  child: Center(
+                                    child: Text(
+                                      'No operations found.',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.grey.shade500,
                                       ),
-                                    )
-                                  : ListView.separated(
-                                      shrinkWrap: true,
-                                      physics: const NeverScrollableScrollPhysics(),
-                                      itemCount: _operations.length,
-                                      separatorBuilder: (_, __) => const Divider(height: 1, thickness: 1),
-                                      itemBuilder: (context, index) {
-                                        final op = _operations[index];
-                                        final count = _opBatchCounts[op.id] ?? 0;
-                                        final isSelected = _selectedOperation?.id == op.id;
-
-                                        return Column(
-                                          children: [
-                                            GestureDetector(
-                                              onTap: () {
-                                                setState(() {
-                                                  if (isSelected) {
-                                                    _selectedOperation = null;
-                                                  } else {
-                                                    _selectedOperation = op;
-                                                    _fetchOpDetails(op.id);
-                                                  }
-                                                });
-                                              },
-                                              child: AnimatedContainer(
-                                                duration: const Duration(milliseconds: 180),
-                                                color: isSelected ? Colors.blue.withOpacity(0.05) : Colors.white,
-                                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                                                child: Row(
-                                                  children: [
-                                                    Expanded(
-                                                      child: Text(
-                                                        op.name,
-                                                        style: TextStyle(
-                                                          fontSize: 14,
-                                                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                                                          color: isSelected ? Colors.blue.shade800 : Colors.black87,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    Container(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                                      decoration: BoxDecoration(
-                                                        color: count > 0 ? Colors.blue : Colors.grey.shade200,
-                                                        borderRadius: BorderRadius.circular(12),
-                                                      ),
-                                                      child: Text(
-                                                        count.toString(),
-                                                        style: TextStyle(
-                                                          fontSize: 12,
-                                                          fontWeight: FontWeight.bold,
-                                                          color: count > 0 ? Colors.white : Colors.grey.shade600,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                    Icon(
-                                                      isSelected ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                                                      size: 20,
-                                                      color: isSelected ? Colors.blue : Colors.grey.shade300,
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ),
-                                            if (isSelected)
-                                              Padding(
-                                                padding: const EdgeInsets.all(8.0),
-                                                child: _buildDetailsTable(op.id),
-                                              ),
-                                          ],
-                                        );
-                                      },
                                     ),
+                                  ),
+                                )
+                              : ListView.separated(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  itemCount: _operations.length,
+                                  separatorBuilder: (_, __) =>
+                                      const Divider(height: 1, thickness: 1),
+                                  itemBuilder: (context, index) {
+                                    final op = _operations[index];
+                                    final count = _opBatchCounts[op.id] ?? 0;
+                                    final isSelected =
+                                        _selectedOperation?.id == op.id;
+
+                                    return Column(
+                                      children: [
+                                        GestureDetector(
+                                          onTap: () {
+                                            setState(() {
+                                              if (isSelected) {
+                                                _selectedOperation = null;
+                                              } else {
+                                                _selectedOperation = op;
+                                                _fetchOpDetails(op.id);
+                                              }
+                                            });
+                                          },
+                                          child: AnimatedContainer(
+                                            duration: const Duration(
+                                              milliseconds: 180,
+                                            ),
+                                            color: isSelected
+                                                ? Colors.blue.withOpacity(0.05)
+                                                : Colors.white,
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 14,
+                                              vertical: 14,
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    op.name,
+                                                    style: TextStyle(
+                                                      fontSize: 14,
+                                                      fontWeight: isSelected
+                                                          ? FontWeight.w600
+                                                          : FontWeight.w400,
+                                                      color: isSelected
+                                                          ? Colors.blue.shade800
+                                                          : Colors.black87,
+                                                    ),
+                                                  ),
+                                                ),
+                                                Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 10,
+                                                        vertical: 4,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: count > 0
+                                                        ? Colors.blue
+                                                        : Colors.grey.shade200,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                  ),
+                                                  child: Text(
+                                                    count.toString(),
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: count > 0
+                                                          ? Colors.white
+                                                          : Colors
+                                                                .grey
+                                                                .shade600,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Icon(
+                                                  isSelected
+                                                      ? Icons.keyboard_arrow_up
+                                                      : Icons
+                                                            .keyboard_arrow_down,
+                                                  size: 20,
+                                                  color: isSelected
+                                                      ? Colors.blue
+                                                      : Colors.grey.shade300,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                        if (isSelected)
+                                          Padding(
+                                            padding: const EdgeInsets.all(8.0),
+                                            child: BatchDetailsTable(
+                                              isLoading:
+                                                  _loadingDetails[op.id] ==
+                                                  true,
+                                              summaries: _opBatchDetails[op.id],
+                                              onDetailsPressed: (s) async {
+                                                final currentIndex = _operations
+                                                    .indexWhere(
+                                                      (o) =>
+                                                          o.id ==
+                                                          _selectedOperation
+                                                              ?.id,
+                                                    );
+                                                String nextOpName = 'N/A';
+                                                int? nextOpId;
+                                                if (currentIndex != -1 &&
+                                                    currentIndex <
+                                                        _operations.length -
+                                                            1) {
+                                                  nextOpName =
+                                                      _operations[currentIndex +
+                                                              1]
+                                                          .name;
+                                                  nextOpId =
+                                                      _operations[currentIndex +
+                                                              1]
+                                                          .id;
+                                                }
+                                                final result = await Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (context) =>
+                                                        ProcessingBatchDetailsScreen(
+                                                          batchHeaderId:
+                                                              s.batchHeaderId,
+                                                          currentOperationId:
+                                                              _selectedOperation!
+                                                                  .id,
+                                                          batchCode:
+                                                              s.batchCode,
+                                                          machineId:
+                                                              s.machineId,
+                                                          machine: s.machine,
+                                                          color: s.color,
+                                                          trayCount:
+                                                              s.trayCount,
+                                                          totalWeight:
+                                                              s.totalWeight,
+                                                          operationName:
+                                                              _selectedOperation
+                                                                  ?.name ??
+                                                              '-',
+                                                          nextOperationName:
+                                                              nextOpName,
+                                                          nextOperationId:
+                                                              nextOpId,
+                                                        ),
+                                                  ),
+                                                );
+                                                if (result == true) {
+                                                  SchedulerBinding.instance
+                                                      .addPostFrameCallback((
+                                                        _,
+                                                      ) {
+                                                        if (mounted) {
+                                                          setState(() {
+                                                            _selectedOperation =
+                                                                null;
+                                                            _opBatchDetails
+                                                                .clear();
+                                                          });
+                                                          _fetchOperations();
+                                                        }
+                                                      });
+                                                }
+                                              },
+                                            ),
+                                          ),
+                                      ],
+                                    );
+                                  },
+                                ),
                         ),
                       ],
                     ),
@@ -344,247 +488,31 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
     );
   }
 
-  Widget _buildDetailsTable(int opId) {
-    if (_loadingDetails[opId] == true) {
-      return const SizedBox(
-        height: 140,
-        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-      );
-    }
+  // Removed _buildDetailsTable and _BatchSummaryItem as they were extracted.
 
-    final summaries = _opBatchDetails[opId];
-    if (summaries == null || summaries.isEmpty) {
-      return const ContentCard(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.info_outline, color: Colors.grey, size: 32),
-                SizedBox(height: 8),
-                Text(
-                  'No batches found for this operation.',
-                  style: TextStyle(fontSize: 13, color: Colors.grey),
-                ),
-              ],
-            ),
-          ),
+  // ── Small status / flag badge ────────────────────────────────────────────────
+  Widget _statusBadge({
+    required String label,
+    required Color color,
+    required Color bg,
+    required Color border,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        border: Border.all(color: border),
+        borderRadius: BorderRadius.circular(5),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: color,
+          letterSpacing: 0.2,
         ),
-      );
-    }
-
-    return ContentCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                flex: 2,
-                child: Text(
-                  'BATCH ID',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade700,
-                  ),
-                ),
-              ),
-              Expanded(
-                flex: 2,
-                child: Text(
-                  'MACHINE',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade700,
-                  ),
-                ),
-              ),
-              Expanded(
-                flex: 2,
-                child: Text(
-                  'COLOR',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade700,
-                  ),
-                ),
-              ),
-              Expanded(
-                flex: 2,
-                child: Text(
-                  'TRAYS',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade700,
-                  ),
-                ),
-              ),
-              Expanded(
-                flex: 2,
-                child: Text(
-                  'WEIGHT',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade700,
-                  ),
-                ),
-              ),
-              const Expanded(flex: 3, child: SizedBox.shrink()),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ...summaries.map((s) {
-            return Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      s.batchCode,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Colors.black87,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      s.machine,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Colors.black87,
-                        fontWeight: FontWeight.normal,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      s.color,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Colors.black87,
-                        fontWeight: FontWeight.normal,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      '${s.trayCount} trays',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Colors.black87,
-                        fontWeight: FontWeight.normal,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      '${s.totalWeight.toStringAsFixed(2)} g',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Colors.blue,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 3,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        ElevatedButton(
-                          onPressed: () async {
-                            final currentIndex = _operations.indexWhere((o) => o.id == _selectedOperation?.id);
-                            String nextOpName = 'N/A';
-                            int? nextOpId;
-                            if (currentIndex != -1 && currentIndex < _operations.length - 1) {
-                              nextOpName = _operations[currentIndex + 1].name;
-                              nextOpId = _operations[currentIndex + 1].id;
-                            }
-                            final result = await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => ProcessingBatchDetailsScreen(
-                                  batchHeaderId: s.batchHeaderId,
-                                  currentOperationId: _selectedOperation!.id,
-                                  batchCode: s.batchCode,
-                                  machineId: s.machineId,
-                                  machine: s.machine,
-                                  color: s.color,
-                                  trayCount: s.trayCount,
-                                  totalWeight: s.totalWeight,
-                                  operationName: _selectedOperation?.name ?? '-',
-                                  nextOperationName: nextOpName,
-                                  nextOperationId: nextOpId,
-                                ),
-                              ),
-                            );
-                            if (result == true) {
-                              SchedulerBinding.instance.addPostFrameCallback((_) {
-                                if (mounted) {
-                                  setState(() {
-                                    _selectedOperation = null;
-                                    _opBatchDetails.clear(); // Invalidate cache — prevents stale data on old op
-                                  });
-                                  _fetchOperations();
-                                }
-                              });
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            minimumSize: const Size(0, 34),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                            elevation: 0,
-                          ),
-                          child: const Text('Batch Details', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
       ),
     );
   }
-}
-
-class _BatchSummaryItem {
-  final int batchHeaderId;
-  final int? machineId;
-  final String batchCode;
-  final String machine;
-  final String color;
-  final int trayCount;
-  final double totalWeight;
-
-  _BatchSummaryItem({
-    required this.batchHeaderId,
-    this.machineId,
-    required this.batchCode,
-    required this.machine,
-    required this.color,
-    required this.trayCount,
-    required this.totalWeight,
-  });
 }

@@ -5,9 +5,14 @@ import 'package:active_wear_scanning/core/widgets/barcode_scanner_dialog.dart';
 import 'package:active_wear_scanning/core/widgets/content_card.dart';
 import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
 import 'package:active_wear_scanning/core/widgets/dynamic_info_display.dart';
+import 'package:active_wear_scanning/core/widgets/empty_scan_state.dart';
+import 'package:active_wear_scanning/core/widgets/scanner_always_open.dart';
 import 'package:active_wear_scanning/core/widgets/section_header.dart';
-import 'package:active_wear_scanning/features/tray/model/plan_header_model.dart';
+import 'package:active_wear_scanning/core/widgets/tray_table_header.dart';
 import 'package:active_wear_scanning/features/tray/model/scanned_tray.dart';
+import 'package:active_wear_scanning/features/tray/presentation/widgets/scanned_tray_row.dart';
+import 'package:active_wear_scanning/features/tray/presentation/widgets/work_order_dropdown.dart';
+import 'package:active_wear_scanning/features/tray/model/plan_header_model.dart';
 import 'package:active_wear_scanning/features/tray/model/tray_details_model.dart';
 import 'package:active_wear_scanning/features/tray/repo/tray_scanning_repo.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
@@ -15,7 +20,6 @@ import 'package:flutter/material.dart';
 import 'package:plex/plex_di/plex_dependency_injection.dart';
 
 import '../../../core/widgets/custom_expanded_async_dropdown.dart';
-import '../../../core/widgets/scanner_always_open.dart';
 
 class TrayScanningScreen extends StatefulWidget {
   const TrayScanningScreen({super.key});
@@ -43,12 +47,6 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     fontSize: 14,
     fontWeight: FontWeight.w500,
     color: Colors.black87,
-  );
-
-  static final _tableHeaderStyle = TextStyle(
-    fontSize: 12,
-    fontWeight: FontWeight.w600,
-    color: Colors.grey.shade700,
   );
 
   // Bluetooth Scanner Support
@@ -265,10 +263,6 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
           if (trayDetailsModel.data != null) {
             availableTraysDetail = (trayDetailsModel.data as List).map((item) => item as TrayDetailsModel).toList();
           }
-          // if (_planLines!.length == 1) {
-          //   _selectedPlanLine = _planLines!.first;
-          //   _overrideQuantityController.text = _getPlanQuantityPerTray();
-          // }
         });
       } else {
         _showError(apiResult.message ?? "No data found");
@@ -470,7 +464,18 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                           ),
                         ],
                       ),
-                      _buildWorkOrderDropdown(),
+                      WorkOrderDropdown(
+                        planLines: _planLines,
+                        selectedPlanLine: _selectedPlanLine,
+                        onChanged: (newValue) {
+                          setState(() {
+                            _selectedPlanLine = newValue;
+                            if (_selectedPlanLine != null) {
+                              _overrideQuantityController.text = _getPlanQuantityPerTray();
+                            }
+                          });
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -520,7 +525,6 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   }
 
   Widget _buildScannedTraysSection() {
-    final hasTrays = _scannedTrays.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -569,14 +573,25 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              _buildTrayTableHeader(),
-              if (!hasTrays)
-                _buildEmptyState()
+              const TrayTableHeader(),
+              if (_scannedTrays.isEmpty)
+                const EmptyScanState(hasBorder: false)
               else
                 ...List.generate(
                   _scannedTrays.length,
-                  (index) => _buildTrayRow(index, _scannedTrays[index]),
+                  (index) => ScannedTrayRow(
+                    index: index,
+                    tray: _scannedTrays[index],
+                    quantityController: _quantityControllers[index],
+                    selectedPlanLine: _selectedPlanLine,
+                    onDelete: () {
+                      setState(() {
+                        _quantityControllers[index].dispose();
+                        _quantityControllers.removeAt(index);
+                        _scannedTrays.removeAt(index);
+                      });
+                    },
+                  ),
                 ),
             ],
           ),
@@ -585,209 +600,9 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     );
   }
 
-  Widget _buildTrayTableHeader() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Row(
-        children: [
-          Expanded(flex: 2, child: Text('TRAY CODE', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
-          Expanded(flex: 2, child: Text('WORK ORDER', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
-          Expanded(flex: 3, child: Text('ITEM DESCRIPTION', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
-          Expanded(flex: 2, child: Text('COLOR', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
-          Expanded(flex: 2, child: Text('SIZE', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
-          Expanded(flex: 2, child: Text('PCS/TUBE', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
-          Expanded(flex: 2, child: Text('TUBES', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
-          Expanded(flex: 2, child: Text('PCS', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
-          Expanded(flex: 2, child: Text('WEIGHT', style: _tableHeaderStyle.copyWith(letterSpacing: 1.1))),
-          const SizedBox(width: 40),
-        ],
-      ),
-    );
-  }
+  // Removed _buildTrayTableHeader and _buildEmptyState as they are extracted to core widgets
 
-  Widget _buildEmptyState() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 24),
-      child: Center(
-        child: Text(
-          'No scanned trays yet. Start by scanning a tray barcode.',
-          style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTrayRow(int index, ScannedTray tray) {
-    final isEmpty = tray.trayCode.isEmpty;
-    final displayCode = isEmpty ? '-' : tray.trayCode;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-      decoration: BoxDecoration(
-        border: Border(
-          left: BorderSide(color: Colors.grey.shade300),
-          right: BorderSide(color: Colors.grey.shade300),
-          bottom: BorderSide(color: Colors.grey.shade300),
-        ),
-        color: index.isEven ? Colors.white : Colors.grey.shade50,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 2,
-            child: Text(
-              displayCode,
-              style: TextStyle(fontSize: 13, color: isEmpty ? Colors.grey : Colors.black87),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              _selectedPlanLine?.workOrderHeader.workOrderCode ?? "-",
-              style: TextStyle(fontSize: 12, color: isEmpty ? Colors.grey : Colors.black87),
-            ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(
-              _selectedPlanLine?.item.description ?? "-",
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 11, color: isEmpty ? Colors.grey : Colors.black87),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              tray.colorDescription.isNotEmpty ? tray.colorDescription : "-",
-              style: TextStyle(fontSize: 11, color: isEmpty ? Colors.grey : Colors.black87, fontWeight: FontWeight.w600),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              tray.sizeDescription.isNotEmpty ? tray.sizeDescription : "-",
-              style: TextStyle(fontSize: 11, color: isEmpty ? Colors.grey : Colors.black87),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              tray.perGarmentTube > 0 ? tray.perGarmentTube.toStringAsFixed(0) : '-',
-              style: TextStyle(fontSize: 12, color: isEmpty ? Colors.grey : Colors.indigo.shade700, fontWeight: FontWeight.w600),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: SizedBox(
-                width: 55,
-                height: 35,
-                child: TextField(
-                  controller: _quantityControllers[index],
-                  keyboardType: TextInputType.number,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                  decoration: InputDecoration(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
-                    focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.blue, width: 1.5)),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Builder(
-              builder: (_) {
-                final qty = double.tryParse(_quantityControllers[index].text) ?? 0;
-                final garmentPcs = (tray.perGarmentTube > 0) ? (qty * tray.perGarmentTube) : 0;
-                return Text(
-                  garmentPcs > 0 ? garmentPcs.toStringAsFixed(0) : '-',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: isEmpty ? Colors.grey : Colors.teal.shade700,
-                  ),
-                );
-              },
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Builder(
-              builder: (_) {
-                final qty = double.tryParse(_quantityControllers[index].text) ?? 0;
-                final pw = _selectedPlanLine?.item.pieceWeight;
-                if (pw == null || pw == 0) return const Text('-', style: TextStyle(fontSize: 13));
-                return Text('${(qty * pw).toStringAsFixed(2)} g', style: const TextStyle(fontSize: 13));
-              },
-            ),
-          ),
-          const SizedBox(width: 8),
-          _buildDeleteTrayButton(index),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDeleteTrayButton(int index) {
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _quantityControllers[index].dispose();
-          _quantityControllers.removeAt(index);
-          _scannedTrays.removeAt(index);
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade300),
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Icon(Icons.cancel, size: 18, color: Colors.red.shade400),
-      ),
-    );
-  }
-
-  Widget _buildWorkOrderDropdown() {
-    if (_planLines == null || _planLines!.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(top: 16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Select Work Order & Item Description', style: _labelStyle),
-          const SizedBox(height: 8),
-          CustomExpandedAsyncDropdown<PlanLineResponseModel>(
-            hint: "Select from list",
-            width: double.infinity,
-            height: 48,
-            borderColor: Colors.blue,
-            items: _planLines,
-            selectedValue: _selectedPlanLine,
-            itemAsString: (plan) => "${plan.workOrderHeader.workOrderCode} - ${plan.item.description}",
-            onChanged: (newValue) {
-              setState(() {
-                _selectedPlanLine = newValue;
-                if (_selectedPlanLine != null) {
-                  _overrideQuantityController.text = _getPlanQuantityPerTray();
-                }
-              });
-            },
-          ),
-        ],
-      ),
-    );
-  }
+  // Removed _buildTrayRow, _buildDeleteTrayButton, and _buildWorkOrderDropdown as they were extracted.
 
   InputDecoration _inputDecoration({
     required String hintText,

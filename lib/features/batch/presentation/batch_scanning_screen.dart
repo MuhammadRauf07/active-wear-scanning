@@ -6,11 +6,14 @@ import 'package:active_wear_scanning/core/widgets/custom_expanded_async_dropdown
 import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
 import 'package:active_wear_scanning/core/widgets/scanner_always_open.dart';
 import 'package:active_wear_scanning/core/widgets/section_header.dart';
-import 'package:active_wear_scanning/features/batch/model/batch_machine_model.dart';
+import 'package:active_wear_scanning/core/widgets/empty_scan_state.dart';
+import 'package:active_wear_scanning/core/widgets/tray_table_header.dart';
 import 'package:active_wear_scanning/features/batch/model/batch_color_model.dart';
 import 'package:active_wear_scanning/features/batch/model/batch_header_model.dart';
-import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
+import 'package:active_wear_scanning/features/batch/model/batch_machine_model.dart';
+import 'package:active_wear_scanning/features/batch/presentation/widgets/scanning_tray_row.dart';
 import 'package:active_wear_scanning/features/batch/repo/batch_repo.dart';
+import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:flutter/material.dart';
 
 class BatchScanningScreen extends StatefulWidget {
@@ -964,13 +967,23 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                               ],
                             ),
                             const SizedBox(height: 12),
-                            _buildTrayTableHeader(),
-                            if (_scannedTrays.isEmpty)
-                              _buildEmptyState()
-                            else
-                              ...List.generate(_scannedTrays.length, (index) {
-                                return _buildTrayRow(index);
-                              }),
+                            const TrayTableHeader(actionColumnWidth: 44),
+                            if (_scannedTrays.isEmpty) const EmptyScanState(hasBorder: true),
+                            ...List.generate(_scannedTrays.length, (index) {
+                              return ScanningTrayRow(
+                                index: index,
+                                tray: _scannedTrays[index],
+                                onDelete: () {
+                                  setState(() {
+                                    final pid = _scannedTrays[index].productionProgress.id;
+                                    if (pid != null) _batchedProgressIds.remove(pid);
+                                    _quantityControllers[index].dispose();
+                                    _quantityControllers.removeAt(index);
+                                    _scannedTrays.removeAt(index);
+                                  });
+                                },
+                              );
+                            }),
                           ],
                         ),
                       ),
@@ -1233,267 +1246,5 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     );
   }
 
-  Widget _buildTrayTableHeader() {
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 2,
-            child: Text(
-              'TRAY CODE',
-              style: _tableHeaderStyle.copyWith(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              'WORK ORDER',
-              style: _tableHeaderStyle.copyWith(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(
-              'ITEM DESCRIPTION',
-              style: _tableHeaderStyle.copyWith(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              'COLOR',
-              style: _tableHeaderStyle.copyWith(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              'SIZE',
-              style: _tableHeaderStyle.copyWith(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              'PCS/TUBE',
-              style: _tableHeaderStyle.copyWith(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              'TUBES',
-              style: _tableHeaderStyle.copyWith(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              'PCS',
-              style: _tableHeaderStyle.copyWith(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              'WEIGHT',
-              style: _tableHeaderStyle.copyWith(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          const SizedBox(width: 44),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 24),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(6)),
-      ),
-      child: Center(
-        child: Text(
-          'No scanned trays yet. Start by scanning a tray barcode.',
-          style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTrayRow(int index) {
-    final tray = _scannedTrays[index];
-    final trayId = tray.primaryTrayModel.id;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-      decoration: BoxDecoration(
-        border: Border(
-          left: BorderSide(color: Colors.grey.shade300),
-          right: BorderSide(color: Colors.grey.shade300),
-          bottom: BorderSide(color: Colors.grey.shade300),
-        ),
-        color: index.isEven ? Colors.white : Colors.grey.shade50,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 2,
-            child: Text(
-              tray.primaryTrayModel?.trayCode ?? '',
-              style: const TextStyle(fontSize: 13, color: Colors.black87),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              tray.workOrderHeader!.workOrderCode,
-              style: const TextStyle(fontSize: 12, color: Colors.black87),
-            ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(
-              tray.item!.description,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11, color: Colors.black87),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              tray.item!.colorDescription?.isNotEmpty == true ? tray.item!.colorDescription! : '-',
-              style: const TextStyle(fontSize: 11, color: Colors.black87, fontWeight: FontWeight.w600),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              tray.item!.sizeDescription?.isNotEmpty == true ? tray.item!.sizeDescription! : '-',
-              style: const TextStyle(fontSize: 11, color: Colors.black87),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              (tray.item?.perGarmentTube ?? 0) > 0
-                  ? (tray.item!.perGarmentTube).toStringAsFixed(0)
-                  : '-',
-              style: TextStyle(fontSize: 12, color: Colors.indigo.shade700, fontWeight: FontWeight.w600),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  (tray.productionProgress.primaryQuantity ?? 0)
-                      .toStringAsFixed(0),
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Colors.black87,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Builder(
-              builder: (_) {
-                final tubes = tray.productionProgress.primaryQuantity ?? 0;
-                final pgt = tray.item?.perGarmentTube ?? 0;
-                final garmentPcs = pgt > 0 ? tubes * pgt : 0;
-                return Text(
-                  garmentPcs > 0 ? garmentPcs.toStringAsFixed(0) : '-',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.teal.shade700),
-                );
-              },
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Builder(
-              builder: (_) {
-                final qty = tray.productionProgress.primaryQuantity ?? 0;
-                final pw = tray.item?.pieceWeight;
-                if (pw == null || pw == 0)
-                  return const Text('-', style: TextStyle(fontSize: 13));
-                return Text(
-                  '${(qty * pw).toStringAsFixed(2)} g',
-                  style: const TextStyle(fontSize: 13, color: Colors.black87),
-                );
-              },
-            ),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: () {
-              setState(() {
-                final pid = tray.productionProgress.id;
-                if (pid != null) _batchedProgressIds.remove(pid);
-                _quantityControllers[index].dispose();
-                _quantityControllers.removeAt(index);
-                _scannedTrays.removeAt(index);
-              });
-            },
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Icon(Icons.cancel, size: 18, color: Colors.red.shade400),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // Removed _buildTrayTableHeader, _buildEmptyState, and _buildTrayRow as they are extracted
 }

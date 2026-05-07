@@ -3,7 +3,9 @@ import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/content_card.dart';
 import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
 import 'package:active_wear_scanning/core/widgets/scanner_always_open.dart';
+import 'package:active_wear_scanning/features/batch/model/batch_header_model.dart';
 import 'package:active_wear_scanning/features/batch/presentation/batch_scanning_screen.dart';
+import 'package:active_wear_scanning/features/batch/presentation/widgets/locked_batch_tray_table.dart';
 import 'package:active_wear_scanning/features/batch/repo/batch_repo.dart';
 import 'package:active_wear_scanning/features/batch/model/batch_header_model.dart';
 import 'package:active_wear_scanning/features/tray/repo/tray_scanning_repo.dart';
@@ -34,6 +36,11 @@ class _BatchListScreenState extends State<BatchListScreen>
   final Map<int, int> _trolleyDetailIdByBatch = {};
   final Map<int, String> _trolleyCodeByBatch = {};
 
+  // Expand/collapse state for locked batch tray details
+  final Set<int> _expandedLockedBatchIds = {};
+  // trayDetailId → trayCode (all trays, used for sub-table tray code lookup)
+  Map<int, String> _primaryTrayIdToCode = {};
+
   late TabController _tabController;
 
   @override
@@ -57,6 +64,18 @@ class _BatchListScreenState extends State<BatchListScreen>
 
     final headerResult = await _batchRepo.fetchBatchHeaders();
     final batchLinesResult = await _batchRepo.fetchBatchLines();
+    final trayDetailsResult = await _trayRepo.fetchAvailableTrayDetails();
+
+    // Build trayDetailId → trayCode lookup map (reused for trolleys + sub-table)
+    final Map<int, String> trayIdToCode = {};
+    if (trayDetailsResult.success && trayDetailsResult.data != null) {
+      for (final t in trayDetailsResult.data as List<TrayDetailsModel>) {
+        final id = t.trayDetails?.id;
+        final code = t.trayDetails?.trayCode;
+        if (id != null && code != null) trayIdToCode[id] = code;
+      }
+    }
+    _primaryTrayIdToCode = trayIdToCode;
 
     if (mounted && headerResult.success) {
       final headerData = headerResult.data as List<Map<String, dynamic>>? ?? [];
@@ -70,7 +89,18 @@ class _BatchListScreenState extends State<BatchListScreen>
           .where((h) => h.batchHeader.lockFlag == true)
           .toList();
 
-      // Group batch-lines by batchHeaderId — this IS populated correctly
+      // Pre-populate trolley maps from persisted trayDetailId on all batches
+      for (final batch in headers) {
+        final batchId = batch.batchHeader.id;
+        final trayDetailId = batch.batchHeader.trayDetailId;
+        if (batchId != null && trayDetailId != null) {
+          _trolleyDetailIdByBatch[batchId] = trayDetailId;
+          final trayCode = trayIdToCode[trayDetailId];
+          if (trayCode != null) _trolleyCodeByBatch[batchId] = trayCode;
+        }
+      }
+
+      // Group batch-lines by batchHeaderId
       final Map<int, List<Map<String, dynamic>>> grouped = {};
       if (batchLinesResult.success && batchLinesResult.data != null) {
         final rawLines = batchLinesResult.data as List<Map<String, dynamic>>;
@@ -160,6 +190,18 @@ class _BatchListScreenState extends State<BatchListScreen>
 
         final trolleyId = trayDetail!.id!;
         final trolleyCode = trayDetail.trayCode ?? code;
+
+        // ── Uniqueness check: trolley must not be assigned to any other batch ─
+        final allBatches = [..._unlockedBatches, ..._lockedBatches];
+        for (final batch in allBatches) {
+          final existingId = batch.batchHeader.id;
+          if (existingId == batchHeaderId) continue; // skip current batch
+          final assignedTrolleyId = _trolleyDetailIdByBatch[existingId] ?? batch.batchHeader.trayDetailId;
+          if (assignedTrolleyId == trolleyId) {
+            final batchCode = batch.batchHeader.batchHeaderCode ?? 'another batch';
+            return 'Trolly already assigned to $batchCode';
+          }
+        }
 
         setState(() {
           _trolleyDetailIdByBatch[batchHeaderId] = trolleyId;
@@ -741,18 +783,17 @@ class _BatchListScreenState extends State<BatchListScreen>
                       ),
                     ),
                   ),
-                  if (!isLocked)
-                    Expanded(
-                      flex: 3,
-                      child: Text(
-                        'TROLLY',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey.shade700,
-                        ),
+                  Expanded(
+                    flex: 3,
+                    child: Text(
+                      'TROLLY',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade700,
                       ),
                     ),
+                  ),
                   if (!isLocked) const SizedBox(width: 120),
                 ],
               ),
@@ -783,176 +824,217 @@ class _BatchListScreenState extends State<BatchListScreen>
                   ? '${totalWeight.toStringAsFixed(2)} g'
                   : '-';
 
-              return Container(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 16,
-                  horizontal: 12,
-                ),
-                decoration: BoxDecoration(
-                  border: Border(
-                    left: BorderSide(color: Colors.grey.shade300),
-                    right: BorderSide(color: Colors.grey.shade300),
-                    bottom: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  color: index.isEven ? Colors.white : Colors.grey.shade50,
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: Text(
-                        batchId,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Summary row (tappable for locked batches) ─────────────────
+                  GestureDetector(
+                    onTap: isLocked
+                        ? () => setState(() {
+                              if (_expandedLockedBatchIds.contains(headerDatabaseId)) {
+                                _expandedLockedBatchIds.remove(headerDatabaseId);
+                              } else {
+                                _expandedLockedBatchIds.add(headerDatabaseId);
+                              }
+                            })
+                        : null,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          left: BorderSide(color: Colors.grey.shade300),
+                          right: BorderSide(color: Colors.grey.shade300),
+                          bottom: BorderSide(color: Colors.grey.shade300),
                         ),
+                        color: index.isEven ? Colors.white : Colors.grey.shade50,
                       ),
-                    ),
-                    Expanded(
-                      flex: 3,
-                      child: Text(
-                        machineBrand,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.black87,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Expanded(
-                      flex: 2,
-                      child: Text(
-                        colorDesc,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.black87,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Expanded(
-                      flex: 2,
-                      child: Text(
-                        "$traysLength",
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      flex: 2,
-                      child: Text(
-                        weightDisplay,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.black87,
-                        ),
-                      ),
-                    ),
-                    if (!isLocked)
-                      Expanded(
-                        flex: 3,
-                        child: Builder(builder: (_) {
-                          final trolleyCode = _trolleyCodeByBatch[headerDatabaseId];
-                          if (trolleyCode != null) {
-                            return Text(
-                              trolleyCode,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.teal.shade700,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: Text(
+                              batchId,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
                               ),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 3,
+                            child: Text(
+                              machineBrand,
+                              style: const TextStyle(fontSize: 12, color: Colors.black87),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                            );
-                          }
-                          return SizedBox(
-                              width: 110,
-                              child: CustomOutlinedButton(
-                                label: 'Scan Trolly',
-                                icon: Icons.qr_code_scanner,
-                                iconSize: 14,
-                                textSize: 11,
-                                borderColor: Colors.orange,
-                                fillColor: Colors.orange,
-                                textColor: Colors.white,
-                                buttonHeight: 34,
-                                onPressed: () => _scanTrolleyForBatch(headerDatabaseId),
-                              ),
-                            );
-                        }),
-                      ),
-                    if (!isLocked)
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Edit button
-                          GestureDetector(
-                            onTap: () => _navigateToEditBatch(header),
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey.shade300),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Icon(
-                                Icons.edit,
-                                size: 18,
-                                color: Colors.blue.shade400,
+                            ),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              colorDesc,
+                              style: const TextStyle(fontSize: 12, color: Colors.black87),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              '$traysLength',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue,
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          // Delete button
-                          GestureDetector(
-                            onTap: () => _deleteBatch(header),
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey.shade300),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Icon(
-                                Icons.cancel,
-                                size: 18,
-                                color: Colors.red.shade400,
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              weightDisplay,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.black87,
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          // Lock / Issue Batch button (right)
-                          GestureDetector(
-                            onTap: () => _lockBatch(header),
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                  color: Colors.orange.shade200,
+                          Expanded(
+                            flex: 3,
+                            child: Builder(builder: (_) {
+                              final trolleyCode = _trolleyCodeByBatch[headerDatabaseId];
+                              if (trolleyCode != null) {
+                                return Text(
+                                  trolleyCode,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.teal.shade700,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                );
+                              }
+                              if (isLocked) {
+                                return Text('-', style: TextStyle(fontSize: 12, color: Colors.grey.shade400));
+                              }
+                              return Align(
+                                alignment: Alignment.centerLeft,
+                                child: GestureDetector(
+                                  onTap: () => _scanTrolleyForBatch(headerDatabaseId),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(color: Colors.grey.shade300),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Icon(Icons.qr_code_scanner, size: 18, color: Colors.orange.shade600),
+                                  ),
                                 ),
-                                color: Colors.orange.shade50,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Icon(
-                                Icons.lock_outline,
+                              );
+                            }),
+                          ),
+                          // Draft actions
+                          if (!isLocked)
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                GestureDetector(
+                                  onTap: () => _navigateToEditBatch(header),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(color: Colors.grey.shade300),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Icon(Icons.edit, size: 18, color: Colors.blue.shade400),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                GestureDetector(
+                                  onTap: () => _deleteBatch(header),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(color: Colors.grey.shade300),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Icon(Icons.cancel, size: 18, color: Colors.red.shade400),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                GestureDetector(
+                                  onTap: () => _lockBatch(header),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(color: Colors.orange.shade200),
+                                      color: Colors.orange.shade50,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: const Icon(Icons.lock_outline, size: 18, color: Colors.orange),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          // Locked: expand chevron
+                          if (isLocked)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 4),
+                              child: Icon(
+                                _expandedLockedBatchIds.contains(headerDatabaseId)
+                                    ? Icons.keyboard_arrow_up
+                                    : Icons.keyboard_arrow_down,
                                 size: 18,
-                                color: Colors.orange,
+                                color: Colors.grey.shade500,
                               ),
                             ),
-                          ),
                         ],
                       ),
-                  ],
-                ),
+                    ),
+                  ),
+                  // ── Expanded tray sub-table (locked only) ─────────────────────
+                  if (isLocked && _expandedLockedBatchIds.contains(headerDatabaseId))
+                    LockedBatchTrayTable(
+                      lines: _groupedBatchLinesByHeader[headerDatabaseId] ?? [],
+                      trayIdToCode: _primaryTrayIdToCode,
+                    ),
+                ],
               );
             }),
           ],
         ),
+      ),
+    );
+  }
+
+  // Removed _buildLockedBatchTrayTable as it is extracted to LockedBatchTrayTable widget
+
+
+
+  // ── Tiny metric chip ────────────────────────────────────────────────────────
+  Widget _metricChip({
+    required String label,
+    required String value,
+    required Color color,
+    required Color bg,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label, style: TextStyle(fontSize: 8, fontWeight: FontWeight.w600,
+              color: color.withOpacity(0.8), letterSpacing: 0.3)),
+          Text(value, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: color)),
+        ],
       ),
     );
   }

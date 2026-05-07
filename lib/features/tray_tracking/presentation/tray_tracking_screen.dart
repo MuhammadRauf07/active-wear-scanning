@@ -8,6 +8,9 @@ import 'package:active_wear_scanning/features/tray_tracking/model/tray_tracking_
 import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
 import 'package:active_wear_scanning/features/tray_tracking/repo/tray_tracking_repo.dart';
 import 'package:active_wear_scanning/features/common-models/common_models.dart';
+import 'package:active_wear_scanning/features/tray_tracking/presentation/widgets/path_node.dart';
+import 'package:active_wear_scanning/features/tray_tracking/presentation/widgets/status_badge.dart';
+import 'package:active_wear_scanning/features/tray_tracking/presentation/widgets/tray_detail_card.dart';
 import 'package:flutter/material.dart';
 
 class TrayTrackingScreen extends StatefulWidget {
@@ -182,7 +185,67 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> {
                             subtitle: 'Information for the identified tray',
                           ),
                           const SizedBox(height: 12),
-                          _buildBeautifulDetails(),
+                          TrayDetailCard(
+                            trayDetail: _trayDetail,
+                            locatorName: _locatorName,
+                          ),
+                          const SizedBox(height: 24),
+                          const SectionHeader(
+                            title: 'Tracking Path',
+                            subtitle: 'Real-time production flow visualization',
+                          ),
+                          const SizedBox(height: 16),
+                          ContentCard(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              children: [
+                                PathNode(
+                                  icon: Icons.description_outlined,
+                                  title: 'Item Description',
+                                  value: _itemDescription ?? '-',
+                                  color: Colors.blue,
+                                  isLast: false,
+                                ),
+                                PathNode(
+                                  icon: Icons.assignment_outlined,
+                                  title: 'Work Order',
+                                  value: _workOrderDescription ?? 'Not assigned',
+                                  color: Colors.indigo,
+                                  isLast: false,
+                                ),
+                                PathNode(
+                                  icon: Icons.badge_outlined,
+                                  title: 'Batch Code',
+                                  value: _batchCode ?? "-",
+                                  color: Colors.purple,
+                                  isLast: false,
+                                ),
+                                PathNode(
+                                  icon: Icons.palette_outlined,
+                                  title: 'Color',
+                                  value: _color ?? "-",
+                                  color: Colors.pink,
+                                  isLast: false,
+                                ),
+                                PathNode(
+                                  icon: Icons.precision_manufacturing_outlined,
+                                  title: 'Active Machine',
+                                  value: _machineName ?? 'Idle',
+                                  color: Colors.teal,
+                                  isLast: false,
+                                ),
+                                PathNode(
+                                  icon: Icons.assignment_turned_in_outlined,
+                                  title: 'Is Reassigned',
+                                  value: _trayDetail?.isReAssigned == true ? 'YES' : 'NO',
+                                  color: _trayDetail?.isReAssigned == true ? Colors.green : Colors.grey,
+                                  isLast: true,
+                                  isHighlight: _trayDetail?.isReAssigned == true,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 32),
                         ] else if (_errorMessage != null) ...[
                           Center(
                             child: Padding(
@@ -227,269 +290,4 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> {
       ),
     );
   }
-  Widget _buildBeautifulDetails() {
-    return Column(
-      children: [
-        // 1. ELITE IDENTITY CARD (GLASSMORPHISM STYLE)
-        Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.blue.shade100.withOpacity(0.5),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              ),
-            ],
-            gradient: LinearGradient(
-              colors: [Colors.blue.shade800, Colors.blue.shade500],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: Stack(
-              children: [
-                Positioned(
-                  right: -30,
-                  top: -30,
-                  child: Icon(Icons.qr_code_2, size: 150, color: Colors.white.withOpacity(0.1)),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Text(
-                          'ACTIVE TRAY',
-                          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              _trayDetail?.trayCode ?? '-',
-                              style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -0.5),
-                            ),
-                          ),
-                          if (_locatorName != null && _locatorName!.isNotEmpty)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: Colors.amberAccent,
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.amberAccent.withOpacity(0.4),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
-                                  )
-                                ],
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.location_on, color: Colors.blue.shade900, size: 24),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    _locatorName!.toUpperCase(),
-                                    style: TextStyle(
-                                      color: Colors.blue.shade900,
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Icon(Icons.inventory_2_outlined, color: Colors.white.withOpacity(0.8), size: 16),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Quantity: ${_trayDetail?.trayQuantity ?? 0} tubes',
-                            style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 14, fontWeight: FontWeight.w500),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
-
-        // 2. TRACKING PATH (THE "WOW" FACTOR)
-        const SectionHeader(
-          title: 'Tracking Path',
-          subtitle: 'Real-time production flow visualization',
-        ),
-        const SizedBox(height: 16),
-        ContentCard(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              _buildPathNode(
-                icon: Icons.description_outlined,
-                title: 'Item Description',
-                value: _itemDescription ?? '-',
-                color: Colors.blue,
-                isLast: false,
-              ),
-              _buildPathNode(
-                icon: Icons.assignment_outlined,
-                title: 'Work Order',
-                value: _workOrderDescription ?? 'Not assigned',
-                color: Colors.indigo,
-                isLast: false,
-              ),
-              _buildPathNode(
-                icon: Icons.badge_outlined,
-                title: 'Batch Code',
-                value: _batchCode ?? "-",
-                color: Colors.purple,
-                isLast: false,
-              ),
-              _buildPathNode(
-                icon: Icons.palette_outlined,
-                title: 'Color',
-                value: _color ?? "-",
-                color: Colors.pink,
-                isLast: false,
-              ),
-              _buildPathNode(
-                icon: Icons.precision_manufacturing_outlined,
-                title: 'Active Machine',
-                value: _machineName ?? 'Idle',
-                color: Colors.teal,
-                isLast: false,
-              ),
-              // _buildPathNode(
-              //   icon: Icons.location_on_outlined,
-              //   title: 'Current Locator',
-              //   value: _locatorName ?? '-',
-              //   color: Colors.orange,
-              //   isLast: false,
-              //   isHighlight: true,
-              // ),
-              _buildPathNode(
-                icon: Icons.assignment_turned_in_outlined,
-                title: 'Is Reassigned',
-                value: _trayDetail?.isReAssigned == true ? 'YES' : 'NO',
-                color: _trayDetail?.isReAssigned == true ? Colors.green : Colors.grey,
-                isLast: true,
-                isHighlight: _trayDetail?.isReAssigned == true,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 32),
-      ],
-    );
-  }
-
-  Widget _buildStatusBadge() {
-    final isReassigned = _trayDetail?.isReAssigned == true;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: isReassigned ? Colors.greenAccent.shade400 : Colors.white.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            isReassigned ? Icons.check_circle : Icons.pending,
-            size: 12,
-            color: isReassigned ? Colors.white : Colors.white70,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            isReassigned ? 'REASSIGNED' : 'PENDING',
-            style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPathNode({
-    required IconData icon,
-    required String title,
-    required String value,
-    required Color color,
-    required bool isLast,
-    bool isHighlight = false,
-  }) {
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Column(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: isHighlight ? color : color.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: color, width: 2),
-                ),
-                child: Icon(icon, color: isHighlight ? Colors.white : color, size: 16),
-              ),
-              if (!isLast)
-                Expanded(
-                  child: Container(
-                    width: 2,
-                    color: color.withOpacity(0.3),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title.toUpperCase(),
-                  style: TextStyle(color: Colors.grey.shade500, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
-                ),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: isHighlight ? FontWeight.bold : FontWeight.w600,
-                    color: isHighlight ? color : Colors.black87,
-                  ),
-                ),
-                if (!isLast) const SizedBox(height: 24),
-                if (isLast) const SizedBox(height: 8),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
-
-

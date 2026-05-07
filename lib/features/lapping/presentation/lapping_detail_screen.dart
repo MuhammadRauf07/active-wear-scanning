@@ -1,5 +1,4 @@
 import 'package:flutter/services.dart';
-import 'package:flutter/services.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/content_card.dart';
@@ -9,6 +8,10 @@ import 'package:active_wear_scanning/features/batch/repo/batch_repo.dart';
 import 'package:active_wear_scanning/features/common-models/common_models.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:active_wear_scanning/features/lapping/model/lapping_model.dart';
+import 'package:active_wear_scanning/features/lapping/model/work_order_summary.dart';
+import 'package:active_wear_scanning/features/lapping/presentation/widgets/lapping_scanner_ui.dart';
+import 'package:active_wear_scanning/features/lapping/presentation/widgets/lapping_tray_table.dart';
+import 'package:active_wear_scanning/features/lapping/presentation/widgets/work_order_selection_card.dart';
 import 'package:active_wear_scanning/features/lapping/repo/lapping_repo.dart';
 import 'package:active_wear_scanning/features/processing/repo/processing_repo.dart';
 import 'package:flutter/material.dart';
@@ -58,7 +61,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
   final _lappingRepo = LappingRepo();
   bool _isLoading = false;
   List<LappingModel> _trays = [];
-  final Map<String, _WorkOrderSummary> _workOrders = {};
+  final Map<String, WorkOrderSummary> _workOrders = {};
   String? _selectedWorkOrderId;
   final Map<String, List<LappingModel>> _scannedTraysByWO = {};
 
@@ -138,7 +141,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
       final List<LappingModel> fetchedTrays =
       res.data as List<LappingModel>;
 
-      final Map<String, _WorkOrderSummary> summaries = {};
+      final Map<String, WorkOrderSummary> summaries = {};
 
       for (final tray in fetchedTrays) {
         final woId = tray.workOrderHeader?.id;
@@ -149,7 +152,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
 
           if (summaries.containsKey(compositeId)) {
             final existing = summaries[compositeId]!;
-            summaries[compositeId] = _WorkOrderSummary(
+            summaries[compositeId] = WorkOrderSummary(
               id: compositeId,
               description: existing.description,
               componentDescription: existing.componentDescription,
@@ -158,7 +161,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
             );
           } else {
             final woDesc = tray.workOrderHeader?.description ?? '';
-            summaries[compositeId] = _WorkOrderSummary(
+            summaries[compositeId] = WorkOrderSummary(
               id: compositeId,
               description: woDesc,
               componentDescription: itemDesc,
@@ -377,12 +380,52 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
                               },
                             ),
                             const SizedBox(height: 20),
-                            _buildWorkOrderSelection(),
+                            WorkOrderSelectionCard(
+                              workOrders: _workOrders,
+                              selectedWorkOrderId: _selectedWorkOrderId,
+                              scannedTraysByWO: _scannedTraysByWO,
+                              trayOverrideQuantities: _trayOverrideQuantities,
+                              onSelected: (val) => setState(() => _selectedWorkOrderId = val),
+                            ),
                             if (_selectedWorkOrderId != null) ...[
                               // const SizedBox(height: 24),
                               // const SectionHeader(title: 'Scan Trays', subtitle: 'Verify and assign trays to the selected work order'),
                               const SizedBox(height: 12),
-                              _buildScannerUI(), // Unified Scanner & Table Layout
+                              LappingScannerUI(
+                                selectedWorkOrderId: _selectedWorkOrderId,
+                                scannedTraysByWO: _scannedTraysByWO,
+                                trayQtyController: _trayQtyController,
+                                focusNode: _focusNode,
+                                onScanPressed: _openScanner,
+                                childTable: Builder(
+                                  builder: (_) {
+                                    final traysToShow = _scannedTraysByWO[_selectedWorkOrderId] ?? [];
+                                    if (traysToShow.isNotEmpty) {
+                                      return LappingTrayTable(
+                                        selectedWorkOrderId: _selectedWorkOrderId,
+                                        scannedTraysByWO: _scannedTraysByWO,
+                                        trayOverrideQuantities: _trayOverrideQuantities,
+                                        onRemove: (t, trayKey) {
+                                          setState(() {
+                                            _scannedTraysByWO[_selectedWorkOrderId]?.remove(t);
+                                            _trayOverrideQuantities.remove(trayKey);
+                                          });
+                                        },
+                                      );
+                                    } else {
+                                      return Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.symmetric(vertical: 40),
+                                        alignment: Alignment.center,
+                                        child: Text(
+                                          'No scanned trays yet. Start by scanning a tray barcode.',
+                                          style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                ),
+                              ),
                             ],
                           ],
                         ),
@@ -397,280 +440,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
     );
   }
 
-  Widget _buildWorkOrderSelection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.only(left: 4, bottom: 8),
-          child: Text('Select Work Order Line', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87)),
-        ),
-        ContentCard(
-          padding: EdgeInsets.zero,
-          child: Column(
-            children: [
-              _buildTableHeader(),
-              ...List.generate(_workOrders.values.length, (index) {
-                final wo = _workOrders.values.elementAt(index);
-                final isSelected = _selectedWorkOrderId == wo.id;
-                final reassigned = (_scannedTraysByWO[wo.id] ?? []).fold<double>(0, (sum, t) =>
-                sum + (_trayOverrideQuantities[t.primaryTrayModel.trayCode?.toLowerCase() ?? ''] ?? 0));
-
-                return InkWell(
-                  onTap: () => setState(() => _selectedWorkOrderId = wo.id),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: isSelected ? Colors.blue.withOpacity(0.05) : (index.isEven ? Colors.white : Colors.grey.shade50),
-                      border: Border(
-                        left: BorderSide(color: Colors.grey.shade300),
-                        right: BorderSide(color: Colors.grey.shade300),
-                        bottom: BorderSide(color: Colors.grey.shade300),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(flex: 3, child: Text(wo.description, style: const TextStyle(fontSize: 12, color: Colors.black87))),
-                        Expanded(flex: 6, child: Text(wo.componentDescription, style: const TextStyle(fontSize: 11, color: Colors.black87))),
-                        Expanded(flex: 2, child: Text('${wo.trayCount}', style: const TextStyle(fontSize: 12, color: Colors.black87))),
-                        Expanded(flex: 2, child: Text('${wo.cumulativePieces.toInt()}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue))),
-                        Expanded(flex: 2, child: Text(reassigned > 0 ? '${reassigned.toInt()}' : '-', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: reassigned > 0 ? Colors.green : Colors.grey))),
-                        Radio<String>(
-                          value: wo.id, 
-                          groupValue: _selectedWorkOrderId, 
-                          activeColor: Colors.blue, 
-                          visualDensity: VisualDensity.compact,
-                          onChanged: (val) => setState(() => _selectedWorkOrderId = val)
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTableHeader() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Row(
-        children: [
-          Expanded(flex: 3, child: Text('WORK ORDER', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 6, child: Text('ITEM DESCRIPTION', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('TRAYS', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('TOTAL TUBES', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('RE-ASSIGN', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green))),
-          const SizedBox(width: 32),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildScannerUI() {
-    final traysToShow = _scannedTraysByWO[_selectedWorkOrderId] ?? [];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SectionHeader(title: 'Tray Scanner', subtitle: 'Scan tray barcodes to assign them to this work order'),
-        const SizedBox(height: 12),
-        ContentCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Scan Tray Barcode', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87)),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  // Pcs Field
-
-                  // Ready for scan bar (GBS style)
-                  Expanded(
-                    child: Container(
-                      height: 44,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.blue.withOpacity(0.5)),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Ready for scan...',
-                        style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  SizedBox(
-                    width: 70,
-                    height: 44,
-                    child: TextField(
-                      controller: _trayQtyController,
-                      keyboardType: TextInputType.number,
-                      textAlign: TextAlign.center,
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: (_) {
-                        FocusScope.of(context).requestFocus(_focusNode);
-                      },
-                      decoration: InputDecoration(
-                        hintText: 'Tubes',
-                        contentPadding: EdgeInsets.zero,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(width: 10),
-                  CustomOutlinedButton(
-                    label: 'Scan Tray',
-                    borderColor: Colors.blue,
-                    fillColor: Colors.blue,
-                    textColor: Colors.white,
-                    buttonHeight: 44,
-                    onPressed: _openScanner,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Scanned Trays (${traysToShow.length})',
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
-            ),
-          ],
-        ),
-        if (traysToShow.isNotEmpty)
-          _buildScannedTraysTable()
-        else
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 40),
-            alignment: Alignment.center,
-            child: Text(
-              'No scanned trays yet. Start by scanning a tray barcode.',
-              style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildScannedTraysTable() {
-    final traysToShow = _scannedTraysByWO[_selectedWorkOrderId] ?? [];
-    return Padding(
-      padding: const EdgeInsets.only(top: 12.0),
-      child: ContentCard(
-        padding: EdgeInsets.zero,
-        child: Column(
-          children: [
-            _buildScannedHeader(),
-            ...List.generate(traysToShow.length, (index) {
-              final t = traysToShow[index];
-              final trayKey = t.primaryTrayModel.trayCode?.toLowerCase() ?? '';
-              final qty = _trayOverrideQuantities[trayKey] ?? 0;
-              final pw = t.item.pieceWeight ?? 0;
-              return Container(
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                decoration: BoxDecoration(
-                  border: Border(
-                    left: BorderSide(color: Colors.grey.shade300),
-                    right: BorderSide(color: Colors.grey.shade300),
-                    bottom: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  color: index.isEven ? Colors.white : Colors.grey.shade50,
-                ),
-                child: Row(
-                  children: [
-                    Expanded(flex: 2, child: Text(t.primaryTrayModel.trayCode ?? '-', style: const TextStyle(fontSize: 13, color: Colors.black87))),
-                    Expanded(flex: 4, child: Text(t.processedItem?.description ?? t.item?.description ?? '-', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Colors.black87))),
-                    Expanded(flex: 2, child: Text(t.item?.colorDescription?.isNotEmpty == true ? t.item!.colorDescription! : '-', style: const TextStyle(fontSize: 11, color: Colors.black87, fontWeight: FontWeight.w600))),
-                    Expanded(flex: 2, child: Text(t.item?.sizeDescription?.isNotEmpty == true ? t.item!.sizeDescription! : '-', style: const TextStyle(fontSize: 11, color: Colors.black87))),
-                    Expanded(flex: 2, child: Text((t.item?.perGarmentTube ?? 0) > 0 ? t.item!.perGarmentTube!.toStringAsFixed(0) : '-', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.indigo.shade700))),                    Expanded(
-                      flex: 2, 
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey.shade300),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            qty.toStringAsFixed(0),
-                            style: const TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Expanded(flex: 2, child: Builder(builder: (_) {
-                      final pgt = t.item?.perGarmentTube ?? 0;
-                      final garmentPcs = pgt > 0 ? qty * pgt : 0;
-                      return Text(garmentPcs > 0 ? garmentPcs.toStringAsFixed(0) : '-', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.teal.shade700));
-                    })),
-                    Expanded(flex: 2, child: Text('${(qty * pw).toStringAsFixed(2)} kg', style: const TextStyle(fontSize: 13, color: Colors.black87))),
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _scannedTraysByWO[_selectedWorkOrderId]?.remove(t);
-                            _trayOverrideQuantities.remove(trayKey);
-                          });
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey.shade300),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Icon(Icons.cancel, size: 18, color: Colors.red.shade400),
-                        ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildScannedHeader() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Row(
-        children: [
-          Expanded(flex: 2, child: Text('TRAY CODE', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 4, child: Text('ITEM DESCRIPTION', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('COLOR', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('SIZE', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('PCS/TUBE', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('TUBES', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('PCS', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('WEIGHT', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          const SizedBox(width: 44),
-        ],
-      ),
-    );
-  }
+  // Removed _buildScannerUI as it was extracted to LappingScannerUI.
 
   void _showSnackBar(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
@@ -960,11 +730,4 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
     );
   }
 }
-class _WorkOrderSummary {
-  final String id;
-  final String description;
-  final String componentDescription;
-  final int trayCount;
-  final double cumulativePieces;
-  _WorkOrderSummary({required this.id, required this.description, required this.componentDescription, required this.trayCount, required this.cumulativePieces});
-}
+  // Removed _WorkOrderSummary as it was extracted to model.
