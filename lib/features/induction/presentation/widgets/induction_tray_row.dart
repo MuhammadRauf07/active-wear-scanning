@@ -29,21 +29,20 @@ class InductionTrayRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Expanded(flex: 2, child: Text(tray.trayCode, style: const TextStyle(fontSize: 13, color: Colors.black87))),
-          Expanded(flex: 2, child: Text(tray.workOrderCode, style: const TextStyle(fontSize: 12, color: Colors.black87))),
-          Expanded(flex: 4, child: Text(tray.itemDescription, style: const TextStyle(fontSize: 11, color: Colors.black87), maxLines: 2, overflow: TextOverflow.ellipsis)),
+          Expanded(flex: 2, child: Text(tray.trayCode, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: Colors.black87))),
+          Expanded(flex: 2, child: Text(tray.workOrderCode, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: Colors.black87))),
+          Expanded(flex: 4, child: Text(tray.itemDescription, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, color: Colors.black87), maxLines: 2, overflow: TextOverflow.ellipsis)),
           Expanded(
             flex: 2, 
-            child: Text(tray.colorDescription.isNotEmpty ? tray.colorDescription : '-', style: const TextStyle(fontSize: 11, color: Colors.black87))
+            child: Text(tray.colorDescription.isNotEmpty ? tray.colorDescription : '-', textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, color: Colors.black87))
           ),
           Expanded(
             flex: 2, 
-            child: Text(tray.sizeDescription.isNotEmpty ? tray.sizeDescription : '-', style: const TextStyle(fontSize: 11, color: Colors.black87))
+            child: Text(tray.sizeDescription.isNotEmpty ? tray.sizeDescription : '-', textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, color: Colors.black87))
           ),
           Expanded(
             flex: 2,
-            child: Align(
-              alignment: Alignment.centerLeft,
+            child: Center(
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
@@ -52,6 +51,7 @@ class InductionTrayRow extends StatelessWidget {
                 ),
                 child: Text(
                   tray.primaryQuantity,
+                  textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 13, color: Colors.black87),
                 ),
               ),
@@ -61,6 +61,7 @@ class InductionTrayRow extends StatelessWidget {
             flex: 2,
             child: Text(
               '${((double.tryParse(tray.primaryQuantity) ?? 0.0) * tray.pieceWeight).toStringAsFixed(2)} g',
+              textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 13, color: Colors.black87),
             ),
           ),

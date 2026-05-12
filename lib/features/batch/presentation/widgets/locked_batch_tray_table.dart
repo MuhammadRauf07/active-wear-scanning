@@ -66,7 +66,7 @@ class LockedBatchTrayTable extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.indigo.shade50.withOpacity(0.4),
+        color: Colors.indigo.shade50.withValues(alpha: 0.4),
         border: Border(
           left: BorderSide(color: Colors.indigo.shade300, width: 3),
           bottom: BorderSide(color: Colors.grey.shade200),
@@ -89,24 +89,24 @@ class LockedBatchTrayTable extends StatelessWidget {
                     flex: 2,
                     child: Text('TRAY CODE', style: _subHeaderStyle)),
                 Expanded(
-                    flex: 3,
+                    flex: 2,
                     child: Text('WORK ORDER', style: _subHeaderStyle)),
                 Expanded(
                     flex: 4,
                     child:
                         Text('ITEM DESCRIPTION', style: _subHeaderStyle)),
                 Expanded(
-                    flex: 1,
-                    child: Text('PCS/TUBE',
+                    flex: 2,
+                    child: Text('PCS PER TUBE',
                         style: _subHeaderStyle,
                         textAlign: TextAlign.center)),
                 Expanded(
-                    flex: 1,
+                    flex: 2,
                     child: Text('TUBES',
                         style: _subHeaderStyle,
                         textAlign: TextAlign.center)),
                 Expanded(
-                    flex: 1,
+                    flex: 2,
                     child: Text('PCS',
                         style: _subHeaderStyle,
                         textAlign: TextAlign.center)),
@@ -136,8 +136,8 @@ class LockedBatchTrayTable extends StatelessWidget {
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
               decoration: BoxDecoration(
                 color: i.isEven
-                    ? Colors.white.withOpacity(0.8)
-                    : Colors.indigo.shade50.withOpacity(0.3),
+                    ? Colors.white.withValues(alpha: 0.8)
+                    : Colors.indigo.shade50.withValues(alpha: 0.3),
                 border: Border(
                     bottom: BorderSide(color: Colors.indigo.shade50)),
               ),
@@ -149,11 +149,8 @@ class LockedBatchTrayTable extends StatelessWidget {
                     child: Text(
                       trayCode,
                       style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: isTrayResolved
-                            ? Colors.indigo.shade700
-                            : Colors.grey.shade400,
+                        fontSize: 9,
+                        color: Colors.black,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -161,13 +158,12 @@ class LockedBatchTrayTable extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    flex: 3,
+                    flex: 2,
                     child: Text(
                       woCode,
                       style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.blueGrey.shade700,
-                          fontWeight: FontWeight.w500),
+                          fontSize: 9,
+                          color: Colors.black),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -177,42 +173,39 @@ class LockedBatchTrayTable extends StatelessWidget {
                     child: Text(
                       itemDesc,
                       style: const TextStyle(
-                          fontSize: 11, color: Colors.black87),
+                          fontSize: 9, color: Colors.black),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   Expanded(
-                    flex: 1,
+                    flex: 2,
                     child: Text(
                       pgt > 0 ? pgt.toStringAsFixed(0) : '-',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.purple.shade600),
+                          fontSize: 9,
+                          color: Colors.black),
                     ),
                   ),
                   Expanded(
-                    flex: 1,
+                    flex: 2,
                     child: Text(
                       tubes.toStringAsFixed(0),
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.blue.shade700),
+                          fontSize: 9,
+                          color: Colors.black),
                     ),
                   ),
                   Expanded(
-                    flex: 1,
+                    flex: 2,
                     child: Text(
                       pcs > 0 ? pcs.toString() : '-',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.teal.shade700),
+                          fontSize: 9,
+                          color: Colors.black),
                     ),
                   ),
                 ],

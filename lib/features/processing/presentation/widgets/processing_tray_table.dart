@@ -44,13 +44,12 @@ class ProcessingTrayTable extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(flex: 2, child: Text('TRAY CODE', style: _headerStyle)),
-                Expanded(flex: 2, child: Text('ITEM DESCRIPTION', style: _headerStyle)),
-                Expanded(flex: 1, child: Text('COLOR', style: _headerStyle)),
-                Expanded(flex: 1, child: Text('SIZE', style: _headerStyle)),
-                Expanded(flex: 1, child: Text('PCS/TUBE', style: _headerStyle)),
-                Expanded(flex: 1, child: Text('TUBES', style: _headerStyle)),
-                Expanded(flex: 1, child: Text('PCS', style: _headerStyle)),
-                Expanded(flex: 1, child: Text('WEIGHT', style: _headerStyle)),
+                Expanded(flex: 4, child: Text('ITEM DESCRIPTION', style: _headerStyle)),
+                Expanded(flex: 2, child: Text('COLOR', style: _headerStyle)),
+                Expanded(flex: 2, child: Text('SIZE', style: _headerStyle)),
+                Expanded(flex: 2, child: Text('PCS/TUBE', style: _headerStyle)),
+                Expanded(flex: 2, child: Text('TUBES', style: _headerStyle)),
+                Expanded(flex: 2, child: Text('PCS', style: _headerStyle)),
                 if (isReworkMode)
                   const SizedBox(width: 44)
                 else
@@ -74,74 +73,61 @@ class ProcessingTrayTable extends StatelessWidget {
                     flex: 2,
                     child: Text(
                       t.primaryTrayModel.trayCode ?? '-',
-                      style: const TextStyle(fontSize: 13),
+                      style: const TextStyle(fontSize: 10),
                     ),
                   ),
                   Expanded(
-                    flex: 2,
+                    flex: 4,
                     child: Text(
                       t.item.description ?? '-',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 13),
+                      style: const TextStyle(fontSize: 10),
                     ),
                   ),
                   Expanded(
-                    flex: 1,
+                    flex: 2,
                     child: Text(
                       t.item.colorDescription?.isNotEmpty == true
                           ? t.item.colorDescription!
                           : '-',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 13),
+                      style: const TextStyle(fontSize: 10),
                     ),
                   ),
                   Expanded(
-                    flex: 1,
+                    flex: 2,
                     child: Text(
                       t.item.sizeDescription?.isNotEmpty == true
                           ? t.item.sizeDescription!
                           : '-',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 13),
+                      style: const TextStyle(fontSize: 10),
                     ),
                   ),
                   Expanded(
-                    flex: 1,
+                    flex: 2,
                     child: Text(
                       pgt > 0 ? pgt.toStringAsFixed(0) : '-',
                       style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.indigo.shade700,
-                      ),
+                        fontSize: 10),
                     ),
                   ),
                   Expanded(
-                    flex: 1,
+                    flex: 2,
                     child: Text(
                       tubes.toStringAsFixed(0),
-                      style: const TextStyle(fontSize: 13),
+                      style: const TextStyle(fontSize: 10),
                     ),
                   ),
                   Expanded(
-                    flex: 1,
+                    flex: 2,
                     child: Text(
                       garmentPcs > 0 ? garmentPcs.toStringAsFixed(0) : '-',
                       style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.teal.shade700,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 1,
-                    child: Text(
-                      '${weight.toStringAsFixed(2)} g',
-                      style: const TextStyle(fontSize: 13),
+                        fontSize: 10),
                     ),
                   ),
                   if (isReworkMode)

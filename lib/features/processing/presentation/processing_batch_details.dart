@@ -305,11 +305,6 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                                     'start_time': {'icon': Icons.play_circle_outline, 'label': 'Start Time', 'value': _formatTime(_startTime!)},
                                   if (_isBatchStarted && _issueTime != null && _startTime != null)
                                     'idle_time': {'icon': Icons.hourglass_empty, 'label': 'Idle Time', 'value': _formatDuration(_startTime!.difference(_issueTime!))},
-                                  'trolley': {
-                                    'icon': Icons.local_shipping_outlined,
-                                    'label': 'Trolley',
-                                    'value': _trolleyCode ?? 'Not Assigned',
-                                  },
                                 },
                               ),
                               const SizedBox(height: 16),
@@ -740,7 +735,9 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
       setState(() {
         _isBatchStarted = true;
         _startTime = now;
+        _trays.clear(); // Force refresh to get new concurrency stamps
       });
+      await _fetchTraysIfNeeded();
     }
   }
 
@@ -858,7 +855,8 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
         if (isRework) {
           json['transactionType'] = 3;
           json['reworkFlag'] = true;
-          await _processingRepo.updateProductionProgress(pp.id!, json);
+          final updRes = await _processingRepo.updateProductionProgress(pp.id!, json);
+          if (!updRes.success) throw Exception('Update old progress failed: ${updRes.message}');
 
           int rewLoc = 10;
           final rewRes = await _processingRepo.fetchLocators(operationId: _reworkTargetOpId!);
@@ -874,35 +872,43 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
           final newJ = pp.toJson();
           newJ.remove('id');
           newJ.remove('progressCode');
+          newJ.remove('concurrencyStamp');
           newJ.addAll({
             'transactionType': 2,
             'reworkFlag': true,
             'operationId': _reworkTargetOpId,
             'locatorId': rewLoc,
             'date': DateTime.now().toIso8601String(),
+            'isStarted': false,
+            'startDate': null,
           });
-          await _processingRepo.createProductionProgress(newJ);
+          final crRes = await _processingRepo.createProductionProgress(newJ);
+          if (!crRes.success) throw Exception('Create new progress failed: ${crRes.message}');
         } else if (widget.nextOperationId != null) {
           json['transactionType'] = 3;
-          await _processingRepo.updateProductionProgress(pp.id!, json);
+          final updRes = await _processingRepo.updateProductionProgress(pp.id!, json);
+          if (!updRes.success) throw Exception('Update old progress failed: ${updRes.message}');
 
           final newJ = pp.toJson();
-              newJ.remove('id');
-              newJ.remove('progressCode');
-              newJ.addAll({
-                'transactionType': 2,
-                'operationId': widget.nextOperationId,
-                'locatorId': nextLocatorId,
-                'date': DateTime.now().toIso8601String(),
-                'isStarted': false,
-                'startDate': null,
-              });
-              await _processingRepo.createProductionProgress(newJ);
+          newJ.remove('id');
+          newJ.remove('progressCode');
+          newJ.remove('concurrencyStamp');
+          newJ.addAll({
+            'transactionType': 2,
+            'operationId': widget.nextOperationId,
+            'locatorId': nextLocatorId,
+            'date': DateTime.now().toIso8601String(),
+            'isStarted': false,
+            'startDate': null,
+          });
+          final crRes = await _processingRepo.createProductionProgress(newJ);
+          if (!crRes.success) throw Exception('Create new progress failed: ${crRes.message}');
         } else {
           json['transactionType'] = 3;
           json['wipStatus'] = 1;
           json['isLastProcess'] = true; // ✅ Flags tray as ready for Induction
-          await _processingRepo.updateProductionProgress(pp.id!, json);
+          final updRes = await _processingRepo.updateProductionProgress(pp.id!, json);
+          if (!updRes.success) throw Exception('Update final progress failed: ${updRes.message}');
         }
       }
 

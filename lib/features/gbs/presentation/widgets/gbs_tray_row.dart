@@ -27,28 +27,47 @@ class GBSTrayRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Expanded(flex: 2, child: Text(tray.trayCode, style: const TextStyle(fontSize: 13, color: Colors.black87))),
-          Expanded(flex: 2, child: Text(tray.workOrderCode, style: const TextStyle(fontSize: 12, color: Colors.black87))),
-          Expanded(flex: 3, child: Text(tray.itemDescription, style: const TextStyle(fontSize: 11, color: Colors.black87), maxLines: 2, overflow: TextOverflow.ellipsis)),
           Expanded(
-            flex: 2, 
-            child: Text(tray.colorDescription.isNotEmpty ? tray.colorDescription : '-', style: const TextStyle(fontSize: 11, color: Colors.black87, fontWeight: FontWeight.w600))
+            flex: 3,
+            child: Text(
+              tray.trayCode,
+              maxLines: 2,
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 9, color: Colors.black),
+            ),
           ),
           Expanded(
-            flex: 2, 
-            child: Text(tray.sizeDescription.isNotEmpty ? tray.sizeDescription : '-', style: const TextStyle(fontSize: 11, color: Colors.black87))
+            flex: 2,
+            child: Text(
+              tray.workOrderCode,
+              maxLines: 1,
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 9, color: Colors.black),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              tray.sizeDescription.isNotEmpty ? tray.sizeDescription : '-',
+              maxLines: 1,
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 9, color: Colors.black),
+            ),
           ),
           Expanded(
             flex: 2,
             child: Text(
               tray.perGarmentTube > 0 ? tray.perGarmentTube.toStringAsFixed(0) : '-',
-              style: TextStyle(fontSize: 12, color: Colors.indigo.shade700, fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 9, color: Colors.black),
             ),
           ),
           Expanded(
             flex: 2,
-            child: Align(
-              alignment: Alignment.centerLeft,
+            child: Center(
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
@@ -57,7 +76,8 @@ class GBSTrayRow extends StatelessWidget {
                 ),
                 child: Text(
                   tray.primaryQuantity,
-                  style: const TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.w600),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 9, color: Colors.black, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
@@ -70,7 +90,8 @@ class GBSTrayRow extends StatelessWidget {
                 final garmentPcs = (tray.perGarmentTube > 0) ? (tubes * tray.perGarmentTube) : 0;
                 return Text(
                   garmentPcs > 0 ? garmentPcs.toStringAsFixed(0) : '-',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.teal.shade700),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 9, color: Colors.black),
                 );
               },
             ),
@@ -78,20 +99,21 @@ class GBSTrayRow extends StatelessWidget {
           Expanded(
             flex: 2,
             child: Text(
-              '${((double.tryParse(tray.primaryQuantity) ?? 0.0) * tray.pieceWeight).toStringAsFixed(2)} g',
-              style: const TextStyle(fontSize: 13, color: Colors.black87),
+              '${((double.tryParse(tray.primaryQuantity) ?? 0.0) * tray.pieceWeight).toStringAsFixed(1)} g',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 9, color: Colors.black),
             ),
           ),
           const SizedBox(width: 8),
           GestureDetector(
             onTap: onRemove,
             child: Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(5),
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(4),
               ),
-              child: Icon(Icons.cancel, size: 18, color: Colors.red.shade400),
+              child: Icon(Icons.cancel, size: 14, color: Colors.red.shade400),
             ),
           ),
         ],

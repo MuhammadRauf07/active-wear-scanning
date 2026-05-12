@@ -39,10 +39,11 @@ class ScanningTrayRow extends StatelessWidget {
         children: [
           // Tray code
           Expanded(
-            flex: 2,
+            flex: 3,
             child: Text(
               tray.primaryTrayModel.trayCode ?? '',
-              style: const TextStyle(fontSize: 13, color: Colors.black87),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 10, color: Colors.black),
             ),
           ),
           // Work order
@@ -50,30 +51,8 @@ class ScanningTrayRow extends StatelessWidget {
             flex: 2,
             child: Text(
               tray.workOrderHeader?.workOrderCode ?? '-',
-              style: const TextStyle(fontSize: 12, color: Colors.black87),
-            ),
-          ),
-          // Item description
-          Expanded(
-            flex: 3,
-            child: Text(
-              tray.item?.description ?? '-',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11, color: Colors.black87),
-            ),
-          ),
-          // Color
-          Expanded(
-            flex: 2,
-            child: Text(
-              tray.item?.colorDescription?.isNotEmpty == true
-                  ? tray.item!.colorDescription!
-                  : '-',
-              style: const TextStyle(
-                  fontSize: 11,
-                  color: Colors.black87,
-                  fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 10, color: Colors.black),
             ),
           ),
           // Size
@@ -83,7 +62,8 @@ class ScanningTrayRow extends StatelessWidget {
               tray.item?.sizeDescription?.isNotEmpty == true
                   ? tray.item!.sizeDescription!
                   : '-',
-              style: const TextStyle(fontSize: 11, color: Colors.black87),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 10, color: Colors.black),
             ),
           ),
           // PCS/TUBE
@@ -91,17 +71,16 @@ class ScanningTrayRow extends StatelessWidget {
             flex: 2,
             child: Text(
               pgt > 0 ? pgt.toStringAsFixed(0) : '-',
+              textAlign: TextAlign.center,
               style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.indigo.shade700,
-                  fontWeight: FontWeight.w600),
+                  fontSize: 10,
+                  color: Colors.black),
             ),
           ),
           // TUBES (quantity box)
           Expanded(
             flex: 2,
-            child: Align(
-              alignment: Alignment.centerLeft,
+            child: Center(
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
@@ -110,11 +89,10 @@ class ScanningTrayRow extends StatelessWidget {
                 ),
                 child: Text(
                   tubes.toStringAsFixed(0),
+                  textAlign: TextAlign.center,
                   style: const TextStyle(
-                    fontSize: 13,
-                    color: Colors.black87,
-                    fontWeight: FontWeight.w600,
-                  ),
+                    fontSize: 10,
+                    color: Colors.black),
                 ),
               ),
             ),
@@ -124,10 +102,10 @@ class ScanningTrayRow extends StatelessWidget {
             flex: 2,
             child: Text(
               garmentPcs > 0 ? garmentPcs.toStringAsFixed(0) : '-',
+              textAlign: TextAlign.center,
               style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.teal.shade700),
+                  fontSize: 10,
+                  color: Colors.black),
             ),
           ),
           // WEIGHT
@@ -135,7 +113,8 @@ class ScanningTrayRow extends StatelessWidget {
             flex: 2,
             child: Text(
               weight != null ? '${weight.toStringAsFixed(2)} g' : '-',
-              style: const TextStyle(fontSize: 13, color: Colors.black87),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 10, color: Colors.black),
             ),
           ),
           const SizedBox(width: 8),

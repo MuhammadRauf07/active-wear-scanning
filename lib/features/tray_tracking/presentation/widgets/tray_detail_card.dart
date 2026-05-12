@@ -20,7 +20,7 @@ class TrayDetailCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.blue.shade100.withOpacity(0.5),
+            color: Colors.blue.shade100.withValues(alpha: 0.5),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -38,7 +38,7 @@ class TrayDetailCard extends StatelessWidget {
             Positioned(
               right: -30,
               top: -30,
-              child: Icon(Icons.qr_code_2, size: 150, color: Colors.white.withOpacity(0.1)),
+              child: Icon(Icons.qr_code_2, size: 150, color: Colors.white.withValues(alpha: 0.1)),
             ),
             Padding(
               padding: const EdgeInsets.all(24),
@@ -48,7 +48,7 @@ class TrayDetailCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Text(
@@ -84,7 +84,7 @@ class TrayDetailCard extends StatelessWidget {
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.amberAccent.withOpacity(0.4),
+                                color: Colors.amberAccent.withValues(alpha: 0.4),
                                 blurRadius: 10,
                                 offset: const Offset(0, 4),
                               )
@@ -112,12 +112,12 @@ class TrayDetailCard extends StatelessWidget {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Icon(Icons.inventory_2_outlined, color: Colors.white.withOpacity(0.8), size: 16),
+                      Icon(Icons.inventory_2_outlined, color: Colors.white.withValues(alpha: 0.8), size: 16),
                       const SizedBox(width: 8),
                       Text(
                         'Quantity: ${trayDetail?.trayQuantity ?? 0} tubes',
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.9),
+                          color: Colors.white.withValues(alpha: 0.9),
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                         ),

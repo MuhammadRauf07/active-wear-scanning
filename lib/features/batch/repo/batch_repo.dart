@@ -103,7 +103,10 @@ class BatchRepo {
   }
 
   Future<PlexApiResult> fetchBatchLines({int? batchHeaderId}) async {
-    final query = batchHeaderId != null ? {'BatchHeaderId': batchHeaderId.toString()} : <String, dynamic>{};
+    final query = {
+      'maxResultCount': '1000',
+      if (batchHeaderId != null) 'batchHeaderId': batchHeaderId.toString(),
+    };
     final result = await _api.getList('/api/app/batch-liness', query: query);
     return result;
   }
@@ -124,14 +127,26 @@ class BatchRepo {
   }
 
   Future<PlexApiResult> fetchBatchLinesByProgressId(int progressId) async {
-    final result = await _api.getList('/api/app/batch-liness', query: {'ProgressId': progressId.toString()});
+    final result = await _api.getList(
+      '/api/app/batch-liness', 
+      query: {
+        'progressId': progressId.toString(),
+        'maxResultCount': '1000',
+      }
+    );
     return result;
   }
 
   /// Finds the WIP transaction linked to a given progressId.
   /// Returns the raw list so the caller can extract the wipTransaction.id.
   Future<PlexApiResult> fetchWipTransactionsByProgressId(int progressId) async {
-    final result = await _api.getList('/api/app/w-iPTransactions', query: {'ProgressId': progressId.toString()});
+    // Fetching a larger list without the problematic filter to allow in-memory filtering
+    final result = await _api.getList(
+      '/api/app/w-iPTransactions', 
+      query: {
+        'maxResultCount': '1000',
+      }
+    );
     return result;
   }
 

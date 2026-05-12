@@ -179,9 +179,11 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                 '-';
 
             double totalWeight = 0;
+            double totalTubes = 0;
             for (final gr in groupRecords) {
               final qty = gr.productionProgress.primaryQuantity ?? 0;
               final pw = gr.item.pieceWeight ?? 0;
+              totalTubes += qty;
               totalWeight += qty * pw;
             }
 
@@ -193,6 +195,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                 machine: machineCode,
                 color: bhFull.batchHeader.colorDescription ?? '-',
                 trayCount: groupRecords.length,
+                totalTubes: totalTubes,
                 totalWeight: totalWeight,
                 trolleyCode: bhFull.batchHeader.trayDetailId != null
                     ? _trayIdToCode[bhFull.batchHeader.trayDetailId]
@@ -322,7 +325,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                                               milliseconds: 180,
                                             ),
                                             color: isSelected
-                                                ? Colors.blue.withOpacity(0.05)
+                                                ? Colors.blue.withValues(alpha: 0.05)
                                                 : Colors.white,
                                             padding: const EdgeInsets.symmetric(
                                               horizontal: 14,

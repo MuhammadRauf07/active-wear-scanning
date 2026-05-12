@@ -71,7 +71,7 @@ class WorkOrderSelectionCard extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                     decoration: BoxDecoration(
-                      color: isSelected ? Colors.blue.withOpacity(0.05) : (index.isEven ? Colors.white : Colors.grey.shade50),
+                      color: isSelected ? Colors.blue.withValues(alpha: 0.05) : (index.isEven ? Colors.white : Colors.grey.shade50),
                       border: Border(
                         left: BorderSide(color: Colors.grey.shade300),
                         right: BorderSide(color: Colors.grey.shade300),

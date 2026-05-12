@@ -9,6 +9,7 @@ import 'package:active_wear_scanning/features/scanning_sections/presentation/wid
 import 'package:active_wear_scanning/features/tray/presentation/tray_scanning_screen.dart';
 import 'package:active_wear_scanning/features/wip/presentation/wip_screen.dart';
 import 'package:active_wear_scanning/features/tray_tracking/presentation/tray_tracking_screen.dart';
+import 'package:active_wear_scanning/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:flutter/material.dart';
 
 class ScanningSectionsScreen extends StatelessWidget {
@@ -31,13 +32,13 @@ class ScanningSectionsScreen extends StatelessWidget {
                     Row(
                       children: [
                         SectionCard(
-                          title: 'Order Header',
-                          subtitle: 'Order header details',
-                          sectionCode: 'ORDER',
+                          title: 'Dashboard',
+                          subtitle: 'View orders overview',
+                          sectionCode: 'DASH',
                           progressValue: 0.5,
                           isShowProgress: true,
                           onTap: () {
-                            Navigator.push(context, MaterialPageRoute(builder: (context) => const OrderHeaderScreen()));
+                            Navigator.push(context, MaterialPageRoute(builder: (context) => const DashboardScreen()));
                           },
                         ),
                         const SizedBox(width: 12),
@@ -131,6 +132,23 @@ class ScanningSectionsScreen extends StatelessWidget {
                         ),
                       ],
                     ),
+                    // const SizedBox(height: 10),
+                    // Row(
+                    //   children: [
+                    //     SectionCard(
+                    //       title: 'Dashboard',
+                    //       subtitle: 'View orders overview',
+                    //       sectionCode: 'DASH',
+                    //       progressValue: 0.8,
+                    //       isShowProgress: true,
+                    //       onTap: () {
+                    //         Navigator.push(context, MaterialPageRoute(builder: (context) => const DashboardScreen()));
+                    //       },
+                    //     ),
+                    //     const SizedBox(width: 12),
+                    //     const Expanded(child: SizedBox()), // Empty space for alignment
+                    //   ],
+                    // ),
                   ],
                 ),
               ),

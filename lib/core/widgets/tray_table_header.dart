@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 /// A standard table header for scanned tray lists.
-/// Shows TRAY CODE, WORK ORDER, ITEM DESCRIPTION, COLOR, SIZE, PCS/TUBE, TUBES, PCS, WEIGHT.
+/// Shows TRAY CODE, WO, SIZE, PCS/TBE, TUBES, PCS, WEIGHT.
 class TrayTableHeader extends StatelessWidget {
   final double actionColumnWidth;
 
@@ -11,10 +11,10 @@ class TrayTableHeader extends StatelessWidget {
   });
 
   static final _style = TextStyle(
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: FontWeight.bold,
     color: Colors.grey.shade700,
-    letterSpacing: 1.1,
+    letterSpacing: 0.3,
   );
 
   @override
@@ -28,15 +28,13 @@ class TrayTableHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Expanded(flex: 2, child: Text('TRAY CODE', style: _style)),
-          Expanded(flex: 2, child: Text('WORK ORDER', style: _style)),
-          Expanded(flex: 3, child: Text('ITEM DESCRIPTION', style: _style)),
-          Expanded(flex: 2, child: Text('COLOR', style: _style)),
-          Expanded(flex: 2, child: Text('SIZE', style: _style)),
-          Expanded(flex: 2, child: Text('PCS/TUBE', style: _style)),
-          Expanded(flex: 2, child: Text('TUBES', style: _style)),
-          Expanded(flex: 2, child: Text('PCS', style: _style)),
-          Expanded(flex: 2, child: Text('WEIGHT', style: _style)),
+          Expanded(flex: 3, child: Text('TRAY CODE', textAlign: TextAlign.center, style: _style)),
+          Expanded(flex: 2, child: Text('WORK ORDER', textAlign: TextAlign.center, style: _style)),
+          Expanded(flex: 2, child: Text('SIZE', textAlign: TextAlign.center, style: _style)),
+          Expanded(flex: 2, child: Text('PCS PER TUBE', textAlign: TextAlign.center, style: _style)),
+          Expanded(flex: 2, child: Text('TUBES', textAlign: TextAlign.center, style: _style)),
+          Expanded(flex: 2, child: Text('PCS', textAlign: TextAlign.center, style: _style)),
+          Expanded(flex: 2, child: Text('WEIGHT', textAlign: TextAlign.center, style: _style)),
           SizedBox(width: actionColumnWidth),
         ],
       ),

@@ -50,19 +50,18 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   );
 
   // Bluetooth Scanner Support
-  final FocusNode _focusNode = FocusNode();
   String _barcodeBuffer = '';
   DateTime? _lastKeyPress;
 
   @override
   void initState() {
     super.initState();
-    _focusNode.requestFocus();
+    HardwareKeyboard.instance.addHandler(_onHardwareKey);
   }
 
   @override
   void dispose() {
-    _focusNode.dispose();
+    HardwareKeyboard.instance.removeHandler(_onHardwareKey);
     _overrideQuantityController.dispose();
     for (final controller in _quantityControllers) {
       controller.dispose();
@@ -70,27 +69,35 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     super.dispose();
   }
 
-  void _onKey(RawKeyEvent event) {
-    if (event is RawKeyDownEvent) {
-      final now = DateTime.now();
-      if (_lastKeyPress != null && now.difference(_lastKeyPress!).inMilliseconds > 200) {
-        _barcodeBuffer = '';
-      }
-      _lastKeyPress = now;
+  bool _onHardwareKey(KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return false;
 
-      if (event.logicalKey == LogicalKeyboardKey.enter) {
-        if (_barcodeBuffer.isNotEmpty) {
-          final code = _barcodeBuffer;
-          _barcodeBuffer = '';
-          _processBluetoothScan(code);
-        }
-      } else if (event.character != null) {
-        _barcodeBuffer += event.character!;
-      }
+    final now = DateTime.now();
+    if (_lastKeyPress != null && now.difference(_lastKeyPress!).inMilliseconds > 200) {
+      _barcodeBuffer = '';
     }
+    _lastKeyPress = now;
+
+    final ch = event.character;
+    final isEnter = event.logicalKey == LogicalKeyboardKey.enter ||
+        event.logicalKey == LogicalKeyboardKey.numpadEnter ||
+        ch == '\n' || ch == '\r';
+
+    if (isEnter) {
+      if (_barcodeBuffer.isNotEmpty) {
+        final code = _barcodeBuffer;
+        _barcodeBuffer = '';
+        debugPrint('📡 BT Scanner → code: $code');
+        _processBluetoothScan(code);
+        return true; // consume the Enter so it doesn't submit a focused TextField
+      }
+    } else if (ch != null && ch.isNotEmpty) {
+      _barcodeBuffer += ch;
+    }
+    return false;
   }
 
-  void _processBluetoothScan(String scannedCode) {
+  Future<void> _processBluetoothScan(String scannedCode) async {
     final code = scannedCode.trim();
     if (code.isEmpty) return;
 
@@ -99,9 +106,9 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       _fetchMachineData(code);
     } else {
       // Treat as tray scan
-      final error = _validateTrayForScan(code);
-      if (error != null) {
-        _showError(error as String);
+      final error = await _validateTrayForScan(code);
+      if (error != null && mounted) {
+        _showError(error);
       }
     }
   }
@@ -334,6 +341,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
           "productGrade": 0,
           "productNature": 0,
           "isLastProcess": false,
+          "isStarted": false,
           "lotMakingFlag": false,
           "reworkFlag": false,
           "operationId": _selectedPlanLine!.operation.id,
@@ -382,16 +390,14 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: RawKeyboardListener(
-        focusNode: _focusNode,
-        autofocus: true,
-        onKey: _onKey,
-        child: SafeArea(
+      resizeToAvoidBottomInset: false,
+      body: SafeArea(
         child: ExcludeSemantics(
-          excluding: false, 
+          excluding: false,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // ── App bar ────────────────────────────────────────────────────
               CustomInspectionHeader(
                 heading: 'Tray Scanning',
                 subtitle: 'Scan tray barcode to record production',
@@ -406,22 +412,33 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                   onPressed: saveTrayAndProductionProgress,
                 ),
               ),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildMachineScannerSection(),
-                      const SizedBox(height: 10),
-                      if (_planLines != null) _buildScannedTraysSection(),
-                    ],
+
+              // ── Pinned: Machine scanner card (barcode input + WO dropdown) ─
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                child: _buildMachineScannerSection(),
+              ),
+
+              // ── Pinned: Info display — only after WO selected ──────────────
+              if (_selectedPlanLine != null) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                  child: DynamicInfoDisplay(
+                    items: _buildPlanLineDetailsMap(_selectedPlanLine!),
                   ),
                 ),
-              ),
+              ],
+
+              // ── Scrollable Table: Header Pinned, Rows Scrollable ───────────
+              if (_selectedPlanLine != null)
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    child: _buildScannedTraysSection(),
+                  ),
+                ),
             ],
           ),
-        ),
         ),
       ),
     );
@@ -480,12 +497,6 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 10),
-              if (_selectedPlanLine != null) ...[
-                DynamicInfoDisplay(
-                  items: _buildPlanLineDetailsMap(_selectedPlanLine!),
-                ),
-              ],
             ],
           ),
         ),
@@ -525,84 +536,94 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   }
 
   Widget _buildScannedTraysSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SectionHeader(
-          title: 'Scanned Trays',
-          subtitle: 'Scan a machine to start binding trays',
-        ),
-        const SizedBox(height: 12),
-        ContentCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Scanned Trays (${_scannedTrays.length})',
-                    style: _labelStyle.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                  Row(
-                    children: [
-                      SizedBox(
-                        width: 120,
-                        height: _inputAndButtonHeight,
-                        child: TextField(
-                          controller: _overrideQuantityController,
-                          decoration: _inputDecoration(
-                            hintText: 'Tubes per tray',
-                            isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 13),
-                            borderRadius: 4,
-                          ),
-                          keyboardType: TextInputType.number,
+    return ContentCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Toolbar: Scanned count, Tubes per tray, Scan Tray button ──────
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Scanned Trays (${_scannedTrays.length})',
+                  style: _labelStyle.copyWith(fontWeight: FontWeight.w600),
+                ),
+                Row(
+                  children: [
+                    const Text(
+                      'Tubes per tray:',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 70,
+                      height: _inputAndButtonHeight,
+                      child: TextField(
+                        controller: _overrideQuantityController,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        decoration: _inputDecoration(
+                          hintText: '',
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+                          borderRadius: 4,
                         ),
+                        keyboardType: TextInputType.number,
                       ),
-                      const SizedBox(width: 8),
-                      CustomOutlinedButton(
-                        label: 'Scan Tray',
-                        borderColor: Colors.blue,
-                        fillColor: Colors.blue,
-                        textColor: Colors.white,
-                        buttonHeight: _inputAndButtonHeight,
-                        onPressed: _onScanTray,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const TrayTableHeader(),
-              if (_scannedTrays.isEmpty)
-                const EmptyScanState(hasBorder: false)
-              else
-                ...List.generate(
-                  _scannedTrays.length,
-                  (index) => ScannedTrayRow(
-                    index: index,
-                    tray: _scannedTrays[index],
-                    quantityController: _quantityControllers[index],
-                    selectedPlanLine: _selectedPlanLine,
-                    onDelete: () {
-                      setState(() {
-                        _quantityControllers[index].dispose();
-                        _quantityControllers.removeAt(index);
-                        _scannedTrays.removeAt(index);
-                      });
+                    ),
+                    const SizedBox(width: 12),
+                    CustomOutlinedButton(
+                      label: 'Scan Tray',
+                      borderColor: Colors.blue,
+                      fillColor: Colors.blue,
+                      textColor: Colors.white,
+                      buttonHeight: _inputAndButtonHeight,
+                      onPressed: _onScanTray,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          
+          // ── Fixed Table Header ─────────────────────────────────────────────
+          const TrayTableHeader(),
+
+          // ── Scrollable List of Values ──────────────────────────────────────
+          Expanded(
+            child: _scannedTrays.isEmpty
+                ? const EmptyScanState(hasBorder: false)
+                : ListView.builder(
+                    padding: EdgeInsets.zero,
+                    itemCount: _scannedTrays.length,
+                    itemBuilder: (context, index) {
+                      return ScannedTrayRow(
+                        index: index,
+                        tray: _scannedTrays[index],
+                        quantityController: _quantityControllers[index],
+                        selectedPlanLine: _selectedPlanLine,
+                        onDelete: () {
+                          setState(() {
+                            _quantityControllers[index].dispose();
+                            _quantityControllers.removeAt(index);
+                            _scannedTrays.removeAt(index);
+                          });
+                        },
+                      );
                     },
                   ),
-                ),
-            ],
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
-
-  // Removed _buildTrayTableHeader and _buildEmptyState as they are extracted to core widgets
-
-  // Removed _buildTrayRow, _buildDeleteTrayButton, and _buildWorkOrderDropdown as they were extracted.
 
   InputDecoration _inputDecoration({
     required String hintText,

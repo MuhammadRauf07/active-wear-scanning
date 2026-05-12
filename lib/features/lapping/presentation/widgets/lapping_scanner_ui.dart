@@ -43,7 +43,7 @@ class LappingScannerUI extends StatelessWidget {
                     child: Container(
                       height: 44,
                       decoration: BoxDecoration(
-                        border: Border.all(color: Colors.blue.withOpacity(0.5)),
+                        border: Border.all(color: Colors.blue.withValues(alpha: 0.5)),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       padding: const EdgeInsets.symmetric(horizontal: 12),

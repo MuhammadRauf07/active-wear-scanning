@@ -731,7 +731,7 @@ class _BatchListScreenState extends State<BatchListScreen>
                   Expanded(
                     flex: 3,
                     child: Text(
-                      'BATCH ID',
+                      'BATCH #',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
@@ -786,7 +786,7 @@ class _BatchListScreenState extends State<BatchListScreen>
                   Expanded(
                     flex: 3,
                     child: Text(
-                      'TROLLY',
+                      'TROLLEY',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
@@ -855,9 +855,8 @@ class _BatchListScreenState extends State<BatchListScreen>
                             child: Text(
                               batchId,
                               style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
+                                fontSize: 10,
+                                color: Colors.black,
                               ),
                             ),
                           ),
@@ -865,7 +864,7 @@ class _BatchListScreenState extends State<BatchListScreen>
                             flex: 3,
                             child: Text(
                               machineBrand,
-                              style: const TextStyle(fontSize: 12, color: Colors.black87),
+                              style: const TextStyle(fontSize: 10, color: Colors.black),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -874,7 +873,7 @@ class _BatchListScreenState extends State<BatchListScreen>
                             flex: 2,
                             child: Text(
                               colorDesc,
-                              style: const TextStyle(fontSize: 12, color: Colors.black87),
+                              style: const TextStyle(fontSize: 10, color: Colors.black),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -884,9 +883,8 @@ class _BatchListScreenState extends State<BatchListScreen>
                             child: Text(
                               '$traysLength',
                               style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blue,
+                                fontSize: 10,
+                                color: Colors.black,
                               ),
                             ),
                           ),
@@ -895,9 +893,8 @@ class _BatchListScreenState extends State<BatchListScreen>
                             child: Text(
                               weightDisplay,
                               style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.black87,
+                                fontSize: 10,
+                                color: Colors.black,
                               ),
                             ),
                           ),
@@ -909,9 +906,8 @@ class _BatchListScreenState extends State<BatchListScreen>
                                 return Text(
                                   trolleyCode,
                                   style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.teal.shade700,
+                                    fontSize: 10,
+                                    color: Colors.black,
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,

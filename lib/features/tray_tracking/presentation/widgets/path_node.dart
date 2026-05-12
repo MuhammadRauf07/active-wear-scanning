@@ -30,7 +30,7 @@ class PathNode extends StatelessWidget {
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: isHighlight ? color : color.withOpacity(0.1),
+                  color: isHighlight ? color : color.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                   border: Border.all(color: color, width: 2),
                 ),
@@ -40,7 +40,7 @@ class PathNode extends StatelessWidget {
                 Expanded(
                   child: Container(
                     width: 2,
-                    color: color.withOpacity(0.3),
+                    color: color.withValues(alpha: 0.3),
                   ),
                 ),
             ],

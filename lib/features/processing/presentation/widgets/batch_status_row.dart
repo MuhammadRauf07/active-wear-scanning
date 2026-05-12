@@ -13,27 +13,19 @@ class BatchStatusRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Row tint: rework overrides status color
-    final Color rowBg = summary.reworkFlag
-        ? Colors.amber.shade50
+    final Color statusColor = summary.reworkFlag
+        ? Colors.amber.shade800
         : summary.isStarted
-            ? Colors.green.shade50
-            : Colors.orange.shade50;
-    final Color accentColor = summary.reworkFlag
-        ? Colors.amber.shade400
-        : summary.isStarted
-            ? Colors.green.shade400
-            : Colors.orange.shade400;
+            ? Colors.green.shade700
+            : Colors.orange.shade700;
 
     return Container(
       margin: const EdgeInsets.only(top: 6),
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
       decoration: BoxDecoration(
-        color: rowBg,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(6),
-        border: Border(
-          left: BorderSide(color: accentColor, width: 4),
-        ),
+        border: Border.all(color: Colors.grey.shade200),
       ),
       child: Row(
         children: [
@@ -41,10 +33,9 @@ class BatchStatusRow extends StatelessWidget {
             flex: 2,
             child: Text(
               summary.batchCode,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Colors.black87,
-                fontWeight: FontWeight.w500,
+              style: TextStyle(
+                fontSize: 10,
+                color: statusColor,
               ),
             ),
           ),
@@ -52,10 +43,9 @@ class BatchStatusRow extends StatelessWidget {
             flex: 2,
             child: Text(
               summary.machine,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Colors.black87,
-                fontWeight: FontWeight.normal,
+              style: TextStyle(
+                fontSize: 10,
+                color: statusColor,
               ),
             ),
           ),
@@ -65,69 +55,40 @@ class BatchStatusRow extends StatelessWidget {
               summary.color,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Colors.black87,
-                fontWeight: FontWeight.normal,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              '${summary.trayCount} trays',
-              style: const TextStyle(
-                fontSize: 13,
-                color: Colors.black87,
-                fontWeight: FontWeight.normal,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              '${summary.totalWeight.toStringAsFixed(2)} g',
-              style: const TextStyle(
-                fontSize: 13,
-                color: Colors.blue,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              summary.trolleyCode ?? '-',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: summary.trolleyCode != null ? Colors.teal.shade700 : Colors.grey.shade400,
+                fontSize: 10,
+                color: statusColor,
               ),
             ),
           ),
-          // REWORK — plain text
+          Expanded(
+            flex: 2,
+            child: Text(
+              summary.totalTubes.toStringAsFixed(0),
+              style: TextStyle(
+                fontSize: 10,
+                color: statusColor,
+              ),
+            ),
+          ),
+          // Weight and Trolley removed
           Expanded(
             flex: 2,
             child: Text(
               summary.reworkFlag ? 'Yes' : 'No',
               style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: summary.reworkFlag ? Colors.amber.shade800 : Colors.grey.shade500,
+                fontSize: 10,
+                color: statusColor,
               ),
             ),
           ),
-          // STATUS — plain text
           Expanded(
             flex: 2,
             child: Text(
-              summary.isStarted ? 'Started' : 'Issued',
+              summary.isStarted ? 'Started' : 'Offered',
               style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: summary.isStarted ? Colors.green.shade700 : Colors.orange.shade700,
+                fontSize: 10,
+                color: statusColor,
               ),
             ),
           ),

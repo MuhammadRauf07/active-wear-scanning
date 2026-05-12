@@ -18,20 +18,25 @@ class BatchScanSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // ── Compute aggregates ───────────────────────────────────────────────────
+    double totalTubes = 0;
     double totalPcs = 0;
-    double totalWeight = 0;
+    int startedCount = 0;
+    int reworkCount = 0;
     final Map<String, List<ProductionProgressResponseModel>> byWO = {};
 
     for (final t in trays) {
-      final qty = t.productionProgress.primaryQuantity ?? 0;
-      final pw = t.item.pieceWeight ?? 0;
-      totalPcs += qty;
-      totalWeight += qty * pw;
+      final tubes = t.productionProgress.primaryQuantity ?? 0;
+      final pgt = t.item.perGarmentTube ?? 0;
+      
+      totalTubes += tubes;
+      totalPcs += (pgt > 0 ? tubes * pgt : 0);
+      
+      if (t.productionProgress.isStarted == true) startedCount++;
+      if (t.productionProgress.reworkFlag == true) reworkCount++;
+
       final woCode = t.workOrderHeader?.workOrderCode ?? 'Unknown WO';
       byWO.putIfAbsent(woCode, () => []).add(t);
     }
-
-    final capacity = machineCapacity;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -59,18 +64,30 @@ class BatchScanSummary extends StatelessWidget {
         IntrinsicHeight(
           child: Row(
             children: [
-              _statTile('No. of Trays', '${trays.length}', Icons.layers_outlined),
+              _statTile('Tubes', totalTubes.toStringAsFixed(0), Icons.format_list_numbered),
+              _verticalDivider(),
+              _statTile('Trays', '${trays.length}', Icons.layers_outlined),
+              _verticalDivider(),
+              _statTile('Pieces (PCS)', totalPcs.toStringAsFixed(0), Icons.style_outlined),
               _verticalDivider(),
               _statTile(
-                  'Total Tubes', totalPcs.toStringAsFixed(0), Icons.format_list_numbered),
-              if (capacity != null && capacity > 0) ...[
+                'Status', 
+                startedCount == 0 
+                    ? 'Issued' 
+                    : startedCount == trays.length 
+                        ? 'Started' 
+                        : 'Partial', 
+                Icons.info_outline,
+                valueColor: startedCount == 0 
+                    ? Colors.orange.shade800 
+                    : startedCount == trays.length 
+                        ? Colors.green.shade700 
+                        : Colors.blue.shade800,
+              ),
+              if (reworkCount > 0) ...[
                 _verticalDivider(),
-                _statTile('Capacity', capacity.toStringAsFixed(1),
-                    Icons.settings_input_component),
+                _statTile('Rework', '$reworkCount', Icons.sync_problem, valueColor: Colors.orange.shade800),
               ],
-              _verticalDivider(),
-              _statTile('Allocated Weight', totalWeight.toStringAsFixed(1),
-                  Icons.scale_outlined),
             ],
           ),
         ),
@@ -115,7 +132,7 @@ class BatchScanSummary extends StatelessWidget {
                   style: const TextStyle(
                       fontSize: 13, fontWeight: FontWeight.w600)),
               subtitle: Text(
-                '${woTrays.length} trays · ${woPcs.toStringAsFixed(0)} tubes · ${woWeight.toStringAsFixed(2)} g',
+                '${woPcs.toStringAsFixed(0)} tubes',
                 style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
               ),
               children: [
@@ -135,21 +152,7 @@ class BatchScanSummary extends StatelessWidget {
                                   color: Colors.grey.shade600))),
                       Expanded(
                           flex: 2,
-                          child: Text('TRAYS',
-                              style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.grey.shade600))),
-                      Expanded(
-                          flex: 2,
                           child: Text('TUBES',
-                              style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.grey.shade600))),
-                      Expanded(
-                          flex: 3,
-                          child: Text('WEIGHT',
                               style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
@@ -191,25 +194,9 @@ class BatchScanSummary extends StatelessWidget {
                         Expanded(
                           flex: 2,
                           child: Text(
-                            '${itemTrays.length}',
-                            style: const TextStyle(
-                                fontSize: 12, color: Colors.black87),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 2,
-                          child: Text(
                             itemPcs.toStringAsFixed(0),
                             style: const TextStyle(
                                 fontSize: 12, fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 3,
-                          child: Text(
-                            '${itemWeight.toStringAsFixed(2)} g',
-                            style: TextStyle(
-                                fontSize: 11, color: Colors.grey.shade700),
                           ),
                         ),
                       ],

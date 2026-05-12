@@ -5,6 +5,7 @@ class BatchSummaryItem {
   final String machine;
   final String color;
   final int trayCount;
+  final double totalTubes;
   final double totalWeight;
   final String? trolleyCode;
   final bool isStarted;
@@ -17,6 +18,7 @@ class BatchSummaryItem {
     required this.machine,
     required this.color,
     required this.trayCount,
+    required this.totalTubes,
     required this.totalWeight,
     this.trolleyCode,
     required this.isStarted,

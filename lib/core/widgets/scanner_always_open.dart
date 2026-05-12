@@ -275,7 +275,7 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
                         border: Border.all(
                           color: _errorOverlayText != null
                               ? Colors.red
-                              : Colors.blue.withOpacity(0.5),
+                              : Colors.blue.withValues(alpha: 0.5),
                           width: 4,
                         ),
                         borderRadius: BorderRadius.circular(12),

@@ -201,10 +201,13 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
     final activeSummary = _workOrders[_selectedWorkOrderId];
     if (activeSummary == null) return 'No Active Work Order selected!';
 
-    final currentWOTrays = _scannedTraysByWO[_selectedWorkOrderId] ?? [];
-    if (currentWOTrays.any((t) => t.primaryTrayModel.trayCode?.toLowerCase() == trayCode)) {
-      return 'Tray already scanned in this session!';
+    for (final woTrays in _scannedTraysByWO.values) {
+      if (woTrays.any((t) => t.primaryTrayModel.trayCode?.toLowerCase() == trayCode)) {
+        return 'Tray already scanned in this session!';
+      }
     }
+
+    final currentWOTrays = _scannedTraysByWO[_selectedWorkOrderId] ?? [];
 
     double totalScanned = currentWOTrays.fold(0, (sum, t) =>
     sum + (_trayOverrideQuantities[t.primaryTrayModel.trayCode?.toLowerCase() ?? ''] ?? 0));
@@ -519,6 +522,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
           "shiftId": scannedTray.productionProgress.shiftId ?? 1,
           "machineId": scannedTray.productionProgress.machineId ?? (_trays.isNotEmpty ? _trays.first.productionProgress.machineId : null),
           "isLastProcess": false,
+          "isStarted": false,
           "reworkFlag": false,
           "lotMakingFlag": false, // Strict pass
           "locatorId": nextLocatorId,

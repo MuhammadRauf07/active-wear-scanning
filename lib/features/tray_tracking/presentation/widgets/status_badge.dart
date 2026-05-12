@@ -13,7 +13,7 @@ class TrayStatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: isReassigned ? Colors.greenAccent.shade400 : Colors.white.withOpacity(0.2),
+        color: isReassigned ? Colors.greenAccent.shade400 : Colors.white.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(

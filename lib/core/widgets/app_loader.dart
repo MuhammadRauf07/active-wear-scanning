@@ -37,7 +37,7 @@ class AppLoader {
                     child: GestureDetector(
                       onTap: () {},
                       behavior: HitTestBehavior.opaque,
-                      child: Container(color: Colors.black.withOpacity(0.25)),
+                      child: Container(color: Colors.black.withValues(alpha: 0.25)),
                     ),
                   ),
                 ),
@@ -51,7 +51,7 @@ class AppLoader {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: const BorderRadius.all(Radius.circular(12)),
-                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 16, offset: const Offset(0, 6))],
+                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 16, offset: const Offset(0, 6))],
                       ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,

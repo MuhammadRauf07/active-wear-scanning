@@ -31,14 +31,13 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
   static final _tableHeaderStyle = TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700);
 
   // Bluetooth Scanner Support
-  final FocusNode _focusNode = FocusNode();
   String _barcodeBuffer = '';
   DateTime? _lastKeyPress;
 
   @override
   void initState() {
     super.initState();
-    _focusNode.requestFocus();
+    HardwareKeyboard.instance.addHandler(_onHardwareKey);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _onInitialDataFetch();
@@ -49,39 +48,42 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
 
   @override
   void dispose() {
-    _focusNode.dispose();
+    HardwareKeyboard.instance.removeHandler(_onHardwareKey);
     super.dispose();
   }
 
-  void _onKey(RawKeyEvent event) {
-    if (event is RawKeyDownEvent) {
-      final now = DateTime.now();
-      // If it's been more than 200ms since the last keypress, reset buffer.
-      // Scanners type very fast (usually <50ms between keys).
-      if (_lastKeyPress != null && now.difference(_lastKeyPress!).inMilliseconds > 200) {
-        _barcodeBuffer = '';
-      }
-      _lastKeyPress = now;
+  bool _onHardwareKey(KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return false;
 
-      if (event.logicalKey == LogicalKeyboardKey.enter) {
-        if (_barcodeBuffer.isNotEmpty) {
-          final code = _barcodeBuffer;
-          _barcodeBuffer = '';
-          _processBluetoothScan(code);
-        }
-      } else if (event.character != null) {
-        _barcodeBuffer += event.character!;
-      }
+    final now = DateTime.now();
+    if (_lastKeyPress != null && now.difference(_lastKeyPress!).inMilliseconds > 200) {
+      _barcodeBuffer = '';
     }
+    _lastKeyPress = now;
+
+    final ch = event.character;
+    final isEnter = event.logicalKey == LogicalKeyboardKey.enter ||
+        event.logicalKey == LogicalKeyboardKey.numpadEnter ||
+        ch == '\n' || ch == '\r';
+
+    if (isEnter) {
+      if (_barcodeBuffer.isNotEmpty) {
+        final code = _barcodeBuffer;
+        _barcodeBuffer = '';
+        debugPrint('📡 BT Scanner (GBS) → code: $code');
+        _processBluetoothScan(code);
+        return true;
+      }
+    } else if (ch != null && ch.isNotEmpty) {
+      _barcodeBuffer += ch;
+    }
+    return false;
   }
 
-  void _processBluetoothScan(String scannedCode) {
-    final error = _validateTrayForReceiving(scannedCode);
-    if (error != null) {
-      _showError(error as String);
-    } else {
-      // Optionally show a success snackbar or play a sound
-      // ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tray $scannedCode scanned successfully')));
+  Future<void> _processBluetoothScan(String scannedCode) async {
+    final error = await _validateTrayForReceiving(scannedCode);
+    if (error != null && mounted) {
+      _showError(error);
     }
   }
 
@@ -328,40 +330,32 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: RawKeyboardListener(
-        focusNode: _focusNode,
-        autofocus: true,
-        onKey: _onKey,
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              CustomInspectionHeader(
-                heading: 'GBS Receiving',
-                subtitle: 'Scan trays to receive them in GBS',
-                isShowBackIcon: true,
-                topPadding: 0,
-                horizontalPadding: 12,
-                widget: CustomOutlinedButton(
-                  label: 'Save Changes',
-                  borderColor: Colors.blue,
-                  textColor: Colors.blue,
-                  buttonHeight: 42,
-                  onPressed: saveWipTransactionsAndUpdateTray,
-                ),
+      resizeToAvoidBottomInset: false,
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            CustomInspectionHeader(
+              heading: 'GBS Receiving',
+              subtitle: 'Scan trays to receive them in GBS',
+              isShowBackIcon: true,
+              topPadding: 0,
+              horizontalPadding: 12,
+              widget: CustomOutlinedButton(
+                label: 'Save Changes',
+                borderColor: Colors.blue,
+                textColor: Colors.blue,
+                buttonHeight: 42,
+                onPressed: saveWipTransactionsAndUpdateTray,
               ),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    children: [
-                      _buildScannedTraysSection()
-                    ],
-                  ),
-                ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: _buildScannedTraysSection(),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -409,68 +403,61 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
   }
 
   Widget _buildScannedTraysSection() {
-    final hasTrays = _scannedTrays.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SectionHeader(title: 'Received Trays', subtitle: 'Scan tray barcodes to receive them in GBS'),
         const SizedBox(height: 12),
-        ContentCard(
-          padding: EdgeInsets.zero,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Received Trays (${_scannedTrays.length})', 
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)
-                    ),
-                    Row(
-                      children: [
-                        // SizedBox(
-                        //   width: 100,
-                        //   height: _inputAndButtonHeight,
-                        //   child: TextField(
-                        //     readOnly: true,
-                        //     textAlign: TextAlign.center,
-                        //     decoration: InputDecoration(
-                        //       hintText: 'Pcs/tray',
-                        //       hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
-                        //       isDense: true,
-                        //       contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 13),
-                        //       border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: Colors.grey.shade300)),
-                        //       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: Colors.grey.shade300)),
-                        //     ),
-                        //   ),
-                        // ),
-                        const SizedBox(width: 8),
-                        CustomOutlinedButton(
-                          label: 'Scan Tray',
-                          borderColor: Colors.blue,
-                          fillColor: Colors.blue,
-                          textColor: Colors.white,
-                          buttonHeight: _inputAndButtonHeight,
-                          onPressed: _onScanTray,
-                        ),
-                      ],
-                    ),
-                  ],
+        Expanded(
+          child: ContentCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // ── Toolbar ──────────────────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Received Trays (${_scannedTrays.length})', 
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)
+                      ),
+                      CustomOutlinedButton(
+                        label: 'Scan Tray',
+                        borderColor: Colors.blue,
+                        fillColor: Colors.blue,
+                        textColor: Colors.white,
+                        buttonHeight: _inputAndButtonHeight,
+                        onPressed: _onScanTray,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const TrayTableHeader(actionColumnWidth: 44),
-              if (!hasTrays) const EmptyScanState(hasBorder: true)
-              else ...List.generate(_scannedTrays.length, (index) {
-                final reversedIndex = _scannedTrays.length - 1 - index;
-                return GBSTrayRow(
-                  index: reversedIndex,
-                  tray: _scannedTrays[reversedIndex],
-                  onRemove: () => _onRemoveTray(reversedIndex),
-                );
-              }),
-            ],
+                
+                // ── Fixed Header ─────────────────────────────────────────────
+                const TrayTableHeader(actionColumnWidth: 44),
+
+                // ── Scrollable Values ────────────────────────────────────────
+                Expanded(
+                  child: _scannedTrays.isEmpty 
+                      ? const EmptyScanState(hasBorder: false)
+                      : ListView.builder(
+                          padding: EdgeInsets.zero,
+                          itemCount: _scannedTrays.length,
+                          itemBuilder: (context, index) {
+                            final reversedIndex = _scannedTrays.length - 1 - index;
+                            return GBSTrayRow(
+                              index: reversedIndex,
+                              tray: _scannedTrays[reversedIndex],
+                              onRemove: () => _onRemoveTray(reversedIndex),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
           ),
         ),
       ],
