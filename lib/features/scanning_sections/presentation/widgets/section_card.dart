@@ -12,81 +12,106 @@ class SectionCard extends StatelessWidget {
   const
   SectionCard({super.key, required this.title, required this.subtitle, required this.sectionCode, required this.progressValue, this.isShowProgress, required this.onTap});
 
-  IconData _getSectionIcon(String code) {
-    switch (code.toUpperCase()) {
-      case 'TRAY':
-        return Icons.inventory_2;
-      case 'ORDER':
-        return Icons.inventory_2;
-      case 'SCAN':
-        return Icons.qr_code_scanner;
-      case 'WIP':
-        return Icons.insights;
-      default:
-        return Icons.folder_open;
-    }
+  IconData _getSectionIcon(String title) {
+    final t = title.toLowerCase();
+    if (t.contains('dashboard')) return Icons.factory_outlined;
+    if (t.contains('tray scanning')) return Icons.qr_code_scanner;
+    if (t.contains('gbs')) return Icons.inventory_2_outlined;
+    if (t.contains('batch')) return Icons.assignment_outlined;
+    if (t.contains('processing')) return Icons.settings_outlined;
+    if (t.contains('induction')) return Icons.warehouse_outlined;
+    if (t.contains('wip')) return Icons.account_tree_outlined;
+    if (t.contains('tracking')) return Icons.location_on_outlined;
+    return Icons.folder_outlined;
+  }
+
+  Color _getSectionColor(String title) {
+    final t = title.toLowerCase();
+    if (t.contains('dashboard') || t.contains('gbs')) return const Color(0xFF1B64A3); // Industrial Blue
+    if (t.contains('wip')) return const Color(0xFF2E7D32); // Green
+    return const Color(0xFFE67E22); // Industrial Orange
   }
 
   @override
   Widget build(BuildContext context) {
+    final accentColor = _getSectionColor(title);
+    final iconBgColor = accentColor.withValues(alpha: 0.1);
+
     return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          decoration: BoxDecoration(
-            color: DynamicColorUtil.getBackgroundColor(progressValue),
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: DynamicColorUtil.getDynamicTextColor(progressValue)),
-          ),
-          child: Column(
-            children: [
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const SizedBox(width: 12),
-                  Container(
-                    decoration: BoxDecoration(color: DynamicColorUtil.getDynamicTextColor(progressValue), borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.all(8),
-                    child: Icon(_getSectionIcon(sectionCode), size: 24, color: Colors.white),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 16,
+              spreadRadius: 0,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: accentColor, width: 4),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: SizedBox(
-                      height: 60,
+                ),
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: iconBgColor,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        _getSectionIcon(title),
+                        size: 28,
+                        color: accentColor,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
                       child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             title,
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: DynamicColorUtil.getDynamicTextColor(progressValue)),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF1A1A1A),
+                              letterSpacing: -0.2,
+                            ),
                           ),
-                          Wrap(
-                            children: [Text(subtitle, maxLines: 2, style: TextStyle(fontSize: 12, color: DynamicColorUtil.getDynamicTextColor(progressValue)))],
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                              fontWeight: FontWeight.w400,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                ],
+                  ],
+                ),
               ),
-              const SizedBox(height: 12),
-              if (isShowProgress == true)
-                LinearProgressIndicator(
-                  value: 1,
-                  minHeight: 5,
-                  borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)),
-                  backgroundColor: Colors.grey.shade300,
-                  valueColor: AlwaysStoppedAnimation<Color>(DynamicColorUtil.getDynamicTextColor(progressValue)),
-                )
-              else
-                const SizedBox.shrink(),
-            ],
+            ),
           ),
         ),
       ),

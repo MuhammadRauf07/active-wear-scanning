@@ -31,7 +31,7 @@ class ScannedTrayRow extends StatelessWidget {
           right: BorderSide(color: Colors.grey.shade300),
           bottom: BorderSide(color: Colors.grey.shade300),
         ),
-        color: index.isEven ? Colors.white : Colors.grey.shade50,
+        color: index.isEven ? Colors.white : const Color(0xFFF5F2F9), // Light Purple/Lavender shade
       ),
       child: Row(
         children: [

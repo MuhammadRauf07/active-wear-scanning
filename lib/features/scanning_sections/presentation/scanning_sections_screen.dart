@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/features/batch/presentation/batch_list_screen.dart';
@@ -23,138 +24,118 @@ class ScanningSectionsScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            CustomInspectionHeader(heading: 'Active Wear', isShowBackIcon: false, topPadding: 10, horizontalPadding: 12),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Operations Modules',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.grey.shade900,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Select a module to begin production tasks',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        SectionCard(
-                          title: 'Dashboard',
-                          subtitle: 'View orders overview',
-                          sectionCode: 'DASH',
-                          progressValue: 0.5,
-                          isShowProgress: true,
-                          onTap: () {
-                            Navigator.push(context, MaterialPageRoute(builder: (context) => const DashboardScreen()));
-                          },
-                        ),
-                        const SizedBox(width: 12),
-                        SectionCard(
-                          title: 'Tray Scanning',
-                          subtitle: 'Scan trays for inventory',
-                          sectionCode: 'TRAY',
-                          progressValue: 0.5,
-                          isShowProgress: true,
-                          onTap: () {
-                            Navigator.push(context, MaterialPageRoute(builder: (context) => const TrayScanningScreen()));
-                          },
-                        ),
-                      ],
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                children: [
+                  _buildRow(context, [
+                    SectionCard(
+                      title: 'Dashboard',
+                      subtitle: 'Primary system overview',
+                      sectionCode: 'DASH',
+                      progressValue: 0.5,
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DashboardScreen())),
                     ),
-                    SizedBox(height: 10),
-                    Row(
-                      children: [
-                        SectionCard(
-                          title: 'GBS Receiving',
-                          subtitle: 'Scan trays for GBS Receiving',
-                          sectionCode: 'TRAY',
-                          progressValue: 0.5,
-                          isShowProgress: true,
-                          onTap: () {
-                            Navigator.push(context, MaterialPageRoute(builder: (context) => const GBSReceivingScreen()));
-                          },
-                        ),
-                        const SizedBox(width: 12),
-                        SectionCard(
-                          title: 'Batch',
-                          subtitle: 'Scan trays to create batch',
-                          sectionCode: 'TRAY',
-                          progressValue: 0.5,
-                          isShowProgress: true,
-                          onTap: () {
-                            Navigator.push(context, MaterialPageRoute(builder: (context) => const BatchListScreen()));
-                          },
-                        ),
-                      ],
+                    SectionCard(
+                      title: 'Tray Scanning',
+                      subtitle: 'Verify and trace manufacturing trays',
+                      sectionCode: 'TRAY',
+                      progressValue: 0.5,
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const TrayScanningScreen())),
                     ),
-                    SizedBox(height: 10),
-                    Row(
-                      children: [
-                        SectionCard(
-                          title: 'Processing',
-                          subtitle: 'WIP transaction',
-                          sectionCode: 'PROC',
-                          progressValue: 0.5,
-                          isShowProgress: true,
-                          onTap: () {
-                            Navigator.push(context, MaterialPageRoute(builder: (context) => const ProcessingScreen()));
-                          },
-                        ),
-                        const SizedBox(width: 12),
-                        SectionCard(
-                          title: 'Induction Store',
-                          subtitle: 'Scan Trays for Induction Store',
-                          sectionCode: 'TRAY',
-                          progressValue: 0.5,
-                          isShowProgress: true,
-                          onTap: () {
-                            Navigator.push(context, MaterialPageRoute(builder: (context) => const InductionStoreScreen()));
-                          },
-                        ),
-                      ],
+                  ]),
+                  _buildRow(context, [
+                    SectionCard(
+                      title: 'GBS Receiving',
+                      subtitle: 'Handle goods-based stock incoming',
+                      sectionCode: 'TRAY',
+                      progressValue: 0.5,
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GBSReceivingScreen())),
                     ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        SectionCard(
-                          title: 'WIP',
-                          subtitle: 'Work In Progress',
-                          sectionCode: 'WIP',
-                          progressValue: 0.75,
-                          isShowProgress: true,
-                          onTap: () {
-                            Navigator.push(context, MaterialPageRoute(builder: (context) => const WIPScreen()));
-                          },
-                        ),
-                        const SizedBox(width: 12),
-                        SectionCard(
-                          title: 'Tray Tracking',
-                          subtitle: 'Track tray locations',
-                          sectionCode: 'TRACK',
-                          progressValue: 0.5,
-                          isShowProgress: true,
-                          onTap: () {
-                            Navigator.push(context, MaterialPageRoute(builder: (context) => const TrayTrackingScreen()));
-                          },
-                        ),
-                      ],
+                    SectionCard(
+                      title: 'Batch Creation',
+                      subtitle: 'Initialize new production batches',
+                      sectionCode: 'TRAY',
+                      progressValue: 0.5,
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const BatchListScreen())),
                     ),
-                    // const SizedBox(height: 10),
-                    // Row(
-                    //   children: [
-                    //     SectionCard(
-                    //       title: 'Dashboard',
-                    //       subtitle: 'View orders overview',
-                    //       sectionCode: 'DASH',
-                    //       progressValue: 0.8,
-                    //       isShowProgress: true,
-                    //       onTap: () {
-                    //         Navigator.push(context, MaterialPageRoute(builder: (context) => const DashboardScreen()));
-                    //       },
-                    //     ),
-                    //     const SizedBox(width: 12),
-                    //     const Expanded(child: SizedBox()), // Empty space for alignment
-                    //   ],
-                    // ),
-                  ],
-                ),
+                  ]),
+                  _buildRow(context, [
+                    SectionCard(
+                      title: 'Processing',
+                      subtitle: 'Main production line tasks',
+                      sectionCode: 'PROC',
+                      progressValue: 0.5,
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ProcessingScreen())),
+                    ),
+                    SectionCard(
+                      title: 'Induction Store',
+                      subtitle: 'Log materials to production store',
+                      sectionCode: 'TRAY',
+                      progressValue: 0.5,
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const InductionStoreScreen())),
+                    ),
+                  ]),
+                  _buildRow(context, [
+                    SectionCard(
+                      title: 'Work In Progress (WIP)',
+                      subtitle: 'Real-time production flow',
+                      sectionCode: 'WIP',
+                      progressValue: 0.75,
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const WIPScreen())),
+                    ),
+                    SectionCard(
+                      title: 'Tray Tracking',
+                      subtitle: 'Location history of production trays',
+                      sectionCode: 'TRACK',
+                      progressValue: 0.5,
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const TrayTrackingScreen())),
+                    ),
+                  ]),
+                  const SizedBox(height: 24),
+                ],
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildRow(BuildContext context, List<Widget> children) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        children: [
+          children[0],
+          const SizedBox(width: 16),
+          children[1],
+        ],
       ),
     );
   }

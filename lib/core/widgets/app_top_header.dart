@@ -13,6 +13,7 @@ class CustomInspectionHeader extends StatelessWidget {
   final bool? isShowBackIcon;
   final VoidCallback? callBack;
   final VoidCallback? onBackPress;
+  final Color? buttonColor;
 
   const CustomInspectionHeader({
     super.key,
@@ -26,23 +27,31 @@ class CustomInspectionHeader extends StatelessWidget {
     this.buttonLabel,
     this.onBackPress,
     this.horizontalPadding,
+    this.buttonColor,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: EdgeInsets.only(top: topPadding ?? 32, left: horizontalPadding ?? 0, right: horizontalPadding ?? 0),
+      margin: EdgeInsets.only(top: topPadding ?? 16, left: horizontalPadding ?? 16, right: horizontalPadding ?? 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(16),
         color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.grey.shade200, blurRadius: 8, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 16,
+            spreadRadius: 0,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Row(
         children: [
-          isShowBackIcon == null || isShowBackIcon! ? CustomBackButton(onBackPress: onBackPress) : const SizedBox.shrink(),
+          if (isShowBackIcon == null || isShowBackIcon!) 
+            CustomBackButton(onBackPress: onBackPress),
 
-          /// Assuming this is defined elsewhere in your project.
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -50,25 +59,44 @@ class CustomInspectionHeader extends StatelessWidget {
               children: [
                 Text(
                   heading.trim(),
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
+                  style: const TextStyle(
+                    fontSize: 18, 
+                    fontWeight: FontWeight.w800, 
+                    color: Color(0xFF1A1A1A),
+                    letterSpacing: -0.5,
+                  ),
                 ),
-                SizedBox(height: subtitle != null ? 8 : 0),
-                subtitle != null ? Text(subtitle!, style: TextStyle(fontSize: 14, color: Colors.grey[600])) : const SizedBox.shrink(),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle!, 
+                    style: TextStyle(
+                      fontSize: 12, 
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
-          callBack == null
-              ? widget ?? Icon(icon, color: Colors.blueAccent)
-              : SizedBox(
-                  width: 100,
-                  child: CustomOutlinedButton(
-                    borderColor: Colors.blue,
-                    label: buttonLabel,
-                    fillColor: Colors.blueAccent,
-                    textColor: Colors.white,
-                    onPressed: callBack,
-                  ),
+          if (callBack != null)
+            SizedBox(
+              height: 40,
+              child: ElevatedButton(
+                onPressed: callBack,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: buttonColor ?? const Color(0xFF1B64A3),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
+                child: Text(buttonLabel ?? 'Save', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+              ),
+            )
+          else
+            widget ?? Icon(icon, color: const Color(0xFF1B64A3)),
         ],
       ),
     );
@@ -83,10 +111,15 @@ class CustomBackButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(right: 10),
-      decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(8)),
+      margin: const EdgeInsets.only(right: 12),
       child: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new, color: Colors.blue, size: 18),
+        iconSize: 20,
+        icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF1B64A3)),
+        style: IconButton.styleFrom(
+          backgroundColor: const Color(0xFF1B64A3).withValues(alpha: 0.08),
+          padding: const EdgeInsets.all(10),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
         onPressed: () {
           if (onBackPress != null) {
             onBackPress!();
