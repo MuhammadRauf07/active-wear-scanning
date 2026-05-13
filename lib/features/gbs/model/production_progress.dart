@@ -13,6 +13,7 @@ class ProductionProgressResponseModel {
   final Item? processedItem;
   final PlanHeader? planHeader;
   final BatchHeaderModel? batchHeader;
+  final int? wipTransactionId; // ✅ Added to avoid extra API calls
 
   ProductionProgressResponseModel({
     required this.productionProgress,
@@ -26,9 +27,18 @@ class ProductionProgressResponseModel {
     this.processedItem,
     this.planHeader,
     this.batchHeader,
+    this.wipTransactionId,
   });
 
   factory ProductionProgressResponseModel.fromJson(Map<String, dynamic> json) {
+    // Resolve wipTransactionId from various possible nested locations
+    int? resolvedWipId;
+    if (json.containsKey('wipTransactionId')) {
+      resolvedWipId = int.tryParse(json['wipTransactionId']?.toString() ?? '');
+    } else if (json.containsKey('wipTransaction')) {
+      resolvedWipId = int.tryParse(json['wipTransaction']['id']?.toString() ?? '');
+    }
+
     return ProductionProgressResponseModel(
       productionProgress: ProductionProgress.fromJson(json['productionProgress'] ?? {}),
       operation: Operation.fromJson(json['operation'] ?? {}),
@@ -41,6 +51,7 @@ class ProductionProgressResponseModel {
       primaryTrayModel: PrimaryTrayModel.fromJson(json['primaryTray'] ?? {}),
       planHeader: json['planHeader'] != null ? PlanHeader.fromJson(json['planHeader']) : null,
       batchHeader: json['batchHeader'] != null ? BatchHeaderModel.fromJson(json['batchHeader']) : null,
+      wipTransactionId: resolvedWipId,
     );
   }
 

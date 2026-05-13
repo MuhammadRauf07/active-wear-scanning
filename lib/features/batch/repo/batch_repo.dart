@@ -140,11 +140,11 @@ class BatchRepo {
   /// Finds the WIP transaction linked to a given progressId.
   /// Returns the raw list so the caller can extract the wipTransaction.id.
   Future<PlexApiResult> fetchWipTransactionsByProgressId(int progressId) async {
-    // Fetching a larger list without the problematic filter to allow in-memory filtering
     final result = await _api.getList(
       '/api/app/w-iPTransactions', 
       query: {
-        'maxResultCount': '1000',
+        'ProgressId': progressId.toString(),
+        'maxResultCount': '1',
       }
     );
     return result;

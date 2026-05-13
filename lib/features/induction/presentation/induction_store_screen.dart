@@ -87,13 +87,17 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
     return false;
   }
 
-  void _processBluetoothScan(String scannedCode) {
+  void _processBluetoothScan(String scannedCode) async {
     final code = scannedCode.trim();
     if (code.isEmpty) return;
 
-    final error = _validateTrayForInduction(code);
+    final error = await _validateTrayForInduction(code);
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $error'), backgroundColor: Colors.red));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $error'), backgroundColor: Colors.red),
+        );
+      }
     } else {
       setState(() {});
     }

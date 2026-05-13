@@ -617,58 +617,66 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
 
       if (progressId != null &&
           !alreadyLinkedProgressIds.contains(progressId)) {
-        // Lookup wipTransactionId — backend DTO requires it as non-nullable FK
-        int? wipTransactionId;
-        final wipRes = await _batchRepo.fetchWipTransactionsByProgressId(
-          progressId,
-        );
-        if (wipRes.success && wipRes.data != null) {
-          final items = wipRes.data as List<Map<String, dynamic>>;
-          if (items.isNotEmpty) {
-            wipTransactionId = items.first['wipTransaction']?['id'] as int?;
+        // ① Try to get wipTransactionId from the model first (cached/pre-fetched)
+        int? wipTransactionId = tray.wipTransactionId;
+        
+        // ② If missing, try the repo (server-side filter)
+        if (wipTransactionId == null) {
+          final wipRes = await _batchRepo.fetchWipTransactionsByProgressId(
+            progressId,
+          );
+          if (wipRes.success && wipRes.data != null) {
+            final items = wipRes.data as List<Map<String, dynamic>>;
+            if (items.isNotEmpty) {
+              wipTransactionId = items.first['wipTransaction']?['id'] as int?;
+            }
           }
         }
+        
         debugPrint(
           '🔍 WIP for progress $progressId → wipTransactionId=$wipTransactionId',
         );
 
-        if (wipTransactionId != null) {
-          final int pItemId =
-              _trayProcessedItemId[trayId] ??
-              tray.processedItem?.id ??
-              tray.item?.id ??
-              0;
-          final lineRes = await _batchRepo.createBatchLine({
-            "planDate": DateTime.now().toIso8601String(),
-            "transactionDate": DateTime.now().toIso8601String(),
-            "primaryQuantity": tray.productionProgress.primaryQuantity ?? 0,
-            "primaryUOM": tray.productionProgress.primaryUOM ?? 0,
-            "secondaryQuantity": tray.productionProgress.secondaryQuantity ?? 0,
-            "secondaryUOM": tray.productionProgress.secondaryUOM ?? 0,
-            "batchLineCode": "BL-$batchHeaderId-${trayId ?? i}",
-            "batchHeaderId": batchHeaderId,
-            "progressId": progressId,
-            "wipTransactionId": wipTransactionId,
-            "workOrderHeaderId": tray.workOrderHeader?.id,
-            "workOrderLineId": tray.workOrderLine?.id,
-            "itemId": tray.item?.id,
-            "trayId": trayId,
-            "locatorId": tray.productionProgress.locatorId,
-            "processItemId": pItemId,
-          });
+        if (wipTransactionId == null) {
+          debugPrint('⚠️ Warning: No WIP Transaction ID found for tray ${tray.primaryTrayModel.trayCode}. Attempting to save without it.');
+          // We no longer return; here to restore the "before" behavior, but we log the warning.
+        }
+
+        final int pItemId =
+            _trayProcessedItemId[trayId] ??
+            tray.processedItem?.id ??
+            tray.item?.id ??
+            0;
+            
+        final lineRes = await _batchRepo.createBatchLine({
+          "planDate": DateTime.now().toIso8601String(),
+          "transactionDate": DateTime.now().toIso8601String(),
+          "primaryQuantity": tray.productionProgress.primaryQuantity ?? 0,
+          "primaryUOM": tray.productionProgress.primaryUOM ?? 0,
+          "secondaryQuantity": tray.productionProgress.secondaryQuantity ?? 0,
+          "secondaryUOM": tray.productionProgress.secondaryUOM ?? 0,
+          "batchLineCode": "BL-$batchHeaderId-${trayId ?? i}",
+          "batchHeaderId": batchHeaderId,
+          "progressId": progressId,
+          "wipTransactionId": wipTransactionId, // Might be null
+          "workOrderHeaderId": tray.workOrderHeader?.id,
+          "workOrderLineId": tray.workOrderLine?.id,
+          "itemId": tray.item?.id,
+          "trayId": trayId,
+          "locatorId": tray.productionProgress.locatorId,
+          "processItemId": pItemId,
+        });
 
           if (lineRes.success && lineRes.data != null) {
             debugPrint('✅ BatchLine API Response: ${lineRes.data}');
             final dynamic responseData = lineRes.data;
             if (responseData is Map<String, dynamic>) {
-              // Now assigning to the OUTER scope batchLineId
               batchLineId =
                   (responseData['id'] as int?) ??
                   (responseData['batchLines']?['id'] as int?);
             }
             debugPrint('🎯 Resolved batchLineId: $batchLineId');
 
-            // Update the tray-details record with both IDs
             if (trayId != null) {
               final trayRes = await _batchRepo.fetchTrayDetailById(trayId);
               if (trayRes.success && trayRes.data != null) {
@@ -677,50 +685,26 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                 );
                 trayMap['batchHeaderId'] = batchHeaderId;
                 if (batchLineId != null)
-                  trayMap['batchLinesId'] = batchLineId; // ✅ Fixed key (Plural)
+                  trayMap['batchLinesId'] = batchLineId;
 
-                final updateRes = await _batchRepo.updateTrayDetails(
-                  trayId,
-                  trayMap,
-                );
-                if (updateRes.success) {
-                  debugPrint(
-                    '✅ TrayDetails updated: tray=$trayId batchLineId=$batchLineId',
-                  );
-                }
+                await _batchRepo.updateTrayDetails(trayId, trayMap);
               }
             }
           } else {
-            // Show full server error
             AppLoader.hide(context);
             await showDialog(
               context: context,
               builder: (ctx) => AlertDialog(
                 title: Text('BatchLine Error (tray $trayId)'),
-                content: SingleChildScrollView(
-                  child: Text(
-                    lineRes.message.isNotEmpty
-                        ? lineRes.message
-                        : 'Unknown server error',
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text('OK'),
-                  ),
-                ],
+                content: Text(lineRes.message.isNotEmpty ? lineRes.message : 'Unknown server error'),
+                actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
               ),
             );
-            AppLoader.show(context);
-          }
         }
       } else {
-        // Use existing ID if already linked
         batchLineId = tray.productionProgress.batchLinesId;
       }
 
-      // ③ Update productionProgress with both IDs (always ensure sync)
       if (progressId != null) {
         final prodPayload = <String, dynamic>{
           "subOperation": tray.productionProgress.subOperation,
@@ -736,7 +720,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
           "pbsFlag": true,
           "progressCode": tray.productionProgress.progressCode,
           "batchHeaderId": batchHeaderId,
-          "batchLinesId": batchLineId, // ✅ Syncing batchLineId
+          "batchLinesId": batchLineId,
           "operationId": tray.operation.id,
           "workOrderHeaderId": tray.workOrderHeader.id,
           "workOrderLineId": tray.workOrderLine.id,
@@ -763,7 +747,22 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
       }
     }
 
-    // Update in-memory set so trays just saved can't be scanned into another batch
+    // ── Final step: Update Batch Header with total weight and pieces ─────────
+    double totalPcs = 0;
+    double totalWeight = 0;
+    for (final tray in _scannedTrays) {
+      final qty = tray.productionProgress.primaryQuantity ?? 0;
+      totalPcs += qty;
+      totalWeight += qty * (tray.item?.pieceWeight ?? 0);
+    }
+
+    await _batchRepo.updateBatchHeader(batchHeaderId, {
+      "totalPcs": totalPcs,
+      "totalWeight": totalWeight,
+      "trayCount": _scannedTrays.length,
+      "lastModificationTime": DateTime.now().toIso8601String(),
+    });
+
     for (final tray in _scannedTrays) {
       final pid = tray.productionProgress.id;
       if (pid != null) _batchedProgressIds.add(pid);
