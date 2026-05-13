@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/features/batch/presentation/batch_list_screen.dart';
@@ -19,61 +20,41 @@ class ScanningSectionsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      body: Stack(
-        children: [
-          // Background Image
-          Positioned.fill(
-            child: Image.asset(
-              'lib/core/assets/Gemini_Generated_Image_5eos4d5eos4d5eos.png',
-              fit: BoxFit.cover,
-            ),
-          ),
-          // Dark Overlay for readability
-          Positioned.fill(
-            child: Container(
-              color: Colors.black.withValues(alpha: 0.3),
-            ),
-          ),
-          SafeArea(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Operations Modules',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white,
-                          letterSpacing: 0.5,
-                          shadows: [
-                            Shadow(color: Colors.black, blurRadius: 4, offset: Offset(0, 2)),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Select a module to begin production tasks',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.white.withValues(alpha: 0.8),
-                          shadows: [
-                            Shadow(color: Colors.black, blurRadius: 2, offset: Offset(0, 1)),
-                          ],
-                        ),
-                      ),
-                    ],
+      backgroundColor: const Color(0xFFF1F7FE), // Light Bluish / Sky Tint
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Operations Modules',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF101828),
+                      letterSpacing: -0.5,
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    children: [
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Select a module to begin production tasks',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF475467),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                children: [
                       _buildRow(context, [
                         SectionCard(
                           title: 'Dashboard',
@@ -124,7 +105,7 @@ class ScanningSectionsScreen extends StatelessWidget {
                       ]),
                       _buildRow(context, [
                         SectionCard(
-                          title: 'Work In Progress (WIP)',
+                          title: 'WIP Monitoring',
                           subtitle: 'Real-time production flow',
                           sectionCode: 'WIP',
                           progressValue: 0.75,
@@ -145,7 +126,88 @@ class ScanningSectionsScreen extends StatelessWidget {
               ],
             ),
           ),
+        );
+  }
+
+  Widget _buildEnterpriseAppBar(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
+            ),
+            child: const Icon(Icons.blur_on_rounded, color: Color(0xFF1E293B), size: 28),
+          ),
+          const SizedBox(width: 12),
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('ACTIVE WEAR', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF1E293B), letterSpacing: 1)),
+              Text('Manufacturing Execution System', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.w600)),
+            ],
+          ),
+          const Spacer(),
+          IconButton(
+            onPressed: () {},
+            icon: const Icon(Icons.notifications_none_rounded, color: Color(0xFF64748B)),
+          ),
+          const SizedBox(width: 8),
+          const CircleAvatar(
+            radius: 18,
+            backgroundColor: Color(0xFF1E293B),
+            child: Text('AJ', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildKPIGrid() {
+    return Row(
+      children: [
+        _buildKPICard('Active Batches', '12', Icons.layers_outlined, Colors.blue),
+        const SizedBox(width: 12),
+        _buildKPICard("Today's Output", '1,240', Icons.check_circle_outline, Colors.green),
+        const SizedBox(width: 12),
+        _buildKPICard('Pending Trays', '45', Icons.hourglass_empty_rounded, Colors.orange),
+      ],
+    );
+  }
+
+  Widget _buildKPICard(String label, String value, IconData icon, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))],
+          border: Border.all(color: color.withValues(alpha: 0.1)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Icon(icon, color: color, size: 18),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
+                  child: const Text('+5%', style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF1E293B))),
+            Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.grey.shade500)),
+          ],
+        ),
       ),
     );
   }

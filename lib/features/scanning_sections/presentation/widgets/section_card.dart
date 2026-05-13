@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-class SectionCard extends StatelessWidget {
+class SectionCard extends StatefulWidget {
   final String title;
   final String subtitle;
   final String sectionCode;
@@ -18,166 +18,140 @@ class SectionCard extends StatelessWidget {
     required this.onTap,
   });
 
+  @override
+  State<SectionCard> createState() => _SectionCardState();
+}
+
+class _SectionCardState extends State<SectionCard> with SingleTickerProviderStateMixin {
+  late AnimationController _pulseController;
+  bool _isHovered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
   IconData _getSectionIcon(String title) {
     final t = title.toLowerCase();
-    if (t.contains('dashboard')) return Icons.factory;
-    if (t.contains('tray scanning')) return Icons.barcode_reader;
-    if (t.contains('gbs')) return Icons.inventory_2;
-    if (t.contains('batch')) return Icons.assignment;
-    if (t.contains('processing')) return Icons.settings_rounded;
-    if (t.contains('induction')) return Icons.warehouse;
-    if (t.contains('wip')) return Icons.account_tree;
-    if (t.contains('tracking')) return Icons.location_on;
-    return Icons.folder;
+    if (t.contains('dashboard')) return Icons.auto_graph_rounded;
+    if (t.contains('tray scanning')) return Icons.qr_code_scanner_rounded;
+    if (t.contains('gbs')) return Icons.lan_rounded;
+    if (t.contains('batch')) return Icons.layers_rounded;
+    if (t.contains('processing')) return Icons.settings_input_component_rounded;
+    if (t.contains('induction')) return Icons.vibration_rounded;
+    if (t.contains('wip')) return Icons.bolt_rounded;
+    if (t.contains('tracking')) return Icons.radar_rounded;
+    return Icons.widgets_rounded;
   }
 
   Color _getGlowColor(String title) {
     final t = title.toLowerCase();
-    if (t.contains('dashboard') || t.contains('gbs')) return const Color(0xFF29B6F6); // Blue Glow
-    if (t.contains('wip')) return const Color(0xFF66BB6A); // Green Glow
-    return const Color(0xFFFFA726); // Orange Glow
+    if (t.contains('dashboard') || t.contains('gbs')) return const Color(0xFF00E5FF); // Cyber Cyan
+    if (t.contains('wip')) return const Color(0xFF00E676); // Neon Green
+    if (t.contains('processing')) return const Color(0xFFFF1744); // Electric Red
+    return const Color(0xFFFFD600); // Vivid Yellow
   }
 
   @override
   Widget build(BuildContext context) {
-    final glowColor = _getGlowColor(title);
+    final glowColor = _getGlowColor(widget.title);
 
     return Expanded(
       child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          height: 110,
-          margin: const EdgeInsets.only(bottom: 8),
+        onTapDown: (_) => setState(() => _isHovered = true),
+        onTapUp: (_) => setState(() => _isHovered = false),
+        onTapCancel: () => setState(() => _isHovered = false),
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          height: 100,
+          margin: const EdgeInsets.only(bottom: 12),
+          transform: _isHovered ? (Matrix4.identity()..scale(1.02)) : Matrix4.identity(),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
+            color: const Color(0xFF0056D2), // Vibrant Royal Blue
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: _isHovered ? glowColor.withValues(alpha: 0.8) : Colors.white.withValues(alpha: 0.1),
+              width: 1,
+            ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.5),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
+                color: _isHovered ? glowColor.withValues(alpha: 0.3) : Colors.black.withValues(alpha: 0.15),
+                blurRadius: _isHovered ? 25 : 15,
+                offset: const Offset(0, 10),
               ),
             ],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
             child: Stack(
               children: [
-                // MAIN METAL BODY
-                Column(
-                  children: [
-                    // Top Metal Section
-                    Expanded(
-                      flex: 7,
+                // NEON GROUNDING STRIP (Bottom Pulse)
+                AnimatedBuilder(
+                  animation: _pulseController,
+                  builder: (context, child) {
+                    return Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      height: 4,
                       child: Container(
+                        decoration: BoxDecoration(
+                          color: glowColor,
+                          boxShadow: [
+                            BoxShadow(
+                              color: glowColor.withValues(alpha: 0.6 + (0.4 * _pulseController.value)),
+                              blurRadius: 10 + (10 * _pulseController.value),
+                              spreadRadius: 1,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+
+                // CONTENT
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 16, 20),
+                  child: Row(
+                    children: [
+                      // NEON ICON CIRCLE
+                      Container(
+                        width: 48,
+                        height: 48,
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                             colors: [
-                              Colors.grey.shade400,
-                              Colors.grey.shade600,
-                              Colors.grey.shade400,
+                              Colors.white.withValues(alpha: 0.2),
+                              Colors.white.withValues(alpha: 0.05),
                             ],
-                            stops: const [0.0, 0.5, 1.0],
                           ),
-                        ),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.white.withValues(alpha: 0.2),
-                                Colors.transparent,
-                                Colors.black.withValues(alpha: 0.1),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    // Bottom Dark Section
-                    Expanded(
-                      flex: 3,
-                      child: Container(
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1A1A1A),
-                          image: DecorationImage(
-                            image: const NetworkImage('https://www.transparenttextures.com/patterns/carbon-fibre.png'), // Subtle texture
-                            repeat: ImageRepeat.repeat,
-                            opacity: 0.2,
-                            colorFilter: ColorFilter.mode(Colors.grey.shade900, BlendMode.srcATop),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                // GLOWING BARS
-                // Top Border Glow
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: Container(
-                    height: 2,
-                    decoration: BoxDecoration(
-                      boxShadow: [
-                        BoxShadow(color: glowColor, blurRadius: 4, spreadRadius: 1),
-                      ],
-                    ),
-                  ),
-                ),
-                // Middle Divider Glow
-                Positioned(
-                  bottom: 110 * 0.3 - 1,
-                  left: 0,
-                  right: 0,
-                  child: Container(
-                    height: 3,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          glowColor.withValues(alpha: 0.1),
-                          glowColor,
-                          glowColor.withValues(alpha: 0.1),
-                        ],
-                      ),
-                      boxShadow: [
-                        BoxShadow(color: glowColor.withValues(alpha: 0.5), blurRadius: 6, spreadRadius: 1),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // CONTENT
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  child: Row(
-                    children: [
-                      // ICON BOX
-                      Container(
-                        width: 54,
-                        height: 54,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF263238),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.1), width: 1),
-                          boxShadow: [
-                            BoxShadow(color: Colors.black.withValues(alpha: 0.4), blurRadius: 4, offset: const Offset(2, 2)),
-                          ],
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1.5),
                         ),
                         child: Center(
                           child: Icon(
-                            _getSectionIcon(title),
-                            color: glowColor.withValues(alpha: 0.8),
-                            size: 30,
+                            _getSectionIcon(widget.title),
+                            color: Colors.white,
+                            size: 24,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 16),
                       // TEXT
                       Expanded(
                         child: Column(
@@ -185,23 +159,25 @@ class SectionCard extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              title,
+                              widget.title,
                               style: const TextStyle(
-                                color: Color(0xFF212121),
+                                color: Colors.white,
                                 fontSize: 15,
                                 fontWeight: FontWeight.w900,
-                                letterSpacing: 0.5,
+                                letterSpacing: 0.3,
                               ),
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              subtitle,
+                              widget.subtitle,
                               style: TextStyle(
-                                color: Colors.grey.shade800,
+                                color: Colors.white.withValues(alpha: 0.8),
                                 fontSize: 10,
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w500,
+                                letterSpacing: 0.1,
+                                height: 1.2,
                               ),
-                              maxLines: 1,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ],
