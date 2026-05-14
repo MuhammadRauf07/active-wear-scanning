@@ -1,7 +1,6 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 
-/// A standard table header for scanned tray lists.
-/// Shows TRAY CODE, WO, SIZE, PCS/TBE, TUBES, PCS, WEIGHT.
 class TrayTableHeader extends StatelessWidget {
   final double actionColumnWidth;
 
@@ -10,31 +9,32 @@ class TrayTableHeader extends StatelessWidget {
     this.actionColumnWidth = 40.0,
   });
 
-  static final _style = TextStyle(
-    fontSize: 9,
-    fontWeight: FontWeight.bold,
-    color: Colors.grey.shade700,
-    letterSpacing: 0.3,
+  static const _headerStyle = TextStyle(
+    fontSize: 10,
+    fontWeight: FontWeight.w700,
+    color: Color(0xFF455A64), // Slate Grey
+    letterSpacing: 0.2,
   );
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
-        border: Border.all(color: Colors.grey.shade300),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF1F5F9), // Very light slate blue/grey
+        border: Border(
+          bottom: BorderSide(color: Color(0xFFCFD8DC), width: 1.5),
+        ),
       ),
       child: Row(
         children: [
-          Expanded(flex: 3, child: Text('TRAY CODE', textAlign: TextAlign.center, style: _style)),
-          Expanded(flex: 2, child: Text('WORK ORDER', textAlign: TextAlign.center, style: _style)),
-          Expanded(flex: 2, child: Text('SIZE', textAlign: TextAlign.center, style: _style)),
-          Expanded(flex: 2, child: Text('PCS PER TUBE', textAlign: TextAlign.center, style: _style)),
-          Expanded(flex: 2, child: Text('TUBES', textAlign: TextAlign.center, style: _style)),
-          Expanded(flex: 2, child: Text('PCS', textAlign: TextAlign.center, style: _style)),
-          Expanded(flex: 2, child: Text('WEIGHT', textAlign: TextAlign.center, style: _style)),
+          Expanded(flex: 3, child: Text('Tray Code', textAlign: TextAlign.center, style: _headerStyle)),
+          Expanded(flex: 2, child: Text('Work Order', textAlign: TextAlign.center, style: _headerStyle)),
+          Expanded(flex: 2, child: Text('Size', textAlign: TextAlign.center, style: _headerStyle)),
+          Expanded(flex: 2, child: Text('Pcs/Tube', textAlign: TextAlign.center, style: _headerStyle)),
+          Expanded(flex: 2, child: Text('Tubes', textAlign: TextAlign.center, style: _headerStyle)),
+          Expanded(flex: 2, child: Text('Pcs', textAlign: TextAlign.center, style: _headerStyle)),
+          Expanded(flex: 2, child: Text('Weight', textAlign: TextAlign.center, style: _headerStyle)),
           SizedBox(width: actionColumnWidth),
         ],
       ),

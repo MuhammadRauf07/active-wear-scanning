@@ -18,81 +18,108 @@ class ScannedTrayRow extends StatelessWidget {
     required this.onDelete,
   });
 
+  static const _cellStyle = TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w600,
+    color: Color(0xFF263238), // Standard Black
+  );
+
+  static const _blueCellStyle = TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w700,
+    color: Color(0xFF1B64A3), // Premium Blue
+  );
+
   @override
   Widget build(BuildContext context) {
     final isEmpty = tray.trayCode.isEmpty;
     final displayCode = isEmpty ? '-' : tray.trayCode;
 
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
       decoration: BoxDecoration(
+        color: index.isEven ? Colors.white : const Color(0xFFF8FAFC),
         border: Border(
-          left: BorderSide(color: Colors.grey.shade300),
-          right: BorderSide(color: Colors.grey.shade300),
-          bottom: BorderSide(color: Colors.grey.shade300),
+          bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.1), width: 1),
         ),
-        color: index.isEven ? Colors.white : const Color(0xFFF5F2F9), // Light Purple/Lavender shade
       ),
       child: Row(
         children: [
+          // Tray Code (Now Blue)
           Expanded(
             flex: 3,
             child: Text(
               displayCode,
-              maxLines: 2,
               textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 9, color: isEmpty ? Colors.grey : Colors.black),
+              style: _blueCellStyle.copyWith(
+                color: isEmpty ? Colors.grey : const Color(0xFF1B64A3),
+              ),
             ),
           ),
+          
+          // Work Order (Now Black)
           Expanded(
             flex: 2,
             child: Text(
               selectedPlanLine?.workOrderHeader.workOrderCode ?? "-",
-              maxLines: 1,
               textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 9, color: isEmpty ? Colors.grey : Colors.black),
+              style: _cellStyle,
             ),
           ),
+          
+          // Size
           Expanded(
             flex: 2,
             child: Text(
               tray.sizeDescription.isNotEmpty ? tray.sizeDescription : "-",
-              maxLines: 1,
               textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 9, color: isEmpty ? Colors.grey : Colors.black),
+              style: _cellStyle,
             ),
           ),
+          
+          // Pcs Per Tube
           Expanded(
             flex: 2,
             child: Text(
               tray.perGarmentTube > 0 ? tray.perGarmentTube.toStringAsFixed(0) : '-',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 9, color: isEmpty ? Colors.grey : Colors.black),
+              style: _cellStyle,
             ),
           ),
+          
+          // Tubes (Input Pill)
           Expanded(
             flex: 2,
             child: Center(
-              child: SizedBox(
-                width: 44,
-                height: 30,
+              child: Container(
+                width: 50,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFCFD8DC), width: 1),
+                ),
                 child: TextField(
                   controller: quantityController,
                   keyboardType: TextInputType.number,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-                  decoration: InputDecoration(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
-                    focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.blue, width: 1.5)),
+                  textAlignVertical: TextAlignVertical.center,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF263238), // Black text in input
+                  ),
+                  decoration: const InputDecoration(
+                    contentPadding: EdgeInsets.zero,
+                    border: InputBorder.none,
+                    isDense: true,
                   ),
                 ),
               ),
             ),
           ),
+          
+          // Pcs
           Expanded(
             flex: 2,
             child: Builder(
@@ -102,36 +129,48 @@ class ScannedTrayRow extends StatelessWidget {
                 return Text(
                   garmentPcs > 0 ? garmentPcs.toStringAsFixed(0) : '-',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 9, color: isEmpty ? Colors.grey : Colors.black),
+                  style: _cellStyle,
                 );
               },
             ),
           ),
+          
+          // Weight
           Expanded(
             flex: 2,
             child: Builder(
               builder: (_) {
                 final qty = double.tryParse(quantityController.text) ?? 0;
                 final pw = selectedPlanLine?.item.pieceWeight;
-                if (pw == null || pw == 0) return const Text('-', textAlign: TextAlign.center, style: TextStyle(fontSize: 9));
+                if (pw == null || pw == 0) return const Text('-', textAlign: TextAlign.center, style: _cellStyle);
                 return Text(
                   '${(qty * pw).toStringAsFixed(1)} g',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 9, color: Colors.black),
+                  style: _cellStyle,
                 );
               },
             ),
           ),
+          
+          // Delete Action
           const SizedBox(width: 8),
-          GestureDetector(
-            onTap: onDelete,
-            child: Container(
-              padding: const EdgeInsets.all(5),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(4),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onDelete,
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.delete_outline_rounded,
+                  size: 18,
+                  color: Colors.red.shade400,
+                ),
               ),
-              child: Icon(Icons.cancel, size: 14, color: Colors.red.shade400),
             ),
           ),
         ],

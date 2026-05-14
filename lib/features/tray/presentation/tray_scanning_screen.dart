@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/services.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
@@ -213,13 +215,18 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     final workOrder = planLine.workOrderHeader;
     final item = planLine.item;
 
-    addField('Plan Date', Icons.calendar_today, 'Plan Date', plan.planDate.toString());
+    String? formatDate(String? dateStr) {
+      if (dateStr == null) return null;
+      return dateStr.split('T')[0].split(' ')[0];
+    }
+
+    addField('Plan Date', Icons.calendar_today, 'Plan Date', formatDate(plan.planDate.toString()));
     addField('Knitting Tube', Icons.precision_manufacturing, 'Knitting Tube', plan.primaryPlanQuantity.toString());
     addField('Tubes Per Tray', Icons.grid_view, 'Tubes Per Tray', plan.quantityPerTray.toString());
     addField('Garment Pcs', Icons.checkroom, 'Garment Pcs', plan.secondaryPlanQuantity.toString());
     addField('Shift Code', Icons.schedule, 'Shift Code', shift.code.toString());
     addField('Work Order Code', Icons.assignment, 'Work Order Code', workOrder.workOrderCode);
-    addField('Work Order Date', Icons.event, 'Work Order Date', workOrder.workOrderDate);
+    addField('Work Order Date', Icons.event, 'Work Order Date', formatDate(workOrder.workOrderDate));
     addField('Item Description', Icons.description, 'Item Description', item.description);
 
     return result;
@@ -389,210 +396,282 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: const Color(0xFFE3F2FD), // Consistent Sky Blue
       resizeToAvoidBottomInset: false,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ── Premium Header ───────────────────────────────────────────────
-            CustomInspectionHeader(
-              heading: 'Tray Scanning',
-              subtitle: 'Operators scan machine and tray barcodes to record production',
-              isShowBackIcon: true,
-              topPadding: 16,
-              horizontalPadding: 16,
-              buttonLabel: 'Save Changes',
-              buttonColor: const Color(0xFF2E7D32), // Success Green
-              callBack: saveTrayAndProductionProgress,
-            ),
+            // ── Premium Header (Fixed) ────────────────────────────────────────
+            _buildPremiumHeader(context),
 
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // ── Machine Scanner Section ──────────────────────────────
-                    _buildMachineScannerSection(),
+            // ── Fixed Top Sections ───────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Machine Scanner Section
+                  _TrayFadeSlideTransition(delay: 0, child: _buildMachineScannerSection()),
 
-                    // ── Production Information Section ────────────────────────
-                    if (_selectedPlanLine != null) ...[
-                      const SizedBox(height: 24),
-                      const Padding(
-                        padding: EdgeInsets.only(bottom: 12),
+                  // Production Information Section
+                  if (_selectedPlanLine != null) ...[
+                    const SizedBox(height: 16),
+                    const _TrayFadeSlideTransition(
+                      delay: 100,
+                      child: Padding(
+                        padding: EdgeInsets.only(left: 4, bottom: 8),
                         child: Text(
-                          'Production Information Section',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A)),
+                          'Production Intelligence',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF263238)),
                         ),
                       ),
-                      _buildProductionInfoGrid(),
-                    ],
-
-                    // ── Action Area (Above Table) ────────────────────────────
-                    if (_selectedPlanLine != null) ...[
-                      const SizedBox(height: 24),
-                      const Padding(
-                        padding: EdgeInsets.only(bottom: 12),
-                        child: Text(
-                          'Action Area',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A)),
-                        ),
-                      ),
-                      _buildActionArea(),
-                    ],
-
-                    // ── Scanned Trays Table ──────────────────────────────────
-                    if (_selectedPlanLine != null) ...[
-                      const SizedBox(height: 24),
-                      const Padding(
-                        padding: EdgeInsets.only(bottom: 12),
-                        child: Text(
-                          'Scanned Trays Table',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A)),
-                        ),
-                      ),
-                      _buildScannedTraysTable(),
-                    ],
-                    const SizedBox(height: 32),
+                    ),
+                    _TrayFadeSlideTransition(delay: 150, child: _buildProductionInfoGrid()),
                   ],
-                ),
+
+                  // Action Area
+                  if (_selectedPlanLine != null) ...[
+                    const SizedBox(height: 16),
+                    _TrayFadeSlideTransition(delay: 200, child: _buildActionArea()),
+                  ],
+                ],
               ),
             ),
+
+            // ── Scrollable Table Section ─────────────────────────────────────
+            if (_selectedPlanLine != null) ...[
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 16, 16, 8),
+                child: _TrayFadeSlideTransition(
+                  delay: 250,
+                  child: Text(
+                    'Active Scanned Trays',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF263238)),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _TrayFadeSlideTransition(delay: 300, child: _buildScannedTraysTable()),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ] else 
+              const Spacer(),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildMachineScannerSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Machine Scanner Section',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A)),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
-              ),
-            ],
+  Widget _buildPremiumHeader(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
           ),
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
             children: [
-              // ── Left: Barcode Scanner Visual ──────────────────────────────
-              Expanded(
-                flex: 4,
+              IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0D47A1), size: 20),
+                visualDensity: VisualDensity.compact,
+              ),
+              const Expanded(
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      height: 100,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF1F4F8),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Icon(Icons.barcode_reader, size: 60, color: Colors.grey.shade400),
-                          if (_machineBarcode.isNotEmpty)
-                            Positioned(
-                              bottom: 8,
-                              child: Text(
-                                _machineBarcode,
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1B64A3)),
-                              ),
-                            ),
-                          // Corner brackets for "scanner" feel
-                          Positioned(top: 8, left: 8, child: _cornerBracket(top: true, left: true)),
-                          Positioned(top: 8, right: 8, child: _cornerBracket(top: true, left: false)),
-                          Positioned(bottom: 8, left: 8, child: _cornerBracket(top: false, left: true)),
-                          Positioned(bottom: 8, right: 8, child: _cornerBracket(top: false, left: false)),
-                        ],
-                      ),
+                    Text(
+                      'Tray Scanning',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Color(0xFF263238)),
                     ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 40,
-                      child: ElevatedButton.icon(
-                        onPressed: _onScanMachineBarcode,
-                        icon: const Icon(Icons.qr_code_scanner, size: 18),
-                        label: const Text('Scan Machine'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF1B64A3),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                      ),
+                    Text(
+                      'Production Execution HUD',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF546E7A), fontWeight: FontWeight.w500),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 16),
-              // ── Right: Work Order Selection ──────────────────────────────
-              Expanded(
-                flex: 5,
-                child: _machineBarcode.isEmpty
-                    ? Center(
-                        child: Text(
-                          'Scan machine to select Work Order',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade400, fontStyle: FontStyle.italic),
-                        ),
-                      )
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Work Order Selection',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A)),
-                          ),
-                          const SizedBox(height: 8),
-                          WorkOrderDropdown(
-                            planLines: _planLines,
-                            selectedPlanLine: _selectedPlanLine,
-                            onChanged: (newValue) {
-                              setState(() {
-                                _selectedPlanLine = newValue;
-                                if (_selectedPlanLine != null) {
-                                  _overrideQuantityController.text = _getPlanQuantityPerTray();
-                                }
-                              });
-                            },
-                          ),
-                        ],
-                      ),
+              ElevatedButton(
+                onPressed: _scannedTrays.isEmpty ? null : saveTrayAndProductionProgress,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2E7D32),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  disabledBackgroundColor: Colors.grey.shade200,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text('SAVE BATCH', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
               ),
             ],
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  Widget _cornerBracket({required bool top, required bool left}) {
+  Widget _buildMachineScannerSection() {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0D47A1).withValues(alpha: 0.15),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.8),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white, width: 1.5),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Left: Barcode Scanner Visual ──────────────────────────────
+                Expanded(
+                  flex: 4,
+                  child: Column(
+                    children: [
+                      Container(
+                        height: 90, // Reduced height to prevent overflow
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0D47A1).withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFF0D47A1).withValues(alpha: 0.2), width: 1.5),
+                        ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Icon(Icons.precision_manufacturing_rounded, size: 40, color: const Color(0xFF0D47A1).withValues(alpha: 0.5)),
+                            if (_machineBarcode.isNotEmpty)
+                              Positioned(
+                                bottom: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF455A64),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    _machineBarcode,
+                                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.white),
+                                  ),
+                                ),
+                              ),
+                            // Industrial Corners
+                            Positioned(top: 8, left: 8, child: _cornerBracket(top: true, left: true, color: const Color(0xFF0D47A1))),
+                            Positioned(top: 8, right: 8, child: _cornerBracket(top: true, left: false, color: const Color(0xFF0D47A1))),
+                            Positioned(bottom: 8, left: 8, child: _cornerBracket(top: false, left: true, color: const Color(0xFF0D47A1))),
+                            Positioned(bottom: 8, right: 8, child: _cornerBracket(top: false, left: false, color: const Color(0xFF0D47A1))),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 38, // Slightly more compact button
+                        child: ElevatedButton.icon(
+                          onPressed: _onScanMachineBarcode,
+                          icon: const Icon(Icons.precision_manufacturing_rounded, size: 18),
+                          label: const Text('SCAN MACHINE', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 10, letterSpacing: 0.5)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0D47A1),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                // ── Right: Work Order Selection ──────────────────────────────
+                Expanded(
+                  flex: 5,
+                  child: _machineBarcode.isEmpty
+                      ? Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const SizedBox(height: 20),
+                            Icon(Icons.touch_app_rounded, color: Colors.grey.withValues(alpha: 0.3), size: 30),
+                            const SizedBox(height: 8),
+                            Text(
+                              'AWAITING SCAN',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 10, color: Colors.grey.shade500, fontWeight: FontWeight.w900, letterSpacing: 1),
+                            ),
+                          ],
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Work Order Select',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF546E7A)),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+                              ),
+                              child: WorkOrderDropdown(
+                                planLines: _planLines,
+                                selectedPlanLine: _selectedPlanLine,
+                                onChanged: (newValue) {
+                                  setState(() {
+                                    _selectedPlanLine = newValue;
+                                    if (_selectedPlanLine != null) {
+                                      _overrideQuantityController.text = _getPlanQuantityPerTray();
+                                    }
+                                  });
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _cornerBracket({required bool top, required bool left, required Color color}) {
     return Container(
       width: 12,
       height: 12,
       decoration: BoxDecoration(
         border: Border(
-          top: top ? const BorderSide(color: Colors.grey, width: 2) : BorderSide.none,
-          bottom: !top ? const BorderSide(color: Colors.grey, width: 2) : BorderSide.none,
-          left: left ? const BorderSide(color: Colors.grey, width: 2) : BorderSide.none,
-          right: !left ? const BorderSide(color: Colors.grey, width: 2) : BorderSide.none,
+          top: top ? BorderSide(color: color.withValues(alpha: 0.5), width: 2) : BorderSide.none,
+          bottom: !top ? BorderSide(color: color.withValues(alpha: 0.5), width: 2) : BorderSide.none,
+          left: left ? BorderSide(color: color.withValues(alpha: 0.5), width: 2) : BorderSide.none,
+          right: !left ? BorderSide(color: color.withValues(alpha: 0.5), width: 2) : BorderSide.none,
         ),
       ),
     );
@@ -601,32 +680,32 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   Widget _buildProductionInfoGrid() {
     final info = _buildPlanLineDetailsMap(_selectedPlanLine!);
     
-    // Calculate total units processed
     double totalUnits = 0;
     for (int i = 0; i < _scannedTrays.length; i++) {
       totalUnits += double.tryParse(_quantityControllers[i].text) ?? 0;
     }
 
-    // Prepare list of all 11 items for the 5+5+1 layout
     final List<Map<String, dynamic>> allItems = [
-      {'label': 'Plan Date', 'icon': Icons.calendar_today, 'value': info['Plan Date']?['value']},
-      {'label': 'Knitting Tube', 'icon': Icons.precision_manufacturing, 'value': info['Knitting Tube']?['value']},
-      {'label': 'Shift Code', 'icon': Icons.schedule, 'value': info['Shift Code']?['value']},
-      {'label': 'Work Order Date', 'icon': Icons.event, 'value': info['Work Order Date']?['value']},
-      {'label': 'Trays Scanned', 'icon': Icons.layers_outlined, 'value': '${_scannedTrays.length}', 'color': const Color(0xFF1B64A3)},
+      // Row 1: Primary WO & Date Info
+      {'label': 'WORK ORDER CODE', 'icon': Icons.qr_code_rounded, 'value': info['Work Order Code']?['value']},
+      {'label': 'PLAN DATE', 'icon': Icons.calendar_today_rounded, 'value': info['Plan Date']?['value']},
+      {'label': 'WORK ORDER DATE', 'icon': Icons.event_note_rounded, 'value': info['Work Order Date']?['value']},
+      {'label': 'GARMENT PCS', 'icon': Icons.checkroom_rounded, 'value': info['Garment Pcs']?['value']},
+      {'label': 'KNITTING TUBE', 'icon': Icons.settings_suggest_rounded, 'value': info['Knitting Tube']?['value']},
       
-      {'label': 'Work Order Code', 'icon': Icons.assignment, 'value': info['Work Order Code']?['value']},
-      {'label': 'Garment Pcs', 'icon': Icons.checkroom, 'value': info['Garment Pcs']?['value']},
-      {'label': 'Units Processed', 'icon': Icons.summarize_outlined, 'value': totalUnits.toStringAsFixed(0), 'color': const Color(0xFF2E7D32)},
-      {'label': 'Tubes per Tray', 'icon': Icons.grid_view, 'isEditable': true},
-      {'label': 'Plan Quantity', 'icon': Icons.analytics_outlined, 'value': info['Knitting Tube']?['value']}, 
+      // Row 2: Targets & Performance
+      {'label': 'TUBES PER TRAY', 'icon': Icons.flag_rounded, 'value': info['Knitting Tube']?['value']},
+      {'label': 'SHIFT', 'icon': Icons.timer_rounded, 'value': info['Shift Code']?['value']},
+      {'label': 'SCANNED TRAYS', 'icon': Icons.layers_rounded, 'value': '${_scannedTrays.length}'},
+      {'label': 'SCANNED TUBES', 'icon': Icons.analytics_rounded, 'value': totalUnits.toStringAsFixed(0)},
+      {'label': 'TRAY CAPACITY', 'icon': Icons.grid_view_rounded, 'isEditable': true},
 
-      {'label': 'Item Description', 'icon': Icons.description, 'value': info['Item Description']?['value'], 'isFullWidth': true},
+      // Row 3: Full Width Details
+      {'label': 'ITEM DESCRIPTION', 'icon': Icons.description_rounded, 'value': info['Item Description']?['value'], 'isFullWidth': true},
     ];
 
     return Column(
       children: [
-        // Rows 1 & 2 (5 cards each)
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -634,13 +713,12 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
             crossAxisCount: 5,
             crossAxisSpacing: 8,
             mainAxisSpacing: 8,
-            childAspectRatio: 1.5,
+            childAspectRatio: 1.8, // More compact aspect ratio
           ),
           itemCount: 10,
           itemBuilder: (context, index) => _buildMetricCard(allItems[index]),
         ),
         const SizedBox(height: 8),
-        // Row 3 (Full Width Item Description)
         _buildMetricCard(allItems[10]),
       ],
     );
@@ -653,11 +731,18 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
     return Container(
       width: isFullWidth ? double.infinity : null,
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Colors.white.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: Colors.white, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0D47A1).withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -665,41 +750,45 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
         children: [
           Row(
             children: [
-              Icon(item['icon'], size: 12, color: const Color(0xFF1B64A3)),
-              const SizedBox(width: 4),
+              Icon(item['icon'], size: 12, color: const Color(0xFF1976D2)),
+              const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   item['label'],
-                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF546E7A)),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           if (isEditable)
-            SizedBox(
-              height: 24,
+            Container(
+              height: 28,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE3F2FD),
+                borderRadius: BorderRadius.circular(6),
+              ),
               child: TextField(
                 controller: _overrideQuantityController,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
-                decoration: InputDecoration(
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF0D47A1)),
+                decoration: const InputDecoration(
                   contentPadding: EdgeInsets.zero,
                   isDense: true,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: Colors.grey.shade300)),
+                  border: InputBorder.none,
                 ),
                 keyboardType: TextInputType.number,
               ),
             )
           else
             Text(
-              item['value'] ?? 'N/A',
+              item['value'] ?? '---',
               style: TextStyle(
-                fontSize: isFullWidth ? 13 : 11,
-                fontWeight: FontWeight.w800,
-                color: valueColor ?? const Color(0xFF1A1A1A),
+                fontSize: isFullWidth ? 14 : 12,
+                fontWeight: FontWeight.w700,
+                color: valueColor ?? const Color(0xFF263238),
               ),
               maxLines: isFullWidth ? 2 : 1,
               overflow: TextOverflow.ellipsis,
@@ -711,30 +800,38 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
   Widget _buildActionArea() {
     return Container(
+      width: double.infinity,
+      height: 60,
       decoration: BoxDecoration(
-        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0D47A1), Color(0xFF1976D2)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+            color: const Color(0xFF0D47A1).withValues(alpha: 0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
-      padding: const EdgeInsets.all(16),
-      child: SizedBox(
-        height: 44,
-        width: double.infinity,
-        child: ElevatedButton.icon(
-          onPressed: _onScanTray,
-          icon: const Icon(Icons.qr_code_scanner, size: 20),
-          label: const Text('Scan Tray', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF1B64A3),
-            foregroundColor: Colors.white,
-            elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _onScanTray,
+          borderRadius: BorderRadius.circular(16),
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 24),
+              const SizedBox(width: 12),
+              Text(
+                'INITIALIZE TRAY SCAN',
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 1.5),
+              ),
+            ],
           ),
         ),
       ),
@@ -744,45 +841,83 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   Widget _buildScannedTraysTable() {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Colors.white.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white, width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+            color: const Color(0xFF0D47A1).withValues(alpha: 0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
       clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          const TrayTableHeader(),
-          if (_scannedTrays.isEmpty)
-            const EmptyScanState(hasBorder: false)
-          else
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _scannedTrays.length,
-              itemBuilder: (context, index) {
-                return ScannedTrayRow(
-                  index: index,
-                  tray: _scannedTrays[index],
-                  quantityController: _quantityControllers[index],
-                  selectedPlanLine: _selectedPlanLine,
-                  onDelete: () {
-                    setState(() {
-                      _quantityControllers[index].dispose();
-                      _quantityControllers.removeAt(index);
-                      _scannedTrays.removeAt(index);
-                    });
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+        child: Column(
+          children: [
+            const TrayTableHeader(),
+            if (_scannedTrays.isEmpty)
+              const Expanded(child: EmptyScanState(hasBorder: false))
+            else
+              Expanded(
+                child: ListView.builder(
+                  padding: EdgeInsets.zero,
+                  itemCount: _scannedTrays.length,
+                  itemBuilder: (context, index) {
+                    return ScannedTrayRow(
+                      index: index,
+                      tray: _scannedTrays[index],
+                      quantityController: _quantityControllers[index],
+                      selectedPlanLine: _selectedPlanLine,
+                      onDelete: () {
+                        setState(() {
+                          _quantityControllers[index].dispose();
+                          _quantityControllers.removeAt(index);
+                          _scannedTrays.removeAt(index);
+                        });
+                      },
+                    );
                   },
-                );
-              },
-            ),
-        ],
+                ),
+              ),
+          ],
+        ),
       ),
+    );
+  }
+}
+
+class _TrayFadeSlideTransition extends StatelessWidget {
+  final Widget child;
+  final int delay;
+
+  const _TrayFadeSlideTransition({required this.child, required this.delay});
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return FutureBuilder(
+          future: Future.delayed(Duration(milliseconds: delay)),
+          builder: (context, snapshot) {
+            final isVisible = snapshot.connectionState == ConnectionState.done;
+            return AnimatedOpacity(
+              opacity: isVisible ? value : 0.0,
+              duration: const Duration(milliseconds: 400),
+              child: Transform.translate(
+                offset: Offset(0.0, (1.0 - (isVisible ? value : 0.0)) * 20),
+                child: child,
+              ),
+            );
+          },
+        );
+      },
+      child: child,
     );
   }
 }

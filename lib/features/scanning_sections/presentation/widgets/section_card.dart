@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 
 class SectionCard extends StatefulWidget {
@@ -22,24 +23,8 @@ class SectionCard extends StatefulWidget {
   State<SectionCard> createState() => _SectionCardState();
 }
 
-class _SectionCardState extends State<SectionCard> with SingleTickerProviderStateMixin {
-  late AnimationController _pulseController;
+class _SectionCardState extends State<SectionCard> {
   bool _isHovered = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _pulseController.dispose();
-    super.dispose();
-  }
 
   IconData _getSectionIcon(String title) {
     final t = title.toLowerCase();
@@ -68,61 +53,49 @@ class _SectionCardState extends State<SectionCard> with SingleTickerProviderStat
 
     return Expanded(
       child: GestureDetector(
-        onTapDown: (_) => setState(() => _isHovered = true),
-        onTapUp: (_) => setState(() => _isHovered = false),
-        onTapCancel: () => setState(() => _isHovered = false),
+        onTapDown: (_) => setState(() { _isHovered = true; }),
+        onTapUp: (_) => setState(() { _isHovered = false; }),
+        onTapCancel: () => setState(() { _isHovered = false; }),
         onTap: widget.onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+          duration: const Duration(milliseconds: 300),
           curve: Curves.easeOutCubic,
           height: 100,
           margin: const EdgeInsets.only(bottom: 12),
-          transform: _isHovered ? (Matrix4.identity()..scale(1.02)) : Matrix4.identity(),
+          transform: _isHovered ? (Matrix4.identity()..scale(1.03)) : Matrix4.identity(),
           decoration: BoxDecoration(
-            color: const Color(0xFF0056D2), // Vibrant Royal Blue
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: _isHovered ? glowColor.withValues(alpha: 0.8) : Colors.white.withValues(alpha: 0.1),
-              width: 1,
-            ),
+            borderRadius: BorderRadius.circular(12),
             boxShadow: [
+              // Soft Multi-layered Shadow
               BoxShadow(
-                color: _isHovered ? glowColor.withValues(alpha: 0.3) : Colors.black.withValues(alpha: 0.15),
-                blurRadius: _isHovered ? 25 : 15,
-                offset: const Offset(0, 10),
+                color: const Color(0xFF0D47A1).withValues(alpha: _isHovered ? 0.3 : 0.15),
+                blurRadius: _isHovered ? 30 : 20,
+                offset: const Offset(0, 12),
               ),
+              if (_isHovered)
+                BoxShadow(
+                  color: Colors.white.withValues(alpha: 0.1),
+                  blurRadius: 10,
+                  spreadRadius: -5,
+                ),
             ],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Stack(
-              children: [
-                // NEON GROUNDING STRIP (Bottom Pulse)
-                AnimatedBuilder(
-                  animation: _pulseController,
-                  builder: (context, child) {
-                    return Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      height: 4,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: glowColor,
-                          boxShadow: [
-                            BoxShadow(
-                              color: glowColor.withValues(alpha: 0.6 + (0.4 * _pulseController.value)),
-                              blurRadius: 10 + (10 * _pulseController.value),
-                              spreadRadius: 1,
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
+            borderRadius: BorderRadius.circular(12),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0D47A1).withValues(alpha: 0.85), // Glassy Royal Blue
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    width: 1.5,
+                  ),
                 ),
-
-                // CONTENT
+                child: Stack(
+                  children: [
+                    // CONTENT
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 16, 16, 20),
                   child: Row(
@@ -191,6 +164,8 @@ class _SectionCardState extends State<SectionCard> with SingleTickerProviderStat
           ),
         ),
       ),
+    ),
+    ),
     );
   }
 }

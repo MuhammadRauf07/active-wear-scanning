@@ -20,8 +20,9 @@ class ScanningSectionsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F7FE), // Light Bluish / Sky Tint
-      body: SafeArea(
+      body: Container(
+        color: const Color(0xFFE3F2FD), // Solid Sky Blue
+        child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -33,19 +34,19 @@ class ScanningSectionsScreen extends StatelessWidget {
                   const Text(
                     'Operations Modules',
                     style: TextStyle(
-                      fontSize: 24,
+                      fontSize: 28,
                       fontWeight: FontWeight.w900,
-                      color: Color(0xFF101828),
-                      letterSpacing: -0.5,
+                      color: Color(0xFF0D47A1), // Deep Blue to match cards
+                      letterSpacing: -1.0,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   const Text(
                     'Select a module to begin production tasks',
                     style: TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF475467),
-                      fontWeight: FontWeight.w500,
+                      fontSize: 15,
+                      color: Color(0xFF1976D2), // Medium Blue
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -55,78 +56,91 @@ class ScanningSectionsScreen extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 children: [
-                      _buildRow(context, [
-                        SectionCard(
-                          title: 'Dashboard',
-                          subtitle: 'Primary system overview',
-                          sectionCode: 'DASH',
-                          progressValue: 0.5,
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DashboardScreen())),
-                        ),
-                        SectionCard(
-                          title: 'Tray Scanning',
-                          subtitle: 'Verify and trace manufacturing trays',
-                          sectionCode: 'TRAY',
-                          progressValue: 0.5,
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const TrayScanningScreen())),
-                        ),
-                      ]),
-                      _buildRow(context, [
-                        SectionCard(
-                          title: 'GBS Receiving',
-                          subtitle: 'Handle goods-based stock incoming',
-                          sectionCode: 'TRAY',
-                          progressValue: 0.5,
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GBSReceivingScreen())),
-                        ),
-                        SectionCard(
-                          title: 'Batch Creation',
-                          subtitle: 'Initialize new production batches',
-                          sectionCode: 'TRAY',
-                          progressValue: 0.5,
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const BatchListScreen())),
-                        ),
-                      ]),
-                      _buildRow(context, [
-                        SectionCard(
-                          title: 'Processing',
-                          subtitle: 'Main production line tasks',
-                          sectionCode: 'PROC',
-                          progressValue: 0.5,
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ProcessingScreen())),
-                        ),
-                        SectionCard(
-                          title: 'Induction Store',
-                          subtitle: 'Log materials to production store',
-                          sectionCode: 'TRAY',
-                          progressValue: 0.5,
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const InductionStoreScreen())),
-                        ),
-                      ]),
-                      _buildRow(context, [
-                        SectionCard(
-                          title: 'WIP Monitoring',
-                          subtitle: 'Real-time production flow',
-                          sectionCode: 'WIP',
-                          progressValue: 0.75,
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const WIPScreen())),
-                        ),
-                        SectionCard(
-                          title: 'Tray Tracking',
-                          subtitle: 'Location history of production trays',
-                          sectionCode: 'TRACK',
-                          progressValue: 0.5,
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const TrayTrackingScreen())),
-                        ),
-                      ]),
+                      _FadeSlideTransition(
+                        delay: 0,
+                        child: _buildRow(context, [
+                          SectionCard(
+                            title: 'Dashboard',
+                            subtitle: 'Primary system overview',
+                            sectionCode: 'DASH',
+                            progressValue: 0.5,
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DashboardScreen())),
+                          ),
+                          SectionCard(
+                            title: 'Tray Scanning',
+                            subtitle: 'Verify and trace manufacturing trays',
+                            sectionCode: 'TRAY',
+                            progressValue: 0.5,
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const TrayScanningScreen())),
+                          ),
+                        ]),
+                      ),
+                      _FadeSlideTransition(
+                        delay: 100,
+                        child: _buildRow(context, [
+                          SectionCard(
+                            title: 'GBS Receiving',
+                            subtitle: 'Handle goods-based stock incoming',
+                            sectionCode: 'TRAY',
+                            progressValue: 0.5,
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GBSReceivingScreen())),
+                          ),
+                          SectionCard(
+                            title: 'Batch Creation',
+                            subtitle: 'Initialize new production batches',
+                            sectionCode: 'TRAY',
+                            progressValue: 0.5,
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const BatchListScreen())),
+                          ),
+                        ]),
+                      ),
+                      _FadeSlideTransition(
+                        delay: 200,
+                        child: _buildRow(context, [
+                          SectionCard(
+                            title: 'Processing',
+                            subtitle: 'Main production line tasks',
+                            sectionCode: 'PROC',
+                            progressValue: 0.5,
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ProcessingScreen())),
+                          ),
+                          SectionCard(
+                            title: 'Induction Store',
+                            subtitle: 'Log materials to production store',
+                            sectionCode: 'TRAY',
+                            progressValue: 0.5,
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const InductionStoreScreen())),
+                          ),
+                        ]),
+                      ),
+                      _FadeSlideTransition(
+                        delay: 300,
+                        child: _buildRow(context, [
+                          SectionCard(
+                            title: 'WIP Monitoring',
+                            subtitle: 'Real-time production flow',
+                            sectionCode: 'WIP',
+                            progressValue: 0.75,
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const WIPScreen())),
+                          ),
+                          SectionCard(
+                            title: 'Tray Tracking',
+                            subtitle: 'Location history of production trays',
+                            sectionCode: 'TRACK',
+                            progressValue: 0.5,
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const TrayTrackingScreen())),
+                          ),
+                        ]),
+                      ),
                       const SizedBox(height: 24),
                     ],
                   ),
                 ),
               ],
             ),
-          ),
-        );
+        ),
+      ),
+    );
   }
 
   Widget _buildEnterpriseAppBar(BuildContext context) {
@@ -138,7 +152,7 @@ class ScanningSectionsScreen extends StatelessWidget {
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(0),
               boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
             ),
             child: const Icon(Icons.blur_on_rounded, color: Color(0xFF1E293B), size: 28),
@@ -185,7 +199,7 @@ class ScanningSectionsScreen extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(0),
           boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))],
           border: Border.all(color: color.withValues(alpha: 0.1)),
         ),
@@ -222,6 +236,39 @@ class ScanningSectionsScreen extends StatelessWidget {
           children[1],
         ],
       ),
+    );
+  }
+}
+
+class _FadeSlideTransition extends StatelessWidget {
+  final Widget child;
+  final int delay;
+
+  const _FadeSlideTransition({required this.child, required this.delay});
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return FutureBuilder(
+          future: Future.delayed(Duration(milliseconds: delay)),
+          builder: (context, snapshot) {
+            final isVisible = snapshot.connectionState == ConnectionState.done;
+            return AnimatedOpacity(
+              opacity: isVisible ? value : 0.0,
+              duration: const Duration(milliseconds: 400),
+              child: Transform.translate(
+                offset: Offset(0.0, (1.0 - (isVisible ? value : 0.0)) * 20),
+                child: child,
+              ),
+            );
+          },
+        );
+      },
+      child: child,
     );
   }
 }
