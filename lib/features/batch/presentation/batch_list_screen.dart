@@ -142,7 +142,9 @@ class _BatchListScreenState extends State<BatchListScreen>
 
   void _navigateToEditBatch(BatchHeaderResponseModel batchHeaderModel) async {
     AppLoader.show(context, message: 'Loading Batch...');
-    await Future.delayed(const Duration(milliseconds: 300)); // Allow loader to render
+    await Future.delayed(
+      const Duration(milliseconds: 300),
+    ); // Allow loader to render
     AppLoader.hide(context);
     final result = await Navigator.push(
       context,
@@ -196,9 +198,12 @@ class _BatchListScreenState extends State<BatchListScreen>
         for (final batch in allBatches) {
           final existingId = batch.batchHeader.id;
           if (existingId == batchHeaderId) continue; // skip current batch
-          final assignedTrolleyId = _trolleyDetailIdByBatch[existingId] ?? batch.batchHeader.trayDetailId;
+          final assignedTrolleyId =
+              _trolleyDetailIdByBatch[existingId] ??
+              batch.batchHeader.trayDetailId;
           if (assignedTrolleyId == trolleyId) {
-            final batchCode = batch.batchHeader.batchHeaderCode ?? 'another batch';
+            final batchCode =
+                batch.batchHeader.batchHeaderCode ?? 'another batch';
             return 'Trolly already assigned to $batchCode';
           }
         }
@@ -339,32 +344,44 @@ class _BatchListScreenState extends State<BatchListScreen>
     // ── Step 1b: POST batch-header-routings (once per batch) ────────────────
     final lines = _groupedBatchLinesByHeader[headerId] ?? [];
     final firstLine = lines.isNotEmpty ? lines.first : null;
-    final firstItemId =
-        (firstLine?['batchLines'] as Map<String, dynamic>?)?['itemId'] as int?;
+    if (firstLine != null) {
+      final bl = firstLine['batchLines'] as Map<String, dynamic>?;
+      final workOrderLineId = bl?['workOrderLineId'] as int?;
+      final colorDescription = bh.colorDescription;
+      
+      int? firstProcessedItemId;
+      if (workOrderLineId != null && colorDescription != null) {
+        final woRes = await _batchRepo.fetchWorkOrderLineDetails(workOrderLineId, colorDescription);
+        if (woRes.success && woRes.data != null) {
+          final woItems = woRes.data as List;
+          if (woItems.isNotEmpty) {
+            final raw = woItems.first['processIItemd'];
+            if (raw is Map) firstProcessedItemId = raw['id'] as int?;
+            else if (raw is int) firstProcessedItemId = raw;
+          }
+        }
+      }
 
-    if (firstItemId != null) {
-      final routingRes = await _batchRepo.fetchItemRoutings(firstItemId);
-      if (routingRes.success && routingRes.data != null) {
-        final routingItems = routingRes.data as List;
-        for (final r in routingItems) {
-          final rMap = r as Map;
-          final routingCode = rMap['itemRouting']?['routingCode']?.toString();
-          final operationId = rMap['itemRouting']?['operationId'] as int?;
-          final sequence = rMap['itemRouting']?['seq'] as int?;
+      final routingFetchId = firstProcessedItemId ?? bl?['itemId'] as int?;
+      if (routingFetchId != null) {
+        final routingRes = await _batchRepo.fetchItemRoutings(routingFetchId);
+        if (routingRes.success && routingRes.data != null) {
+          final routingItems = routingRes.data as List;
+          for (final r in routingItems) {
+            final rMap = r as Map;
+            final routingCode = rMap['itemRouting']?['routingCode']?.toString();
+            final operationId = rMap['itemRouting']?['operationId'] as int?;
+            final sequence = rMap['itemRouting']?['seq'] as int?;
 
-          if (routingCode != null && operationId != null) {
-            final res = await _batchRepo.postBatchHeaderRouting({
-              'code': routingCode,
-              'batchHeaderId': headerId,
-              'operationId': operationId,
-              'seq': sequence,
-              'isActive': true,
-            });
-            debugPrint(
-              res.success
-                  ? '✅ BatchHeaderRouting posted: code=$routingCode opId=$operationId'
-                  : '❌ BatchHeaderRouting failed: code=$routingCode → ${res.message}',
-            );
+            if (routingCode != null && operationId != null) {
+              await _batchRepo.postBatchHeaderRouting({
+                'code': routingCode,
+                'batchHeaderId': headerId,
+                'operationId': operationId,
+                'seq': sequence,
+                'isActive': true,
+              });
+            }
           }
         }
       }
@@ -379,24 +396,6 @@ class _BatchListScreenState extends State<BatchListScreen>
       final item = line['item'] as Map<String, dynamic>?;
 
       if (bl == null) continue;
-
-      // ── Compute min operationId from item routings ────────────────────────
-      int? minOpId;
-      final itemId = bl['itemId'] as int?;
-      if (itemId != null) {
-        final routingRes = await _batchRepo.fetchItemRoutings(itemId);
-        if (routingRes.success && routingRes.data != null) {
-          final routingItems = routingRes.data as List;
-          final opIds = routingItems
-              .map((r) => (r as Map)['itemRouting']?['operationId'])
-              .whereType<int>()
-              .toList();
-          if (opIds.isNotEmpty) {
-            minOpId = opIds.reduce((a, b) => a < b ? a : b);
-          }
-        }
-        debugPrint('🔑 Lock: item=$itemId minOpId=$minOpId');
-      }
 
       // ── Fetch processedItemId from work-order-line-details ────────────────
       int? processedItemId;
@@ -424,6 +423,24 @@ class _BatchListScreenState extends State<BatchListScreen>
         );
       }
 
+      // ── Compute min operationId from item routings using processedItemId ──
+      int? minOpId;
+      final targetRoutingId = processedItemId ?? bl['itemId'] as int?;
+      if (targetRoutingId != null) {
+        final routingRes = await _batchRepo.fetchItemRoutings(targetRoutingId);
+        if (routingRes.success && routingRes.data != null) {
+          final routingItems = routingRes.data as List;
+          final opIds = routingItems
+              .map((r) => (r as Map)['itemRouting']?['operationId'])
+              .whereType<int>()
+              .toList();
+          if (opIds.isNotEmpty) {
+            minOpId = opIds.reduce((a, b) => a < b ? a : b);
+          }
+        }
+        debugPrint('🔑 Lock: targetRoutingId=$targetRoutingId minOpId=$minOpId');
+      }
+
       final primaryQty = (bl['primaryQuantity'] as num?)?.toDouble() ?? 0;
       final secondaryQty = (bl['secondaryQuantity'] as num?)?.toDouble() ?? 0;
 
@@ -436,21 +453,30 @@ class _BatchListScreenState extends State<BatchListScreen>
           final locList = locRes.data as List;
           // Use .toString() comparison to avoid int vs String mismatch
           final matchingEntry = locList.cast<Map>().firstWhere(
-            (entry) => (entry['operation']?['id'] ?? entry['locator']?['operationId'])?.toString() == targetOpId.toString(),
+            (entry) =>
+                (entry['operation']?['id'] ?? entry['locator']?['operationId'])
+                    ?.toString() ==
+                targetOpId.toString(),
             orElse: () => {},
           );
-          
+
           if (matchingEntry.isNotEmpty) {
             final locId = matchingEntry['locator']?['id'];
             if (locId != null) {
               dynamicLocatorId = locId as int;
-              debugPrint('✅ Found Dynamic Locator: Op=$targetOpId -> Loc=$dynamicLocatorId');
+              debugPrint(
+                '✅ Found Dynamic Locator: Op=$targetOpId -> Loc=$dynamicLocatorId',
+              );
             }
           } else {
-            debugPrint('⚠️ No matching locator found in list for Op=$targetOpId. Using default 10.');
+            debugPrint(
+              '⚠️ No matching locator found in list for Op=$targetOpId. Using default 10.',
+            );
           }
         } else {
-          debugPrint('❌ Fetch Locators Failed: ${locRes.message}. Using default 10.');
+          debugPrint(
+            '❌ Fetch Locators Failed: ${locRes.message}. Using default 10.',
+          );
         }
       }
 
@@ -549,7 +575,8 @@ class _BatchListScreenState extends State<BatchListScreen>
             'workOrderLineId': bl['workOrderLineId'],
             'itemId': bl['itemId'],
             'trayId': bl['trayId'],
-            'locatorId': dynamicLocatorId, // Transition to dynamic locator based on op
+            'locatorId':
+                dynamicLocatorId, // Transition to dynamic locator based on op
             'processItemId':
                 bl['processItemId'], // Send original value to keep it unchanged
             'concurrencyStamp': bl['concurrencyStamp'],
@@ -831,22 +858,29 @@ class _BatchListScreenState extends State<BatchListScreen>
                   GestureDetector(
                     onTap: isLocked
                         ? () => setState(() {
-                              if (_expandedLockedBatchIds.contains(headerDatabaseId)) {
-                                _expandedLockedBatchIds.remove(headerDatabaseId);
-                              } else {
-                                _expandedLockedBatchIds.add(headerDatabaseId);
-                              }
-                            })
+                            if (_expandedLockedBatchIds.contains(
+                              headerDatabaseId,
+                            )) {
+                              _expandedLockedBatchIds.remove(headerDatabaseId);
+                            } else {
+                              _expandedLockedBatchIds.add(headerDatabaseId);
+                            }
+                          })
                         : null,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 16,
+                        horizontal: 12,
+                      ),
                       decoration: BoxDecoration(
                         border: Border(
                           left: BorderSide(color: Colors.grey.shade300),
                           right: BorderSide(color: Colors.grey.shade300),
                           bottom: BorderSide(color: Colors.grey.shade300),
                         ),
-                        color: index.isEven ? Colors.white : Colors.grey.shade50,
+                        color: index.isEven
+                            ? Colors.white
+                            : Colors.grey.shade50,
                       ),
                       child: Row(
                         children: [
@@ -864,7 +898,10 @@ class _BatchListScreenState extends State<BatchListScreen>
                             flex: 3,
                             child: Text(
                               machineBrand,
-                              style: const TextStyle(fontSize: 10, color: Colors.black),
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Colors.black,
+                              ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -873,7 +910,10 @@ class _BatchListScreenState extends State<BatchListScreen>
                             flex: 2,
                             child: Text(
                               colorDesc,
-                              style: const TextStyle(fontSize: 10, color: Colors.black),
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Colors.black,
+                              ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -900,37 +940,53 @@ class _BatchListScreenState extends State<BatchListScreen>
                           ),
                           Expanded(
                             flex: 3,
-                            child: Builder(builder: (_) {
-                              final trolleyCode = _trolleyCodeByBatch[headerDatabaseId];
-                              if (trolleyCode != null) {
-                                return Text(
-                                  trolleyCode,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: Colors.black,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                );
-                              }
-                              if (isLocked) {
-                                return Text('-', style: TextStyle(fontSize: 12, color: Colors.grey.shade400));
-                              }
-                              return Align(
-                                alignment: Alignment.centerLeft,
-                                child: GestureDetector(
-                                  onTap: () => _scanTrolleyForBatch(headerDatabaseId),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      border: Border.all(color: Colors.grey.shade300),
-                                      borderRadius: BorderRadius.circular(6),
+                            child: Builder(
+                              builder: (_) {
+                                final trolleyCode =
+                                    _trolleyCodeByBatch[headerDatabaseId];
+                                if (trolleyCode != null) {
+                                  return Text(
+                                    trolleyCode,
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.black,
                                     ),
-                                    child: Icon(Icons.qr_code_scanner, size: 18, color: Colors.orange.shade600),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  );
+                                }
+                                if (isLocked) {
+                                  return Text(
+                                    '-',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade400,
+                                    ),
+                                  );
+                                }
+                                return Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: GestureDetector(
+                                    onTap: () =>
+                                        _scanTrolleyForBatch(headerDatabaseId),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(
+                                          color: Colors.grey.shade300,
+                                        ),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Icon(
+                                        Icons.qr_code_scanner,
+                                        size: 18,
+                                        color: Colors.orange.shade600,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              );
-                            }),
+                                );
+                              },
+                            ),
                           ),
                           // Draft actions
                           if (!isLocked)
@@ -942,10 +998,16 @@ class _BatchListScreenState extends State<BatchListScreen>
                                   child: Container(
                                     padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(
-                                      border: Border.all(color: Colors.grey.shade300),
+                                      border: Border.all(
+                                        color: Colors.grey.shade300,
+                                      ),
                                       borderRadius: BorderRadius.circular(6),
                                     ),
-                                    child: Icon(Icons.edit, size: 18, color: Colors.blue.shade400),
+                                    child: Icon(
+                                      Icons.edit,
+                                      size: 18,
+                                      color: Colors.blue.shade400,
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
@@ -954,10 +1016,16 @@ class _BatchListScreenState extends State<BatchListScreen>
                                   child: Container(
                                     padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(
-                                      border: Border.all(color: Colors.grey.shade300),
+                                      border: Border.all(
+                                        color: Colors.grey.shade300,
+                                      ),
                                       borderRadius: BorderRadius.circular(6),
                                     ),
-                                    child: Icon(Icons.cancel, size: 18, color: Colors.red.shade400),
+                                    child: Icon(
+                                      Icons.cancel,
+                                      size: 18,
+                                      color: Colors.red.shade400,
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
@@ -966,11 +1034,17 @@ class _BatchListScreenState extends State<BatchListScreen>
                                   child: Container(
                                     padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(
-                                      border: Border.all(color: Colors.orange.shade200),
+                                      border: Border.all(
+                                        color: Colors.orange.shade200,
+                                      ),
                                       color: Colors.orange.shade50,
                                       borderRadius: BorderRadius.circular(6),
                                     ),
-                                    child: const Icon(Icons.lock_outline, size: 18, color: Colors.orange),
+                                    child: const Icon(
+                                      Icons.lock_outline,
+                                      size: 18,
+                                      color: Colors.orange,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -980,7 +1054,9 @@ class _BatchListScreenState extends State<BatchListScreen>
                             Padding(
                               padding: const EdgeInsets.only(left: 4),
                               child: Icon(
-                                _expandedLockedBatchIds.contains(headerDatabaseId)
+                                _expandedLockedBatchIds.contains(
+                                      headerDatabaseId,
+                                    )
                                     ? Icons.keyboard_arrow_up
                                     : Icons.keyboard_arrow_down,
                                 size: 18,
@@ -992,7 +1068,8 @@ class _BatchListScreenState extends State<BatchListScreen>
                     ),
                   ),
                   // ── Expanded tray sub-table (locked only) ─────────────────────
-                  if (isLocked && _expandedLockedBatchIds.contains(headerDatabaseId))
+                  if (isLocked &&
+                      _expandedLockedBatchIds.contains(headerDatabaseId))
                     LockedBatchTrayTable(
                       lines: _groupedBatchLinesByHeader[headerDatabaseId] ?? [],
                       trayIdToCode: _primaryTrayIdToCode,
@@ -1007,8 +1084,6 @@ class _BatchListScreenState extends State<BatchListScreen>
   }
 
   // Removed _buildLockedBatchTrayTable as it is extracted to LockedBatchTrayTable widget
-
-
 
   // ── Tiny metric chip ────────────────────────────────────────────────────────
   Widget _metricChip({
@@ -1027,9 +1102,23 @@ class _BatchListScreenState extends State<BatchListScreen>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label, style: TextStyle(fontSize: 8, fontWeight: FontWeight.w600,
-              color: color.withOpacity(0.8), letterSpacing: 0.3)),
-          Text(value, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: color)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 8,
+              fontWeight: FontWeight.w600,
+              color: color.withOpacity(0.8),
+              letterSpacing: 0.3,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
+          ),
         ],
       ),
     );

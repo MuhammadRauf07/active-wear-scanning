@@ -369,32 +369,37 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                                     if (isLapping && !isReassignedBatch) ...[
                                       Expanded(
                                         flex: 3,
-                                        child: CustomOutlinedButton(
-                                          label: 'Re-assign',
-                                          borderColor: Colors.teal,
-                                          textColor: Colors.teal,
-                                          onPressed: () async {
-                                            final result = await Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (context) => LappingDetailScreen(
-                                                  batchHeaderId: widget.batchHeaderId,
-                                                  batchCode: widget.batchCode,
-                                                  machineId: widget.machineId,
-                                                  machine: widget.machine,
-                                                  color: widget.color,
-                                                  trayCount: widget.trayCount,
-                                                  totalWeight: widget.totalWeight,
-                                                  currentOperationId: widget.currentOperationId,
-                                                  nextOperationId: widget.nextOperationId,
-                                                  nextOperationName: widget.nextOperationName,
-                                                ),
-                                              ),
+                                        child: Builder(
+                                          builder: (context) {
+                                            final isReassignBlocked = !_isBatchStarted;
+                                            return CustomOutlinedButton(
+                                              label: 'Re-assign',
+                                              borderColor: isReassignBlocked ? Colors.grey.shade400 : Colors.teal,
+                                              textColor: isReassignBlocked ? Colors.grey.shade400 : Colors.teal,
+                                              onPressed: isReassignBlocked ? null : () async {
+                                                final result = await Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (context) => LappingDetailScreen(
+                                                      batchHeaderId: widget.batchHeaderId,
+                                                      batchCode: widget.batchCode,
+                                                      machineId: widget.machineId,
+                                                      machine: widget.machine,
+                                                      color: widget.color,
+                                                      trayCount: widget.trayCount,
+                                                      totalWeight: widget.totalWeight,
+                                                      currentOperationId: widget.currentOperationId,
+                                                      nextOperationId: widget.nextOperationId,
+                                                      nextOperationName: widget.nextOperationName,
+                                                    ),
+                                                  ),
+                                                );
+                                                if (mounted && result == true) {
+                                                  Navigator.pop(context, true);
+                                                }
+                                              },
                                             );
-                                            if (mounted && result == true) {
-                                              Navigator.pop(context, true);
-                                            }
-                                          },
+                                          }
                                         ),
                                       ),
                                       const SizedBox(width: 4),

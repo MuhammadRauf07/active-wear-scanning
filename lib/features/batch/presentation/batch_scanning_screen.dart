@@ -372,9 +372,10 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
         }
 
         // ── Item Routing Validation (after color validation) ─────────────────
-        final itemDefId = tray.productionProgress.itemId;
+        // Use the processedItemId we just fetched from Work Order Line details
+        final itemDefId = (processedItemId > 0) ? processedItemId : tray.productionProgress.itemId;
         debugPrint(
-          '🔑 itemDefId for routing: $itemDefId (from productionProgress.itemId)',
+          '🔑 itemDefId for routing: $itemDefId (Priority: processedItemId)',
         );
         final routingRes = await _batchRepo.fetchItemRoutings(itemDefId!);
         if (!routingRes.success || routingRes.data == null) {
@@ -391,6 +392,9 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
             .toSet();
         final routingCount = routingItems.length;
 
+        // Capture current process stage from productionProgress
+        final currentOpId = tray.productionProgress.operationId;
+
         if (routingCount == 0) {
           debugPrint(
             '❌ Item $itemDefId has no routings configured — scan blocked',
@@ -400,25 +404,32 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
           // First tray with routings: store as reference
           _referenceRoutingCodes = routingCodes;
           _referenceRoutingCount = routingCount;
-          _referenceMinOperationId = routingCodes
-              .map((s) => int.tryParse(s) ?? 0)
-              .where((v) => v > 0)
-              .fold<int?>(null, (min, v) => min == null || v < min ? v : min);
+          _referenceMinOperationId = currentOpId; // Store current stage as reference
+          
           debugPrint(
-            '📋 Routing reference set: count=$routingCount codes=$routingCodes minOpId=$_referenceMinOperationId',
+            '📋 Routing reference set: count=$routingCount codes=$routingCodes stage=$_referenceMinOperationId',
           );
         } else {
           // Subsequent trays: compare against reference
           debugPrint(
-            '🔍 Routing compare: ref=$_referenceRoutingCodes(${_referenceRoutingCount}) vs current=$routingCodes($routingCount)',
+            '🔍 Routing compare: ref=$_referenceRoutingCodes vs current=$routingCodes',
           );
+          
+          // 1. Check if route pattern is identical
           if (routingCount != _referenceRoutingCount ||
               !routingCodes.containsAll(_referenceRoutingCodes!) ||
               !_referenceRoutingCodes!.containsAll(routingCodes)) {
             debugPrint('❌ Routing mismatch!');
-            return 'Tray has a different route';
+            return 'Tray has a different route pattern';
           }
-          debugPrint('✅ Routing matched');
+
+          // 2. Check if current stage is identical
+          if (currentOpId != _referenceMinOperationId) {
+            debugPrint('❌ Stage mismatch! Ref=$_referenceMinOperationId vs Current=$currentOpId');
+            return 'Process stage mismatch: Tray is at a different operation stage';
+          }
+
+          debugPrint('✅ Routing and Stage matched');
         }
 
         // Capacity check: cumulative weight must not exceed machine capacity
