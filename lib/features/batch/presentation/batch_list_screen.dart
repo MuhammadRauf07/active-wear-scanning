@@ -270,17 +270,35 @@ class _BatchListScreenState extends State<BatchListScreen>
     }
   }
 
+  void _handleLockRequest(BatchHeaderResponseModel batch, String? trolleyCode) {
+    if (trolleyCode == null || trolleyCode.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 12),
+              const Text('TROLLEY REQUIRED: Please scan trolley first.', 
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
+            ],
+          ),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+      return;
+    }
+    _lockBatch(batch);
+  }
+
   Future<void> _lockBatch(BatchHeaderResponseModel header) async {
     final headerId = header.batchHeader.id!;
 
-    // ── Trolley guard: must scan trolley before locking ──────────────────────
+    // Double safety check
     if (!_trolleyDetailIdByBatch.containsKey(headerId)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please scan a Trolly before issuing this batch.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _handleLockRequest(header, null);
       return;
     }
 
@@ -631,53 +649,33 @@ class _BatchListScreenState extends State<BatchListScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF1F5F9),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             CustomInspectionHeader(
-              heading: 'Batch History',
-              subtitle: 'List of all created batches',
+              heading: 'BATCH HISTORY',
+              subtitle: 'Manage your scanning batches',
               isShowBackIcon: true,
               topPadding: 0,
-              horizontalPadding: 12,
-              widget: CustomOutlinedButton(
-                label: 'Add Batch',
-                borderColor: Colors.blue,
-                textColor: Colors.blue,
-                buttonHeight: 42,
-                icon: Icons.add,
+              horizontalPadding: 16,
+              widget: ElevatedButton.icon(
                 onPressed: _navigateToAddBatch,
-              ),
-            ),
-
-            // Segmented Control Tab Bar
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: TabBar(
-                  controller: _tabController,
-                  labelColor: Colors.white,
-                  unselectedLabelColor: Colors.blue,
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  dividerColor: Colors.transparent,
-                  indicator: BoxDecoration(
-                    color: Colors.blue,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  tabs: const [
-                    Tab(text: "Draft"),
-                    Tab(text: "Issued"),
-                  ],
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('NEW BATCH',
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1B64A3),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
                 ),
               ),
             ),
-
+            _buildPremiumTabBar(),
             Expanded(
               child: TabBarView(
                 controller: _tabController,
@@ -693,345 +691,286 @@ class _BatchListScreenState extends State<BatchListScreen>
     );
   }
 
-  Widget _buildBatchList(
-    List<BatchHeaderResponseModel> batches, {
-    required bool isLocked,
-  }) {
-    if (batches.isEmpty) {
-      return Center(
-        child: Text(
-          isLocked ? 'No batch is issued' : 'No draft batches found.',
-          style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
-        ),
-      );
-    }
-
-    // Sort heavily newest first
-    batches.sort(
-      (a, b) => (b.batchHeader.id ?? 0).compareTo((a.batchHeader.id ?? 0)),
-    );
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(12),
-      child: ContentCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(6),
-                ),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: Text(
-                      'BATCH #',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade700,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 3,
-                    child: Text(
-                      'MACHINE',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade700,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      'COLOR',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade700,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      'TRAYS',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade700,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      'WEIGHT',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade700,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 3,
-                    child: Text(
-                      'TROLLEY',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade700,
-                      ),
-                    ),
-                  ),
-                  if (!isLocked) const SizedBox(width: 120),
-                ],
-              ),
+  Widget _buildPremiumTabBar() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE2E8F0),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: TabBar(
+        controller: _tabController,
+        dividerColor: Colors.transparent,
+        indicatorSize: TabBarIndicatorSize.tab,
+        indicator: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
             ),
-            ...List.generate(batches.length, (index) {
-              final header = batches[index];
-              final batchId = header.batchHeader.batchHeaderCode ?? "Undef";
-              final machineBrand = header.machine?.brand ?? 'Unknown';
-              final colorDesc = header.batchHeader.colorDescription ?? '-';
-
-              final headerDatabaseId = header.batchHeader.id ?? 0;
-              final traysLength =
-                  _groupedBatchLinesByHeader[headerDatabaseId]?.length ?? 0;
-
-              // Cumulative weight: sum(primaryQuantity × pieceWeight) for all lines in this batch
-              double totalWeight = 0;
-              for (final line
-                  in (_groupedBatchLinesByHeader[headerDatabaseId] ?? [])) {
-                final qty =
-                    (line['batchLines']?['primaryQuantity'] as num?)
-                        ?.toDouble() ??
-                    0;
-                final pw =
-                    (line['item']?['pieceWeight'] as num?)?.toDouble() ?? 0;
-                totalWeight += qty * pw;
-              }
-              final weightDisplay = totalWeight > 0
-                  ? '${totalWeight.toStringAsFixed(2)} g'
-                  : '-';
-
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── Summary row (tappable for locked batches) ─────────────────
-                  GestureDetector(
-                    onTap: isLocked
-                        ? () => setState(() {
-                              if (_expandedLockedBatchIds.contains(headerDatabaseId)) {
-                                _expandedLockedBatchIds.remove(headerDatabaseId);
-                              } else {
-                                _expandedLockedBatchIds.add(headerDatabaseId);
-                              }
-                            })
-                        : null,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-                      decoration: BoxDecoration(
-                        border: Border(
-                          left: BorderSide(color: Colors.grey.shade300),
-                          right: BorderSide(color: Colors.grey.shade300),
-                          bottom: BorderSide(color: Colors.grey.shade300),
-                        ),
-                        color: index.isEven ? Colors.white : Colors.grey.shade50,
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            flex: 3,
-                            child: Text(
-                              batchId,
-                              style: const TextStyle(
-                                fontSize: 10,
-                                color: Colors.black,
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            flex: 3,
-                            child: Text(
-                              machineBrand,
-                              style: const TextStyle(fontSize: 10, color: Colors.black),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          Expanded(
-                            flex: 2,
-                            child: Text(
-                              colorDesc,
-                              style: const TextStyle(fontSize: 10, color: Colors.black),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          Expanded(
-                            flex: 2,
-                            child: Text(
-                              '$traysLength',
-                              style: const TextStyle(
-                                fontSize: 10,
-                                color: Colors.black,
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            flex: 2,
-                            child: Text(
-                              weightDisplay,
-                              style: const TextStyle(
-                                fontSize: 10,
-                                color: Colors.black,
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            flex: 3,
-                            child: Builder(builder: (_) {
-                              final trolleyCode = _trolleyCodeByBatch[headerDatabaseId];
-                              if (trolleyCode != null) {
-                                return Text(
-                                  trolleyCode,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: Colors.black,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                );
-                              }
-                              if (isLocked) {
-                                return Text('-', style: TextStyle(fontSize: 12, color: Colors.grey.shade400));
-                              }
-                              return Align(
-                                alignment: Alignment.centerLeft,
-                                child: GestureDetector(
-                                  onTap: () => _scanTrolleyForBatch(headerDatabaseId),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      border: Border.all(color: Colors.grey.shade300),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Icon(Icons.qr_code_scanner, size: 18, color: Colors.orange.shade600),
-                                  ),
-                                ),
-                              );
-                            }),
-                          ),
-                          // Draft actions
-                          if (!isLocked)
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                GestureDetector(
-                                  onTap: () => _navigateToEditBatch(header),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      border: Border.all(color: Colors.grey.shade300),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Icon(Icons.edit, size: 18, color: Colors.blue.shade400),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                GestureDetector(
-                                  onTap: () => _deleteBatch(header),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      border: Border.all(color: Colors.grey.shade300),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Icon(Icons.cancel, size: 18, color: Colors.red.shade400),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                GestureDetector(
-                                  onTap: () => _lockBatch(header),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      border: Border.all(color: Colors.orange.shade200),
-                                      color: Colors.orange.shade50,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: const Icon(Icons.lock_outline, size: 18, color: Colors.orange),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          // Locked: expand chevron
-                          if (isLocked)
-                            Padding(
-                              padding: const EdgeInsets.only(left: 4),
-                              child: Icon(
-                                _expandedLockedBatchIds.contains(headerDatabaseId)
-                                    ? Icons.keyboard_arrow_up
-                                    : Icons.keyboard_arrow_down,
-                                size: 18,
-                                color: Colors.grey.shade500,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  // ── Expanded tray sub-table (locked only) ─────────────────────
-                  if (isLocked && _expandedLockedBatchIds.contains(headerDatabaseId))
-                    LockedBatchTrayTable(
-                      lines: _groupedBatchLinesByHeader[headerDatabaseId] ?? [],
-                      trayIdToCode: _primaryTrayIdToCode,
-                    ),
-                ],
-              );
-            }),
           ],
         ),
-      ),
-    );
-  }
-
-  // Removed _buildLockedBatchTrayTable as it is extracted to LockedBatchTrayTable widget
-
-
-
-  // ── Tiny metric chip ────────────────────────────────────────────────────────
-  Widget _metricChip({
-    required String label,
-    required String value,
-    required Color color,
-    required Color bg,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(5),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(label, style: TextStyle(fontSize: 8, fontWeight: FontWeight.w600,
-              color: color.withOpacity(0.8), letterSpacing: 0.3)),
-          Text(value, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: color)),
+        labelColor: const Color(0xFF1B64A3),
+        unselectedLabelColor: const Color(0xFF64748B),
+        labelStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+        unselectedLabelStyle:
+            const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+        tabs: const [
+          Tab(text: 'DRAFT'),
+          Tab(text: 'ISSUED'),
         ],
       ),
     );
   }
+
+  Widget _buildBatchList(List<BatchHeaderResponseModel> batches,
+      {required bool isLocked}) {
+    if (batches.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.inventory_2_outlined,
+                size: 64, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            Text(
+              isLocked ? 'No issued batches found' : 'No draft batches found',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade400,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    batches.sort(
+        (a, b) => (b.batchHeader.id ?? 0).compareTo((a.batchHeader.id ?? 0)));
+
+    return Column(
+      children: [
+        _buildListHeader(isLocked),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            itemCount: batches.length,
+            itemBuilder: (context, index) =>
+                _buildBatchCard(batches[index], isLocked: isLocked),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildListHeader(bool isLocked) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: Row(
+        children: [
+          _buildHeaderCell('BATCH #', 2, align: TextAlign.center),
+          _buildHeaderCell('MACHINE', 3, align: TextAlign.center),
+          _buildHeaderCell('COLOR', 2, align: TextAlign.center),
+          _buildHeaderCell('TRAYS', 1, align: TextAlign.center),
+          _buildHeaderCell('WEIGHT', 2, align: TextAlign.center),
+          _buildHeaderCell('TROLLEY', 2, align: TextAlign.center),
+          if (!isLocked)
+            const SizedBox(
+                width: 110,
+                child: Text('ACTIONS',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        fontSize: 8,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF94A3B8)))),
+          if (isLocked) const SizedBox(width: 40),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderCell(String label, int flex,
+      {TextAlign align = TextAlign.center}) {
+    return Expanded(
+      flex: flex,
+      child: Text(
+        label,
+        textAlign: align,
+        style: const TextStyle(
+          fontSize: 8,
+          fontWeight: FontWeight.w900,
+          color: Color(0xFF94A3B8),
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBatchCard(BatchHeaderResponseModel batch,
+      {required bool isLocked}) {
+    final headerId = batch.batchHeader.id ?? 0;
+    final batchCode = batch.batchHeader.batchHeaderCode ?? "Undef";
+    final machineName = batch.machine?.brand ?? 'Unknown';
+    final colorDesc = batch.batchHeader.colorDescription ?? '-';
+    final trays = _groupedBatchLinesByHeader[headerId]?.length ?? 0;
+    final trolleyCode = _trolleyCodeByBatch[headerId];
+
+    double totalWeight = 0;
+    for (final line in (_groupedBatchLinesByHeader[headerId] ?? [])) {
+      final qty =
+          (line['batchLines']?['primaryQuantity'] as num?)?.toDouble() ?? 0;
+      final pw = (line['item']?['pieceWeight'] as num?)?.toDouble() ?? 0;
+      totalWeight += qty * pw;
+    }
+
+    final isExpanded = _expandedLockedBatchIds.contains(headerId);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFCFD8DC), width: 1),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              children: [
+                // Data Columns
+                _buildDataCell(batchCode, 2, isBold: true, align: TextAlign.center),
+                _buildDataCell(machineName, 3, align: TextAlign.center),
+                _buildDataCell(colorDesc, 2, align: TextAlign.center),
+                _buildDataCell('$trays', 1, align: TextAlign.center),
+                _buildDataCell('${totalWeight.toStringAsFixed(0)}g', 2,
+                    align: TextAlign.center),
+
+                // Interactive Trolley Column
+                Expanded(
+                  flex: 2,
+                  child: Center(
+                    child: GestureDetector(
+                      onTap: isLocked ? null : () => _scanTrolleyForBatch(headerId),
+                      child: trolleyCode != null
+                          ? Text(
+                              trolleyCode,
+                              style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFF1B64A3),
+                                  decoration: TextDecoration.underline),
+                            )
+                          : Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.shade50,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: Colors.amber.shade200),
+                              ),
+                              child: const Icon(Icons.local_shipping_outlined,
+                                  size: 14, color: Colors.orange),
+                            ),
+                    ),
+                  ),
+                ),
+
+                // Actions
+                if (!isLocked)
+                  SizedBox(
+                    width: 110,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildSmallIconButton(
+                            Icons.edit_rounded,
+                            const Color(0xFF1B64A3),
+                            () => _navigateToEditBatch(batch)),
+                        const SizedBox(width: 6),
+                        _buildSmallIconButton(
+                            Icons.lock_open_rounded,
+                            trolleyCode == null 
+                                ? Colors.grey.shade400 
+                                : const Color(0xFFE67E22),
+                            () => _handleLockRequest(batch, trolleyCode)),
+                        const SizedBox(width: 6),
+                        _buildSmallIconButton(
+                            Icons.delete_outline_rounded,
+                            Colors.red,
+                            () => _deleteBatch(batch)),
+                      ],
+                    ),
+                  ),
+
+                if (isLocked)
+                  GestureDetector(
+                    onTap: () => setState(() {
+                      if (isExpanded) {
+                        _expandedLockedBatchIds.remove(headerId);
+                      } else {
+                        _expandedLockedBatchIds.add(headerId);
+                      }
+                    }),
+                    child: SizedBox(
+                      width: 40,
+                      child: Center(
+                        child: Icon(
+                          isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                          color: const Color(0xFFB0BEC5),
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (isLocked && isExpanded)
+            LockedBatchTrayTable(
+              lines: _groupedBatchLinesByHeader[headerId] ?? [],
+              trayIdToCode: _primaryTrayIdToCode,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDataCell(String value, int flex, {bool isBold = false, TextAlign align = TextAlign.start}) {
+    return Expanded(
+      flex: flex,
+      child: Text(
+        value,
+        textAlign: align,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: isBold ? FontWeight.w900 : FontWeight.w600,
+          color: const Color(0xFF263238),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSmallIconButton(IconData icon, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(5),
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Icon(icon, size: 14, color: color),
+      ),
+    );
+  }
 }
+

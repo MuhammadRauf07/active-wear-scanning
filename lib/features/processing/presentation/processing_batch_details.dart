@@ -258,211 +258,340 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
     final isReassignedBatch = _trays.isNotEmpty && _trays.every((t) => t.primaryTrayModel.isReAssigned == true);
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF1F5F9),
       body: SafeArea(
-        child: ExcludeSemantics(
-          excluding: _isLoadingTrays,
-          child: Column(
-            children: [
-              CustomInspectionHeader(
-                heading: 'Batch Details',
-                subtitle: widget.batchCode,
-                isShowBackIcon: true,
-                topPadding: 10,
-                horizontalPadding: 12,
-              ),
-              Expanded(
-                child: AbsorbPointer(
-                  absorbing: _isLoadingTrays,
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SectionHeader(
-                          title: 'Batch Overview',
-                          subtitle: 'Detailed information and actions for this batch',
-                        ),
-                        const SizedBox(height: 12),
-                        ContentCard(
-                          child: Column(
-                            children: [
-                              DynamicInfoDisplay(
-                                items: {
-                                  'batch': {'icon': Icons.qr_code, 'label': 'Batch ID', 'value': widget.batchCode},
-                                  'machine': {'icon': Icons.precision_manufacturing, 'label': 'Machine', 'value': widget.machine},
-                                  'color': {'icon': Icons.palette, 'label': 'Color', 'value': widget.color},
-                                  'operation': {'icon': Icons.settings_applications, 'label': 'Current Process', 'value': widget.operationName},
-                                  if (widget.nextOperationName.isNotEmpty && widget.nextOperationName != 'Completed')
-                                    'next_process': {'icon': Icons.arrow_forward_outlined, 'label': 'Next Process', 'value': widget.nextOperationName},
-                                  if (!isLapping) 'is_rework': {'icon': Icons.sync_problem, 'label': 'Is Rework', 'value': isReworkBatch ? 'Yes' : 'No'},
-                                  'is_reassigned': {'icon': Icons.assignment_turned_in, 'label': 'Re-assigned', 'value': isReassignedBatch ? 'Yes' : 'No'},
-                                  if (_reworkTargetOpName != null)
-                                    'rework_to': {'icon': Icons.subdirectory_arrow_left, 'label': 'Rework To', 'value': _reworkTargetOpName!},
-                                  if (_issueTime != null)
-                                    'issue_time': {'icon': Icons.schedule, 'label': 'Issue Time', 'value': _formatTime(_issueTime!)},
-                                  if (_startTime != null)
-                                    'start_time': {'icon': Icons.play_circle_outline, 'label': 'Start Time', 'value': _formatTime(_startTime!)},
-                                  if (_isBatchStarted && _issueTime != null && _startTime != null)
-                                    'idle_time': {'icon': Icons.hourglass_empty, 'label': 'Idle Time', 'value': _formatDuration(_startTime!.difference(_issueTime!))},
-                                },
-                              ),
-                              const SizedBox(height: 16),
-                              BatchScanSummary(
-                                trays: _trays,
-                                machineCapacity: _machineCapacity,
-                              ),
-                              const Divider(height: 32),
-                              SizedBox(
-                                height: 48,
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      flex: 3,
-                                      child: CustomOutlinedButton(
-                                        label: _showTrays ? 'Hide Trays' : 'Show Trays',
-                                        borderColor: Colors.blue,
-                                        textColor: _showTrays ? Colors.white : Colors.blue,
-                                        fillColor: _showTrays ? Colors.blue : Colors.white,
-                                        onPressed: _toggleTrayDetails,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    // ── Start button: visible only when not yet started ──
-                                    if (!_isBatchStarted) ...[
-                                      Expanded(
-                                        flex: 3,
-                                        child: CustomOutlinedButton(
-                                          label: 'Start',
-                                          icon: Icons.play_arrow_rounded,
-                                          borderColor: Colors.green,
-                                          fillColor: Colors.green,
-                                          textColor: Colors.white,
-                                          onPressed: _trays.isEmpty ? null : _confirmStart,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 4),
-                                    ],
-                                    if (_hasPreviousProcess && !isLapping) ...[
-                                      Expanded(
-                                        flex: 3,
-                                        child: CustomOutlinedButton(
-                                          label: _isReworkMode ? 'Cancel' : 'Rework',
-                                          borderColor: _isReworkMode ? Colors.red : Colors.orange,
-                                          textColor: _isReworkMode ? Colors.red : Colors.orange,
-                                          onPressed: () {
-                                            if (_isReworkMode) {
-                                              setState(() {
-                                                _isReworkMode = false;
-                                                _selectedReworkTrayIds.clear();
-                                                _reworkTargetOpId = null;
-                                                _reworkTargetOpName = null;
-                                              });
-                                            } else {
-                                              _showReworkDialog();
-                                            }
-                                          },
-                                        ),
-                                      ),
-                                      const SizedBox(width: 4),
-                                    ],
-                                    if (isLapping && !isReassignedBatch) ...[
-                                      Expanded(
-                                        flex: 3,
-                                        child: CustomOutlinedButton(
-                                          label: 'Re-assign',
-                                          borderColor: Colors.teal,
-                                          textColor: Colors.teal,
-                                          onPressed: () async {
-                                            final result = await Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (context) => LappingDetailScreen(
-                                                  batchHeaderId: widget.batchHeaderId,
-                                                  batchCode: widget.batchCode,
-                                                  machineId: widget.machineId,
-                                                  machine: widget.machine,
-                                                  color: widget.color,
-                                                  trayCount: widget.trayCount,
-                                                  totalWeight: widget.totalWeight,
-                                                  currentOperationId: widget.currentOperationId,
-                                                  nextOperationId: widget.nextOperationId,
-                                                  nextOperationName: widget.nextOperationName,
-                                                ),
-                                              ),
-                                            );
-                                            if (mounted && result == true) {
-                                              Navigator.pop(context, true);
-                                            }
-                                          },
-                                        ),
-                                      ),
-                                      const SizedBox(width: 4),
-                                    ],
-                                    // ── Trolley: Free if attached, Scan if not ─────
-                                    Expanded(
-                                      flex: 3,
-                                      child: _trolleyCode != null
-                                          ? CustomOutlinedButton(
-                                              label: 'Free Trolley',
-                                              icon: Icons.link_off,
-                                              borderColor: Colors.red.shade400,
-                                              textColor: Colors.red.shade400,
-                                              onPressed: _isUpdatingTrolley ? null : _confirmFreeTrolley,
-                                            )
-                                          : CustomOutlinedButton(
-                                              label: 'Scan Trolley',
-                                              icon: Icons.qr_code_scanner,
-                                              borderColor: Colors.teal,
-                                              textColor: Colors.teal,
-                                              onPressed: _isUpdatingTrolley ? null : _showScanTrolleyDialog,
-                                            ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    // ── Submit: disabled until batch is started ─────
-                                    Expanded(
-                                      flex: 3,
-                                      child: Builder(builder: (_) {
-                                        final submitBlocked = !_isBatchStarted || (isLapping && !isReassignedBatch && !_isReworkMode);
-                                        return CustomOutlinedButton(
-                                          label: 'Submit',
-                                          borderColor: submitBlocked ? Colors.grey.shade400 : Colors.green,
-                                          textColor: submitBlocked ? Colors.grey.shade400 : Colors.green,
-                                          onPressed: submitBlocked ? null : _confirmSubmit,
-                                        );
-                                      }),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (_showTrays) ...[
-                          const SizedBox(height: 16),
-                          ProcessingTrayTable(
-                            trays: _trays,
-                            isReworkMode: _isReworkMode,
-                            selectedReworkTrayIds: _selectedReworkTrayIds,
-                            onReworkToggle: (progressId, selected) {
-                              setState(() {
-                                if (selected) {
-                                  _selectedReworkTrayIds.add(progressId);
-                                } else {
-                                  _selectedReworkTrayIds.remove(progressId);
-                                }
-                              });
-                            },
-                          ),
-                        ],
+        child: Column(
+          children: [
+            _buildPremiumHeader(context),
+            Expanded(
+              child: AbsorbPointer(
+                absorbing: _isLoadingTrays,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildBatchIntelligenceGrid(),
+                      const SizedBox(height: 12),
+                      _buildActionConsole(),
+                      if (_showTrays) ...[
+                        const SizedBox(height: 16),
+                        _buildTrayTableContainer(),
                       ],
-                    ),
+                    ],
                   ),
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumHeader(BuildContext context) {
+    final isLapping = widget.operationName.toLowerCase().contains('lapping');
+    final isReassignedBatch = _trays.isNotEmpty && _trays.every((t) => t.primaryTrayModel.isReAssigned == true);
+    final submitBlocked = !_isBatchStarted || (isLapping && !isReassignedBatch && !_isReworkMode);
+    
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: const Color(0xFFB0BEC5),
+            width: 1.5,
+            strokeAlign: BorderSide.strokeAlignOutside,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            IconButton(
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0D47A1), size: 18),
+              visualDensity: VisualDensity.compact,
+            ),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Batch Processing',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF263238)),
+                  ),
+                  Text(
+                    'BATCH: ${widget.batchCode}',
+                    style: const TextStyle(fontSize: 10, color: Color(0xFF546E7A), fontWeight: FontWeight.w600, letterSpacing: 0.5),
+                  ),
+                ],
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: submitBlocked ? null : _confirmSubmit,
+              icon: const Icon(Icons.check_circle_rounded, size: 16),
+              label: const Text('SUBMIT BATCH', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2E7D32),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                disabledBackgroundColor: Colors.grey.shade200,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBatchIntelligenceGrid() {
+    final isReworkBatch = _trays.isNotEmpty && _trays.any((t) => t.productionProgress.reworkFlag == true);
+    
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 2,
+      mainAxisSpacing: 8,
+      crossAxisSpacing: 8,
+      childAspectRatio: 2.2,
+      children: [
+        _buildMetricCard('MACHINE', widget.machine, Icons.precision_manufacturing_rounded),
+        _buildMetricCard('PROCESS', widget.operationName, Icons.settings_suggest_rounded),
+        _buildMetricCard('COLOR', widget.color, Icons.palette_rounded),
+        _buildMetricCard('TROLLEY', _trolleyCode ?? 'NOT ATTACHED', Icons.local_shipping_rounded, 
+          valueColor: _trolleyCode != null ? const Color(0xFF1976D2) : Colors.red),
+      ],
+    );
+  }
+
+  Widget _buildMetricCard(String label, String value, IconData icon, {Color? valueColor}) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFB0BEC5), width: 1.5, strokeAlign: BorderSide.strokeAlignOutside),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: const Color(0xFFE3F2FD), borderRadius: BorderRadius.circular(8)),
+            child: Icon(icon, color: const Color(0xFF1976D2), size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(label, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF78909C), letterSpacing: 0.5)),
+                Text(
+                  value,
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: valueColor ?? const Color(0xFF263238)),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionConsole() {
+    final isLapping = widget.operationName.toLowerCase().contains('lapping');
+    final isReassignedBatch = _trays.isNotEmpty && _trays.every((t) => t.primaryTrayModel.isReAssigned == true);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFB0BEC5), width: 1.5, strokeAlign: BorderSide.strokeAlignOutside),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('CONTROL CONSOLE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF263238), letterSpacing: 0.5)),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildConsoleButton(
+                label: _showTrays ? 'HIDE TRAYS' : 'SHOW TRAYS',
+                icon: _showTrays ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                color: const Color(0xFF0D47A1),
+                onPressed: _toggleTrayDetails,
+              ),
+              if (!_isBatchStarted)
+                _buildConsoleButton(
+                  label: 'START BATCH',
+                  icon: Icons.play_arrow_rounded,
+                  color: const Color(0xFF2E7D32),
+                  onPressed: _trays.isEmpty ? null : _confirmStart,
+                ),
+              if (_hasPreviousProcess && !isLapping)
+                _buildConsoleButton(
+                  label: _isReworkMode ? 'CANCEL REWORK' : 'REWORK',
+                  icon: Icons.sync_problem_rounded,
+                  color: _isReworkMode ? Colors.red : Colors.orange.shade800,
+                  onPressed: () {
+                    if (_isReworkMode) {
+                      setState(() {
+                        _isReworkMode = false;
+                        _selectedReworkTrayIds.clear();
+                        _reworkTargetOpId = null;
+                        _reworkTargetOpName = null;
+                      });
+                    } else {
+                      _showReworkDialog();
+                    }
+                  },
+                ),
+              if (isLapping && !isReassignedBatch)
+                _buildConsoleButton(
+                  label: 'RE-ASSIGN',
+                  icon: Icons.assignment_turned_in_rounded,
+                  color: Colors.teal,
+                  onPressed: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => LappingDetailScreen(
+                          batchHeaderId: widget.batchHeaderId,
+                          batchCode: widget.batchCode,
+                          machineId: widget.machineId,
+                          machine: widget.machine,
+                          color: widget.color,
+                          trayCount: widget.trayCount,
+                          totalWeight: widget.totalWeight,
+                          currentOperationId: widget.currentOperationId,
+                          nextOperationId: widget.nextOperationId,
+                          nextOperationName: widget.nextOperationName,
+                        ),
+                      ),
+                    );
+                    if (mounted && result == true) Navigator.pop(context, true);
+                  },
+                ),
+              _buildConsoleButton(
+                label: _trolleyCode != null ? 'FREE TROLLEY' : 'SCAN TROLLEY',
+                icon: _trolleyCode != null ? Icons.link_off_rounded : Icons.qr_code_scanner_rounded,
+                color: _trolleyCode != null ? Colors.red.shade700 : Colors.teal.shade700,
+                onPressed: _isUpdatingTrolley ? null : (_trolleyCode != null ? _confirmFreeTrolley : _showScanTrolleyDialog),
+              ),
             ],
           ),
+          if (_isBatchStarted && _issueTime != null && _startTime != null) ...[
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _buildTimeIndicator('IDLE TIME', _formatDuration(_startTime!.difference(_issueTime!)), Icons.hourglass_empty_rounded),
+                _buildTimeIndicator('START TIME', _formatTime(_startTime!), Icons.play_circle_outline_rounded),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConsoleButton({required String label, required IconData icon, required Color color, required VoidCallback? onPressed}) {
+    return ElevatedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 16),
+      label: Text(label, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 10)),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        disabledBackgroundColor: Colors.grey.shade100,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
+  Widget _buildTimeIndicator(String label, String value, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: const Color(0xFF78909C)),
+        const SizedBox(width: 6),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Color(0xFF90A4AE))),
+            Text(value, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF455A64))),
+          ],
         ),
+      ],
+    );
+  }
+
+  Widget _buildTrayTableContainer() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFB0BEC5), width: 1.5, strokeAlign: BorderSide.strokeAlignOutside),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('BATCHED TRAYS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF263238), letterSpacing: 0.5)),
+                    Text('Units within current production batch', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF78909C))),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(color: const Color(0xFFECEFF1), borderRadius: BorderRadius.circular(6)),
+                  child: Text('${_trays.length} Units', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF455A64))),
+                ),
+              ],
+            ),
+          ),
+          ProcessingTrayTable(
+            trays: _trays,
+            isReworkMode: _isReworkMode,
+            selectedReworkTrayIds: _selectedReworkTrayIds,
+            onReworkToggle: (progressId, selected) {
+              setState(() {
+                if (selected) {
+                  _selectedReworkTrayIds.add(progressId);
+                } else {
+                  _selectedReworkTrayIds.remove(progressId);
+                }
+              });
+            },
+          ),
+        ],
       ),
     );
   }

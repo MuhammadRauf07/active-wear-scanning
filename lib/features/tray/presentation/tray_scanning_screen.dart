@@ -396,7 +396,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFE3F2FD), // Consistent Sky Blue
+      backgroundColor: const Color(0xFFF1F5F9), // Lightest Industrial Grey
       resizeToAvoidBottomInset: false,
       body: SafeArea(
         child: Column(
@@ -454,7 +454,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _TrayFadeSlideTransition(delay: 300, child: _buildScannedTraysTable()),
+                  child: _buildScannedTraysTable(),
                 ),
               ),
               const SizedBox(height: 16),
@@ -467,55 +467,101 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   }
 
   Widget _buildPremiumHeader(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFB0BEC5), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            IconButton(
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0D47A1), size: 18),
+              visualDensity: VisualDensity.compact,
+            ),
+            const Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Tray Scanning',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF263238)),
+                  ),
+                  Text(
+                    'Production Execution HUD',
+                    style: TextStyle(fontSize: 10, color: Color(0xFF546E7A), fontWeight: FontWeight.w600, letterSpacing: 0.3),
+                  ),
+                ],
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: _scannedTrays.isEmpty ? null : saveTrayAndProductionProgress,
+              icon: const Icon(Icons.save_rounded, size: 16),
+              label: const Text('SAVE BATCH', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2E7D32),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                disabledBackgroundColor: Colors.grey.shade200,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScannedTraysTable() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
       decoration: BoxDecoration(
         color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFFB0BEC5),
+          width: 1.5,
+          strokeAlign: BorderSide.strokeAlignOutside,
+        ),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
-          Row(
-            children: [
-              IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0D47A1), size: 20),
-                visualDensity: VisualDensity.compact,
-              ),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Tray Scanning',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Color(0xFF263238)),
-                    ),
-                    Text(
-                      'Production Execution HUD',
-                      style: TextStyle(fontSize: 11, color: Color(0xFF546E7A), fontWeight: FontWeight.w500),
-                    ),
-                  ],
-                ),
-              ),
-              ElevatedButton(
-                onPressed: _scannedTrays.isEmpty ? null : saveTrayAndProductionProgress,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2E7D32),
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  disabledBackgroundColor: Colors.grey.shade200,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                child: const Text('SAVE BATCH', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-              ),
-            ],
+          const TrayTableHeader(),
+          Expanded(
+            child: _scannedTrays.isEmpty
+                ? const EmptyScanState()
+                : ListView.builder(
+                    padding: EdgeInsets.zero,
+                    itemCount: _scannedTrays.length,
+                    itemBuilder: (context, index) {
+                      return ScannedTrayRow(
+                        index: index,
+                        tray: _scannedTrays[index],
+                        quantityController: _quantityControllers[index],
+                        selectedPlanLine: _selectedPlanLine,
+                        onDelete: () {
+                          setState(() {
+                            _quantityControllers[index].dispose();
+                            _quantityControllers.removeAt(index);
+                            _scannedTrays.removeAt(index);
+                          });
+                        },
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -525,25 +571,18 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   Widget _buildMachineScannerSection() {
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0D47A1).withValues(alpha: 0.15),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(12),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(12),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.8),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white, width: 1.5),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFB0BEC5), width: 1.5),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -733,16 +772,9 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       width: isFullWidth ? double.infinity : null,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.9),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0D47A1).withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: const Color(0xFFB0BEC5), width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -764,22 +796,31 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
           ),
           const SizedBox(height: 6),
           if (isEditable)
-            Container(
-              height: 28,
-              decoration: BoxDecoration(
-                color: const Color(0xFFE3F2FD),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: TextField(
-                controller: _overrideQuantityController,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF0D47A1)),
-                decoration: const InputDecoration(
-                  contentPadding: EdgeInsets.zero,
-                  isDense: true,
-                  border: InputBorder.none,
+            Center(
+              child: Container(
+                width: 60,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE3F2FD),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFFBBDEFB), width: 1),
                 ),
-                keyboardType: TextInputType.number,
+                child: TextField(
+                  controller: _overrideQuantityController,
+                  textAlign: TextAlign.center,
+                  textAlignVertical: TextAlignVertical.center,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF0D47A1),
+                  ),
+                  decoration: const InputDecoration(
+                    contentPadding: EdgeInsets.only(top: 4),
+                    isCollapsed: true,
+                    border: InputBorder.none,
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
               ),
             )
           else
@@ -799,94 +840,26 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   }
 
   Widget _buildActionArea() {
-    return Container(
+    return SizedBox(
       width: double.infinity,
-      height: 60,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0D47A1), Color(0xFF1976D2)],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
+      height: 44,
+      child: ElevatedButton.icon(
+        onPressed: _onScanTray,
+        icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
+        label: const Text(
+          'INITIALIZE TRAY SCAN',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12, letterSpacing: 0.5),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0D47A1).withValues(alpha: 0.3),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: _onScanTray,
-          borderRadius: BorderRadius.circular(16),
-          child: const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 24),
-              const SizedBox(width: 12),
-              Text(
-                'INITIALIZE TRAY SCAN',
-                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 1.5),
-              ),
-            ],
-          ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF0D47A1),
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       ),
     );
   }
 
-  Widget _buildScannedTraysTable() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.7),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0D47A1).withValues(alpha: 0.1),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-        child: Column(
-          children: [
-            const TrayTableHeader(),
-            if (_scannedTrays.isEmpty)
-              const Expanded(child: EmptyScanState(hasBorder: false))
-            else
-              Expanded(
-                child: ListView.builder(
-                  padding: EdgeInsets.zero,
-                  itemCount: _scannedTrays.length,
-                  itemBuilder: (context, index) {
-                    return ScannedTrayRow(
-                      index: index,
-                      tray: _scannedTrays[index],
-                      quantityController: _quantityControllers[index],
-                      selectedPlanLine: _selectedPlanLine,
-                      onDelete: () {
-                        setState(() {
-                          _quantityControllers[index].dispose();
-                          _quantityControllers.removeAt(index);
-                          _scannedTrays.removeAt(index);
-                        });
-                      },
-                    );
-                  },
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _TrayFadeSlideTransition extends StatelessWidget {

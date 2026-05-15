@@ -110,9 +110,9 @@ class ScannedTrayRow extends StatelessWidget {
                     color: Color(0xFF263238), // Black text in input
                   ),
                   decoration: const InputDecoration(
-                    contentPadding: EdgeInsets.zero,
+                    contentPadding: EdgeInsets.only(top: 4),
+                    isCollapsed: true,
                     border: InputBorder.none,
-                    isDense: true,
                   ),
                 ),
               ),

@@ -329,29 +329,15 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF1F5F9), // Lightest Industrial Grey
       resizeToAvoidBottomInset: false,
       body: SafeArea(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            CustomInspectionHeader(
-              heading: 'GBS Receiving',
-              subtitle: 'Scan trays to receive them in GBS',
-              isShowBackIcon: true,
-              topPadding: 0,
-              horizontalPadding: 12,
-              widget: CustomOutlinedButton(
-                label: 'Save Changes',
-                borderColor: Colors.blue,
-                textColor: Colors.blue,
-                buttonHeight: 42,
-                onPressed: saveWipTransactionsAndUpdateTray,
-              ),
-            ),
+            _buildPremiumHeader(context),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                 child: _buildScannedTraysSection(),
               ),
             ),
@@ -361,108 +347,139 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
     );
   }
 
-  Widget _buildTrayScannerSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SectionHeader(title: 'Tray Scanner', subtitle: 'Scan tray barcodes to receive them in GBS'),
-        const SizedBox(height: 12),
-        ContentCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Scan Tray Barcode', style: _labelStyle),
-              const SizedBox(height: 8),
-              Row(
+  Widget _buildPremiumHeader(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFB0BEC5), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            IconButton(
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0D47A1), size: 18),
+              visualDensity: VisualDensity.compact,
+            ),
+            const Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Container(
-                      height: _inputAndButtonHeight,
-                      decoration: BoxDecoration(border: Border.all(color: Colors.blue), borderRadius: BorderRadius.circular(6)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      alignment: Alignment.centerLeft,
-                      child: Text('Ready for scan...', style: TextStyle(color: Colors.grey.shade400, fontSize: 14)),
-                    ),
+                  Text(
+                    'GBS Receiving',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF263238)),
                   ),
-                  const SizedBox(width: 10),
-                  CustomOutlinedButton(
-                    label: 'Scan Tray',
-                    borderColor: Colors.blue,
-                    fillColor: Colors.blue,
-                    textColor: Colors.white,
-                    buttonHeight: _inputAndButtonHeight,
-                    onPressed: _onScanTray,
+                  Text(
+                    'Modular Receiving HUD',
+                    style: TextStyle(fontSize: 10, color: Color(0xFF546E7A), fontWeight: FontWeight.w600, letterSpacing: 0.3),
                   ),
                 ],
               ),
-            ],
-          ),
+            ),
+            ElevatedButton.icon(
+              onPressed: _scannedTrays.isEmpty ? null : saveWipTransactionsAndUpdateTray,
+              icon: const Icon(Icons.save_rounded, size: 16),
+              label: const Text('SAVE CHANGES', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2E7D32),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                disabledBackgroundColor: Colors.grey.shade200,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
   Widget _buildScannedTraysSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SectionHeader(title: 'Received Trays', subtitle: 'Scan tray barcodes to receive them in GBS'),
-        const SizedBox(height: 12),
-        Expanded(
-          child: ContentCard(
-            padding: EdgeInsets.zero,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFFB0BEC5),
+          width: 1.5,
+          strokeAlign: BorderSide.strokeAlignOutside,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Toolbar ──────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // ── Toolbar ──────────────────────────────────────────────────
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Received Trays (${_scannedTrays.length})', 
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)
-                      ),
-                      CustomOutlinedButton(
-                        label: 'Scan Tray',
-                        borderColor: Colors.blue,
-                        fillColor: Colors.blue,
-                        textColor: Colors.white,
-                        buttonHeight: _inputAndButtonHeight,
-                        onPressed: _onScanTray,
-                      ),
-                    ],
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'RECEIVED TRAYS',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF263238), letterSpacing: 0.5),
+                    ),
+                    Text(
+                      '${_scannedTrays.length} Units Assigned',
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: const Color(0xFF78909C)),
+                    ),
+                  ],
                 ),
-                
-                // ── Fixed Header ─────────────────────────────────────────────
-                const TrayTableHeader(actionColumnWidth: 44),
-
-                // ── Scrollable Values ────────────────────────────────────────
-                Expanded(
-                  child: _scannedTrays.isEmpty 
-                      ? const EmptyScanState(hasBorder: false)
-                      : ListView.builder(
-                          padding: EdgeInsets.zero,
-                          itemCount: _scannedTrays.length,
-                          itemBuilder: (context, index) {
-                            final reversedIndex = _scannedTrays.length - 1 - index;
-                            return GBSTrayRow(
-                              index: reversedIndex,
-                              tray: _scannedTrays[reversedIndex],
-                              onRemove: () => _onRemoveTray(reversedIndex),
-                            );
-                          },
-                        ),
+                SizedBox(
+                  height: 38,
+                  child: ElevatedButton.icon(
+                    onPressed: _onScanTray,
+                    icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
+                    label: const Text('SCAN TRAY', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 10)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0D47A1),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
-        ),
-      ],
+          
+          // ── Fixed Header ─────────────────────────────────────────────
+          const TrayTableHeader(actionColumnWidth: 44),
+
+          // ── Scrollable Values ────────────────────────────────────────
+          Expanded(
+            child: _scannedTrays.isEmpty 
+                ? const EmptyScanState(hasBorder: false)
+                : ListView.builder(
+                    padding: EdgeInsets.zero,
+                    itemCount: _scannedTrays.length,
+                    itemBuilder: (context, index) {
+                      final reversedIndex = _scannedTrays.length - 1 - index;
+                      return GBSTrayRow(
+                        index: reversedIndex,
+                        tray: _scannedTrays[reversedIndex],
+                        onRemove: () => _onRemoveTray(reversedIndex),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
     );
   }
-
-  // Removed _buildTrayTableHeader and _buildEmptyState as they are extracted to core widgets
 }

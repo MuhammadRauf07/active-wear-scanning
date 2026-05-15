@@ -13,17 +13,27 @@ class GBSTrayRow extends StatelessWidget {
     required this.onRemove,
   });
 
+  static const _cellStyle = TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w600,
+    color: Color(0xFF263238),
+  );
+
+  static const _blueCellStyle = TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w700,
+    color: Color(0xFF1B64A3),
+  );
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
       decoration: BoxDecoration(
+        color: index.isEven ? Colors.white : const Color(0xFFF8FAFC),
         border: Border(
-          left: BorderSide(color: Colors.grey.shade300),
-          right: BorderSide(color: Colors.grey.shade300),
-          bottom: BorderSide(color: Colors.grey.shade300),
+          bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.1), width: 1),
         ),
-        color: index.isEven ? Colors.white : Colors.grey.shade50,
       ),
       child: Row(
         children: [
@@ -34,7 +44,7 @@ class GBSTrayRow extends StatelessWidget {
               maxLines: 2,
               textAlign: TextAlign.center,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 9, color: Colors.black),
+              style: _blueCellStyle,
             ),
           ),
           Expanded(
@@ -44,7 +54,7 @@ class GBSTrayRow extends StatelessWidget {
               maxLines: 1,
               textAlign: TextAlign.center,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 9, color: Colors.black),
+              style: _cellStyle,
             ),
           ),
           Expanded(
@@ -54,7 +64,7 @@ class GBSTrayRow extends StatelessWidget {
               maxLines: 1,
               textAlign: TextAlign.center,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 9, color: Colors.black),
+              style: _cellStyle,
             ),
           ),
           Expanded(
@@ -62,7 +72,7 @@ class GBSTrayRow extends StatelessWidget {
             child: Text(
               tray.perGarmentTube > 0 ? tray.perGarmentTube.toStringAsFixed(0) : '-',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 9, color: Colors.black),
+              style: _cellStyle,
             ),
           ),
           Expanded(
@@ -71,13 +81,18 @@ class GBSTrayRow extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(4),
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFCFD8DC), width: 1),
                 ),
                 child: Text(
                   tray.primaryQuantity,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 9, color: Colors.black, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: Color(0xFF263238),
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ),
@@ -91,7 +106,7 @@ class GBSTrayRow extends StatelessWidget {
                 return Text(
                   garmentPcs > 0 ? garmentPcs.toStringAsFixed(0) : '-',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 9, color: Colors.black),
+                  style: _cellStyle,
                 );
               },
             ),
@@ -101,19 +116,27 @@ class GBSTrayRow extends StatelessWidget {
             child: Text(
               '${((double.tryParse(tray.primaryQuantity) ?? 0.0) * tray.pieceWeight).toStringAsFixed(1)} g',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 9, color: Colors.black),
+              style: _cellStyle,
             ),
           ),
           const SizedBox(width: 8),
-          GestureDetector(
-            onTap: onRemove,
-            child: Container(
-              padding: const EdgeInsets.all(5),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(4),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onRemove,
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.delete_outline_rounded,
+                  size: 18,
+                  color: Colors.red.shade400,
+                ),
               ),
-              child: Icon(Icons.cancel, size: 14, color: Colors.red.shade400),
             ),
           ),
         ],

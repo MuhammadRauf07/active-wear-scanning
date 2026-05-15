@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:active_wear_scanning/core/config/app_config.dart';
 import 'package:active_wear_scanning/features/gbs/repo/gbs_receiving_repo.dart';
 import 'package:active_wear_scanning/features/induction/repo/induction_repo.dart';
@@ -17,6 +18,7 @@ import 'package:plex/plex_utils/plex_messages.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  PlexNetworking.instance.allowBadCertificateForHTTPS();
 
   AppConfig.tenant = 'ActiveWare';
 

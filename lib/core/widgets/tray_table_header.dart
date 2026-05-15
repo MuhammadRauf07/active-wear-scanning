@@ -23,7 +23,7 @@ class TrayTableHeader extends StatelessWidget {
       decoration: const BoxDecoration(
         color: Color(0xFFF1F5F9), // Very light slate blue/grey
         border: Border(
-          bottom: BorderSide(color: Color(0xFFCFD8DC), width: 1.5),
+          bottom: BorderSide(color: Color(0xFFB0BEC5), width: 1.5),
         ),
       ),
       child: Row(

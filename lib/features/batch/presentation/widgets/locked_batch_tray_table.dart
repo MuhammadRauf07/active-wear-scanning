@@ -44,20 +44,21 @@ class LockedBatchTrayTable extends StatelessWidget {
     if (lines.isEmpty) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade50,
-          border: Border(
-            left: BorderSide(color: Colors.indigo.shade200, width: 3),
-            bottom: BorderSide(color: Colors.grey.shade200),
-          ),
+        decoration: const BoxDecoration(
+          color: Color(0xFFF8FAFC),
+          border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
         ),
-        child: Row(
+        child: const Row(
           children: [
-            Icon(Icons.info_outline, size: 14, color: Colors.grey.shade400),
-            const SizedBox(width: 8),
+            Icon(Icons.info_outline_rounded, size: 14, color: Color(0xFF94A3B8)),
+            SizedBox(width: 8),
             Text(
-              'No tray details available.',
-              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+              'No tray details found in this batch.',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF64748B),
+              ),
             ),
           ],
         ),
@@ -65,155 +66,110 @@ class LockedBatchTrayTable extends StatelessWidget {
     }
 
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.indigo.shade50.withValues(alpha: 0.4),
-        border: Border(
-          left: BorderSide(color: Colors.indigo.shade300, width: 3),
-          bottom: BorderSide(color: Colors.grey.shade200),
-        ),
+      decoration: const BoxDecoration(
+        color: Colors.transparent, // Fix: Transparent to allow parent border to connect
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Sub-table header ───────────────────────────────────────────────
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-            decoration: BoxDecoration(
-              color: Colors.indigo.shade50,
-              border:
-                  Border(bottom: BorderSide(color: Colors.indigo.shade100)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            decoration: const BoxDecoration(
+              color: Color(0xFFE2E8F0),
+              border: Border(
+                top: BorderSide(color: Color(0xFFCBD5E1)),
+                bottom: BorderSide(color: Color(0xFFCBD5E1)),
+              ),
             ),
-            child: const Row(
+            child: Row(
               children: [
-                Expanded(
-                    flex: 2,
-                    child: Text('TRAY CODE', style: _subHeaderStyle)),
-                Expanded(
-                    flex: 2,
-                    child: Text('WORK ORDER', style: _subHeaderStyle)),
-                Expanded(
-                    flex: 4,
-                    child:
-                        Text('ITEM DESCRIPTION', style: _subHeaderStyle)),
-                Expanded(
-                    flex: 2,
-                    child: Text('PCS PER TUBE',
-                        style: _subHeaderStyle,
-                        textAlign: TextAlign.center)),
-                Expanded(
-                    flex: 2,
-                    child: Text('TUBES',
-                        style: _subHeaderStyle,
-                        textAlign: TextAlign.center)),
-                Expanded(
-                    flex: 2,
-                    child: Text('PCS',
-                        style: _subHeaderStyle,
-                        textAlign: TextAlign.center)),
+                _buildSubHeaderCell('TRAY #', 2),
+                _buildSubHeaderCell('WORK ORDER', 2),
+                _buildSubHeaderCell('ITEM DESCRIPTION', 4),
+                _buildSubHeaderCell('PCS/TUBE', 2, align: TextAlign.center),
+                _buildSubHeaderCell('TUBES', 2, align: TextAlign.center),
+                _buildSubHeaderCell('TOTAL PCS', 2, align: TextAlign.center),
               ],
             ),
           ),
+          
           // ── Sub-table rows ─────────────────────────────────────────────────
-          ...lines.asMap().entries.map((entry) {
-            final i = entry.key;
-            final line = entry.value;
-            final trayCode = _resolveTrayCode(line);
-            final woCode =
-                line['workOrderHeader']?['workOrderCode']?.toString() ?? '-';
-            final itemDesc =
-                line['item']?['description']?.toString() ?? '-';
-            final pgt =
-                (line['item']?['perGarmentTube'] as num?)?.toDouble() ?? 0;
-            final tubes =
-                (line['batchLines']?['primaryQuantity'] as num?)?.toDouble() ??
-                    0;
-            final pcs = pgt > 0 ? (tubes * pgt).toInt() : 0;
-            final isTrayResolved =
-                trayCode != '-' && !trayCode.startsWith('ID:');
+          ListView.separated(
+            shrinkWrap: true,
+            padding: EdgeInsets.zero,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: lines.length,
+            separatorBuilder: (context, index) => Container(height: 1, color: const Color(0xFFF1F5F9)),
+            itemBuilder: (context, index) {
+              final line = lines[index];
+              final trayCode = _resolveTrayCode(line);
+              final woCode = line['workOrderHeader']?['workOrderCode']?.toString() ?? '-';
+              final itemDesc = line['item']?['description']?.toString() ?? '-';
+              final pgt = (line['item']?['perGarmentTube'] as num?)?.toDouble() ?? 0;
+              final tubes = (line['batchLines']?['primaryQuantity'] as num?)?.toDouble() ?? 0;
+              final pcs = pgt > 0 ? (tubes * pgt).toInt() : 0;
+              
+              final bool isLast = index == lines.length - 1;
 
-            return Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-              decoration: BoxDecoration(
-                color: i.isEven
-                    ? Colors.white.withValues(alpha: 0.8)
-                    : Colors.indigo.shade50.withValues(alpha: 0.3),
-                border: Border(
-                    bottom: BorderSide(color: Colors.indigo.shade50)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      trayCode,
-                      style: TextStyle(
-                        fontSize: 9,
-                        color: Colors.black,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      woCode,
-                      style: TextStyle(
-                          fontSize: 9,
-                          color: Colors.black),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Expanded(
-                    flex: 4,
-                    child: Text(
-                      itemDesc,
-                      style: const TextStyle(
-                          fontSize: 9, color: Colors.black),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      pgt > 0 ? pgt.toStringAsFixed(0) : '-',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          fontSize: 9,
-                          color: Colors.black),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      tubes.toStringAsFixed(0),
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          fontSize: 9,
-                          color: Colors.black),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      pcs > 0 ? pcs.toString() : '-',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          fontSize: 9,
-                          color: Colors.black),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
+              return Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: isLast 
+                      ? const BorderRadius.vertical(bottom: Radius.circular(8))
+                      : null,
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  children: [
+                    _buildSubDataCell(trayCode, 2, isBold: true),
+                    _buildSubDataCell(woCode, 2),
+                    _buildSubDataCell(itemDesc, 4),
+                    _buildSubDataCell(pgt > 0 ? pgt.toStringAsFixed(0) : '-', 2, align: TextAlign.center),
+                    _buildSubDataCell(tubes.toStringAsFixed(0), 2, align: TextAlign.center),
+                    _buildSubDataCell(pcs > 0 ? '$pcs' : '-', 2, align: TextAlign.center, isHighlight: true),
+                  ],
+                ),
+              );
+            },
+          ),
         ],
       ),
     );
   }
-}
+
+  Widget _buildSubHeaderCell(String label, int flex, {TextAlign align = TextAlign.start}) {
+    return Expanded(
+      flex: flex,
+      child: Text(
+        label,
+        textAlign: align,
+        style: const TextStyle(
+          fontSize: 7,
+          fontWeight: FontWeight.w900,
+          color: Color(0xFF64748B),
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSubDataCell(String value, int flex, 
+      {bool isBold = false, TextAlign align = TextAlign.start, bool isHighlight = false}) {
+    return Expanded(
+      flex: flex,
+      child: Text(
+        value,
+        textAlign: align,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 9,
+          fontWeight: isBold || isHighlight ? FontWeight.w800 : FontWeight.w500,
+          color: isHighlight ? const Color(0xFF1B64A3) : const Color(0xFF334155),
+        ),
+      ),
+    );
+  }
+  }
+

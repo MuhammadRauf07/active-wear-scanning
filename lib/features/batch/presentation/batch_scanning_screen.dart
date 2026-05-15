@@ -14,6 +14,7 @@ import 'package:active_wear_scanning/features/batch/model/batch_machine_model.da
 import 'package:active_wear_scanning/features/batch/repo/batch_repo.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:active_wear_scanning/features/tray/model/scanned_tray.dart';
+import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
 
 class BatchScanningScreen extends StatefulWidget {
@@ -93,12 +94,16 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     }
   }
 
-  Future<void> _loadExistingBatchTrays(List<ProductionProgressResponseModel> allProgresses) async {
+  Future<void> _loadExistingBatchTrays(
+    List<ProductionProgressResponseModel> allProgresses,
+  ) async {
     if (widget.existingBatch == null) return;
     final batchHeaderId = widget.existingBatch!.batchHeader.id;
     if (batchHeaderId == null) return;
 
-    final linesRes = await _batchRepo.fetchBatchLines(batchHeaderId: batchHeaderId);
+    final linesRes = await _batchRepo.fetchBatchLines(
+      batchHeaderId: batchHeaderId,
+    );
     if (!linesRes.success || linesRes.data == null) return;
 
     final rawLines = linesRes.data as List<Map<String, dynamic>>;
@@ -108,7 +113,11 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
         .toSet();
 
     final linkedTrays = allProgresses
-        .where((p) => p.productionProgress.id != null && linkedProgressIds.contains(p.productionProgress.id))
+        .where(
+          (p) =>
+              p.productionProgress.id != null &&
+              linkedProgressIds.contains(p.productionProgress.id),
+        )
         .toList();
 
     if (mounted && linkedTrays.isNotEmpty) {
@@ -116,7 +125,11 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
         _scannedTrays.addAll(linkedTrays);
         for (var tray in linkedTrays) {
           _quantityControllers.add(
-            TextEditingController(text: tray.productionProgress.primaryQuantity?.toStringAsFixed(0) ?? '0'),
+            TextEditingController(
+              text:
+                  tray.productionProgress.primaryQuantity?.toStringAsFixed(0) ??
+                  '0',
+            ),
           );
         }
       });
@@ -127,7 +140,10 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     final result = await _batchRepo.fetchBatchLines();
     if (result.success && result.data != null) {
       final lines = result.data as List<Map<String, dynamic>>;
-      final ids = lines.map((l) => l['batchLines']?['progressId'] as int?).whereType<int>().toSet();
+      final ids = lines
+          .map((l) => l['batchLines']?['progressId'] as int?)
+          .whereType<int>()
+          .toSet();
       if (mounted) setState(() => _batchedProgressIds.addAll(ids));
     }
   }
@@ -144,7 +160,9 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
         _isLoading = false;
         if (widget.existingBatch?.machine != null) {
           final editMachineId = widget.existingBatch!.machine!.id;
-          final match = _machines.where((m) => m.resource?.id == editMachineId).toList();
+          final match = _machines
+              .where((m) => m.resource?.id == editMachineId)
+              .toList();
           if (match.isNotEmpty) _selectedMachine = match.first;
         }
       });
@@ -152,7 +170,9 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     } else {
       setState(() => _isLoading = false);
       AppLoader.hide(context);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${result.message}')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: ${result.message}')));
     }
   }
 
@@ -168,7 +188,9 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
         _isLoadingColors = false;
         if (widget.existingBatch?.colorCode != null) {
           final editColorId = widget.existingBatch!.colorCode!.id;
-          final match = _colors.where((c) => c.segmentCode?.id == editColorId).toList();
+          final match = _colors
+              .where((c) => c.segmentCode?.id == editColorId)
+              .toList();
           if (match.isNotEmpty) _selectedColor = match.first;
         }
       });
@@ -176,14 +198,17 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     } else {
       setState(() => _isLoadingColors = false);
       AppLoader.hide(context);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${result.message}')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: ${result.message}')));
     }
   }
 
   void _onKey(RawKeyEvent event) {
     if (event is RawKeyDownEvent) {
       final now = DateTime.now();
-      if (_lastKeyPress != null && now.difference(_lastKeyPress!).inMilliseconds > 200) {
+      if (_lastKeyPress != null &&
+          now.difference(_lastKeyPress!).inMilliseconds > 200) {
         _barcodeBuffer = '';
       }
       _lastKeyPress = now;
@@ -204,20 +229,26 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     final code = scannedCode.trim();
     if (code.isEmpty) return;
     if (_selectedMachine == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error: Please select a machine first')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error: Please select a machine first')),
+      );
       return;
     }
     AppLoader.show(context, message: 'Validating Tray...');
     final error = await _validateTrayForScan(code);
     AppLoader.hide(context);
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $error'), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $error'), backgroundColor: Colors.red),
+      );
     }
   }
 
   Future<void> _onScanTray() async {
     if (_selectedMachine == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error: Please select a machine first')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error: Please select a machine first')),
+      );
       return;
     }
     await Future.delayed(const Duration(milliseconds: 300));
@@ -234,29 +265,47 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     final code = scannedCode.trim();
     if (code.isEmpty) return 'Invalid tray code';
     if (_selectedColor == null) return 'Please select a batch Color first';
-    if (_scannedTrays.any((t) => (t.primaryTrayModel?.trayCode ?? '').trim().toLowerCase() == code.toLowerCase())) return 'Already assigned';
+    if (_scannedTrays.any(
+      (t) =>
+          (t.primaryTrayModel?.trayCode ?? '').trim().toLowerCase() ==
+          code.toLowerCase(),
+    ))
+      return 'Already assigned';
 
-    final available = productionProgressTrays.where((t) =>
-        (t.primaryTrayModel?.trayCode ?? '').trim().toLowerCase() == code.toLowerCase() &&
-        t.productionProgress.locatorId == 3 &&
-        t.productionProgress.gbsFlag == true).toList();
+    final available = productionProgressTrays
+        .where(
+          (t) =>
+              (t.primaryTrayModel?.trayCode ?? '').trim().toLowerCase() ==
+                  code.toLowerCase() &&
+              t.productionProgress.locatorId == 3 &&
+              t.productionProgress.gbsFlag == true,
+        )
+        .toList();
 
     if (available.isEmpty) return 'Tray not found or not checked out via GBS';
 
     final tray = available.first;
-    if ((tray.primaryTrayModel?.trayType ?? 0) != 1) return 'Invalid tray type.';
+    if ((tray.primaryTrayModel?.trayType ?? 0) != 1)
+      return 'Invalid tray type.';
     final progressId = tray.productionProgress.id;
-    if (progressId != null && _batchedProgressIds.contains(progressId)) return 'Tray already assigned to a batch';
+    if (progressId != null && _batchedProgressIds.contains(progressId))
+      return 'Tray already assigned to a batch';
 
-    final workOrderLineId = tray.productionProgress.workOrderLineId ?? tray.workOrderLine?.id;
+    final workOrderLineId =
+        tray.productionProgress.workOrderLineId ?? tray.workOrderLine?.id;
     final colorDescription = _selectedColor!.segmentCode?.description;
     if (colorDescription == null) return 'Selected Color has no description';
 
-    final colorRes = await _batchRepo.fetchWorkOrderLineDetails(workOrderLineId!, colorDescription);
-    if (!colorRes.success || colorRes.data == null) return 'Validation error: ${colorRes.message}';
+    final colorRes = await _batchRepo.fetchWorkOrderLineDetails(
+      workOrderLineId!,
+      colorDescription,
+    );
+    if (!colorRes.success || colorRes.data == null)
+      return 'Validation error: ${colorRes.message}';
 
     final items = colorRes.data as List?;
-    if (items == null || items.isEmpty) return 'Invalid tray: Tray does not belong to the selected color';
+    if (items == null || items.isEmpty)
+      return 'Invalid tray: Tray does not belong to the selected color';
 
     final firstItem = items.first as Map;
     final detail = firstItem['workOrderLineDetail'];
@@ -270,31 +319,47 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
       processedItemId = detail['knitItemId'] ?? tray.item?.id ?? 0;
     }
 
-    final itemDefId = tray.productionProgress.itemId;
-    final routingRes = await _batchRepo.fetchItemRoutings(itemDefId!);
-    if (!routingRes.success || routingRes.data == null) return 'Routing validation error: ${routingRes.message}';
+    final routingRes = await _batchRepo.fetchItemRoutings(processedItemId);
+    if (!routingRes.success || routingRes.data == null)
+      return 'Routing validation error: ${routingRes.message}';
 
     final routingItems = routingRes.data as List;
-    final routingCodes = routingItems.map((r) => (r as Map)['itemRouting']?['operationId']?.toString() ?? '').where((c) => c.isNotEmpty).toSet();
+    final routingCodes = routingItems
+        .map((r) => (r as Map)['itemRouting']?['operationId']?.toString() ?? '')
+        .where((c) => c.isNotEmpty)
+        .toSet();
     final routingCount = routingItems.length;
 
     if (routingCount == 0) return 'Tray item has no route configured';
     if (_referenceRoutingCodes == null) {
       _referenceRoutingCodes = routingCodes;
       _referenceRoutingCount = routingCount;
-      _referenceMinOperationId = routingCodes.map((s) => int.tryParse(s) ?? 0).where((v) => v > 0).fold<int?>(null, (min, v) => min == null || v < min ? v : min);
-    } else if (routingCount != _referenceRoutingCount || !routingCodes.containsAll(_referenceRoutingCodes!) || !_referenceRoutingCodes!.containsAll(routingCodes)) {
+      _referenceMinOperationId = routingCodes
+          .map((s) => int.tryParse(s) ?? 0)
+          .where((v) => v > 0)
+          .fold<int?>(null, (min, v) => min == null || v < min ? v : min);
+    } else if (routingCount != _referenceRoutingCount ||
+        !routingCodes.containsAll(_referenceRoutingCodes!) ||
+        !_referenceRoutingCodes!.containsAll(routingCodes)) {
       return 'Tray has a different route';
     }
 
     final capacityRaw = _selectedMachine?.resource?.capacity;
-    final capacity = capacityRaw != null ? double.tryParse(capacityRaw.toString()) : null;
+    final capacity = capacityRaw != null
+        ? double.tryParse(capacityRaw.toString())
+        : null;
     if (capacity != null && capacity > 0) {
-      final newQty = double.tryParse(_overrideQuantityController.text) ?? tray.productionProgress.primaryQuantity ?? 0;
+      final newQty =
+          double.tryParse(_overrideQuantityController.text) ??
+          tray.productionProgress.primaryQuantity ??
+          0;
       final pw = tray.item?.pieceWeight ?? 0;
       double currentTotal = 0;
       for (int i = 0; i < _scannedTrays.length; i++) {
-        final qty = double.tryParse(_quantityControllers[i].text) ?? _scannedTrays[i].productionProgress.primaryQuantity ?? 0;
+        final qty =
+            double.tryParse(_quantityControllers[i].text) ??
+            _scannedTrays[i].productionProgress.primaryQuantity ??
+            0;
         final p = _scannedTrays[i].item?.pieceWeight ?? 0;
         currentTotal += qty * p;
       }
@@ -304,9 +369,13 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     }
 
     setState(() {
-      if (tray.primaryTrayModel?.id != null) _trayProcessedItemId[tray.primaryTrayModel!.id!] = processedItemId;
+      if (tray.primaryTrayModel?.id != null)
+        _trayProcessedItemId[tray.primaryTrayModel!.id!] = processedItemId;
       _scannedTrays.add(tray);
-      final defaultQty = _overrideQuantityController.text.isNotEmpty ? _overrideQuantityController.text : (tray.productionProgress.primaryQuantity?.toStringAsFixed(0) ?? '0');
+      final defaultQty = _overrideQuantityController.text.isNotEmpty
+          ? _overrideQuantityController.text
+          : (tray.productionProgress.primaryQuantity?.toStringAsFixed(0) ??
+                '0');
       _quantityControllers.add(TextEditingController(text: defaultQty));
     });
     return null;
@@ -315,11 +384,12 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
   Future<void> _saveBatchChanges() async {
     if (_scannedTrays.isEmpty) return;
     AppLoader.show(context);
+
     int batchHeaderId;
-    if (widget.existingBatch != null) {
-      batchHeaderId = widget.existingBatch!.batchHeader.id!;
-    } else {
-      final batchCode = "BCH-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}";
+    final batchCode = widget.existingBatch?.batchHeader.batchHeaderCode ??
+        "BCH-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}";
+
+    if (widget.existingBatch == null) {
       final res = await _batchRepo.createBatchHeader({
         "planDate": DateTime.now().toIso8601String(),
         "colorDescription": _selectedColor?.segmentCode?.description ?? "N/A",
@@ -327,15 +397,101 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
         "machineId": _selectedMachine?.resource?.id ?? 0,
         "colorCode": _selectedColor?.segmentCode?.id ?? 0,
         "shiftId": _scannedTrays.first.shift?.id,
+        "trayDetailId": null,
         "lockFlag": false,
       });
-      if (!res.success) { AppLoader.hide(context); return; }
-      batchHeaderId = (res.data as Map)['id'] ?? 0; // Simplified for brevity
+
+      if (!res.success) {
+        AppLoader.hide(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to create batch: ${res.message}')));
+        return;
+      }
+
+      final data = res.data as Map;
+      dev.log('🚀 BatchHeader Create Full Response: $data');
+
+      final rawId = data['id'] ??
+          data['batchHeader']?['id'] ??
+          data['result']?['id'] ??
+          0;
+      batchHeaderId = int.tryParse(rawId.toString()) ?? 0;
+
+      // FALLBACK: If server returned 0, try to find the batch by its code
+      if (batchHeaderId == 0) {
+        dev.log('⚠️ Server returned ID 0. Attempting ID recovery by code: $batchCode');
+        final allRes = await _batchRepo.fetchBatchHeaders();
+        if (allRes.success && allRes.data != null) {
+          final List allBatches = allRes.data as List;
+          for (var b in allBatches) {
+            final bMap = b as Map;
+            // Check both flat and nested structures
+            final bHeader = bMap['batchHeader'] ?? bMap;
+            if (bHeader['batchHeaderCode'] == batchCode) {
+              batchHeaderId = bHeader['id'] ?? 0;
+              dev.log('✅ Recovered Batch ID: $batchHeaderId');
+              break;
+            }
+          }
+        }
+      }
+    } else {
+      batchHeaderId = widget.existingBatch!.batchHeader.id!;
+    }
+
+    if (batchHeaderId == 0) {
+      AppLoader.hide(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error: Invalid Batch ID generated.')));
+      return;
     }
 
     for (int i = 0; i < _scannedTrays.length; i++) {
-      // Logic for batch lines and progress updates... (Preserved in full file)
+      final tray = _scannedTrays[i];
+      final qty = double.tryParse(_quantityControllers[i].text) ??
+          tray.productionProgress.primaryQuantity ??
+          0;
+
+      final linePayload = {
+        "planDate": DateTime.now().toIso8601String(),
+        "transactionDate": DateTime.now().toIso8601String(),
+        "primaryQuantity": qty.toDouble(),
+        "primaryUOM": tray.productionProgress.primaryUOM ?? 0,
+        "secondaryQuantity": tray.productionProgress.secondaryQuantity ?? 0,
+        "secondaryUOM": tray.productionProgress.secondaryUOM ?? 0,
+        "batchLineCode": "BL-$batchHeaderId-${tray.primaryTrayModel.id}",
+        "active": true,
+        "isReAssigned": false,
+        "batchHeaderId": batchHeaderId,
+        "progressId": tray.productionProgress.id,
+        "workOrderHeaderId": tray.workOrderHeader.id,
+        "workOrderLineId":
+            tray.workOrderLine?.id ?? tray.productionProgress.workOrderLineId,
+        "itemId": tray.item.id,
+        "trayId": tray.primaryTrayModel.id,
+        "locatorId": tray.productionProgress.locatorId,
+        "processItemId": _trayProcessedItemId[tray.primaryTrayModel.id],
+      };
+
+      dev.log('🚀 POSTing BatchLine: $linePayload');
+      final resLine = await _batchRepo.createBatchLine(linePayload);
+
+      if (resLine.success && resLine.data != null) {
+        final lineId = (resLine.data as Map)['id'];
+        final trayId = tray.primaryTrayModel.id;
+        if (trayId != null) {
+          final trayData = await _batchRepo.fetchTrayDetailById(trayId);
+          if (trayData.success && trayData.data != null) {
+            final map = Map<String, dynamic>.from(trayData.data as Map);
+            map['batchHeaderId'] = batchHeaderId;
+            map['batchLineId'] = lineId;
+            map['trayQuantity'] = qty.toInt();
+            await _batchRepo.updateTrayDetails(trayId, map);
+          }
+        }
+      }
     }
+
     AppLoader.hide(context);
     Navigator.pop(context, true);
   }
@@ -343,93 +499,284 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F4F8),
+      backgroundColor: const Color(0xFFF1F5F9),
       body: RawKeyboardListener(
         focusNode: _focusNode,
         autofocus: true,
         onKey: _onKey,
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [const Color(0xFFF1F4F8), Colors.white.withValues(alpha: 0.9)],
-            ),
-          ),
-          child: SafeArea(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                CustomInspectionHeader(
-                  heading: 'Batch Scanning',
-                  subtitle: 'Initialize and verify manufacturing batches',
-                  isShowBackIcon: true,
-                  buttonLabel: 'Save Batch',
-                  buttonColor: const Color(0xFF2E7D32),
-                  callBack: _saveBatchChanges,
-                ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        _buildLiveDashboard(),
-                        const SizedBox(height: 24),
-                        _buildConfigurationPanel(),
-                        if (_selectedColor != null) ...[
-                          const SizedBox(height: 24),
-                          _buildScannedSection(),
-                        ],
-                      ],
-                    ),
+        child: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildPremiumHeader(),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: Column(
+                    children: [
+                      _buildConfigurationPanel(),
+                      const SizedBox(height: 16),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 400),
+                        transitionBuilder: (child, animation) => FadeTransition(
+                          opacity: animation,
+                          child: SlideTransition(
+                            position: Tween<Offset>(
+                              begin: const Offset(0, 0.05),
+                              end: Offset.zero,
+                            ).animate(animation),
+                            child: child,
+                          ),
+                        ),
+                        child: _selectedColor != null
+                            ? Column(
+                                key: const ValueKey('scanning_active'),
+                                children: [
+                                  _buildLiveDashboard(),
+                                  const SizedBox(height: 16),
+                                  _buildWOSummary(),
+                                  _buildScannedSection(),
+                                ],
+                              )
+                            : const SizedBox.shrink(key: ValueKey('scanning_idle')),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
+  Widget _buildPremiumHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: const Color(0xFFB0BEC5),
+            width: 1.5,
+            strokeAlign: BorderSide.strokeAlignOutside,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            IconButton(
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                color: Color(0xFF0D47A1),
+                size: 18,
+              ),
+              visualDensity: VisualDensity.compact,
+            ),
+            const Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Batch Scanning',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF263238),
+                    ),
+                  ),
+                  Text(
+                    'INITIALIZE MANUFACTURING BATCHES',
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: Color(0xFF546E7A),
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: (_selectedMachine != null && _scannedTrays.isNotEmpty)
+                  ? _saveBatchChanges
+                  : null,
+              icon: const Icon(Icons.save_rounded, size: 16),
+              label: const Text(
+                'SAVE BATCH',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2E7D32),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildLiveDashboard() {
-    double totalWeight = 0;
+    double totalWeightGrams = 0;
     int totalTubes = 0;
     for (int i = 0; i < _scannedTrays.length; i++) {
       final qty = double.tryParse(_quantityControllers[i].text) ?? 0;
       totalTubes += qty.toInt();
-      totalWeight += qty * (_scannedTrays[i].item.pieceWeight ?? 0);
+      totalWeightGrams += qty * (_scannedTrays[i].item.pieceWeight ?? 0);
     }
-    return Row(
-      children: [
-        _buildMetricTile('Capacity', _selectedMachine?.resource?.capacity ?? '0', Icons.speed, const Color(0xFF1B64A3)),
-        const SizedBox(width: 12),
-        _buildMetricTile('Trays', '${_scannedTrays.length}', Icons.layers_outlined, const Color(0xFFE67E22)),
-        const SizedBox(width: 12),
-        _buildMetricTile('Tubes', '$totalTubes', Icons.grid_view, const Color(0xFF2E7D32)),
-        const SizedBox(width: 12),
-        _buildMetricTile('Weight', '${(totalWeight / 1000).toStringAsFixed(1)}kg', Icons.monitor_weight_outlined, const Color(0xFF8E44AD)),
-      ],
+
+    final capacityValue =
+        double.tryParse(_selectedMachine?.resource?.capacity ?? '0') ?? 0;
+    final allocatedWeightGrams = totalWeightGrams;
+    final remainingWeightGrams = capacityValue - allocatedWeightGrams;
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFB0BEC5), width: 1.5),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10.5),
+        child: Container(
+          color: Colors.white,
+          child: Column(
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF8FAFC),
+                  border: Border(
+                    bottom: BorderSide(color: Color(0xFFB0BEC5), width: 1.5),
+                  ),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(
+                      Icons.analytics_rounded,
+                      size: 16,
+                      color: Color(0xFF1B64A3),
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'BATCH SCAN SUMMARY',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF1B64A3),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    _buildMetricCard(
+                      'TRAYS',
+                      '${_scannedTrays.length}',
+                      Icons.layers_outlined,
+                      const Color(0xFFE67E22),
+                    ),
+                    const SizedBox(width: 6),
+                    _buildMetricCard(
+                      'TUBES',
+                      '$totalTubes',
+                      Icons.grid_view_rounded,
+                      const Color(0xFF2E7D32),
+                    ),
+                    const SizedBox(width: 6),
+                    _buildMetricCard(
+                      'CAPACITY',
+                      '${capacityValue.toStringAsFixed(0)}g',
+                      Icons.speed_rounded,
+                      const Color(0xFF1B64A3),
+                    ),
+                    const SizedBox(width: 6),
+                    _buildMetricCard(
+                      'ALLOC. WEIGHT',
+                      '${allocatedWeightGrams.toStringAsFixed(0)}g',
+                      Icons.monitor_weight_outlined,
+                      const Color(0xFF8E44AD),
+                    ),
+                    const SizedBox(width: 6),
+                    _buildMetricCard(
+                      'REM. WEIGHT',
+                      '${remainingWeightGrams.toStringAsFixed(0)}g',
+                      Icons.hourglass_empty_rounded,
+                      const Color(0xFF00796B),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
-  Widget _buildMetricTile(String label, String value, IconData icon, Color color) {
+  Widget _buildMetricCard(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: color.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 4))],
-          border: Border.all(color: color.withValues(alpha: 0.1)),
+          color: color.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withValues(alpha: 0.1), width: 1),
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 18, color: color),
+            Icon(icon, color: color, size: 16),
             const SizedBox(height: 8),
-            Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: color)),
-            Text(label, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Colors.grey.shade500)),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+                color: color,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 8,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF78909C),
+                letterSpacing: 0.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       ),
@@ -438,105 +785,350 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
 
   Widget _buildConfigurationPanel() {
     return Container(
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 16, offset: const Offset(0, 4))]),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFB0BEC5), width: 1.5),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10.5),
+        child: Container(
+          color: Colors.white,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            decoration: BoxDecoration(color: const Color(0xFF1B64A3).withValues(alpha: 0.05), border: const Border(bottom: BorderSide(color: Color(0xFFF1F1F1)))),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: const BoxDecoration(
+              color: Color(0xFFF8FAFC),
+              border: Border(
+                bottom: BorderSide(color: Color(0xFFB0BEC5), width: 1.5),
+              ),
+            ),
             child: Row(
               children: [
-                const Icon(Icons.tune, size: 16, color: Color(0xFF1B64A3)),
+                const Icon(
+                  Icons.tune_rounded,
+                  size: 16,
+                  color: Color(0xFF1B64A3),
+                ),
                 const SizedBox(width: 8),
-                const Text('Batch Configuration', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1B64A3))),
+                const Text(
+                  'BATCH CONFIGURATION',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF1B64A3),
+                    letterSpacing: 0.5,
+                  ),
+                ),
                 const Spacer(),
-                if (_selectedMachine != null) Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: const Color(0xFF1B64A3), borderRadius: BorderRadius.circular(4)), child: const Text('READY', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white))),
+                if (_selectedMachine != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1B64A3),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'READY',
+                      style: TextStyle(
+                        fontSize: 8,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            padding: const EdgeInsets.all(16),
+            child: Row(
               children: [
-                const Text('Machine Identification', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
-                const SizedBox(height: 8),
-                CustomExpandedAsyncDropdown<BatchMachineModel>(
-                  hint: "Select machine...",
-                  width: double.infinity,
-                  height: 48,
-                  items: _machines,
-                  selectedValue: _selectedMachine,
-                  itemAsString: (m) => m.resource?.brand ?? 'Unknown',
-                  onChanged: (val) { setState(() { _selectedMachine = val; _selectedColor = null; }); if (val != null) _fetchColors(); },
-                ),
-                if (_selectedMachine != null) ...[
-                  const SizedBox(height: 16),
-                  const Text('Assigned Color Style', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
-                  const SizedBox(height: 8),
-                  CustomExpandedAsyncDropdown<BatchColorModel>(
-                    hint: "Select color...",
-                    width: double.infinity,
-                    height: 48,
-                    items: _colors,
-                    selectedValue: _selectedColor,
-                    itemAsString: (c) => c.segmentCode?.description ?? 'Unknown',
-                    onChanged: (val) { setState(() { _selectedColor = val; }); },
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'MACHINE',
+                        style: TextStyle(
+                          fontSize: 8,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF78909C),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      _buildOverlayDropdown<BatchMachineModel>(
+                        hint: "Select machine...",
+                        items: _machines,
+                        selectedValue: _selectedMachine,
+                        itemLabel: (m) => m.resource?.brand ?? 'Unknown',
+                        onChanged: (val) {
+                          setState(() {
+                            _selectedMachine = val;
+                            _selectedColor = null;
+                          });
+                          if (val != null) _fetchColors();
+                        },
+                      ),
+                    ],
                   ),
-                ],
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 300),
+                    opacity: _selectedMachine != null ? 1.0 : 0.0,
+                    child: IgnorePointer(
+                      ignoring: _selectedMachine == null,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'COLOR',
+                            style: TextStyle(
+                              fontSize: 8,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF78909C),
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          _buildOverlayDropdown<BatchColorModel>(
+                            hint: "Select color...",
+                            items: _colors,
+                            selectedValue: _selectedColor,
+                            itemLabel: (c) => c.segmentCode?.description ?? '-',
+                            onChanged: (val) =>
+                                setState(() => _selectedColor = val),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
         ],
+      ),
+    ),
+  ),
+);
+}
+
+  Widget _buildOverlayDropdown<T>({
+    required String hint,
+    required List<T> items,
+    required T? selectedValue,
+    required String Function(T) itemLabel,
+    required ValueChanged<T?> onChanged,
+  }) {
+    // Safety check: Ensure the selectedValue is actually in the items list
+    // If not, we fall back to null to avoid the Flutter assertion error.
+    final T? safeValue = items.contains(selectedValue) ? selectedValue : null;
+
+    return Container(
+      height: 40,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFCFD8DC), width: 1),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: safeValue,
+          hint: Text(
+            hint,
+            style: const TextStyle(fontSize: 11, color: Color(0xFF90A4AE)),
+          ),
+          icon: const Icon(
+            Icons.arrow_drop_down_rounded,
+            color: Color(0xFF607D8B),
+          ),
+          isExpanded: true,
+          dropdownColor: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          elevation: 4,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF263238),
+          ),
+          onChanged: onChanged,
+          items: items.map((T item) {
+            return DropdownMenuItem<T>(
+              value: item,
+              child: Text(itemLabel(item)),
+            );
+          }).toList(),
+        ),
       ),
     );
   }
 
   Widget _buildScannedSection() {
     return Container(
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 16, offset: const Offset(0, 4))]),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: const BoxDecoration(gradient: LinearGradient(colors: [Color(0xFFE67E22), Color(0xFFD35400)])),
-            child: Row(
-              children: [
-                const Icon(Icons.qr_code_scanner, color: Colors.white),
-                const SizedBox(width: 12),
-                const Expanded(child: Text('Scanned Trays List', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                Text('${_scannedTrays.length} Trays', style: const TextStyle(color: Colors.white, fontSize: 12)),
-              ],
-            ),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFB0BEC5), width: 1.5),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10.5),
+        child: Container(
+          color: Colors.white,
+          child: Column(
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF1F5F9),
+                  border: Border(
+                    bottom: BorderSide(color: Color(0xFFB0BEC5), width: 1.5),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.qr_code_scanner_rounded,
+                      color: Color(0xFFE67E22),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        'SCANNED TRAYS LIST',
+                        style: TextStyle(
+                          color: Color(0xFF263238),
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '${_scannedTrays.length} Trays',
+                      style: const TextStyle(
+                        color: Color(0xFF546E7A),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    SizedBox(
+                      width: double.infinity,
+                      height: 44,
+                      child: ElevatedButton.icon(
+                        onPressed: _onScanTray,
+                        icon: const Icon(
+                          Icons.add_circle_outline_rounded,
+                          size: 20,
+                        ),
+                        label: const Text(
+                          'SCAN NEW TRAY',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0D47A1),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildCapacityProgress(),
+                    const SizedBox(height: 16),
+                    const TrayTableHeader(actionColumnWidth: 44),
+                    if (_scannedTrays.isEmpty)
+                      const EmptyScanState(hasBorder: false)
+                    else
+                      ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: _scannedTrays.length,
+                        itemBuilder: (ctx, idx) => _buildTrayRow(idx),
+                      ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                SizedBox(width: double.infinity, height: 44, child: ElevatedButton.icon(onPressed: _onScanTray, icon: const Icon(Icons.add), label: const Text('Scan New Tray'), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B64A3), foregroundColor: Colors.white))),
-                const SizedBox(height: 16),
-                _buildCapacityProgress(),
-                const SizedBox(height: 16),
-                const TrayTableHeader(actionColumnWidth: 44),
-                if (_scannedTrays.isEmpty) const EmptyScanState(hasBorder: false) else ListView.builder(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), itemCount: _scannedTrays.length, itemBuilder: (ctx, idx) => _buildTrayRow(idx)),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildCapacityProgress() {
-    final cap = double.tryParse(_selectedMachine?.resource?.capacity ?? '0') ?? 100;
-    final progress = cap > 0 ? (_scannedTrays.length / cap) : 0.0;
+    final capacityValue =
+        double.tryParse(_selectedMachine?.resource?.capacity ?? '0') ?? 0;
+
+    double allocatedWeightGrams = 0;
+    for (int i = 0; i < _scannedTrays.length; i++) {
+      final tray = _scannedTrays[i];
+      final qty = double.tryParse(_quantityControllers[i].text) ?? 0;
+      allocatedWeightGrams += qty * (tray.item.pieceWeight ?? 0);
+    }
+
+    final progress =
+        capacityValue > 0 ? (allocatedWeightGrams / capacityValue) : 0.0;
+    final percentage = (progress * 100).clamp(0, 100).toInt();
+
     return Column(
       children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Capacity', style: TextStyle(fontSize: 10)), Text('${(progress * 100).toInt()}%')]),
-        const SizedBox(height: 4),
-        LinearProgressIndicator(value: progress.clamp(0, 1), backgroundColor: Colors.grey.shade100, color: progress > 0.9 ? Colors.red : Colors.green),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'MACHINE LOAD / CAPACITY',
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF546E7A),
+                letterSpacing: 0.5,
+              ),
+            ),
+            Text(
+              '$percentage%',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+                color: progress > 0.9 ? Colors.red : const Color(0xFF1B64A3),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: progress.clamp(0, 1),
+            minHeight: 8,
+            backgroundColor: const Color(0xFFF1F5F9),
+            valueColor: AlwaysStoppedAnimation<Color>(
+              progress > 0.9
+                  ? Colors.red
+                  : (progress > 0.7 ? Colors.orange : const Color(0xFF2E7D32)),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -548,56 +1140,288 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     final pcs = qty * perTube;
     final weight = qty * (tray.item.pieceWeight ?? 0);
 
+    const cellStyle = TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.w600,
+      color: Color(0xFF263238),
+    );
+
+    const blueCellStyle = TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.w700,
+      color: Color(0xFF1B64A3),
+    );
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
-        color: index.isEven ? Colors.white : const Color(0xFFF5F2F9),
-        border: Border(bottom: BorderSide(color: Colors.grey.shade100)),
+        color: index.isEven ? Colors.white : const Color(0xFFF8FAFC),
+        border: Border(
+          bottom: BorderSide(
+            color: Colors.grey.withValues(alpha: 0.1),
+            width: 1,
+          ),
+        ),
       ),
       child: Row(
         children: [
-          Expanded(flex: 3, child: Text(tray.primaryTrayModel.trayCode ?? 'N/A', textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text(tray.workOrderHeader.workOrderCode ?? 'N/A', textAlign: TextAlign.center, style: const TextStyle(fontSize: 10))),
-          Expanded(flex: 2, child: Text(tray.item.sizeDescription ?? 'N/A', textAlign: TextAlign.center, style: const TextStyle(fontSize: 10))),
-          Expanded(flex: 2, child: Text(perTube.toStringAsFixed(0), textAlign: TextAlign.center, style: const TextStyle(fontSize: 10))),
+          Expanded(
+            flex: 3,
+            child: Text(
+              tray.primaryTrayModel.trayCode ?? 'N/A',
+              textAlign: TextAlign.center,
+              style: blueCellStyle,
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              tray.workOrderHeader.workOrderCode ?? 'N/A',
+              textAlign: TextAlign.center,
+              style: cellStyle,
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              tray.item.sizeDescription ?? 'N/A',
+              textAlign: TextAlign.center,
+              style: cellStyle,
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              perTube.toStringAsFixed(0),
+              textAlign: TextAlign.center,
+              style: cellStyle,
+            ),
+          ),
           Expanded(
             flex: 2,
             child: Center(
-              child: SizedBox(
-                width: 45,
-                height: 28,
+              child: Container(
+                width: 48,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFCFD8DC), width: 1),
+                ),
                 child: TextField(
                   controller: _quantityControllers[index],
                   textAlign: TextAlign.center,
                   keyboardType: TextInputType.number,
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900),
-                  decoration: InputDecoration(
-                    contentPadding: EdgeInsets.zero,
-                    isDense: true,
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: Colors.grey.shade300)),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF263238),
+                  ),
+                  decoration: const InputDecoration(
+                    contentPadding: EdgeInsets.only(top: 4),
+                    isCollapsed: true,
+                    border: InputBorder.none,
                   ),
                   onChanged: (val) => setState(() {}),
                 ),
               ),
             ),
           ),
-          Expanded(flex: 2, child: Text(pcs.toStringAsFixed(0), textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32)))),
-          Expanded(flex: 2, child: Text('${weight.toStringAsFixed(1)}kg', textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, color: Color(0xFF1B64A3)))),
-          SizedBox(
-            width: 44,
-            child: IconButton(
-              icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
-              onPressed: () {
+          Expanded(
+            flex: 2,
+            child: Text(
+              pcs.toStringAsFixed(0),
+              textAlign: TextAlign.center,
+              style: cellStyle,
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              '${weight.toStringAsFixed(0)}g',
+              textAlign: TextAlign.center,
+              style: cellStyle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
                 setState(() {
                   _scannedTrays.removeAt(index);
                   _quantityControllers.removeAt(index);
                 });
               },
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.delete_outline_rounded,
+                  size: 18,
+                  color: Colors.red.shade400,
+                ),
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildWOSummary() {
+    if (_scannedTrays.isEmpty) return const SizedBox.shrink();
+
+    // Grouping logic (by WO + Item + Size to ensure accuracy)
+    final Map<String, Map<String, dynamic>> woGroups = {};
+    for (int i = 0; i < _scannedTrays.length; i++) {
+      final tray = _scannedTrays[i];
+      final qty = double.tryParse(_quantityControllers[i].text) ?? 0;
+      final code = tray.workOrderHeader.workOrderCode ?? 'Unknown WO';
+      final itemDesc = tray.item.description ?? 'N/A';
+      final sizeDesc = tray.item.sizeDescription ?? 'N/A';
+      
+      // Composite key for granular grouping
+      final groupKey = "${code}_${itemDesc}_${sizeDesc}";
+
+      final perTube = tray.item.perGarmentTube;
+      final pcs = qty * perTube;
+      final weight = qty * (tray.item.pieceWeight ?? 0);
+
+      if (!woGroups.containsKey(groupKey)) {
+        woGroups[groupKey] = {
+          'code': code,
+          'item': itemDesc,
+          'size': sizeDesc,
+          'trays': 0,
+          'tubes': 0.0,
+          'weight': 0.0,
+        };
+      }
+      woGroups[groupKey]!['trays'] = (woGroups[groupKey]!['trays'] as int) + 1;
+      woGroups[groupKey]!['tubes'] = (woGroups[groupKey]!['tubes'] as double) + pcs;
+      woGroups[groupKey]!['weight'] = (woGroups[groupKey]!['weight'] as double) + weight;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFB0BEC5), width: 1.5),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10.5),
+        child: Container(
+          color: Colors.white,
+          child: Column(
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF8FAFC),
+                  border: Border(
+                    bottom: BorderSide(color: Color(0xFFB0BEC5), width: 1.5),
+                  ),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.summarize_rounded,
+                        size: 16, color: Color(0xFF1B64A3)),
+                    SizedBox(width: 8),
+                    Text(
+                      'WORK ORDER SUMMARY',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF1B64A3),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(0),
+                child: Table(
+                  columnWidths: const {
+                    0: FlexColumnWidth(3), // WO
+                    1: FlexColumnWidth(4), // Item/Size
+                    2: FlexColumnWidth(1.5), // Trays
+                    3: FlexColumnWidth(1.5), // Tubes
+                    4: FlexColumnWidth(2), // Weight
+                  },
+                  children: [
+                    TableRow(
+                      decoration: const BoxDecoration(color: Color(0xFFF1F5F9)),
+                      children: [
+                        _buildTableHeaderCell('WO CODE'),
+                        _buildTableHeaderCell('ITEM / SIZE'),
+                        _buildTableHeaderCell('TRAYS'),
+                        _buildTableHeaderCell('TUBES'),
+                        _buildTableHeaderCell('WEIGHT'),
+                      ],
+                    ),
+                    ...woGroups.values.map((data) {
+                      return TableRow(
+                        decoration: const BoxDecoration(
+                          border: Border(
+                            bottom:
+                                BorderSide(color: Color(0xFFECEFF1), width: 1),
+                          ),
+                        ),
+                        children: [
+                          _buildTableCell(data['code'].toString(),
+                              isBold: true),
+                          _buildTableCell("${data['item']} (${data['size']})"),
+                          _buildTableCell(data['trays'].toString()),
+                          _buildTableCell(
+                              (data['tubes'] as double).toStringAsFixed(0)),
+                          _buildTableCell(
+                              "${(data['weight'] as double).toStringAsFixed(0)}g"),
+                        ],
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTableHeaderCell(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          fontSize: 8,
+          fontWeight: FontWeight.w800,
+          color: Color(0xFF546E7A),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTableCell(String text, {bool isBold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
+          color: const Color(0xFF263238),
+        ),
       ),
     );
   }
