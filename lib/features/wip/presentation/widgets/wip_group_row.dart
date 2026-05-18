@@ -20,32 +20,43 @@ class WIPGroupRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.grey.shade100)),
-        color: index.isEven ? Colors.white : Colors.blue.shade50.withValues(alpha: 0.1),
+        color: index.isOdd ? const Color(0xFFF8FAFC) : Colors.white,
+        border: Border(bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.1))),
       ),
       child: Row(
         children: [
           if (isKnitting) ...[
-            Expanded(flex: 3, child: Text(group.title1, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))),
-            Expanded(flex: 3, child: Text(group.title2, style: const TextStyle(fontSize: 11))),
-            Expanded(flex: 4, child: Text(group.subtitle ?? '-', style: const TextStyle(fontSize: 11), maxLines: 2, overflow: TextOverflow.ellipsis)),
+            Expanded(flex: 3, child: Text(group.title1, style: _cellStyle(isBold: true, color: const Color(0xFF0D47A1)))),
+            Expanded(flex: 3, child: Text(group.title2, style: _cellStyle())),
+            Expanded(flex: 4, child: Text(group.subtitle ?? '-', style: _cellStyle(isSmall: true), maxLines: 2, overflow: TextOverflow.ellipsis)),
+          ] else if (isProcessing) ...[
+            Expanded(flex: 3, child: Text(group.title1, style: _cellStyle(isBold: true, color: const Color(0xFF0D47A1)))),
+            Expanded(flex: 3, child: Text(group.title2, style: _cellStyle())),
+            Expanded(flex: 4, child: Text(group.title3 ?? '-', style: _cellStyle())),
           ] else ...[
-            Expanded(flex: 4, child: Text(group.title1, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))),
-            Expanded(flex: 4, child: Text(group.title2, style: const TextStyle(fontSize: 11))),
+            Expanded(flex: 4, child: Text(group.title1, style: _cellStyle(isBold: true, color: const Color(0xFF0D47A1)))),
+            Expanded(flex: 4, child: Text(group.title2, style: _cellStyle())),
           ],
-          Expanded(flex: 2, child: Text(group.trayCount.toString(), style: const TextStyle(fontSize: 12))),
-          Expanded(flex: 2, child: Text(group.totalPcs.toInt().toString(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue))),
+          Expanded(flex: 2, child: Text(group.trayCount.toString(), textAlign: TextAlign.center, style: _cellStyle())),
+          Expanded(flex: 2, child: Text(group.totalPcs.toInt().toString(), textAlign: TextAlign.center, style: _cellStyle(isBold: true, color: const Color(0xFF059669)))),
           IconButton(
-            icon: const Icon(Icons.list_alt_rounded, size: 20, color: Colors.blue),
             onPressed: onViewDetails,
-            tooltip: 'View Tray Details',
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+            icon: const Icon(Icons.analytics_rounded, color: Color(0xFF0D47A1), size: 20),
+            visualDensity: VisualDensity.compact,
+            tooltip: 'View Details',
           ),
         ],
       ),
+    );
+  }
+
+  TextStyle _cellStyle({bool isBold = false, bool isSmall = false, Color? color}) {
+    return TextStyle(
+      fontSize: isSmall ? 10 : 11,
+      fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
+      color: color ?? const Color(0xFF1E293B),
     );
   }
 }

@@ -17,68 +17,50 @@ class InductionTrayRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final weight = (double.tryParse(tray.primaryQuantity) ?? 0.0) * tray.pieceWeight;
+
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
       decoration: BoxDecoration(
-        border: Border(
-          left: BorderSide(color: Colors.grey.shade300),
-          right: BorderSide(color: Colors.grey.shade300),
-          bottom: BorderSide(color: Colors.grey.shade300),
-        ),
-        color: displayIndex.isEven ? Colors.white : Colors.grey.shade50,
+        color: displayIndex.isOdd ? const Color(0xFFF8FAFC) : Colors.white,
+        border: Border(bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.1))),
       ),
       child: Row(
         children: [
-          Expanded(flex: 2, child: Text(tray.trayCode, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: Colors.black87))),
-          Expanded(flex: 2, child: Text(tray.workOrderCode, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: Colors.black87))),
-          Expanded(flex: 4, child: Text(tray.itemDescription, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, color: Colors.black87), maxLines: 2, overflow: TextOverflow.ellipsis)),
-          Expanded(
-            flex: 2, 
-            child: Text(tray.colorDescription.isNotEmpty ? tray.colorDescription : '-', textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, color: Colors.black87))
-          ),
-          Expanded(
-            flex: 2, 
-            child: Text(tray.sizeDescription.isNotEmpty ? tray.sizeDescription : '-', textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, color: Colors.black87))
-          ),
+          Expanded(flex: 2, child: Text(tray.trayCode, style: _cellStyle(isBold: true, color: const Color(0xFF0D47A1)))),
+          Expanded(flex: 2, child: Text(tray.workOrderCode, style: _cellStyle(isSmall: true))),
+          Expanded(flex: 4, child: Text(tray.itemDescription, style: _cellStyle(isSmall: true), maxLines: 2, overflow: TextOverflow.ellipsis)),
+          Expanded(flex: 2, child: Text(tray.colorDescription.isNotEmpty ? tray.colorDescription : '-', style: _cellStyle(isBold: true))),
+          Expanded(flex: 2, child: Text(tray.sizeDescription.isNotEmpty ? tray.sizeDescription : '-', style: _cellStyle())),
           Expanded(
             flex: 2,
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  tray.primaryQuantity,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 13, color: Colors.black87),
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              '${((double.tryParse(tray.primaryQuantity) ?? 0.0) * tray.pieceWeight).toStringAsFixed(2)} g',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 13, color: Colors.black87),
-            ),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: onRemove,
             child: Container(
-              padding: const EdgeInsets.all(8),
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(6),
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: const Color(0xFFCBD5E1)),
               ),
-              child: Icon(Icons.cancel, size: 18, color: Colors.red.shade400),
+              child: Text(tray.primaryQuantity, textAlign: TextAlign.center, style: _cellStyle(isBold: true)),
             ),
+          ),
+          Expanded(flex: 2, child: Text('${weight.toStringAsFixed(1)} g', style: _cellStyle())),
+          IconButton(
+            onPressed: onRemove,
+            icon: const Icon(Icons.delete_sweep_rounded, color: Color(0xFFEF4444), size: 20),
+            visualDensity: VisualDensity.compact,
           ),
         ],
       ),
+    );
+  }
+
+  TextStyle _cellStyle({bool isBold = false, bool isSmall = false, Color? color}) {
+    return TextStyle(
+      fontSize: isSmall ? 10 : 11,
+      fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
+      color: color ?? const Color(0xFF1E293B),
     );
   }
 }

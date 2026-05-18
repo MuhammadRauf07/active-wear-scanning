@@ -341,92 +341,104 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF1F5F9),
       body: RawKeyboardListener(
         focusNode: _focusNode,
         autofocus: true,
         onKey: _onKey,
         child: SafeArea(
-          child: GestureDetector(
-            onTap: () {
-              FocusScope.of(context).requestFocus(_focusNode);
-            },
-            behavior: HitTestBehavior.opaque,
-            child: ExcludeSemantics(
-              excluding: _isLoading,
-              child: Column(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              CustomInspectionHeader(
-                heading: 'Lapping Details',
-                subtitle: widget.batchCode,
-                isShowBackIcon: true,
-                topPadding: 10,
-                horizontalPadding: 12,
-                buttonLabel: 'Submit',
-                callBack: _saveChanges,
-              ),
+              _buildPremiumHeader(),
               Expanded(
                 child: _isLoading
                     ? const Center(child: CircularProgressIndicator())
                     : SingleChildScrollView(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            DynamicInfoDisplay(
-                              items: {
-                                'batch': {'icon': Icons.qr_code, 'label': 'Batch ID', 'value': widget.batchCode},
-                                'machine': {'icon': Icons.precision_manufacturing, 'label': 'Machine', 'value': widget.machine},
-                                'color': {'icon': Icons.palette, 'label': 'Color', 'value': widget.color},
-                                'weight': {'icon': Icons.scale, 'label': 'Req Weight', 'value': '${widget.totalWeight.toStringAsFixed(2)} g'},
-                                'trays': {'icon': Icons.layers, 'label': 'Active Trays', 'value': '${widget.trayCount} trays'},
-                              },
-                            ),
-                            const SizedBox(height: 20),
-                            WorkOrderSelectionCard(
-                              workOrders: _workOrders,
-                              selectedWorkOrderId: _selectedWorkOrderId,
-                              scannedTraysByWO: _scannedTraysByWO,
-                              trayOverrideQuantities: _trayOverrideQuantities,
-                              onSelected: (val) => setState(() => _selectedWorkOrderId = val),
-                            ),
-                            if (_selectedWorkOrderId != null) ...[
-                              // const SizedBox(height: 24),
-                              // const SectionHeader(title: 'Scan Trays', subtitle: 'Verify and assign trays to the selected work order'),
-                              const SizedBox(height: 12),
-                              LappingScannerUI(
+                            // ── 1. PROCESS FLOW RIBBON ──────────────────────────
+                            _buildProcessFlowRibbon(),
+                            const SizedBox(height: 16),
+
+                            // ── 2. HUD METRICS GRID ────────────────────────────
+                            _buildAeroIntelligenceGrid(),
+                            const SizedBox(height: 16),
+
+                            // ── 3. WORK ORDER CONSOLE ──────────────────────────
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.05),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: WorkOrderSelectionCard(
+                                workOrders: _workOrders,
                                 selectedWorkOrderId: _selectedWorkOrderId,
                                 scannedTraysByWO: _scannedTraysByWO,
-                                trayQtyController: _trayQtyController,
-                                focusNode: _focusNode,
-                                onScanPressed: _openScanner,
-                                childTable: Builder(
-                                  builder: (_) {
-                                    final traysToShow = _scannedTraysByWO[_selectedWorkOrderId] ?? [];
-                                    if (traysToShow.isNotEmpty) {
-                                      return LappingTrayTable(
-                                        selectedWorkOrderId: _selectedWorkOrderId,
-                                        scannedTraysByWO: _scannedTraysByWO,
-                                        trayOverrideQuantities: _trayOverrideQuantities,
-                                        onRemove: (t, trayKey) {
-                                          setState(() {
-                                            _scannedTraysByWO[_selectedWorkOrderId]?.remove(t);
-                                            _trayOverrideQuantities.remove(trayKey);
-                                          });
-                                        },
-                                      );
-                                    } else {
-                                      return Container(
-                                        width: double.infinity,
-                                        padding: const EdgeInsets.symmetric(vertical: 40),
-                                        alignment: Alignment.center,
-                                        child: Text(
-                                          'No scanned trays yet. Start by scanning a tray barcode.',
-                                          style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
-                                        ),
-                                      );
-                                    }
-                                  },
+                                trayOverrideQuantities: _trayOverrideQuantities,
+                                onSelected: (val) => setState(() => _selectedWorkOrderId = val),
+                              ),
+                            ),
+
+                            if (_selectedWorkOrderId != null) ...[
+                              const SizedBox(height: 16),
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.05),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: LappingScannerUI(
+                                  selectedWorkOrderId: _selectedWorkOrderId,
+                                  scannedTraysByWO: _scannedTraysByWO,
+                                  trayQtyController: _trayQtyController,
+                                  focusNode: _focusNode,
+                                  onScanPressed: _openScanner,
+                                  childTable: Builder(
+                                    builder: (_) {
+                                      final traysToShow = _scannedTraysByWO[_selectedWorkOrderId] ?? [];
+                                      if (traysToShow.isNotEmpty) {
+                                        return LappingTrayTable(
+                                          selectedWorkOrderId: _selectedWorkOrderId,
+                                          scannedTraysByWO: _scannedTraysByWO,
+                                          trayOverrideQuantities: _trayOverrideQuantities,
+                                          onRemove: (t, trayKey) {
+                                            setState(() {
+                                              _scannedTraysByWO[_selectedWorkOrderId]?.remove(t);
+                                              _trayOverrideQuantities.remove(trayKey);
+                                            });
+                                          },
+                                        );
+                                      } else {
+                                        return Container(
+                                          width: double.infinity,
+                                          padding: const EdgeInsets.symmetric(vertical: 40),
+                                          alignment: Alignment.center,
+                                          child: Text(
+                                            'No scanned trays yet. Start by scanning a tray barcode.',
+                                            style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+                                          ),
+                                        );
+                                      }
+                                    },
+                                  ),
                                 ),
                               ),
                             ],
@@ -437,8 +449,174 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFB0BEC5), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            IconButton(
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0D47A1), size: 18),
+              visualDensity: VisualDensity.compact,
+            ),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Lapping Processing',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF263238)),
+                  ),
+                  Text(
+                    'BATCH: ${widget.batchCode}',
+                    style: const TextStyle(fontSize: 10, color: Color(0xFF546E7A), fontWeight: FontWeight.w600, letterSpacing: 0.5),
+                  ),
+                ],
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: _saveChanges,
+              icon: const Icon(Icons.check_circle_rounded, size: 16),
+              label: const Text('SUBMIT BATCH', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2E7D32),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _buildProcessFlowRibbon() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1B64A3), Color(0xFF0D47A1)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF1B64A3).withValues(alpha: 0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          _buildProcessNode('CURRENT', 'LAPPING', Icons.settings_suggest_rounded, true),
+          const Expanded(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Divider(color: Colors.white38, thickness: 1.5),
+                  Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 14),
+                ],
+              ),
+            ),
+          ),
+          _buildProcessNode('NEXT', widget.nextOperationName, Icons.arrow_forward_rounded, false),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProcessNode(String label, String value, IconData icon, bool isActive) {
+    return Column(
+      crossAxisAlignment: isActive ? CrossAxisAlignment.start : CrossAxisAlignment.end,
+      children: [
+        Text(label, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.white.withValues(alpha: 0.7), letterSpacing: 1.2)),
+        const SizedBox(height: 4),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isActive) Icon(icon, color: Colors.white, size: 16),
+            if (isActive) const SizedBox(width: 8),
+            Text(value.toUpperCase(), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white)),
+            if (!isActive) const SizedBox(width: 8),
+            if (!isActive) Icon(icon, color: Colors.white60, size: 16),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAeroIntelligenceGrid() {
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 2,
+      mainAxisSpacing: 10,
+      crossAxisSpacing: 10,
+      childAspectRatio: 3.2,
+      children: [
+        _buildHUDCard('BATCH #', widget.batchCode, Icons.tag_rounded),
+        _buildHUDCard('MACHINE', widget.machine, Icons.precision_manufacturing_rounded),
+        _buildHUDCard('COLOR', widget.color, Icons.palette_rounded),
+        _buildHUDCard('OPERATION', 'LAPPING', Icons.account_tree_rounded),
+        _buildHUDCard('TRAYS', '${widget.trayCount} UNITS', Icons.inventory_2_rounded),
+        _buildHUDCard('WEIGHT', '${widget.totalWeight.toStringAsFixed(1)} KG', Icons.scale_rounded),
+      ],
+    );
+  }
+
+  Widget _buildHUDCard(String label, String value, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFF64748B), size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(label, style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 0.5)),
+                Text(
+                  value,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF1E293B)),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

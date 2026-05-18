@@ -225,7 +225,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     addField('Tubes Per Tray', Icons.grid_view, 'Tubes Per Tray', plan.quantityPerTray.toString());
     addField('Garment Pcs', Icons.checkroom, 'Garment Pcs', plan.secondaryPlanQuantity.toString());
     addField('Shift Code', Icons.schedule, 'Shift Code', shift.code.toString());
-    addField('Work Order Code', Icons.assignment, 'Work Order Code', workOrder.workOrderCode);
+    addField('Work Order', Icons.assignment, 'Work Order', workOrder.workOrderCode);
     addField('Work Order Date', Icons.event, 'Work Order Date', formatDate(workOrder.workOrderDate));
     addField('Item Description', Icons.description, 'Item Description', item.description);
 
@@ -500,7 +500,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF263238)),
                   ),
                   Text(
-                    'Production Execution HUD',
+                    'Scan Trays in a Work Order',
                     style: TextStyle(fontSize: 10, color: Color(0xFF546E7A), fontWeight: FontWeight.w600, letterSpacing: 0.3),
                   ),
                 ],
@@ -509,7 +509,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
             ElevatedButton.icon(
               onPressed: _scannedTrays.isEmpty ? null : saveTrayAndProductionProgress,
               icon: const Icon(Icons.save_rounded, size: 16),
-              label: const Text('SAVE BATCH', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11)),
+              label: const Text('SAVE CHANGES', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF2E7D32),
                 foregroundColor: Colors.white,
@@ -847,7 +847,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
         onPressed: _onScanTray,
         icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
         label: const Text(
-          'INITIALIZE TRAY SCAN',
+          'TRAY SCAN',
           style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12, letterSpacing: 0.5),
         ),
         style: ElevatedButton.styleFrom(

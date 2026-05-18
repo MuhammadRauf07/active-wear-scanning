@@ -174,12 +174,25 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
       if (res.success && res.data != null) {
         if (mounted) {
           final list = res.data as List<ProductionProgressResponseModel>;
-          // Sort by trayCode consistently so order never changes between fetches
-          list.sort((a, b) => (a.primaryTrayModel.trayCode ?? '').compareTo(b.primaryTrayModel.trayCode ?? ''));
+          
+          // ── De-duplicate by Tray Code ──────────────────────────────────────
+          // If multiple records exist for the same tray in this op/batch,
+          // keep only the one with the highest ID (most recent).
+          final Map<String, ProductionProgressResponseModel> uniqueTrays = {};
+          for (final tray in list) {
+            final code = tray.primaryTrayModel.trayCode ?? 'UNKNOWN';
+            if (!uniqueTrays.containsKey(code) || (tray.productionProgress.id ?? 0) > (uniqueTrays[code]!.productionProgress.id ?? 0)) {
+              uniqueTrays[code] = tray;
+            }
+          }
+          final deDuplicatedList = uniqueTrays.values.toList();
+
+          // Sort by trayCode consistently
+          deDuplicatedList.sort((a, b) => (a.primaryTrayModel.trayCode ?? '').compareTo(b.primaryTrayModel.trayCode ?? ''));
 
           // Enrich each tray with color/size/perGarmentTube from item-defs API
           final enrichedList = <ProductionProgressResponseModel>[];
-          for (final tray in list) {
+          for (final tray in deDuplicatedList) {
             final mainItemId = tray.item.id; // Always use main item for display metadata
             final processedItemId = tray.productionProgress.processedItemId;
 
@@ -358,49 +371,166 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
 
   Widget _buildBatchIntelligenceGrid() {
     final isReworkBatch = _trays.isNotEmpty && _trays.any((t) => t.productionProgress.reworkFlag == true);
-    
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
-      mainAxisSpacing: 8,
-      crossAxisSpacing: 8,
-      childAspectRatio: 2.2,
+    final isReassignedBatch = _trays.isNotEmpty && _trays.every((t) => t.primaryTrayModel.isReAssigned == true);
+
+    return Column(
       children: [
-        _buildMetricCard('MACHINE', widget.machine, Icons.precision_manufacturing_rounded),
-        _buildMetricCard('PROCESS', widget.operationName, Icons.settings_suggest_rounded),
-        _buildMetricCard('COLOR', widget.color, Icons.palette_rounded),
-        _buildMetricCard('TROLLEY', _trolleyCode ?? 'NOT ATTACHED', Icons.local_shipping_rounded, 
-          valueColor: _trolleyCode != null ? const Color(0xFF1976D2) : Colors.red),
+        // ── 1. PREMIUM PROCESS FLOW RIBBON ────────────────────────────────
+        _buildProcessFlowRibbon(),
+        const SizedBox(height: 16),
+
+        // ── 2. PHYSICAL & OPERATIONAL METRICS HUD ────────────────────────
+        _buildAeroIntelligenceGrid(),
+        const SizedBox(height: 16),
       ],
     );
   }
 
-  Widget _buildMetricCard(String label, String value, IconData icon, {Color? valueColor}) {
+  Widget _buildProcessFlowRibbon() {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFB0BEC5), width: 1.5, strokeAlign: BorderSide.strokeAlignOutside),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1B64A3), Color(0xFF0D47A1)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF1B64A3).withValues(alpha: 0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: const Color(0xFFE3F2FD), borderRadius: BorderRadius.circular(8)),
-            child: Icon(icon, color: const Color(0xFF1976D2), size: 18),
+          _buildProcessNode('CURRENT', widget.operationName, Icons.settings_suggest_rounded, true),
+          const Expanded(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Divider(color: Colors.white38, thickness: 1.5),
+                  Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 14),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(width: 12),
+          _buildProcessNode('NEXT', widget.nextOperationName, Icons.arrow_forward_rounded, false),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProcessNode(String label, String value, IconData icon, bool isActive) {
+    return Column(
+      crossAxisAlignment: isActive ? CrossAxisAlignment.start : CrossAxisAlignment.end,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 9, 
+            fontWeight: FontWeight.w900, 
+            color: Colors.white.withValues(alpha: 0.7), 
+            letterSpacing: 1.2
+          ),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isActive) Icon(icon, color: Colors.white, size: 16),
+            if (isActive) const SizedBox(width: 8),
+            Text(
+              value.toUpperCase(),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white),
+            ),
+            if (!isActive) const SizedBox(width: 8),
+            if (!isActive) Icon(icon, color: Colors.white60, size: 16),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAeroIntelligenceGrid() {
+    final isReworkBatch = _trays.isNotEmpty && _trays.any((t) => t.productionProgress.reworkFlag == true);
+    final isReassignedBatch = _trays.isNotEmpty && _trays.every((t) => t.primaryTrayModel.isReAssigned == true);
+
+    return Column(
+      children: [
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 2,
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: 3.2, // Leaner, lower profile
+          children: [
+            _buildHUDCard('BATCH #', widget.batchCode, Icons.tag_rounded),
+            _buildHUDCard('MACHINE', widget.machine, Icons.precision_manufacturing_rounded),
+            _buildHUDCard('COLOR', widget.color, Icons.palette_rounded),
+            _buildHUDCard('TROLLEY', _trolleyCode ?? 'N/A', Icons.local_shipping_rounded, valueColor: _trolleyCode != null ? const Color(0xFF1B64A3) : const Color(0xFF94A3B8)),
+            _buildHUDCard('TRAYS', '${widget.trayCount} UNITS', Icons.inventory_2_rounded),
+            _buildHUDCard('WEIGHT', '${widget.totalWeight.toStringAsFixed(1)} KG', Icons.scale_rounded),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildModernTime('ISSUED', _issueTime),
+              _buildModernTime('STARTED', _startTime),
+              _buildModernStatus('RE-ASSIGN', isReassignedBatch ? 'YES' : 'NO', isReassignedBatch ? const Color(0xFF60A5FA) : Colors.white24),
+              _buildModernStatus('REWORK', isReworkBatch ? 'YES' : 'NO', isReworkBatch ? const Color(0xFFFB923C) : Colors.white24),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHUDCard(String label, String value, IconData icon, {Color? valueColor}) {
+    return Container(
+      padding: const EdgeInsets.all(10), // Reduced from 12
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFF64748B), size: 18),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(label, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF78909C), letterSpacing: 0.5)),
+                Text(label, style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 0.5)),
                 Text(
                   value,
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: valueColor ?? const Color(0xFF263238)),
+                  style: TextStyle(
+                    fontSize: 12, // Slightly smaller for slim fit
+                    fontWeight: FontWeight.w900, 
+                    color: valueColor ?? const Color(0xFF1E293B),
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -412,123 +542,76 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
     );
   }
 
-  Widget _buildActionConsole() {
-    final isLapping = widget.operationName.toLowerCase().contains('lapping');
-    final isReassignedBatch = _trays.isNotEmpty && _trays.every((t) => t.primaryTrayModel.isReAssigned == true);
+  Widget _buildModernTime(String label, DateTime? time) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Colors.white54, letterSpacing: 0.5)),
+        const SizedBox(height: 4),
+        Text(
+          time != null ? _formatTimeOnly(time) : '--:--',
+          style: TextStyle(
+            fontSize: 13, 
+            fontWeight: FontWeight.w900, 
+            color: time != null ? Colors.white : Colors.white24,
+            fontFamily: 'monospace'
+          ),
+        ),
+      ],
+    );
+  }
 
+  Widget _buildModernStatus(String label, String value, Color valueColor) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Colors.white54, letterSpacing: 0.5)),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13, 
+            fontWeight: FontWeight.w900, 
+            color: valueColor,
+            letterSpacing: 0.5
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _formatTimeOnly(DateTime dt) {
+    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+
+  Widget _buildMetricCard(String label, String value, IconData icon, {Color? valueColor}) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFB0BEC5), width: 1.5, strokeAlign: BorderSide.strokeAlignOutside),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFB0BEC5), width: 1.2, strokeAlign: BorderSide.strokeAlignOutside),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Text('CONTROL CONSOLE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF263238), letterSpacing: 0.5)),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _buildConsoleButton(
-                label: _showTrays ? 'HIDE TRAYS' : 'SHOW TRAYS',
-                icon: _showTrays ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                color: const Color(0xFF0D47A1),
-                onPressed: _toggleTrayDetails,
-              ),
-              if (!_isBatchStarted)
-                _buildConsoleButton(
-                  label: 'START BATCH',
-                  icon: Icons.play_arrow_rounded,
-                  color: const Color(0xFF2E7D32),
-                  onPressed: _trays.isEmpty ? null : _confirmStart,
-                ),
-              if (_hasPreviousProcess && !isLapping)
-                _buildConsoleButton(
-                  label: _isReworkMode ? 'CANCEL REWORK' : 'REWORK',
-                  icon: Icons.sync_problem_rounded,
-                  color: _isReworkMode ? Colors.red : Colors.orange.shade800,
-                  onPressed: () {
-                    if (_isReworkMode) {
-                      setState(() {
-                        _isReworkMode = false;
-                        _selectedReworkTrayIds.clear();
-                        _reworkTargetOpId = null;
-                        _reworkTargetOpName = null;
-                      });
-                    } else {
-                      _showReworkDialog();
-                    }
-                  },
-                ),
-              if (isLapping && !isReassignedBatch)
-                _buildConsoleButton(
-                  label: 'RE-ASSIGN',
-                  icon: Icons.assignment_turned_in_rounded,
-                  color: Colors.teal,
-                  onPressed: () async {
-                    final result = await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => LappingDetailScreen(
-                          batchHeaderId: widget.batchHeaderId,
-                          batchCode: widget.batchCode,
-                          machineId: widget.machineId,
-                          machine: widget.machine,
-                          color: widget.color,
-                          trayCount: widget.trayCount,
-                          totalWeight: widget.totalWeight,
-                          currentOperationId: widget.currentOperationId,
-                          nextOperationId: widget.nextOperationId,
-                          nextOperationName: widget.nextOperationName,
-                        ),
-                      ),
-                    );
-                    if (mounted && result == true) Navigator.pop(context, true);
-                  },
-                ),
-              _buildConsoleButton(
-                label: _trolleyCode != null ? 'FREE TROLLEY' : 'SCAN TROLLEY',
-                icon: _trolleyCode != null ? Icons.link_off_rounded : Icons.qr_code_scanner_rounded,
-                color: _trolleyCode != null ? Colors.red.shade700 : Colors.teal.shade700,
-                onPressed: _isUpdatingTrolley ? null : (_trolleyCode != null ? _confirmFreeTrolley : _showScanTrolleyDialog),
-              ),
-            ],
+          Icon(icon, color: const Color(0xFF1B64A3), size: 14),
+          const SizedBox(height: 4),
+          Text(label, style: const TextStyle(fontSize: 7, fontWeight: FontWeight.w800, color: Color(0xFF94A3B8), letterSpacing: 0.3)),
+          const SizedBox(height: 1),
+          Text(
+            value,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: valueColor ?? const Color(0xFF1E293B)),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-          if (_isBatchStarted && _issueTime != null && _startTime != null) ...[
-            const SizedBox(height: 16),
-            const Divider(height: 1),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _buildTimeIndicator('IDLE TIME', _formatDuration(_startTime!.difference(_issueTime!)), Icons.hourglass_empty_rounded),
-                _buildTimeIndicator('START TIME', _formatTime(_startTime!), Icons.play_circle_outline_rounded),
-              ],
-            ),
-          ],
         ],
       ),
     );
   }
 
-  Widget _buildConsoleButton({required String label, required IconData icon, required Color color, required VoidCallback? onPressed}) {
-    return ElevatedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon, size: 16),
-      label: Text(label, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 10)),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        disabledBackgroundColor: Colors.grey.shade100,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    );
-  }
+
 
   Widget _buildTimeIndicator(String label, String value, IconData icon) {
     return Row(
@@ -1053,5 +1136,130 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
     }
   }
 
-  // Removed _buildTrayTable, _buildScanSummary, _statTile, and _verticalDivider as they are extracted
+  Widget _buildActionConsole() {
+    final isLapping = widget.operationName.toLowerCase().contains('lapping');
+    final isReassignedBatch = _trays.isNotEmpty && _trays.every((t) => t.primaryTrayModel.isReAssigned == true);
+
+    return Container(
+      width: double.infinity, // Expand to full width
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('CONTROL CONSOLE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF263238), letterSpacing: 0.5)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildConsoleButton(
+                  label: _showTrays ? 'HIDE' : 'SHOW',
+                  icon: _showTrays ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                  color: const Color(0xFF1B64A3),
+                  onPressed: _toggleTrayDetails,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: _buildConsoleButton(
+                  label: _isBatchStarted ? 'STARTED' : 'START',
+                  icon: _isBatchStarted ? Icons.check_circle_outline_rounded : Icons.play_arrow_rounded,
+                  color: _isBatchStarted ? const Color(0xFF94A3B8) : const Color(0xFF2E7D32),
+                  onPressed: (_isBatchStarted || _trays.isEmpty) ? null : _confirmStart,
+                ),
+              ),
+              const SizedBox(width: 6),
+              if (_hasPreviousProcess && !isLapping) ...[
+                Expanded(
+                  child: _buildConsoleButton(
+                    label: _isReworkMode ? 'CANCEL' : 'REWORK',
+                    icon: Icons.sync_problem_rounded,
+                    color: _isReworkMode ? Colors.red : Colors.orange.shade800,
+                    onPressed: () {
+                      if (_isReworkMode) {
+                        setState(() {
+                          _isReworkMode = false;
+                          _selectedReworkTrayIds.clear();
+                          _reworkTargetOpId = null;
+                          _reworkTargetOpName = null;
+                        });
+                      } else {
+                        _showReworkDialog();
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 6),
+              ],
+              if (isLapping && !isReassignedBatch) ...[
+                Expanded(
+                  child: _buildConsoleButton(
+                    label: 'ASSIGN',
+                    icon: Icons.assignment_turned_in_rounded,
+                    color: Colors.teal,
+                    onPressed: () async {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => LappingDetailScreen(
+                            batchHeaderId: widget.batchHeaderId,
+                            batchCode: widget.batchCode,
+                            machineId: widget.machineId,
+                            machine: widget.machine,
+                            color: widget.color,
+                            trayCount: widget.trayCount,
+                            totalWeight: widget.totalWeight,
+                            currentOperationId: widget.currentOperationId,
+                            nextOperationId: widget.nextOperationId,
+                            nextOperationName: widget.nextOperationName,
+                          ),
+                        ),
+                      );
+                      if (mounted && result == true) Navigator.pop(context, true);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 6),
+              ],
+              Expanded(
+                child: _buildConsoleButton(
+                  label: _trolleyCode != null ? 'FREE' : 'SCAN',
+                  icon: _trolleyCode != null ? Icons.link_off_rounded : Icons.qr_code_scanner_rounded,
+                  color: _trolleyCode != null ? Colors.red.shade700 : Colors.teal.shade700,
+                  onPressed: _isUpdatingTrolley ? null : (_trolleyCode != null ? _confirmFreeTrolley : _showScanTrolleyDialog),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConsoleButton({required String label, required IconData icon, required Color color, required VoidCallback? onPressed}) {
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        disabledBackgroundColor: const Color(0xFFF1F5F9),
+        disabledForegroundColor: const Color(0xFF94A3B8),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16),
+          const SizedBox(height: 4),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 8)),
+        ],
+      ),
+    );
+  }
 }

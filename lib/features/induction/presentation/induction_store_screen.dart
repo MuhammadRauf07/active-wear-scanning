@@ -313,29 +313,31 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF1F5F9), // Slate background
       resizeToAvoidBottomInset: false,
       body: SafeArea(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            CustomInspectionHeader(
-              heading: 'Induction Store',
-              subtitle: 'Scan Trays for Induction Store',
-              isShowBackIcon: true,
-              topPadding: 0,
-              horizontalPadding: 12,
-              widget: CustomOutlinedButton(
-                label: 'Save Changes',
-                borderColor: Colors.blue,
-                textColor: Colors.blue,
-                buttonHeight: 42,
-                onPressed: _onSave,
-              ),
-            ),
+            _buildPremiumHeader(),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: _buildScannedTraysSection(),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: _buildScannedQueue(),
+                ),
               ),
             ),
           ],
@@ -344,120 +346,124 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
     );
   }
 
-  Widget _buildScannerSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SectionHeader(
-          title: 'Tray Scanner',
-          subtitle: 'Scan tray barcodes for induction',
+  Widget _buildPremiumHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFB0BEC5), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
-        const SizedBox(height: 12),
-        ContentCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Scan Tray Barcode', style: _labelStyle),
-              const SizedBox(height: 8),
-              Row(
+        child: Row(
+          children: [
+            IconButton(
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0D47A1), size: 18),
+              visualDensity: VisualDensity.compact,
+            ),
+            const Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Container(
-                      height: _inputAndButtonHeight,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.blue),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Ready for scan...',
-                        style: TextStyle(
-                          color: Colors.grey.shade400,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
+                  Text(
+                    'Induction Store',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF263238)),
                   ),
-                  const SizedBox(width: 10),
-                  CustomOutlinedButton(
-                    label: 'Scan Tray',
-                    borderColor: Colors.blue,
-                    fillColor: Colors.blue,
-                    textColor: Colors.white,
-                    buttonHeight: _inputAndButtonHeight,
-                    onPressed: _onScanTray,
+                  Text(
+                    'INVENTORY MANAGEMENT CONSOLE',
+                    style: TextStyle(fontSize: 9, color: Color(0xFF546E7A), fontWeight: FontWeight.w900, letterSpacing: 0.8),
                   ),
                 ],
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: _onSave,
+              icon: const Icon(Icons.save_as_rounded, size: 16),
+              label: const Text('SAVE CHANGES', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2E7D32), // Success Green for save
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScannedQueue() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // ── Toolbar ──────────────────────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'INDUCTION QUEUE',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF263238), letterSpacing: 0.5),
+                  ),
+                  Text(
+                    '${_scannedTrays.length} Trays Ready for Store',
+                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF78909C)),
+                  ),
+                ],
+              ),
+              SizedBox(
+                height: 40,
+                child: ElevatedButton.icon(
+                  onPressed: _onScanTray,
+                  icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
+                  label: const Text('SCAN TRAY', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 10)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0D47A1),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                  ),
+                ),
               ),
             ],
           ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildScannedTraysSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SectionHeader(
-          title: 'Scanned Trays',
-          subtitle: 'Scan a tray barcode to start induction',
-        ),
-        const SizedBox(height: 12),
+        
+        // ── Fixed Header ─────────────────────────────────────────────
+        const InductionTrayTableHeader(),
         Expanded(
-          child: ContentCard(
-            padding: EdgeInsets.zero,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // ── Toolbar ──────────────────────────────────────────────────
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Scanned Trays (${_scannedTrays.length})', 
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)
-                      ),
-                      CustomOutlinedButton(
-                        label: 'Scan Tray',
-                        borderColor: Colors.blue,
-                        fillColor: Colors.blue,
-                        textColor: Colors.white,
-                        buttonHeight: _inputAndButtonHeight,
-                        onPressed: _onScanTray,
-                      ),
-                    ],
-                  ),
+          child: _scannedTrays.isEmpty
+              ? const EmptyScanState(hasBorder: false)
+              : ListView.builder(
+                  padding: EdgeInsets.zero,
+                  itemCount: _scannedTrays.length,
+                  itemBuilder: (context, index) {
+                    final reversedIndex = _scannedTrays.length - 1 - index;
+                    return InductionTrayRow(
+                      index: reversedIndex,
+                      tray: _scannedTrays[reversedIndex],
+                      displayIndex: index,
+                      onRemove: () => _onRemoveTray(reversedIndex),
+                    );
+                  },
                 ),
-                
-                // ── Fixed Header ─────────────────────────────────────────────
-                const InductionTrayTableHeader(),
-
-                // ── Scrollable Values ────────────────────────────────────────
-                Expanded(
-                  child: _scannedTrays.isEmpty 
-                      ? const EmptyScanState(hasBorder: false)
-                      : ListView.builder(
-                          padding: EdgeInsets.zero,
-                          itemCount: _scannedTrays.length,
-                          itemBuilder: (context, index) {
-                            final reversedIndex = _scannedTrays.length - 1 - index;
-                            return InductionTrayRow(
-                              index: reversedIndex,
-                              tray: _scannedTrays[reversedIndex],
-                              displayIndex: index,
-                              onRemove: () => _onRemoveTray(reversedIndex),
-                            );
-                          },
-                        ),
-                ),
-              ],
-            ),
-          ),
         ),
       ],
     );

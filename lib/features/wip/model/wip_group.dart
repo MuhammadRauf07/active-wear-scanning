@@ -3,12 +3,14 @@ import 'package:active_wear_scanning/features/gbs/model/production_progress.dart
 class WIPGroup {
   final String title1;
   final String title2;
+  final String? title3;
   final String? subtitle;
   final List<ProductionProgressResponseModel> trays;
 
   WIPGroup({
     required this.title1,
     required this.title2,
+    this.title3,
     this.subtitle,
     required this.trays,
   });

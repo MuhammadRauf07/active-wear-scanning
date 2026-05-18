@@ -31,59 +31,79 @@ class LocatorExpansionItem extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.blue.shade50),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.blue.shade100.withValues(alpha: 0.1),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
       ),
+      clipBehavior: Clip.antiAlias,
       child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        data: Theme.of(context).copyWith(
+          dividerColor: Colors.transparent,
+          hoverColor: const Color(0xFFF8FAFC),
+        ),
         child: ExpansionTile(
           onExpansionChanged: onExpansionChanged,
-          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          backgroundColor: const Color(0xFFF8FAFC),
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           leading: Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: Colors.blue.shade50,
-              shape: BoxShape.circle,
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(Icons.warehouse_outlined, size: 20, color: Colors.blue.shade700),
+            child: const Icon(Icons.warehouse_rounded, size: 20, color: Color(0xFF334155)),
           ),
           title: Text(
             locator.locator.description,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87),
+            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: Color(0xFF1E293B), letterSpacing: 0.3),
           ),
-          subtitle: Text(
-            'Dept: ${locator.department.name}',
-            style: TextStyle(fontSize: 12, color: Colors.blue.shade400, fontWeight: FontWeight.w500),
+          subtitle: Row(
+            children: [
+              const Icon(Icons.business_center_rounded, size: 10, color: Color(0xFF64748B)),
+              const SizedBox(width: 4),
+              Text(
+                locator.department.name.toUpperCase(),
+                style: const TextStyle(fontSize: 9, color: Color(0xFF64748B), fontWeight: FontWeight.w900, letterSpacing: 0.5),
+              ),
+            ],
           ),
           trailing: isLoading
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-              : Icon(Icons.keyboard_arrow_down, color: Colors.blue.shade200),
+              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Color(0xFF0D47A1))))
+              : const Icon(Icons.add_circle_outline_rounded, color: Color(0xFF94A3B8), size: 22),
           children: [
             if (groupedData.isEmpty && !isLoading)
               const Padding(
-                padding: EdgeInsets.all(32),
+                padding: EdgeInsets.symmetric(vertical: 32),
                 child: WIPEmptyState(),
               )
             else ...[
-              const Divider(height: 1),
-              WIPTableHeader(isKnitting: isKnitting, isProcessing: isProcessing),
-              ...List.generate(groupedData.length, (idx) {
-                return WIPGroupRow(
-                  index: idx,
-                  group: groupedData[idx],
-                  isKnitting: isKnitting,
-                  isProcessing: isProcessing,
-                  onViewDetails: () => onViewDetails(groupedData[idx]),
-                );
-              }),
-              const SizedBox(height: 12),
+              Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  border: Border(top: BorderSide(color: Color(0xFFE2E8F0), width: 1.5)),
+                ),
+                child: Column(
+                  children: [
+                    WIPTableHeader(isKnitting: isKnitting, isProcessing: isProcessing),
+                    ...List.generate(groupedData.length, (idx) {
+                      return WIPGroupRow(
+                        index: idx,
+                        group: groupedData[idx],
+                        isKnitting: isKnitting,
+                        isProcessing: isProcessing,
+                        onViewDetails: () => onViewDetails(groupedData[idx]),
+                      );
+                    }),
+                    const SizedBox(height: 12),
+                  ],
+                ),
+              ),
             ]
           ],
         ),

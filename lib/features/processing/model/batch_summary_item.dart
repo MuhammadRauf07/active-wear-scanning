@@ -10,6 +10,7 @@ class BatchSummaryItem {
   final String? trolleyCode;
   final bool isStarted;
   final bool reworkFlag;
+  final bool isReassigned;
 
   BatchSummaryItem({
     required this.batchHeaderId,
@@ -23,5 +24,6 @@ class BatchSummaryItem {
     this.trolleyCode,
     required this.isStarted,
     required this.reworkFlag,
+    required this.isReassigned,
   });
 }

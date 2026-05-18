@@ -29,8 +29,23 @@ class ProductionProgressResponseModel {
   });
 
   factory ProductionProgressResponseModel.fromJson(Map<String, dynamic> json) {
+    final pp = ProductionProgress.fromJson(json['productionProgress'] ?? {});
+    final ptm = PrimaryTrayModel.fromJson(json['primaryTray'] ?? {});
+    
+    // Greedy flag capture: if flags are at the root, override the nested ones
+    final bool? rootRework = json['reworkFlag'] as bool?;
+    final bool? rootReassigned = json['isReAssigned'] as bool?;
+    
+    final finalPP = pp.copyWith(
+      reworkFlag: rootRework ?? pp.reworkFlag,
+    );
+    
+    final finalPTM = ptm.copyWith(
+      isReAssigned: rootReassigned ?? ptm.isReAssigned,
+    );
+
     return ProductionProgressResponseModel(
-      productionProgress: ProductionProgress.fromJson(json['productionProgress'] ?? {}),
+      productionProgress: finalPP,
       operation: Operation.fromJson(json['operation'] ?? {}),
       shift: Shift.fromJson(json['shift'] ?? {}),
       machineModel: MachineModel.fromJson(json['machine'] ?? {}),
@@ -38,7 +53,7 @@ class ProductionProgressResponseModel {
       workOrderLine: WorkOrderLine.fromJson(json['workOrderLine'] ?? {}),
       item: Item.fromJson(json['item'] ?? {}),
       processedItem: json['processedItem'] != null ? Item.fromJson(json['processedItem']) : null,
-      primaryTrayModel: PrimaryTrayModel.fromJson(json['primaryTray'] ?? {}),
+      primaryTrayModel: finalPTM,
       planHeader: json['planHeader'] != null ? PlanHeader.fromJson(json['planHeader']) : null,
       batchHeader: json['batchHeader'] != null ? BatchHeaderModel.fromJson(json['batchHeader']) : null,
     );

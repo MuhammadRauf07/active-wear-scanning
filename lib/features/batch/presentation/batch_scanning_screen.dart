@@ -452,6 +452,32 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
           tray.productionProgress.primaryQuantity ??
           0;
 
+      // 1. Advance the Production Progress to the first operation
+      final pp = tray.productionProgress;
+      final ppPayload = pp.toJson();
+      
+      // Update with batch and first operation details
+      ppPayload['batchHeaderId'] = batchHeaderId;
+      ppPayload['transactionType'] = 2; // Issued/WIP
+      if (_referenceMinOperationId != null) {
+        ppPayload['operationId'] = _referenceMinOperationId;
+      }
+      
+      // Remove read-only/conflict fields
+      ppPayload.remove('id');
+      ppPayload.remove('progressCode');
+      ppPayload.remove('creationTime');
+      ppPayload.remove('creatorId');
+      ppPayload.remove('lastModificationTime');
+      ppPayload.remove('lastModifierId');
+
+      dev.log('🚀 Updating ProductionProgress for tray ${tray.primaryTrayModel.trayCode} to Op: $_referenceMinOperationId');
+      final resPP = await _batchRepo.updateProductionProgress(pp.id!, ppPayload);
+      if (!resPP.success) {
+        dev.log('❌ Failed to update production progress: ${resPP.message}');
+      }
+
+      // 2. Create the Batch Line
       final linePayload = {
         "planDate": DateTime.now().toIso8601String(),
         "transactionDate": DateTime.now().toIso8601String(),

@@ -81,6 +81,11 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
           });
         }
         await _fetchAllBatchCounts();
+        
+        // Auto-refresh the expanded lane if one is selected
+        if (_selectedOperation != null) {
+          await _fetchOpDetails(_selectedOperation!.id, force: true);
+        }
       }
     } catch (e) {
       debugPrint('Error fetching operations: $e');
@@ -144,7 +149,16 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
         for (final r in records) {
           final bhId = r.productionProgress.batchHeaderId;
           if (bhId != null) {
-            grouped.putIfAbsent(bhId, () => []).add(r);
+            final groupList = grouped.putIfAbsent(bhId, () => []);
+            final trayCode = r.primaryTrayModel.trayCode ?? 'UNKNOWN';
+            final existingIdx = groupList.indexWhere((e) => (e.primaryTrayModel.trayCode ?? 'UNKNOWN') == trayCode);
+            if (existingIdx != -1) {
+              if ((r.productionProgress.id ?? 0) > (groupList[existingIdx].productionProgress.id ?? 0)) {
+                groupList[existingIdx] = r;
+              }
+            } else {
+              groupList.add(r);
+            }
           }
         }
 
@@ -187,6 +201,10 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
               totalWeight += qty * pw;
             }
 
+            final bool isStarted = groupRecords.any((r) => r.productionProgress.isStarted ?? false);
+            final bool isRework = groupRecords.any((r) => r.productionProgress.reworkFlag ?? false);
+            final bool isReassigned = groupRecords.any((r) => r.primaryTrayModel.isReAssigned ?? false);
+
             summaries.add(
               BatchSummaryItem(
                 batchHeaderId: bhId,
@@ -200,12 +218,9 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                 trolleyCode: bhFull.batchHeader.trayDetailId != null
                     ? _trayIdToCode[bhFull.batchHeader.trayDetailId]
                     : null,
-                isStarted: groupRecords.any(
-                  (r) => r.productionProgress.isStarted == true,
-                ),
-                reworkFlag: groupRecords.any(
-                  (r) => r.productionProgress.reworkFlag == true,
-                ),
+                isStarted: isStarted,
+                reworkFlag: isRework,
+                isReassigned: isReassigned,
               ),
             );
           }
@@ -230,266 +245,241 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
   void _onScanBatch() async {
     final barcode = _batchBarcodeController.text.trim();
     if (barcode.isEmpty) return;
-  }
-
-  @override
+  }  @override
   Widget build(BuildContext context) {
     bool isAnyLoading =
         _isLoadingOperations || _loadingDetails.values.any((e) => e);
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF1F5F9), // Slate 100 Background
       body: SafeArea(
-        child: ExcludeSemantics(
-          excluding: isAnyLoading,
-          child: Column(
-            children: [
-              CustomInspectionHeader(
-                heading: 'Processing',
-                subtitle: 'WIP transaction',
-                isShowBackIcon: true,
-                topPadding: 10,
-                horizontalPadding: 12,
-                onBackPress: () {
-                  if (_selectedOperation != null) {
-                    setState(() => _selectedOperation = null);
-                  } else {
-                    Navigator.of(context).pop();
-                  }
-                },
-              ),
-              Expanded(
-                child: AbsorbPointer(
-                  absorbing: isAnyLoading,
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SectionHeader(
-                          title: 'Operation Overview',
-                          subtitle: 'Select an operation to view batch details',
-                        ),
-                        const SizedBox(height: 12),
-                        ContentCard(
-                          padding: EdgeInsets.zero,
-                          child: _isLoadingOperations
-                              ? const SizedBox(
-                                  height: 140,
-                                  child: Center(
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  ),
-                                )
-                              : _operations.isEmpty
-                              ? Padding(
-                                  padding: const EdgeInsets.all(40),
-                                  child: Center(
-                                    child: Text(
-                                      'No operations found.',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.grey.shade500,
-                                      ),
-                                    ),
-                                  ),
-                                )
-                              : ListView.separated(
-                                  shrinkWrap: true,
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  itemCount: _operations.length,
-                                  separatorBuilder: (_, __) =>
-                                      const Divider(height: 1, thickness: 1),
-                                  itemBuilder: (context, index) {
-                                    final op = _operations[index];
-                                    final count = _opBatchCounts[op.id] ?? 0;
-                                    final isSelected =
-                                        _selectedOperation?.id == op.id;
+        child: Column(
+          children: [
+            // 1. Technical Header
+            CustomInspectionHeader(
+              heading: 'WIP PROCESSING',
+              subtitle: 'Manufacturing Status & Tracking',
+              isShowBackIcon: true,
+              topPadding: 0,
+              horizontalPadding: 16,
+              onBackPress: () {
+                if (_selectedOperation != null) {
+                  setState(() => _selectedOperation = null);
+                } else {
+                  Navigator.of(context).pop();
+                }
+              },
+            ),
 
-                                    return Column(
-                                      children: [
-                                        GestureDetector(
-                                          onTap: () {
-                                            setState(() {
-                                              if (isSelected) {
-                                                _selectedOperation = null;
-                                              } else {
-                                                _selectedOperation = op;
-                                                _fetchOpDetails(op.id);
-                                              }
-                                            });
-                                          },
-                                          child: AnimatedContainer(
-                                            duration: const Duration(
-                                              milliseconds: 180,
-                                            ),
-                                            color: isSelected
-                                                ? Colors.blue.withValues(alpha: 0.05)
-                                                : Colors.white,
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 14,
-                                              vertical: 14,
-                                            ),
-                                            child: Row(
-                                              children: [
-                                                Expanded(
-                                                  child: Text(
-                                                    op.name,
-                                                    style: TextStyle(
-                                                      fontSize: 14,
-                                                      fontWeight: isSelected
-                                                          ? FontWeight.w600
-                                                          : FontWeight.w400,
-                                                      color: isSelected
-                                                          ? Colors.blue.shade800
-                                                          : Colors.black87,
-                                                    ),
-                                                  ),
-                                                ),
-                                                Container(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 10,
-                                                        vertical: 4,
-                                                      ),
-                                                  decoration: BoxDecoration(
-                                                    color: count > 0
-                                                        ? Colors.blue
-                                                        : Colors.grey.shade200,
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          12,
-                                                        ),
-                                                  ),
-                                                  child: Text(
-                                                    count.toString(),
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      color: count > 0
-                                                          ? Colors.white
-                                                          : Colors
-                                                                .grey
-                                                                .shade600,
-                                                    ),
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 8),
-                                                Icon(
-                                                  isSelected
-                                                      ? Icons.keyboard_arrow_up
-                                                      : Icons
-                                                            .keyboard_arrow_down,
-                                                  size: 20,
-                                                  color: isSelected
-                                                      ? Colors.blue
-                                                      : Colors.grey.shade300,
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                        if (isSelected)
-                                          Padding(
-                                            padding: const EdgeInsets.all(8.0),
-                                            child: BatchDetailsTable(
-                                              isLoading:
-                                                  _loadingDetails[op.id] ==
-                                                  true,
-                                              summaries: _opBatchDetails[op.id],
-                                              onDetailsPressed: (s) async {
-                                                final currentIndex = _operations
-                                                    .indexWhere(
-                                                      (o) =>
-                                                          o.id ==
-                                                          _selectedOperation
-                                                              ?.id,
-                                                    );
-                                                String nextOpName = 'N/A';
-                                                int? nextOpId;
-                                                if (currentIndex != -1 &&
-                                                    currentIndex <
-                                                        _operations.length -
-                                                            1) {
-                                                  nextOpName =
-                                                      _operations[currentIndex +
-                                                              1]
-                                                          .name;
-                                                  nextOpId =
-                                                      _operations[currentIndex +
-                                                              1]
-                                                          .id;
-                                                }
-                                                final result = await Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (context) =>
-                                                        ProcessingBatchDetailsScreen(
-                                                          batchHeaderId:
-                                                              s.batchHeaderId,
-                                                          currentOperationId:
-                                                              _selectedOperation!
-                                                                  .id,
-                                                          batchCode:
-                                                              s.batchCode,
-                                                          machineId:
-                                                              s.machineId,
-                                                          machine: s.machine,
-                                                          color: s.color,
-                                                          trayCount:
-                                                              s.trayCount,
-                                                          totalWeight:
-                                                              s.totalWeight,
-                                                          operationName:
-                                                              _selectedOperation
-                                                                  ?.name ??
-                                                              '-',
-                                                          nextOperationName:
-                                                              nextOpName,
-                                                          nextOperationId:
-                                                              nextOpId,
-                                                        ),
-                                                  ),
-                                                );
-                                                if (result == true) {
-                                                  SchedulerBinding.instance
-                                                      .addPostFrameCallback((
-                                                        _,
-                                                      ) {
-                                                        if (mounted) {
-                                                          setState(() {
-                                                            _selectedOperation =
-                                                                null;
-                                                            _opBatchDetails
-                                                                .clear();
-                                                          });
-                                                          _fetchOperations();
-                                                        }
-                                                      });
-                                                }
-                                              },
-                                            ),
-                                          ),
-                                      ],
-                                    );
-                                  },
-                                ),
-                        ),
-                      ],
+            // 2. Search & Filter Bar
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
-                  ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.search_rounded, size: 18, color: Color(0xFF94A3B8)),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: TextField(
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                        decoration: InputDecoration(
+                          hintText: 'Search Batch # or Operation...',
+                          hintStyle: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.w500),
+                          border: InputBorder.none,
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Icon(Icons.tune_rounded, size: 14, color: Color(0xFF1B64A3)),
+                    ),
+                  ],
                 ),
               ),
-              //   ),
-              // ),
-            ],
-          ),
+            ),
+
+            // 3. Operation Grid
+            Expanded(
+              child: AbsorbPointer(
+                absorbing: isAnyLoading,
+                child: _isLoadingOperations
+                    ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        itemCount: _operations.length,
+                        itemBuilder: (context, index) {
+                          final op = _operations[index];
+                          final count = _opBatchCounts[op.id] ?? 0;
+                          final isSelected = _selectedOperation?.id == op.id;
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected ? const Color(0xFF1B64A3) : const Color(0xFFE2E8F0),
+                                width: isSelected ? 1.5 : 1,
+                              ),
+                              boxShadow: isSelected ? [
+                                BoxShadow(
+                                  color: const Color(0xFF1B64A3).withValues(alpha: 0.08),
+                                  blurRadius: 15,
+                                  offset: const Offset(0, 8),
+                                )
+                              ] : null,
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: Column(
+                              children: [
+                                GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      if (isSelected) {
+                                        _selectedOperation = null;
+                                      } else {
+                                        _selectedOperation = op;
+                                        _fetchOpDetails(op.id);
+                                      }
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.all(14),
+                                    color: isSelected ? const Color(0xFF1B64A3).withValues(alpha: 0.03) : Colors.white,
+                                    child: Row(
+                                      children: [
+                                        // Op Name
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                op.name.toUpperCase(),
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w900,
+                                                  color: isSelected ? const Color(0xFF1B64A3) : const Color(0xFF334155),
+                                                  letterSpacing: 0.3,
+                                                ),
+                                              ),
+                                              Text(
+                                                'Work-in-Progress Tracking',
+                                                style: TextStyle(
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.grey.shade500,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        
+                                        // Active Count Badge
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                          decoration: BoxDecoration(
+                                            color: count > 0 ? const Color(0xFF1B64A3) : const Color(0xFF94A3B8).withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              if (count > 0)
+                                                const Padding(
+                                                  padding: EdgeInsets.only(right: 4),
+                                                  child: Icon(Icons.layers_rounded, size: 10, color: Colors.white),
+                                                ),
+                                              Text(
+                                                '$count BATCHES',
+                                                style: TextStyle(
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.w900,
+                                                  color: count > 0 ? Colors.white : const Color(0xFF64748B),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Icon(
+                                          isSelected ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                                          size: 20,
+                                          color: isSelected ? const Color(0xFF1B64A3) : const Color(0xFFCBD5E1),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                if (isSelected)
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 1.5, right: 1.5, bottom: 1.5),
+                                    child: BatchDetailsTable(
+                                      isLoading: _loadingDetails[op.id] == true,
+                                      summaries: _opBatchDetails[op.id],
+                                      onDetailsPressed: (s) async {
+                                        final currentIndex = _operations.indexWhere((o) => o.id == _selectedOperation?.id);
+                                        String nextOpName = 'N/A';
+                                        int? nextOpId;
+                                        if (currentIndex != -1 && currentIndex < _operations.length - 1) {
+                                          nextOpName = _operations[currentIndex + 1].name;
+                                          nextOpId = _operations[currentIndex + 1].id;
+                                        }
+                                        final result = await Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => ProcessingBatchDetailsScreen(
+                                              batchHeaderId: s.batchHeaderId,
+                                              currentOperationId: _selectedOperation!.id,
+                                              batchCode: s.batchCode,
+                                              machineId: s.machineId,
+                                              machine: s.machine,
+                                              color: s.color,
+                                              trayCount: s.trayCount,
+                                              totalWeight: s.totalWeight,
+                                              operationName: _selectedOperation?.name ?? '-',
+                                              nextOperationName: nextOpName,
+                                              nextOperationId: nextOpId,
+                                            ),
+                                          ),
+                                        );
+                                        if (result == true) {
+                                          _fetchOperations();
+                                        }
+                                      },
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
+}
 
   // Removed _buildDetailsTable and _BatchSummaryItem as they were extracted.
 
@@ -518,4 +508,4 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
       ),
     );
   }
-}
+
