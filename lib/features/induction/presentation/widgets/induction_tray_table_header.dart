@@ -20,10 +20,9 @@ class InductionTrayTableHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Expanded(flex: 2, child: Text('TRAY CODE', textAlign: TextAlign.center, style: headerStyle)),
-          Expanded(flex: 2, child: Text('WORK ORDER', textAlign: TextAlign.center, style: headerStyle)),
-          Expanded(flex: 4, child: Text('ITEM DESCRIPTION', textAlign: TextAlign.center, style: headerStyle)),
-          Expanded(flex: 2, child: Text('COLOR', textAlign: TextAlign.center, style: headerStyle)),
+          Expanded(flex: 2, child: Text('TRAY CODE', textAlign: TextAlign.start, style: headerStyle)),
+          Expanded(flex: 2, child: Text('WORK ORDER', textAlign: TextAlign.start, style: headerStyle)),
+          Expanded(flex: 4, child: Text('ITEM DESCRIPTION', textAlign: TextAlign.start, style: headerStyle)),
           Expanded(flex: 2, child: Text('SIZE', textAlign: TextAlign.center, style: headerStyle)),
           Expanded(flex: 2, child: Text('TUBES', textAlign: TextAlign.center, style: headerStyle)),
           Expanded(flex: 2, child: Text('WEIGHT', textAlign: TextAlign.center, style: headerStyle)),

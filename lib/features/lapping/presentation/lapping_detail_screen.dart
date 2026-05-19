@@ -138,9 +138,20 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
     });
 
     if (res.success && res.data != null) {
-      final List<LappingModel> fetchedTrays =
-      res.data as List<LappingModel>;
+      final List<LappingModel> rawTrays = res.data as List<LappingModel>;
 
+      final Map<String, LappingModel> uniqueTrays = {};
+      for (final tray in rawTrays) {
+        if (tray.productionProgress.transactionType != 2) continue;
+        if (tray.productionProgress.operationId != widget.currentOperationId) continue;
+        
+        final code = tray.primaryTrayModel.trayCode ?? 'UNKNOWN';
+        if (!uniqueTrays.containsKey(code) || (tray.productionProgress.id ?? 0) > (uniqueTrays[code]!.productionProgress.id ?? 0)) {
+          uniqueTrays[code] = tray;
+        }
+      }
+      
+      final fetchedTrays = uniqueTrays.values.toList();
       final Map<String, WorkOrderSummary> summaries = {};
 
       for (final tray in fetchedTrays) {
@@ -836,6 +847,12 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
           finalJson['batchHeaderId'] = widget.batchHeaderId;
           // Keep concurrencyStamp — ABP REQUIRES it on PUT (do NOT remove)
           if (blId != null) finalJson['batchLinesId'] = blId;
+          finalJson.remove('id');
+          finalJson.remove('progressCode');
+          finalJson.remove('creationTime');
+          finalJson.remove('creatorId');
+          finalJson.remove('lastModificationTime');
+          finalJson.remove('lastModifierId');
           final finalRes = await _processingRepo.updateProductionProgress(targetProgressId!, finalJson);
           if (!finalRes.success) {
             debugPrint('⚠️ Step 5 PP finalize failed (non-critical): ${finalRes.message}');
@@ -865,6 +882,13 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
         if (realLappingPP.productionProgress.id != null && realLappingPP.productionProgress.id! > 0) {
           final closeJson = realLappingPP.productionProgress.toJson();
           closeJson['transactionType'] = 3;
+          closeJson['wipStatus'] = 1;
+          closeJson.remove('id');
+          closeJson.remove('progressCode');
+          closeJson.remove('creationTime');
+          closeJson.remove('creatorId');
+          closeJson.remove('lastModificationTime');
+          closeJson.remove('lastModifierId');
           final closeRes = await _processingRepo.updateProductionProgress(
             realLappingPP.productionProgress.id!, closeJson,
           );

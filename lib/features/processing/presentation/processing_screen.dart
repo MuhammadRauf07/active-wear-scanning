@@ -115,6 +115,8 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
       final list = res.data as List<ProductionProgressResponseModel>;
       final uniqueBatches = <int>{};
       for (var r in list) {
+        if (r.productionProgress.transactionType != 2) continue; // Local filter fallback
+        if (r.productionProgress.operationId != operationId) continue; // Critical: Ensure it belongs to this lane
         if (r.productionProgress.batchHeaderId != null) {
           uniqueBatches.add(r.productionProgress.batchHeaderId!);
         }
@@ -147,6 +149,8 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
         final Map<int, List<ProductionProgressResponseModel>> grouped = {};
 
         for (final r in records) {
+          if (r.productionProgress.transactionType != 2) continue; // Local filter fallback
+          if (r.productionProgress.operationId != operationId) continue; // Critical: Ensure it belongs to this lane
           final bhId = r.productionProgress.batchHeaderId;
           if (bhId != null) {
             final groupList = grouped.putIfAbsent(bhId, () => []);
@@ -462,7 +466,15 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                                           ),
                                         );
                                         if (result == true) {
-                                          _fetchOperations();
+                                          setState(() {
+                                            final currentList = _opBatchDetails[op.id];
+                                            if (currentList != null) {
+                                              _opBatchDetails[op.id] = List.from(currentList)
+                                                ..removeWhere((b) => b.batchHeaderId == s.batchHeaderId);
+                                            }
+                                          });
+                                          await Future.delayed(const Duration(milliseconds: 2500));
+                                          if (mounted) _fetchOperations();
                                         }
                                       },
                                     ),

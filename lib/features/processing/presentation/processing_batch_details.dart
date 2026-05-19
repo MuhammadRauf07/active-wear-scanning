@@ -1,3 +1,5 @@
+import 'dart:developer' as dev;
+
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/content_card.dart';
@@ -15,8 +17,6 @@ import 'package:active_wear_scanning/features/processing/presentation/widgets/pr
 import 'package:active_wear_scanning/features/processing/repo/processing_repo.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-
-import '../../lapping/presentation/lapping_detail_screen.dart';
 
 class ProcessingBatchDetailsScreen extends StatefulWidget {
   final int batchHeaderId;
@@ -180,6 +180,8 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
           // keep only the one with the highest ID (most recent).
           final Map<String, ProductionProgressResponseModel> uniqueTrays = {};
           for (final tray in list) {
+            if (tray.productionProgress.transactionType != 2) continue; // Local filter
+            if (tray.productionProgress.operationId != widget.currentOperationId) continue; // Local filter
             final code = tray.primaryTrayModel.trayCode ?? 'UNKNOWN';
             if (!uniqueTrays.containsKey(code) || (tray.productionProgress.id ?? 0) > (uniqueTrays[code]!.productionProgress.id ?? 0)) {
               uniqueTrays[code] = tray;
@@ -304,8 +306,9 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
 
   Widget _buildPremiumHeader(BuildContext context) {
     final isLapping = widget.operationName.toLowerCase().contains('lapping');
+    final isReworkBatch = _trays.isNotEmpty && _trays.any((t) => t.productionProgress.reworkFlag == true);
     final isReassignedBatch = _trays.isNotEmpty && _trays.every((t) => t.primaryTrayModel.isReAssigned == true);
-    final submitBlocked = !_isBatchStarted || (isLapping && !isReassignedBatch && !_isReworkMode);
+    final submitBlocked = !_isBatchStarted || (isLapping && !isReassignedBatch && !isReworkBatch && !_isReworkMode);
     
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -1066,7 +1069,14 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
 
         if (isRework) {
           json['transactionType'] = 3;
+          json['wipStatus'] = 1;
           json['reworkFlag'] = true;
+          json.remove('id');
+          json.remove('progressCode');
+          json.remove('creationTime');
+          json.remove('creatorId');
+          json.remove('lastModificationTime');
+          json.remove('lastModifierId');
           final updRes = await _processingRepo.updateProductionProgress(pp.id!, json);
           if (!updRes.success) throw Exception('Update old progress failed: ${updRes.message}');
 
@@ -1098,7 +1108,17 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
           if (!crRes.success) throw Exception('Create new progress failed: ${crRes.message}');
         } else if (widget.nextOperationId != null) {
           json['transactionType'] = 3;
+          json['wipStatus'] = 1;
+          json.remove('id');
+          json.remove('progressCode');
+          json.remove('creationTime');
+          json.remove('creatorId');
+          json.remove('lastModificationTime');
+          json.remove('lastModifierId');
+          
+          dev.log('🚀 [HEATSET/NEXT] Updating old PP ID ${pp.id} to TxType 3: $json');
           final updRes = await _processingRepo.updateProductionProgress(pp.id!, json);
+          dev.log('✅ [HEATSET/NEXT] Update Response: ${updRes.success} | ${updRes.message} | ${updRes.data}');
           if (!updRes.success) throw Exception('Update old progress failed: ${updRes.message}');
 
           final newJ = pp.toJson();
@@ -1119,6 +1139,12 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
           json['transactionType'] = 3;
           json['wipStatus'] = 1;
           json['isLastProcess'] = true; // ✅ Flags tray as ready for Induction
+          json.remove('id');
+          json.remove('progressCode');
+          json.remove('creationTime');
+          json.remove('creatorId');
+          json.remove('lastModificationTime');
+          json.remove('lastModifierId');
           final updRes = await _processingRepo.updateProductionProgress(pp.id!, json);
           if (!updRes.success) throw Exception('Update final progress failed: ${updRes.message}');
         }
@@ -1138,6 +1164,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
 
   Widget _buildActionConsole() {
     final isLapping = widget.operationName.toLowerCase().contains('lapping');
+    final isReworkBatch = _trays.isNotEmpty && _trays.any((t) => t.productionProgress.reworkFlag == true);
     final isReassignedBatch = _trays.isNotEmpty && _trays.every((t) => t.primaryTrayModel.isReAssigned == true);
 
     return Container(
@@ -1195,13 +1222,13 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                 ),
                 const SizedBox(width: 6),
               ],
-              if (isLapping && !isReassignedBatch) ...[
+              if (isLapping && !isReassignedBatch && !isReworkBatch) ...[
                 Expanded(
                   child: _buildConsoleButton(
                     label: 'ASSIGN',
                     icon: Icons.assignment_turned_in_rounded,
                     color: Colors.teal,
-                    onPressed: () async {
+                    onPressed: !_isBatchStarted ? null : () async {
                       final result = await Navigator.push(
                         context,
                         MaterialPageRoute(

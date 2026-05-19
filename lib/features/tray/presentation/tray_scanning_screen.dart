@@ -225,7 +225,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     addField('Tubes Per Tray', Icons.grid_view, 'Tubes Per Tray', plan.quantityPerTray.toString());
     addField('Garment Pcs', Icons.checkroom, 'Garment Pcs', plan.secondaryPlanQuantity.toString());
     addField('Shift Code', Icons.schedule, 'Shift Code', shift.code.toString());
-    addField('Work Order', Icons.assignment, 'Work Order', workOrder.workOrderCode);
+    addField('Work Order Code', Icons.assignment, 'Work Order Code', workOrder.workOrderCode);
     addField('Work Order Date', Icons.event, 'Work Order Date', formatDate(workOrder.workOrderDate));
     addField('Item Description', Icons.description, 'Item Description', item.description);
 
@@ -726,7 +726,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
     final List<Map<String, dynamic>> allItems = [
       // Row 1: Primary WO & Date Info
-      {'label': 'WORK ORDER CODE', 'icon': Icons.qr_code_rounded, 'value': info['Work Order Code']?['value']},
+      {'label': 'WORK ORDER', 'icon': Icons.qr_code_rounded, 'value': info['Work Order Code']?['value']},
       {'label': 'PLAN DATE', 'icon': Icons.calendar_today_rounded, 'value': info['Plan Date']?['value']},
       {'label': 'WORK ORDER DATE', 'icon': Icons.event_note_rounded, 'value': info['Work Order Date']?['value']},
       {'label': 'GARMENT PCS', 'icon': Icons.checkroom_rounded, 'value': info['Garment Pcs']?['value']},

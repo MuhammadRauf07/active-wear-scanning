@@ -30,8 +30,7 @@ class InductionTrayRow extends StatelessWidget {
           Expanded(flex: 2, child: Text(tray.trayCode, style: _cellStyle(isBold: true, color: const Color(0xFF0D47A1)))),
           Expanded(flex: 2, child: Text(tray.workOrderCode, style: _cellStyle(isSmall: true))),
           Expanded(flex: 4, child: Text(tray.itemDescription, style: _cellStyle(isSmall: true), maxLines: 2, overflow: TextOverflow.ellipsis)),
-          Expanded(flex: 2, child: Text(tray.colorDescription.isNotEmpty ? tray.colorDescription : '-', style: _cellStyle(isBold: true))),
-          Expanded(flex: 2, child: Text(tray.sizeDescription.isNotEmpty ? tray.sizeDescription : '-', style: _cellStyle())),
+          Expanded(flex: 2, child: Text(tray.sizeDescription.isNotEmpty ? tray.sizeDescription : '-', textAlign: TextAlign.center, style: _cellStyle())),
           Expanded(
             flex: 2,
             child: Container(
@@ -45,7 +44,7 @@ class InductionTrayRow extends StatelessWidget {
               child: Text(tray.primaryQuantity, textAlign: TextAlign.center, style: _cellStyle(isBold: true)),
             ),
           ),
-          Expanded(flex: 2, child: Text('${weight.toStringAsFixed(1)} g', style: _cellStyle())),
+          Expanded(flex: 2, child: Text('${weight.toStringAsFixed(1)} g', textAlign: TextAlign.center, style: _cellStyle())),
           IconButton(
             onPressed: onRemove,
             icon: const Icon(Icons.delete_sweep_rounded, color: Color(0xFFEF4444), size: 20),
