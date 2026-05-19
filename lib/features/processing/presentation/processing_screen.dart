@@ -19,6 +19,28 @@ import '../../gbs/model/production_progress.dart';
 import '../../common-models/common_models.dart';
 import 'processing_batch_details.dart';
 
+class OptimisticTransfer {
+  final int batchHeaderId;
+  final BatchSummaryItem item;
+  final DateTime timestamp;
+
+  OptimisticTransfer({
+    required this.batchHeaderId,
+    required this.item,
+    required this.timestamp,
+  });
+}
+
+class DisposedBatch {
+  final int batchHeaderId;
+  final DateTime timestamp;
+
+  DisposedBatch({
+    required this.batchHeaderId,
+    required this.timestamp,
+  });
+}
+
 class ProcessingScreen extends StatefulWidget {
   const ProcessingScreen({super.key});
 
@@ -37,6 +59,8 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
   Map<int, List<BatchSummaryItem>> _opBatchDetails = {};
   Map<int, bool> _loadingDetails = {};
   Map<int, String> _trayIdToCode = {}; // trayDetailId → trayCode lookup
+  static final Map<int, List<DisposedBatch>> _disposedBatches = {};
+  static final Map<int, List<OptimisticTransfer>> _optimisticCache = {};
 
   Operation? _selectedOperation;
   bool _isLoadingOperations = false;
@@ -106,6 +130,13 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
     if (mounted) setState(() => _isInitialLoading = false);
   }
 
+  bool _isBatchDisposed(int operationId, int bhId) {
+    final list = _disposedBatches[operationId] ?? [];
+    final now = DateTime.now();
+    list.removeWhere((x) => now.difference(x.timestamp).inSeconds > 25);
+    return list.any((x) => x.batchHeaderId == bhId);
+  }
+
   Future<void> _fetchBatchCount(int operationId) async {
     final res = await _processingRepo.fetchProductionProgress({
       'OperationId': operationId.toString(),
@@ -117,10 +148,24 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
       for (var r in list) {
         if (r.productionProgress.transactionType != 2) continue; // Local filter fallback
         if (r.productionProgress.operationId != operationId) continue; // Critical: Ensure it belongs to this lane
-        if (r.productionProgress.batchHeaderId != null) {
-          uniqueBatches.add(r.productionProgress.batchHeaderId!);
+        
+        final bhId = r.productionProgress.batchHeaderId;
+        if (bhId != null) {
+          if (_isBatchDisposed(operationId, bhId)) continue; // Mask eventual consistency lag
+          uniqueBatches.add(bhId);
         }
       }
+
+      // Inject non-expired optimistic cache counts
+      final pending = _optimisticCache[operationId] ?? [];
+      final now = DateTime.now();
+      pending.removeWhere((x) => now.difference(x.timestamp).inSeconds > 25);
+      for (final opt in pending) {
+        if (!_isBatchDisposed(operationId, opt.batchHeaderId)) {
+          uniqueBatches.add(opt.batchHeaderId);
+        }
+      }
+
       if (mounted) {
         setState(() {
           _opBatchCounts[operationId] = uniqueBatches.length;
@@ -133,7 +178,6 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
     if (!force && _opBatchDetails.containsKey(operationId)) return;
 
     try {
-      AppLoader.show(context, message: 'Fetching Batch Details...');
       setState(() {
         _loadingDetails[operationId] = true;
         if (force) _opBatchDetails.remove(operationId);
@@ -151,8 +195,11 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
         for (final r in records) {
           if (r.productionProgress.transactionType != 2) continue; // Local filter fallback
           if (r.productionProgress.operationId != operationId) continue; // Critical: Ensure it belongs to this lane
+          
           final bhId = r.productionProgress.batchHeaderId;
           if (bhId != null) {
+            if (_isBatchDisposed(operationId, bhId)) continue; // Mask eventual consistency lag
+
             final groupList = grouped.putIfAbsent(bhId, () => []);
             final trayCode = r.primaryTrayModel.trayCode ?? 'UNKNOWN';
             final existingIdx = groupList.indexWhere((e) => (e.primaryTrayModel.trayCode ?? 'UNKNOWN') == trayCode);
@@ -230,6 +277,17 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
           }
         }
 
+        // Inject non-expired optimistic cache items
+        final pending = _optimisticCache[operationId] ?? [];
+        final now = DateTime.now();
+        pending.removeWhere((x) => now.difference(x.timestamp).inSeconds > 25);
+        for (final opt in pending) {
+          if (!summaries.any((b) => b.batchHeaderId == opt.batchHeaderId) &&
+              !_isBatchDisposed(operationId, opt.batchHeaderId)) {
+            summaries.add(opt.item);
+          }
+        }
+
         if (mounted) {
           setState(() {
             _opBatchDetails[operationId] = summaries;
@@ -241,7 +299,6 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
     } finally {
       if (mounted) {
         setState(() => _loadingDetails[operationId] = false);
-        AppLoader.hide(context);
       }
     }
   }
@@ -462,20 +519,80 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                                               operationName: _selectedOperation?.name ?? '-',
                                               nextOperationName: nextOpName,
                                               nextOperationId: nextOpId,
+                                              hasPreviousProcess: currentIndex > 0,
                                             ),
                                           ),
                                         );
-                                        if (result == true) {
-                                          setState(() {
-                                            final currentList = _opBatchDetails[op.id];
-                                            if (currentList != null) {
-                                              _opBatchDetails[op.id] = List.from(currentList)
-                                                ..removeWhere((b) => b.batchHeaderId == s.batchHeaderId);
-                                            }
-                                          });
-                                          await Future.delayed(const Duration(milliseconds: 2500));
-                                          if (mounted) _fetchOperations();
-                                        }
+                                           if (result != null && result is Map && result['submitted'] == true) {
+                                             final List<int> targetOps = [];
+                                             if (result['targetOps'] is List) {
+                                               for (final item in result['targetOps']) {
+                                                 if (item is num) {
+                                                   targetOps.add(item.toInt());
+                                                 }
+                                               }
+                                             }
+                                             final isRework = result['isRework'] == true;
+                                             final isReassigned = result['isReassigned'] == true;
+                                             
+                                             setState(() {
+                                               final dispList = _disposedBatches.putIfAbsent(op.id, () => []);
+                                               dispList.removeWhere((x) => x.batchHeaderId == s.batchHeaderId);
+                                               dispList.add(DisposedBatch(
+                                                 batchHeaderId: s.batchHeaderId!,
+                                                 timestamp: DateTime.now(),
+                                               ));
+
+                                              final currentList = _opBatchDetails[op.id];
+                                              if (currentList != null) {
+                                                _opBatchDetails[op.id] = List.from(currentList)
+                                                  ..removeWhere((b) => b.batchHeaderId == s.batchHeaderId);
+                                              }
+                                              
+                                              // Optimistic UI updates for counts and lists
+                                              final currentCount = _opBatchCounts[op.id] ?? 0;
+                                              if (currentCount > 0) {
+                                                _opBatchCounts[op.id] = currentCount - 1;
+                                              }
+                                              
+                                              for (final tOpId in targetOps) {
+                                                _opBatchCounts[tOpId] = (_opBatchCounts[tOpId] ?? 0) + 1;
+                                                
+                                                // Optimistically inject the batch into the target lane's list
+                                                final targetList = _opBatchDetails[tOpId] ?? [];
+                                                // Ensure we don't duplicate if it somehow exists
+                                                final updatedBatch = BatchSummaryItem(
+                                                  batchHeaderId: s.batchHeaderId,
+                                                  machineId: s.machineId,
+                                                  batchCode: s.batchCode,
+                                                  machine: s.machine,
+                                                  color: s.color,
+                                                  trayCount: s.trayCount,
+                                                  totalTubes: s.totalTubes,
+                                                  totalWeight: s.totalWeight,
+                                                  trolleyCode: s.trolleyCode,
+                                                  isStarted: false,
+                                                  reworkFlag: isRework || s.reworkFlag,
+                                                  isReassigned: isReassigned || s.isReassigned,
+                                                );
+                                                if (!targetList.any((b) => b.batchHeaderId == s.batchHeaderId)) {
+                                                  _opBatchDetails[tOpId] = List.from(targetList)..add(updatedBatch);
+                                                }
+
+                                                // Populate optimistic cache to protect against eventual consistency API delays
+                                                final list = _optimisticCache.putIfAbsent(tOpId, () => []);
+                                                list.removeWhere((x) => x.batchHeaderId == s.batchHeaderId);
+                                                list.add(OptimisticTransfer(
+                                                  batchHeaderId: s.batchHeaderId,
+                                                  item: updatedBatch,
+                                                  timestamp: DateTime.now(),
+                                                ));
+                                              }
+
+                                              // Collapse the currently expanded process card
+                                              _selectedOperation = null;
+                                            });
+                                          }
                                       },
                                     ),
                                   ),

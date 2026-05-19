@@ -30,6 +30,7 @@ class ProcessingBatchDetailsScreen extends StatefulWidget {
   final String operationName;
   final String nextOperationName;
   final int? nextOperationId;
+  final bool hasPreviousProcess;
 
   const ProcessingBatchDetailsScreen({
     super.key,
@@ -44,6 +45,7 @@ class ProcessingBatchDetailsScreen extends StatefulWidget {
     required this.operationName,
     required this.nextOperationName,
     this.nextOperationId,
+    required this.hasPreviousProcess,
   });
 
   @override
@@ -57,7 +59,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
   bool _isLoadingTrays = false;
   List<ProductionProgressResponseModel> _trays = [];
   double? _machineCapacity;
-  bool _hasPreviousProcess = false;
+  late bool _hasPreviousProcess;
 
   static final _tableHeaderStyle = TextStyle(
     fontSize: 12,
@@ -88,7 +90,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
   @override
   void initState() {
     super.initState();
-    _checkReworkCapability();
+    _hasPreviousProcess = widget.hasPreviousProcess;
     _fetchMachineCapacity();
     _fetchBatchHeader();
     SchedulerBinding.instance.addPostFrameCallback((_) {
@@ -140,22 +142,6 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
       }
     } catch (e) {
       debugPrint('Fetch batch header error: $e');
-    }
-  }
-
-  Future<void> _checkReworkCapability() async {
-    final res = await _processingRepo.fetchProcessingOperations();
-    if (res.success && res.data != null) {
-      final allOps = res.data as List<Operation>;
-      final currentOp = allOps.firstWhere((o) => o.id == widget.currentOperationId, orElse: () => allOps.first);
-      final currentSeq = int.tryParse(currentOp.identifierRef ?? '0') ?? 0;
-      
-      final hasPrev = allOps.any((op) {
-        final seq = int.tryParse(op.identifierRef ?? '999') ?? 999;
-        return seq < currentSeq && op.processNature == 1;
-      });
-
-      if (mounted) setState(() => _hasPreviousProcess = hasPrev);
     }
   }
 
@@ -270,7 +256,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
   Widget build(BuildContext context) {
     final isLapping = widget.operationName.toLowerCase().contains('lapping');
     final isReworkBatch = _trays.isNotEmpty && _trays.any((t) => t.productionProgress.reworkFlag == true);
-    final isReassignedBatch = _trays.isNotEmpty && _trays.every((t) => t.primaryTrayModel.isReAssigned == true);
+    final isReassignedBatch = _trays.isNotEmpty && _trays.any((t) => t.primaryTrayModel.isReAssigned == true);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
@@ -307,8 +293,8 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
   Widget _buildPremiumHeader(BuildContext context) {
     final isLapping = widget.operationName.toLowerCase().contains('lapping');
     final isReworkBatch = _trays.isNotEmpty && _trays.any((t) => t.productionProgress.reworkFlag == true);
-    final isReassignedBatch = _trays.isNotEmpty && _trays.every((t) => t.primaryTrayModel.isReAssigned == true);
-    final submitBlocked = !_isBatchStarted || (isLapping && !isReassignedBatch && !isReworkBatch && !_isReworkMode);
+    final isReassignedBatch = _trays.isNotEmpty && _trays.any((t) => t.primaryTrayModel.isReAssigned == true);
+    final submitBlocked = !_isBatchStarted || (isLapping && !isReassignedBatch && !_isReworkMode);
     
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -374,7 +360,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
 
   Widget _buildBatchIntelligenceGrid() {
     final isReworkBatch = _trays.isNotEmpty && _trays.any((t) => t.productionProgress.reworkFlag == true);
-    final isReassignedBatch = _trays.isNotEmpty && _trays.every((t) => t.primaryTrayModel.isReAssigned == true);
+    final isReassignedBatch = _trays.isNotEmpty && _trays.any((t) => t.primaryTrayModel.isReAssigned == true);
 
     return Column(
       children: [
@@ -461,7 +447,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
 
   Widget _buildAeroIntelligenceGrid() {
     final isReworkBatch = _trays.isNotEmpty && _trays.any((t) => t.productionProgress.reworkFlag == true);
-    final isReassignedBatch = _trays.isNotEmpty && _trays.every((t) => t.primaryTrayModel.isReAssigned == true);
+    final isReassignedBatch = _trays.isNotEmpty && _trays.any((t) => t.primaryTrayModel.isReAssigned == true);
 
     return Column(
       children: [
@@ -478,7 +464,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
             _buildHUDCard('COLOR', widget.color, Icons.palette_rounded),
             _buildHUDCard('TROLLEY', _trolleyCode ?? 'N/A', Icons.local_shipping_rounded, valueColor: _trolleyCode != null ? const Color(0xFF1B64A3) : const Color(0xFF94A3B8)),
             _buildHUDCard('TRAYS', '${widget.trayCount} UNITS', Icons.inventory_2_rounded),
-            _buildHUDCard('WEIGHT', '${widget.totalWeight.toStringAsFixed(1)} KG', Icons.scale_rounded),
+            _buildHUDCard('WEIGHT', '${widget.totalWeight.toStringAsFixed(1)} g', Icons.scale_rounded),
           ],
         ),
         const SizedBox(height: 14),
@@ -1070,7 +1056,6 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
         if (isRework) {
           json['transactionType'] = 3;
           json['wipStatus'] = 1;
-          json['reworkFlag'] = true;
           json.remove('id');
           json.remove('progressCode');
           json.remove('creationTime');
@@ -1098,11 +1083,14 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
           newJ.addAll({
             'transactionType': 2,
             'reworkFlag': true,
+            'isStarted': false,
+            'startDate': null,
+            'machineId': null,
+            'batchLinesId': null,
+            'isLastProcess': false,
             'operationId': _reworkTargetOpId,
             'locatorId': rewLoc,
             'date': DateTime.now().toIso8601String(),
-            'isStarted': false,
-            'startDate': null,
           });
           final crRes = await _processingRepo.createProductionProgress(newJ);
           if (!crRes.success) throw Exception('Create new progress failed: ${crRes.message}');
@@ -1127,11 +1115,15 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
           newJ.remove('concurrencyStamp');
           newJ.addAll({
             'transactionType': 2,
+            'reworkFlag': pp.reworkFlag ?? false,
+            'isStarted': false,
+            'startDate': null,
+            'machineId': null,
+            'batchLinesId': null,
+            'isLastProcess': false,
             'operationId': widget.nextOperationId,
             'locatorId': nextLocatorId,
             'date': DateTime.now().toIso8601String(),
-            'isStarted': false,
-            'startDate': null,
           });
           final crRes = await _processingRepo.createProductionProgress(newJ);
           if (!crRes.success) throw Exception('Create new progress failed: ${crRes.message}');
@@ -1152,7 +1144,31 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
 
       if (mounted) {
         AppLoader.hide(context);
-        Navigator.pop(context, true);
+        
+        final List<int> targetOps = [];
+        if (_isReworkMode && _reworkTargetOpId != null) {
+          targetOps.add(_reworkTargetOpId!);
+        }
+        
+        bool hasStandard = false;
+        if (_isReworkMode) {
+          hasStandard = _trays.any((t) => !_selectedReworkTrayIds.contains(t.productionProgress.id));
+        } else {
+          hasStandard = true;
+        }
+        
+        if (hasStandard && widget.nextOperationId != null) {
+          if (!targetOps.contains(widget.nextOperationId!)) {
+            targetOps.add(widget.nextOperationId!);
+          }
+        }
+
+        Navigator.pop(context, {
+          'submitted': true,
+          'targetOps': targetOps,
+          'isRework': _isReworkMode,
+          'isReassigned': false,
+        });
       }
     } catch (e) {
       AppLoader.hide(context);
@@ -1165,7 +1181,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
   Widget _buildActionConsole() {
     final isLapping = widget.operationName.toLowerCase().contains('lapping');
     final isReworkBatch = _trays.isNotEmpty && _trays.any((t) => t.productionProgress.reworkFlag == true);
-    final isReassignedBatch = _trays.isNotEmpty && _trays.every((t) => t.primaryTrayModel.isReAssigned == true);
+    final isReassignedBatch = _trays.isNotEmpty && _trays.any((t) => t.primaryTrayModel.isReAssigned == true);
 
     return Container(
       width: double.infinity, // Expand to full width
@@ -1206,23 +1222,25 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                     label: _isReworkMode ? 'CANCEL' : 'REWORK',
                     icon: Icons.sync_problem_rounded,
                     color: _isReworkMode ? Colors.red : Colors.orange.shade800,
-                    onPressed: () {
-                      if (_isReworkMode) {
-                        setState(() {
-                          _isReworkMode = false;
-                          _selectedReworkTrayIds.clear();
-                          _reworkTargetOpId = null;
-                          _reworkTargetOpName = null;
-                        });
-                      } else {
-                        _showReworkDialog();
-                      }
-                    },
+                    onPressed: !_isBatchStarted
+                        ? null
+                        : () {
+                            if (_isReworkMode) {
+                              setState(() {
+                                _isReworkMode = false;
+                                _selectedReworkTrayIds.clear();
+                                _reworkTargetOpId = null;
+                                _reworkTargetOpName = null;
+                              });
+                            } else {
+                              _showReworkDialog();
+                            }
+                          },
                   ),
                 ),
                 const SizedBox(width: 6),
               ],
-              if (isLapping && !isReassignedBatch && !isReworkBatch) ...[
+              if (isLapping && !isReassignedBatch) ...[
                 Expanded(
                   child: _buildConsoleButton(
                     label: 'ASSIGN',
@@ -1246,7 +1264,14 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                           ),
                         ),
                       );
-                      if (mounted && result == true) Navigator.pop(context, true);
+                      if (mounted && result == true) {
+                        Navigator.pop(context, {
+                          'submitted': true,
+                          'targetOps': [if (widget.nextOperationId != null) widget.nextOperationId!],
+                          'isReassigned': true,
+                          'isRework': false,
+                        });
+                      }
                     },
                   ),
                 ),
@@ -1257,7 +1282,9 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                   label: _trolleyCode != null ? 'FREE' : 'SCAN',
                   icon: _trolleyCode != null ? Icons.link_off_rounded : Icons.qr_code_scanner_rounded,
                   color: _trolleyCode != null ? Colors.red.shade700 : Colors.teal.shade700,
-                  onPressed: _isUpdatingTrolley ? null : (_trolleyCode != null ? _confirmFreeTrolley : _showScanTrolleyDialog),
+                  onPressed: !_isBatchStarted
+                      ? null
+                      : (_isUpdatingTrolley ? null : (_trolleyCode != null ? _confirmFreeTrolley : _showScanTrolleyDialog)),
                 ),
               ),
             ],

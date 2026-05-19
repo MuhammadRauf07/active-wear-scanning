@@ -847,26 +847,6 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                     letterSpacing: 0.5,
                   ),
                 ),
-                const Spacer(),
-                if (_selectedMachine != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1B64A3),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Text(
-                      'READY',
-                      style: TextStyle(
-                        fontSize: 8,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
@@ -888,11 +868,12 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                         ),
                       ),
                       const SizedBox(height: 6),
-                      _buildOverlayDropdown<BatchMachineModel>(
+                      _BatchOverlayDropdown<BatchMachineModel>(
                         hint: "Select machine...",
                         items: _machines,
                         selectedValue: _selectedMachine,
                         itemLabel: (m) => m.resource?.brand ?? 'Unknown',
+                        isReadOnly: _scannedTrays.isNotEmpty,
                         onChanged: (val) {
                           setState(() {
                             _selectedMachine = val;
@@ -924,11 +905,12 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                             ),
                           ),
                           const SizedBox(height: 6),
-                          _buildOverlayDropdown<BatchColorModel>(
+                          _BatchOverlayDropdown<BatchColorModel>(
                             hint: "Select color...",
                             items: _colors,
                             selectedValue: _selectedColor,
                             itemLabel: (c) => c.segmentCode?.description ?? '-',
+                            isReadOnly: _scannedTrays.isNotEmpty,
                             onChanged: (val) =>
                                 setState(() => _selectedColor = val),
                           ),
@@ -947,56 +929,6 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
 );
 }
 
-  Widget _buildOverlayDropdown<T>({
-    required String hint,
-    required List<T> items,
-    required T? selectedValue,
-    required String Function(T) itemLabel,
-    required ValueChanged<T?> onChanged,
-  }) {
-    // Safety check: Ensure the selectedValue is actually in the items list
-    // If not, we fall back to null to avoid the Flutter assertion error.
-    final T? safeValue = items.contains(selectedValue) ? selectedValue : null;
-
-    return Container(
-      height: 40,
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFCFD8DC), width: 1),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<T>(
-          value: safeValue,
-          hint: Text(
-            hint,
-            style: const TextStyle(fontSize: 11, color: Color(0xFF90A4AE)),
-          ),
-          icon: const Icon(
-            Icons.arrow_drop_down_rounded,
-            color: Color(0xFF607D8B),
-          ),
-          isExpanded: true,
-          dropdownColor: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          elevation: 4,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF263238),
-          ),
-          onChanged: onChanged,
-          items: items.map((T item) {
-            return DropdownMenuItem<T>(
-              value: item,
-              child: Text(itemLabel(item)),
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
 
   Widget _buildScannedSection() {
     return Container(
@@ -1452,3 +1384,189 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     );
   }
 }
+
+class _BatchOverlayDropdown<T> extends StatefulWidget {
+  final String hint;
+  final List<T> items;
+  final T? selectedValue;
+  final String Function(T) itemLabel;
+  final ValueChanged<T?> onChanged;
+  final bool isReadOnly;
+
+  const _BatchOverlayDropdown({
+    required this.hint,
+    required this.items,
+    required this.selectedValue,
+    required this.itemLabel,
+    required this.onChanged,
+    this.isReadOnly = false,
+  });
+
+  @override
+  State<_BatchOverlayDropdown<T>> createState() => _BatchOverlayDropdownState<T>();
+}
+
+class _BatchOverlayDropdownState<T> extends State<_BatchOverlayDropdown<T>> with SingleTickerProviderStateMixin {
+  bool _isOpen = false;
+  late AnimationController _controller;
+  late Animation<double> _rotateAnimation;
+
+  final LayerLink _layerLink = LayerLink();
+  OverlayEntry? _overlayEntry;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(duration: const Duration(milliseconds: 250), vsync: this);
+    _rotateAnimation = Tween<double>(begin: 0, end: 0.5).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+  }
+
+  @override
+  void dispose() {
+    _overlayEntry?.remove();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _toggleDropdown() {
+    if (widget.isReadOnly) return;
+    if (_isOpen) {
+      _closeDropdown();
+    } else {
+      _openDropdown();
+    }
+  }
+
+  void _openDropdown() {
+    _overlayEntry = _createOverlayEntry();
+    Overlay.of(context).insert(_overlayEntry!);
+    setState(() {
+      _isOpen = true;
+      _controller.forward();
+    });
+  }
+
+  void _closeDropdown() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+    setState(() {
+      _isOpen = false;
+      _controller.reverse();
+    });
+  }
+
+  OverlayEntry _createOverlayEntry() {
+    RenderBox renderBox = context.findRenderObject() as RenderBox;
+    var size = renderBox.size;
+
+    return OverlayEntry(
+      builder: (context) => Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _closeDropdown,
+              child: Container(),
+            ),
+          ),
+          Positioned(
+            width: size.width,
+            child: CompositedTransformFollower(
+              link: _layerLink,
+              showWhenUnlinked: false,
+              offset: Offset(0, size.height + 4),
+              child: Material(
+                elevation: 0,
+                color: Colors.transparent,
+                child: _buildDropdownMenu(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: Opacity(
+        opacity: widget.isReadOnly ? 0.6 : 1.0,
+        child: GestureDetector(
+          onTap: _toggleDropdown,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8F9FA),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: _isOpen ? const Color(0xFF1B64A3) : const Color(0xFFCFD8DC),
+                width: 1.2,
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: widget.selectedValue == null
+                      ? Text(widget.hint, style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontWeight: FontWeight.w400))
+                      : Text(widget.itemLabel(widget.selectedValue as T), style: const TextStyle(color: Color(0xFF263238), fontSize: 13, fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis),
+                ),
+                RotationTransition(
+                  turns: _rotateAnimation,
+                  child: Icon(Icons.arrow_drop_down_rounded, color: _isOpen ? const Color(0xFF1B64A3) : const Color(0xFF546E7A), size: 24),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDropdownMenu() {
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 280),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 15, offset: const Offset(0, 8)),
+        ],
+        border: Border.all(color: const Color(0xFFCFD8DC), width: 1),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ListView.separated(
+        shrinkWrap: true,
+        padding: EdgeInsets.zero,
+        itemCount: widget.items.length,
+        separatorBuilder: (context, index) => Divider(height: 1, color: Colors.grey.shade100),
+        itemBuilder: (context, index) {
+          final item = widget.items[index];
+          final isSelected = item == widget.selectedValue;
+
+          return InkWell(
+            onTap: () {
+              widget.onChanged(item);
+              _closeDropdown();
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              color: isSelected ? const Color(0xFFF1F5F9) : Colors.transparent,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(widget.itemLabel(item), style: TextStyle(color: isSelected ? const Color(0xFF1B64A3) : const Color(0xFF263238), fontSize: 12, fontWeight: FontWeight.w700)),
+                  ),
+                  if (isSelected) const Icon(Icons.check_rounded, color: Color(0xFF1B64A3), size: 16),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+

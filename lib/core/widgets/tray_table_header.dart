@@ -31,7 +31,7 @@ class TrayTableHeader extends StatelessWidget {
           Expanded(flex: 3, child: Text('Tray Code', textAlign: TextAlign.center, style: _headerStyle)),
           Expanded(flex: 2, child: Text('Work Order', textAlign: TextAlign.center, style: _headerStyle)),
           Expanded(flex: 2, child: Text('Size', textAlign: TextAlign.center, style: _headerStyle)),
-          Expanded(flex: 2, child: Text('Pcs/Tube', textAlign: TextAlign.center, style: _headerStyle)),
+          Expanded(flex: 2, child: Text('Pcs per Tube', textAlign: TextAlign.center, style: _headerStyle)),
           Expanded(flex: 2, child: Text('Tubes', textAlign: TextAlign.center, style: _headerStyle)),
           Expanded(flex: 2, child: Text('Pcs', textAlign: TextAlign.center, style: _headerStyle)),
           Expanded(flex: 2, child: Text('Weight', textAlign: TextAlign.center, style: _headerStyle)),

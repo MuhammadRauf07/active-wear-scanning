@@ -418,10 +418,10 @@ class _WIPScreenState extends State<WIPScreen> {
                             children: [
                               _buildDialogHUD('TOTAL TRAYS', '${group.trayCount}', Icons.layers_rounded, const Color(0xFF0D47A1)),
                               _buildDialogHUD('TOTAL TUBES', totalPcs.toStringAsFixed(0), Icons.numbers_rounded, const Color(0xFF10B981)),
-                              _buildDialogHUD('NET WEIGHT', '${totalWeight.toStringAsFixed(1)} kg', Icons.scale_rounded, const Color(0xFFF59E0B)),
+                              _buildDialogHUD('NET WEIGHT', '${totalWeight.toStringAsFixed(1)} g', Icons.scale_rounded, const Color(0xFFF59E0B)),
                               _buildDialogHUD(
                                 isOverCapacity ? 'OVER CAPACITY' : 'CAPACITY REM.',
-                                remaining != null ? '${remaining.abs().toStringAsFixed(1)} kg' : 'N/A',
+                                remaining != null ? '${remaining.abs().toStringAsFixed(1)} g' : 'N/A',
                                 isOverCapacity ? Icons.warning_amber_rounded : Icons.hourglass_bottom_rounded,
                                 isOverCapacity ? const Color(0xFFEF4444) : const Color(0xFF6366F1),
                               ),
@@ -460,7 +460,7 @@ class _WIPScreenState extends State<WIPScreen> {
                                       child: ExpansionTile(
                                         tilePadding: const EdgeInsets.symmetric(horizontal: 16),
                                         title: Text(woEntry.key, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF1E293B))),
-                                        subtitle: Text('${woTrays.length} TRAYS • ${woWeight.toStringAsFixed(1)} kg', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF0D47A1))),
+                                        subtitle: Text('${woTrays.length} TRAYS • ${woWeight.toStringAsFixed(1)} g', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF0D47A1))),
                                         children: [
                                           _buildMiniHeader(),
                                           ...woTrays.map((t) => _buildMiniRow(t)),
@@ -535,7 +535,7 @@ class _WIPScreenState extends State<WIPScreen> {
         children: [
           Expanded(flex: 3, child: Text('TRAY CODE', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Color(0xFF64748B)))),
           Expanded(flex: 4, child: Text('ITEM', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Color(0xFF64748B)))),
-          Expanded(flex: 2, child: Text('WT (kg)', textAlign: TextAlign.right, style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Color(0xFF64748B)))),
+          Expanded(flex: 2, child: Text('WEIGHT', textAlign: TextAlign.right, style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Color(0xFF64748B)))),
         ],
       ),
     );

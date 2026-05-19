@@ -862,11 +862,24 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
 }
 
-class _TrayFadeSlideTransition extends StatelessWidget {
+class _TrayFadeSlideTransition extends StatefulWidget {
   final Widget child;
   final int delay;
 
   const _TrayFadeSlideTransition({required this.child, required this.delay});
+
+  @override
+  State<_TrayFadeSlideTransition> createState() => _TrayFadeSlideTransitionState();
+}
+
+class _TrayFadeSlideTransitionState extends State<_TrayFadeSlideTransition> {
+  late Future<void> _delayFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _delayFuture = Future.delayed(Duration(milliseconds: widget.delay));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -876,7 +889,7 @@ class _TrayFadeSlideTransition extends StatelessWidget {
       curve: Curves.easeOutCubic,
       builder: (context, value, child) {
         return FutureBuilder(
-          future: Future.delayed(Duration(milliseconds: delay)),
+          future: _delayFuture,
           builder: (context, snapshot) {
             final isVisible = snapshot.connectionState == ConnectionState.done;
             return AnimatedOpacity(
@@ -890,7 +903,7 @@ class _TrayFadeSlideTransition extends StatelessWidget {
           },
         );
       },
-      child: child,
+      child: widget.child,
     );
   }
 }

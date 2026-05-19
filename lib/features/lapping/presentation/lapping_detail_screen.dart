@@ -77,6 +77,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onHardwareKey);
     _focusNode.dispose();
     _trayQtyController.dispose();
     super.dispose();
@@ -85,30 +86,38 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _focusNode.requestFocus();
+    HardwareKeyboard.instance.addHandler(_onHardwareKey);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _fetchBatchData();
     });
   }
 
-  void _onKey(RawKeyEvent event) {
-    if (event is RawKeyDownEvent) {
-      final now = DateTime.now();
-      if (_lastKeyPress != null && now.difference(_lastKeyPress!).inMilliseconds > 200) {
-        _barcodeBuffer = '';
-      }
-      _lastKeyPress = now;
+  bool _onHardwareKey(KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return false;
 
-      if (event.logicalKey == LogicalKeyboardKey.enter) {
-        if (_barcodeBuffer.isNotEmpty) {
-          final code = _barcodeBuffer;
-          _barcodeBuffer = '';
-          _processBluetoothScan(code);
-        }
-      } else if (event.character != null) {
-        _barcodeBuffer += event.character!;
-      }
+    final now = DateTime.now();
+    if (_lastKeyPress != null && now.difference(_lastKeyPress!).inMilliseconds > 200) {
+      _barcodeBuffer = '';
     }
+    _lastKeyPress = now;
+
+    final ch = event.character;
+    final isEnter = event.logicalKey == LogicalKeyboardKey.enter ||
+        event.logicalKey == LogicalKeyboardKey.numpadEnter ||
+        ch == '\n' || ch == '\r';
+
+    if (isEnter) {
+      if (_barcodeBuffer.isNotEmpty) {
+        final code = _barcodeBuffer;
+        _barcodeBuffer = '';
+        debugPrint('📡 BT Scanner (Lapping) → code: $code');
+        _processBluetoothScan(code);
+        return true; // consume the Enter key
+      }
+    } else if (ch != null && ch.isNotEmpty) {
+      _barcodeBuffer += ch;
+    }
+    return false;
   }
 
   Future<void> _processBluetoothScan(String scannedCode) async {
@@ -353,32 +362,52 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
-      body: RawKeyboardListener(
-        focusNode: _focusNode,
-        autofocus: true,
-        onKey: _onKey,
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildPremiumHeader(),
-              Expanded(
-                child: _isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // ── 1. PROCESS FLOW RIBBON ──────────────────────────
-                            _buildProcessFlowRibbon(),
-                            const SizedBox(height: 16),
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildPremiumHeader(),
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // ── 1. PROCESS FLOW RIBBON ──────────────────────────
+                          _buildProcessFlowRibbon(),
+                          const SizedBox(height: 16),
 
-                            // ── 2. HUD METRICS GRID ────────────────────────────
-                            _buildAeroIntelligenceGrid(),
-                            const SizedBox(height: 16),
+                          // ── 2. HUD METRICS GRID ────────────────────────────
+                          _buildAeroIntelligenceGrid(),
+                          const SizedBox(height: 16),
 
-                            // ── 3. WORK ORDER CONSOLE ──────────────────────────
+                          // ── 3. WORK ORDER CONSOLE ──────────────────────────
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.05),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: WorkOrderSelectionCard(
+                              workOrders: _workOrders,
+                              selectedWorkOrderId: _selectedWorkOrderId,
+                              scannedTraysByWO: _scannedTraysByWO,
+                              trayOverrideQuantities: _trayOverrideQuantities,
+                              onSelected: (val) => setState(() => _selectedWorkOrderId = val),
+                            ),
+                          ),
+
+                          if (_selectedWorkOrderId != null) ...[
+                            const SizedBox(height: 16),
                             Container(
                               decoration: BoxDecoration(
                                 color: Colors.white,
@@ -392,73 +421,48 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
                                   ),
                                 ],
                               ),
-                              child: WorkOrderSelectionCard(
-                                workOrders: _workOrders,
+                              child: LappingScannerUI(
                                 selectedWorkOrderId: _selectedWorkOrderId,
                                 scannedTraysByWO: _scannedTraysByWO,
-                                trayOverrideQuantities: _trayOverrideQuantities,
-                                onSelected: (val) => setState(() => _selectedWorkOrderId = val),
+                                trayQtyController: _trayQtyController,
+                                focusNode: _focusNode,
+                                onScanPressed: _openScanner,
+                                childTable: Builder(
+                                  builder: (_) {
+                                    final traysToShow = _scannedTraysByWO[_selectedWorkOrderId] ?? [];
+                                    if (traysToShow.isNotEmpty) {
+                                      return LappingTrayTable(
+                                        selectedWorkOrderId: _selectedWorkOrderId,
+                                        scannedTraysByWO: _scannedTraysByWO,
+                                        trayOverrideQuantities: _trayOverrideQuantities,
+                                        onRemove: (t, trayKey) {
+                                          setState(() {
+                                            _scannedTraysByWO[_selectedWorkOrderId]?.remove(t);
+                                            _trayOverrideQuantities.remove(trayKey);
+                                          });
+                                        },
+                                      );
+                                    } else {
+                                      return Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.symmetric(vertical: 40),
+                                        alignment: Alignment.center,
+                                        child: Text(
+                                          'No scanned trays yet. Start by scanning a tray barcode.',
+                                          style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                ),
                               ),
                             ),
-
-                            if (_selectedWorkOrderId != null) ...[
-                              const SizedBox(height: 16),
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.05),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
-                                ),
-                                child: LappingScannerUI(
-                                  selectedWorkOrderId: _selectedWorkOrderId,
-                                  scannedTraysByWO: _scannedTraysByWO,
-                                  trayQtyController: _trayQtyController,
-                                  focusNode: _focusNode,
-                                  onScanPressed: _openScanner,
-                                  childTable: Builder(
-                                    builder: (_) {
-                                      final traysToShow = _scannedTraysByWO[_selectedWorkOrderId] ?? [];
-                                      if (traysToShow.isNotEmpty) {
-                                        return LappingTrayTable(
-                                          selectedWorkOrderId: _selectedWorkOrderId,
-                                          scannedTraysByWO: _scannedTraysByWO,
-                                          trayOverrideQuantities: _trayOverrideQuantities,
-                                          onRemove: (t, trayKey) {
-                                            setState(() {
-                                              _scannedTraysByWO[_selectedWorkOrderId]?.remove(t);
-                                              _trayOverrideQuantities.remove(trayKey);
-                                            });
-                                          },
-                                        );
-                                      } else {
-                                        return Container(
-                                          width: double.infinity,
-                                          padding: const EdgeInsets.symmetric(vertical: 40),
-                                          alignment: Alignment.center,
-                                          child: Text(
-                                            'No scanned trays yet. Start by scanning a tray barcode.',
-                                            style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
-                                          ),
-                                        );
-                                      }
-                                    },
-                                  ),
-                                ),
-                              ),
-                            ],
                           ],
-                        ),
+                        ],
                       ),
-              ),
-            ],
-          ),
+                    ),
+            ),
+          ],
         ),
       ),
     );
@@ -595,7 +599,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
         _buildHUDCard('COLOR', widget.color, Icons.palette_rounded),
         _buildHUDCard('OPERATION', 'LAPPING', Icons.account_tree_rounded),
         _buildHUDCard('TRAYS', '${widget.trayCount} UNITS', Icons.inventory_2_rounded),
-        _buildHUDCard('WEIGHT', '${widget.totalWeight.toStringAsFixed(1)} KG', Icons.scale_rounded),
+        _buildHUDCard('WEIGHT', '${widget.totalWeight.toStringAsFixed(1)} g', Icons.scale_rounded),
       ],
     );
   }
@@ -656,6 +660,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
     }
 
     setState(() => _isLoading = true);
+    AppLoader.show(context, message: 'Submitting changes...');
     try {
       // Only process newly reassigned trays
       final assignedTrays = _scannedTraysByWO.values.expand((list) => list).toList();
@@ -712,7 +717,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
           "machineId": scannedTray.productionProgress.machineId ?? (_trays.isNotEmpty ? _trays.first.productionProgress.machineId : null),
           "isLastProcess": false,
           "isStarted": false,
-          "reworkFlag": false,
+          "reworkFlag": scannedTray.productionProgress.reworkFlag ?? false,
           "lotMakingFlag": false, // Strict pass
           "locatorId": nextLocatorId,
           "operationId": handoverOpId ?? scannedTray.productionProgress.operationId,

@@ -105,7 +105,7 @@ class LappingTrayTable extends StatelessWidget {
                   ),
                 ),
                 Expanded(flex: 2, child: Text(garmentPcs > 0 ? garmentPcs.toStringAsFixed(0) : '-', style: _cellStyle(color: const Color(0xFF059669), isBold: true))),
-                Expanded(flex: 2, child: Text('${(qty * pw).toStringAsFixed(1)} kg', style: _cellStyle())),
+                Expanded(flex: 2, child: Text('${(qty * pw).toStringAsFixed(1)} g', style: _cellStyle())),
                 IconButton(
                   onPressed: () => onRemove(t, trayKey),
                   icon: const Icon(Icons.delete_sweep_rounded, color: Color(0xFFEF4444), size: 20),
