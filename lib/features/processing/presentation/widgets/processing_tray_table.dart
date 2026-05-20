@@ -47,7 +47,7 @@ class ProcessingTrayTable extends StatelessWidget {
                 Expanded(flex: 4, child: Text('ITEM DESCRIPTION', style: _headerStyle)),
                 Expanded(flex: 2, child: Text('COLOR', style: _headerStyle)),
                 Expanded(flex: 2, child: Text('SIZE', style: _headerStyle)),
-                Expanded(flex: 2, child: Text('PCS/TUBE', style: _headerStyle)),
+                Expanded(flex: 2, child: Text('PCS PER TUBE', style: _headerStyle)),
                 Expanded(flex: 2, child: Text('TUBES', style: _headerStyle)),
                 Expanded(flex: 2, child: Text('PCS', style: _headerStyle)),
                 if (isReworkMode)

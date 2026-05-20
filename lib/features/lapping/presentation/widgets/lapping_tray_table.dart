@@ -34,12 +34,12 @@ class LappingTrayTable extends StatelessWidget {
         children: [
           Expanded(flex: 2, child: Text('TRAY CODE', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
           Expanded(flex: 4, child: Text('ITEM DESCRIPTION', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('COLOR', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('SIZE', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('PCS/TUBE', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('TUBES', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('PCS', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('WEIGHT', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('COLOR', textAlign: TextAlign.center, style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('SIZE', textAlign: TextAlign.center, style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('PCS/TUBE', textAlign: TextAlign.center, style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('TUBES', textAlign: TextAlign.center, style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('PCS', textAlign: TextAlign.center, style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text('WEIGHT', textAlign: TextAlign.center, style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
           const SizedBox(width: 44),
         ],
       ),
@@ -62,12 +62,12 @@ class LappingTrayTable extends StatelessWidget {
             children: [
               _buildHeadCell('TRAY CODE', 2),
               _buildHeadCell('ITEM DESCRIPTION', 4),
-              _buildHeadCell('COLOR', 2),
-              _buildHeadCell('SIZE', 2),
-              _buildHeadCell('P/TUBE', 2),
-              _buildHeadCell('TUBES', 2),
-              _buildHeadCell('PCS', 2),
-              _buildHeadCell('WEIGHT', 2),
+              _buildHeadCell('COLOR', 2, textAlign: TextAlign.center),
+              _buildHeadCell('SIZE', 2, textAlign: TextAlign.center),
+              _buildHeadCell('PCS PER TUBE', 2, textAlign: TextAlign.center),
+              _buildHeadCell('TUBES', 2, textAlign: TextAlign.center),
+              _buildHeadCell('PCS', 2, textAlign: TextAlign.center),
+              _buildHeadCell('WEIGHT', 2, textAlign: TextAlign.center),
               const SizedBox(width: 44),
             ],
           ),
@@ -92,23 +92,24 @@ class LappingTrayTable extends StatelessWidget {
               children: [
                 Expanded(flex: 2, child: Text(t.primaryTrayModel.trayCode ?? '-', style: _cellStyle(isBold: true, color: const Color(0xFF0D47A1)))),
                 Expanded(flex: 4, child: Text(t.processedItem?.description ?? t.item?.description ?? '-', maxLines: 2, overflow: TextOverflow.ellipsis, style: _cellStyle(isSmall: true))),
-                Expanded(flex: 2, child: Text(t.item?.colorDescription ?? '-', style: _cellStyle(isBold: true))),
-                Expanded(flex: 2, child: Text(t.item?.sizeDescription ?? '-', style: _cellStyle())),
-                Expanded(flex: 2, child: Text(pgt > 0 ? pgt.toStringAsFixed(0) : '-', style: _cellStyle(color: const Color(0xFF1B64A3)))),
+                Expanded(flex: 2, child: Text(t.item?.colorDescription ?? '-', textAlign: TextAlign.center, style: _cellStyle(isBold: true))),
+                Expanded(flex: 2, child: Text(t.item?.sizeDescription ?? '-', textAlign: TextAlign.center, style: _cellStyle())),
+                Expanded(flex: 2, child: Text(pgt > 0 ? pgt.toStringAsFixed(0) : '-', textAlign: TextAlign.center, style: _cellStyle(color: const Color(0xFF1B64A3)))),
                 Expanded(
                   flex: 2,
-                  child: Container(
-                    margin: const EdgeInsets.only(right: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(4), border: Border.all(color: const Color(0xFFCBD5E1))),
-                    child: Text(qty.toStringAsFixed(0), textAlign: TextAlign.center, style: _cellStyle(isBold: true)),
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(4), border: Border.all(color: const Color(0xFFCBD5E1))),
+                      child: Text(qty.toStringAsFixed(0), textAlign: TextAlign.center, style: _cellStyle(isBold: true)),
+                    ),
                   ),
                 ),
-                Expanded(flex: 2, child: Text(garmentPcs > 0 ? garmentPcs.toStringAsFixed(0) : '-', style: _cellStyle(color: const Color(0xFF059669), isBold: true))),
-                Expanded(flex: 2, child: Text('${(qty * pw).toStringAsFixed(1)} g', style: _cellStyle())),
+                Expanded(flex: 2, child: Text(garmentPcs > 0 ? garmentPcs.toStringAsFixed(0) : '-', textAlign: TextAlign.center, style: _cellStyle(color: const Color(0xFF059669), isBold: true))),
+                Expanded(flex: 2, child: Text('${(qty * pw).toStringAsFixed(1)} g', textAlign: TextAlign.center, style: _cellStyle())),
                 IconButton(
                   onPressed: () => onRemove(t, trayKey),
-                  icon: const Icon(Icons.delete_sweep_rounded, color: Color(0xFFEF4444), size: 20),
+                  icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 20),
                   visualDensity: VisualDensity.compact,
                 ),
               ],
@@ -119,11 +120,12 @@ class LappingTrayTable extends StatelessWidget {
     );
   }
 
-  Widget _buildHeadCell(String label, int flex) {
+  Widget _buildHeadCell(String label, int flex, {TextAlign textAlign = TextAlign.start}) {
     return Expanded(
       flex: flex,
       child: Text(
         label,
+        textAlign: textAlign,
         style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Color(0xFF64748B), letterSpacing: 0.5),
       ),
     );

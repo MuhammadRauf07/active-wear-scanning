@@ -504,6 +504,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                                           nextOpName = _operations[currentIndex + 1].name;
                                           nextOpId = _operations[currentIndex + 1].id;
                                         }
+                                        final activeOpId = _selectedOperation?.id;
                                         final result = await Navigator.push(
                                           context,
                                           MaterialPageRoute(
@@ -523,7 +524,13 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                                             ),
                                           ),
                                         );
-                                           if (result != null && result is Map && result['submitted'] == true) {
+
+                                        if (mounted && activeOpId != null) {
+                                          _fetchOpDetails(activeOpId, force: true);
+                                          _fetchBatchCount(activeOpId);
+                                        }
+
+                                        if (result != null && result is Map && result['submitted'] == true) {
                                              final List<int> targetOps = [];
                                              if (result['targetOps'] is List) {
                                                for (final item in result['targetOps']) {

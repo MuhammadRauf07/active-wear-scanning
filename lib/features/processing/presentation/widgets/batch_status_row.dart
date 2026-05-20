@@ -84,9 +84,14 @@ class BatchStatusRow extends StatelessWidget {
           Expanded(
             flex: 2,
             child: Center(
-              child: summary.isReassigned == true
-                  ? const Icon(Icons.swap_horiz_rounded, size: 16, color: Color(0xFF1B64A3))
-                  : const Text('-', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
+              child: Text(
+                summary.isReassigned == true ? 'Yes' : 'No',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: summary.isReassigned == true ? const Color(0xFF1B64A3) : const Color(0xFF64748B),
+                ),
+              ),
             ),
           ),
           
@@ -94,9 +99,7 @@ class BatchStatusRow extends StatelessWidget {
           Expanded(
             flex: 2,
             child: Center(
-              child: summary.reworkFlag == true
-                  ? const Icon(Icons.refresh_rounded, size: 16, color: Color(0xFFE67E22))
-                  : const Text('-', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
+              child: _buildReworkIndicator(),
             ),
           ),
           
@@ -130,21 +133,49 @@ class BatchStatusRow extends StatelessWidget {
     );
   }
 
+  Widget _buildReworkIndicator() {
+    if (summary.reworkFlag == true) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Yes',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFFEF4444),
+            ),
+          ),
+          Transform.translate(
+            offset: const Offset(1, -2),
+            child: const Icon(
+              Icons.error_rounded,
+              size: 8,
+              color: Color(0xFFEF4444),
+            ),
+          ),
+        ],
+      );
+    } else {
+      return const Text(
+        'No',
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF64748B),
+        ),
+      );
+    }
+  }
+
   Widget _buildStateBadge() {
-    final bool isRework = summary.reworkFlag == true;
     final bool isStarted = summary.isStarted == true;
 
-    String label = isStarted ? 'STARTED' : 'OFFERED';
-    Color bgColor = isStarted ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7);
-    Color textColor = isStarted ? const Color(0xFF166534) : const Color(0xFF92400E);
-    IconData icon = isStarted ? Icons.play_circle_outline_rounded : Icons.pause_circle_outline_rounded;
-
-    if (isRework) {
-      label = 'REWORK';
-      bgColor = const Color(0xFFFEE2E2);
-      textColor = const Color(0xFF991B1B);
-      icon = Icons.error_outline_rounded;
-    }
+    final String label = isStarted ? 'STARTED' : 'OFFERED';
+    final Color bgColor = isStarted ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7);
+    final Color textColor = isStarted ? const Color(0xFF166534) : const Color(0xFF92400E);
+    final IconData icon = isStarted ? Icons.play_circle_outline_rounded : Icons.pause_circle_outline_rounded;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),

@@ -69,6 +69,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
 
   bool _isReworkMode = false;
   final Set<int> _selectedReworkTrayIds = {};
+  final Set<int> _failedTrayIds = {};
   int? _reworkTargetOpId;
   String? _reworkTargetOpName;
 
@@ -341,10 +342,20 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
             ),
             ElevatedButton.icon(
               onPressed: submitBlocked ? null : _confirmSubmit,
-              icon: const Icon(Icons.check_circle_rounded, size: 16),
-              label: const Text('SUBMIT BATCH', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11)),
+              icon: Icon(
+                _failedTrayIds.isNotEmpty ? Icons.replay_rounded : Icons.check_circle_rounded,
+                size: 16,
+              ),
+              label: Text(
+                _failedTrayIds.isNotEmpty
+                    ? 'RETRY SUBMISSION (${_failedTrayIds.length})'
+                    : 'SUBMIT BATCH',
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 11),
+              ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2E7D32),
+                backgroundColor: _failedTrayIds.isNotEmpty
+                    ? const Color(0xFFE65100) // Deep Orange for retry action
+                    : const Color(0xFF2E7D32), // Standard Green
                 foregroundColor: Colors.white,
                 elevation: 0,
                 disabledBackgroundColor: Colors.grey.shade200,
@@ -741,7 +752,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
           _isUpdatingTrolley = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Trolley freed. Scan a new trolley before submitting.'), backgroundColor: Colors.orange),
+          const SnackBar(content: Text('Trolley free. Scan a new trolley before submitting.'), backgroundColor: Colors.orange),
         );
       } else {
         setState(() => _isUpdatingTrolley = false);
@@ -1048,98 +1059,125 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
         if (match.isNotEmpty) nextLocatorId = match['locator']?['id'] as int? ?? 10;
       }
 
-      for (final t in _trays) {
+      final List<int> newFailedTrayIds = [];
+      final traysToProcess = _trays;
+
+      for (final t in traysToProcess) {
         final pp = t.productionProgress;
         final json = pp.toJson();
         final isRework = _isReworkMode && _selectedReworkTrayIds.contains(pp.id);
 
-        if (isRework) {
-          json['transactionType'] = 3;
-          json['wipStatus'] = 1;
-          json.remove('id');
-          json.remove('progressCode');
-          json.remove('creationTime');
-          json.remove('creatorId');
-          json.remove('lastModificationTime');
-          json.remove('lastModifierId');
-          final updRes = await _processingRepo.updateProductionProgress(pp.id!, json);
-          if (!updRes.success) throw Exception('Update old progress failed: ${updRes.message}');
+        try {
+          if (isRework) {
+            json['transactionType'] = 3;
+            json['wipStatus'] = 1;
+            json.remove('id');
+            json.remove('progressCode');
+            json.remove('creationTime');
+            json.remove('creatorId');
+            json.remove('lastModificationTime');
+            json.remove('lastModifierId');
+            final updRes = await _processingRepo.updateProductionProgress(pp.id!, json);
+            if (!updRes.success) throw Exception('Update failed: ${updRes.message}');
 
-          int rewLoc = 10;
-          final rewRes = await _processingRepo.fetchLocators(operationId: _reworkTargetOpId!);
-          if (rewRes.success && rewRes.data != null) {
-            final rl = rewRes.data as List;
-            final rm = rl.cast<Map>().firstWhere(
-                  (e) => (e['operation']?['id'] ?? e['locator']?['operationId'])?.toString() == _reworkTargetOpId.toString(),
-              orElse: () => {},
-            );
-            if (rm.isNotEmpty) rewLoc = rm['locator']?['id'] as int? ?? 10;
+            int rewLoc = 10;
+            final rewRes = await _processingRepo.fetchLocators(operationId: _reworkTargetOpId!);
+            if (rewRes.success && rewRes.data != null) {
+              final rl = rewRes.data as List;
+              final rm = rl.cast<Map>().firstWhere(
+                    (e) => (e['operation']?['id'] ?? e['locator']?['operationId'])?.toString() == _reworkTargetOpId.toString(),
+                orElse: () => {},
+              );
+              if (rm.isNotEmpty) rewLoc = rm['locator']?['id'] as int? ?? 10;
+            }
+
+            final newJ = pp.toJson();
+            newJ.remove('id');
+            newJ.remove('progressCode');
+            newJ.remove('concurrencyStamp');
+            newJ.addAll({
+              'transactionType': 2,
+              'reworkFlag': true,
+              'isStarted': false,
+              'startDate': null,
+              'machineId': null,
+              'batchLinesId': null,
+              'isLastProcess': false,
+              'operationId': _reworkTargetOpId,
+              'locatorId': rewLoc,
+              'date': DateTime.now().toIso8601String(),
+            });
+            final crRes = await _processingRepo.createProductionProgress(newJ);
+            if (!crRes.success) throw Exception('Create failed: ${crRes.message}');
+          } else if (widget.nextOperationId != null) {
+            json['transactionType'] = 3;
+            json['wipStatus'] = 1;
+            json.remove('id');
+            json.remove('progressCode');
+            json.remove('creationTime');
+            json.remove('creatorId');
+            json.remove('lastModificationTime');
+            json.remove('lastModifierId');
+            
+            dev.log('🚀 [HEATSET/NEXT] Updating old PP ID ${pp.id} to TxType 3: $json');
+            final updRes = await _processingRepo.updateProductionProgress(pp.id!, json);
+            dev.log('✅ [HEATSET/NEXT] Update Response: ${updRes.success} | ${updRes.message} | ${updRes.data}');
+            if (!updRes.success) throw Exception('Update failed: ${updRes.message}');
+
+            final newJ = pp.toJson();
+            newJ.remove('id');
+            newJ.remove('progressCode');
+            newJ.remove('concurrencyStamp');
+            newJ.addAll({
+              'transactionType': 2,
+              'reworkFlag': pp.reworkFlag ?? false,
+              'isStarted': false,
+              'startDate': null,
+              'machineId': null,
+              'batchLinesId': null,
+              'isLastProcess': false,
+              'operationId': widget.nextOperationId,
+              'locatorId': nextLocatorId,
+              'date': DateTime.now().toIso8601String(),
+            });
+            final crRes = await _processingRepo.createProductionProgress(newJ);
+            if (!crRes.success) throw Exception('Create failed: ${crRes.message}');
+          } else {
+            json['transactionType'] = 3;
+            json['wipStatus'] = 1;
+            json['isLastProcess'] = true; // ✅ Flags tray as ready for Induction
+            json.remove('id');
+            json.remove('progressCode');
+            json.remove('creationTime');
+            json.remove('creatorId');
+            json.remove('lastModificationTime');
+            json.remove('lastModifierId');
+            final updRes = await _processingRepo.updateProductionProgress(pp.id!, json);
+            if (!updRes.success) throw Exception('Update final progress failed: ${updRes.message}');
           }
-
-          final newJ = pp.toJson();
-          newJ.remove('id');
-          newJ.remove('progressCode');
-          newJ.remove('concurrencyStamp');
-          newJ.addAll({
-            'transactionType': 2,
-            'reworkFlag': true,
-            'isStarted': false,
-            'startDate': null,
-            'machineId': null,
-            'batchLinesId': null,
-            'isLastProcess': false,
-            'operationId': _reworkTargetOpId,
-            'locatorId': rewLoc,
-            'date': DateTime.now().toIso8601String(),
-          });
-          final crRes = await _processingRepo.createProductionProgress(newJ);
-          if (!crRes.success) throw Exception('Create new progress failed: ${crRes.message}');
-        } else if (widget.nextOperationId != null) {
-          json['transactionType'] = 3;
-          json['wipStatus'] = 1;
-          json.remove('id');
-          json.remove('progressCode');
-          json.remove('creationTime');
-          json.remove('creatorId');
-          json.remove('lastModificationTime');
-          json.remove('lastModifierId');
-          
-          dev.log('🚀 [HEATSET/NEXT] Updating old PP ID ${pp.id} to TxType 3: $json');
-          final updRes = await _processingRepo.updateProductionProgress(pp.id!, json);
-          dev.log('✅ [HEATSET/NEXT] Update Response: ${updRes.success} | ${updRes.message} | ${updRes.data}');
-          if (!updRes.success) throw Exception('Update old progress failed: ${updRes.message}');
-
-          final newJ = pp.toJson();
-          newJ.remove('id');
-          newJ.remove('progressCode');
-          newJ.remove('concurrencyStamp');
-          newJ.addAll({
-            'transactionType': 2,
-            'reworkFlag': pp.reworkFlag ?? false,
-            'isStarted': false,
-            'startDate': null,
-            'machineId': null,
-            'batchLinesId': null,
-            'isLastProcess': false,
-            'operationId': widget.nextOperationId,
-            'locatorId': nextLocatorId,
-            'date': DateTime.now().toIso8601String(),
-          });
-          final crRes = await _processingRepo.createProductionProgress(newJ);
-          if (!crRes.success) throw Exception('Create new progress failed: ${crRes.message}');
-        } else {
-          json['transactionType'] = 3;
-          json['wipStatus'] = 1;
-          json['isLastProcess'] = true; // ✅ Flags tray as ready for Induction
-          json.remove('id');
-          json.remove('progressCode');
-          json.remove('creationTime');
-          json.remove('creatorId');
-          json.remove('lastModificationTime');
-          json.remove('lastModifierId');
-          final updRes = await _processingRepo.updateProductionProgress(pp.id!, json);
-          if (!updRes.success) throw Exception('Update final progress failed: ${updRes.message}');
+        } catch (e) {
+          dev.log('❌ Tray submission error for PP ${pp.id}: $e');
+          newFailedTrayIds.add(pp.id!);
         }
+      }
+
+      setState(() {
+        if (_failedTrayIds.isEmpty) {
+          _failedTrayIds.addAll(newFailedTrayIds);
+        } else {
+          for (final t in traysToProcess) {
+            final id = t.productionProgress.id!;
+            if (newFailedTrayIds.contains(id)) {
+              _failedTrayIds.add(id);
+            } else {
+              _failedTrayIds.remove(id);
+            }
+          }
+        }
+      });
+
+      if (_failedTrayIds.isNotEmpty) {
+        throw Exception('${_failedTrayIds.length} tray(s) failed to submit. Please check connection and retry.');
       }
 
       if (mounted) {
@@ -1173,7 +1211,11 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
     } catch (e) {
       AppLoader.hide(context);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red.shade800,
+          duration: const Duration(seconds: 5),
+        ));
       }
     }
   }
@@ -1243,7 +1285,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
               if (isLapping && !isReassignedBatch) ...[
                 Expanded(
                   child: _buildConsoleButton(
-                    label: 'ASSIGN',
+                    label: 'RE-ASSIGN',
                     icon: Icons.assignment_turned_in_rounded,
                     color: Colors.teal,
                     onPressed: !_isBatchStarted ? null : () async {
@@ -1279,7 +1321,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
               ],
               Expanded(
                 child: _buildConsoleButton(
-                  label: _trolleyCode != null ? 'FREE' : 'SCAN',
+                  label: _trolleyCode != null ? 'FREE TROLLEY' : 'SCAN TROLLEY',
                   icon: _trolleyCode != null ? Icons.link_off_rounded : Icons.qr_code_scanner_rounded,
                   color: _trolleyCode != null ? Colors.red.shade700 : Colors.teal.shade700,
                   onPressed: !_isBatchStarted
