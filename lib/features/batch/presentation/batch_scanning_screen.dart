@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
+import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/content_card.dart';
 import 'package:active_wear_scanning/core/widgets/custom_expanded_async_dropdown.dart';
@@ -83,7 +84,8 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
 
   Future<void> _fetchProductionProgresses() async {
     final result = await _batchRepo.fetchProductionProgress();
-    if (mounted && result.success && result.data != null) {
+    if (!mounted) return;
+    if (result.success && result.data != null) {
       final progresses = result.data as List<ProductionProgressResponseModel>;
       setState(() {
         productionProgressTrays = progresses;
@@ -91,6 +93,12 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
       if (widget.existingBatch != null) {
         await _loadExistingBatchTrays(progresses);
       }
+    } else {
+      AppSnackBar.showError(
+        context,
+        title: 'Fetch Failed',
+        message: result.message ?? 'Unknown error fetching production progresses',
+      );
     }
   }
 
@@ -170,9 +178,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     } else {
       setState(() => _isLoading = false);
       AppLoader.hide(context);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: ${result.message}')));
+      AppSnackBar.showError(context, message: result.message ?? '');
     }
   }
 
@@ -198,9 +204,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     } else {
       setState(() => _isLoadingColors = false);
       AppLoader.hide(context);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: ${result.message}')));
+      AppSnackBar.showError(context, message: result.message ?? '');
     }
   }
 
@@ -229,26 +233,20 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     final code = scannedCode.trim();
     if (code.isEmpty) return;
     if (_selectedMachine == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error: Please select a machine first')),
-      );
+      AppSnackBar.showError(context, message: 'Please select a machine first');
       return;
     }
     AppLoader.show(context, message: 'Validating Tray...');
     final error = await _validateTrayForScan(code);
     AppLoader.hide(context);
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $error'), backgroundColor: Colors.red),
-      );
+      AppSnackBar.showError(context, message: error);
     }
   }
 
   Future<void> _onScanTray() async {
     if (_selectedMachine == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error: Please select a machine first')),
-      );
+      AppSnackBar.showError(context, message: 'Please select a machine first');
       return;
     }
     await Future.delayed(const Duration(milliseconds: 300));
@@ -403,8 +401,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
 
       if (!res.success) {
         AppLoader.hide(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to create batch: ${res.message}')));
+        AppSnackBar.showError(context, title: 'Failed to create batch', message: res.message ?? '');
         return;
       }
 
@@ -441,8 +438,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
 
     if (batchHeaderId == 0) {
       AppLoader.hide(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error: Invalid Batch ID generated.')));
+      AppSnackBar.showError(context, message: 'Invalid Batch ID generated.');
       return;
     }
 
@@ -524,53 +520,63 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9),
-      body: RawKeyboardListener(
-        focusNode: _focusNode,
-        autofocus: true,
-        onKey: _onKey,
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildPremiumHeader(),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                  child: Column(
-                    children: [
-                      _buildConfigurationPanel(),
-                      const SizedBox(height: 16),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 400),
-                        transitionBuilder: (child, animation) => FadeTransition(
-                          opacity: animation,
-                          child: SlideTransition(
-                            position: Tween<Offset>(
-                              begin: const Offset(0, 0.05),
-                              end: Offset.zero,
-                            ).animate(animation),
-                            child: child,
+    return PopScope(
+      canPop: !AppLoader.isVisible,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF1F5F9),
+        body: RawKeyboardListener(
+          focusNode: _focusNode,
+          autofocus: true,
+          onKey: _onKey,
+          child: SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildPremiumHeader(),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildConfigurationPanel(),
+                        const SizedBox(height: 16),
+                        Expanded(
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 400),
+                            transitionBuilder: (child, animation) => FadeTransition(
+                              opacity: animation,
+                              child: SlideTransition(
+                                position: Tween<Offset>(
+                                  begin: const Offset(0, 0.05),
+                                  end: Offset.zero,
+                                ).animate(animation),
+                                child: child,
+                              ),
+                            ),
+                            child: _selectedColor != null
+                                ? Column(
+                                    key: const ValueKey('scanning_active'),
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
+                                      _buildLiveDashboard(),
+                                      const SizedBox(height: 16),
+                                      _buildWOSummary(),
+                                      const SizedBox(height: 16),
+                                      Expanded(
+                                        child: _buildScannedSection(),
+                                      ),
+                                    ],
+                                  )
+                                : const SizedBox.shrink(key: ValueKey('scanning_idle')),
                           ),
                         ),
-                        child: _selectedColor != null
-                            ? Column(
-                                key: const ValueKey('scanning_active'),
-                                children: [
-                                  _buildLiveDashboard(),
-                                  const SizedBox(height: 16),
-                                  _buildWOSummary(),
-                                  _buildScannedSection(),
-                                ],
-                              )
-                            : const SizedBox.shrink(key: ValueKey('scanning_idle')),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -981,50 +987,52 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                   ],
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    SizedBox(
-                      width: double.infinity,
-                      height: 44,
-                      child: ElevatedButton.icon(
-                        onPressed: _onScanTray,
-                        icon: const Icon(
-                          Icons.add_circle_outline_rounded,
-                          size: 20,
-                        ),
-                        label: const Text(
-                          'SCAN NEW TRAY',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 12,
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        height: 44,
+                        child: ElevatedButton.icon(
+                          onPressed: _onScanTray,
+                          icon: const Icon(
+                            Icons.add_circle_outline_rounded,
+                            size: 20,
                           ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0D47A1),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                          label: const Text(
+                            'SCAN NEW TRAY',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0D47A1),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildCapacityProgress(),
-                    const SizedBox(height: 16),
-                    const TrayTableHeader(actionColumnWidth: 44),
-                    if (_scannedTrays.isEmpty)
-                      const EmptyScanState(hasBorder: false)
-                    else
-                      ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _scannedTrays.length,
-                        itemBuilder: (ctx, idx) => _buildTrayRow(idx),
+                      const SizedBox(height: 16),
+                      _buildCapacityProgress(),
+                      const SizedBox(height: 16),
+                      const TrayTableHeader(actionColumnWidth: 44),
+                      Expanded(
+                        child: _scannedTrays.isEmpty
+                            ? const EmptyScanState(hasBorder: false)
+                            : ListView.builder(
+                                padding: EdgeInsets.zero,
+                                itemCount: _scannedTrays.length,
+                                itemBuilder: (ctx, idx) => _buildTrayRow(idx),
+                              ),
                       ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ],

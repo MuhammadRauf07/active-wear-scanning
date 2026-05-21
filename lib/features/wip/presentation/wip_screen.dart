@@ -1,7 +1,5 @@
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
-import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
-import 'package:active_wear_scanning/core/widgets/content_card.dart';
-import 'package:active_wear_scanning/core/widgets/section_header.dart';
+import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
 import 'package:active_wear_scanning/features/batch/repo/batch_repo.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:active_wear_scanning/features/wip/model/wip_model.dart';
@@ -26,8 +24,7 @@ class _WIPScreenState extends State<WIPScreen> {
   Map<int, List<ProductionProgressResponseModel>> _locatorTrays = {};
   Map<int, bool> _loadingDetails = {};
 
-  static final _labelStyle = const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87);
-  static final _tableHeaderStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700);
+
 
   @override
   void initState() {
@@ -47,9 +44,18 @@ class _WIPScreenState extends State<WIPScreen> {
         final allLocs = result.data as List<LocatorResponse>;
         setState(() {
           // Condition: shows only those locators in dropdown whose logicalWH is FLOOR
+          // and filters out locators belonging to 'KNITTING' department or having 'KNITTING' in description/code
           _locators = allLocs.where((l) {
             final wh = l.locator.logicalWH?.toUpperCase() ?? '';
-            return wh.contains('FLOOR');
+            final deptCode = l.department.code.toUpperCase();
+            final desc = (l.locator.description ?? '').toUpperCase();
+            final code = (l.locator.locatorCode ?? '').toUpperCase();
+
+            final isFloor = wh.contains('FLOOR');
+            final isKnitting = deptCode.contains('KNITTING') ||
+                               desc.contains('KNITTING') ||
+                               code.contains('KNITTING');
+            return isFloor && !isKnitting;
           }).toList().reversed.toList();
         });
       }
@@ -184,51 +190,54 @@ class _WIPScreenState extends State<WIPScreen> {
 
   void _showError(String msg) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
+      AppSnackBar.showError(context, message: msg);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9), // Slate background
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildPremiumHeader(),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: _locators.isEmpty
-                    ? _buildEmptyLocatorsState()
-                    : ListView.builder(
-                        padding: const EdgeInsets.only(bottom: 24),
-                        itemCount: _locators.length,
-                        itemBuilder: (context, index) {
-                          final loc = _locators[index];
-                          final locatorId = loc.locator.id;
-                          final trays = _locatorTrays[locatorId] ?? [];
-                          final isLoading = _loadingDetails[locatorId] ?? false;
-                          final deptCode = loc.department.code.toUpperCase();
-                          final isKnitting = deptCode == 'KNITTING';
-                          final isProcessing = deptCode == 'PROCESSING';
-                          final groupedData = _groupTrays(trays, isKnitting, isProcessing);
-
-                          return LocatorExpansionItem(
-                            locator: loc,
-                            groupedData: groupedData,
-                            isLoading: isLoading,
-                            onExpansionChanged: (expanded) {
-                              if (expanded) _fetchWipData(locatorId);
-                            },
-                            onViewDetails: (group) => _showTrayDetailsDialog(group),
-                          );
-                        },
-                      ),
+    return PopScope(
+      canPop: !AppLoader.isVisible,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF1F5F9), // Slate background
+        body: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildPremiumHeader(),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: _locators.isEmpty
+                      ? _buildEmptyLocatorsState()
+                      : ListView.builder(
+                          padding: const EdgeInsets.only(bottom: 24),
+                          itemCount: _locators.length,
+                          itemBuilder: (context, index) {
+                            final loc = _locators[index];
+                            final locatorId = loc.locator.id;
+                            final trays = _locatorTrays[locatorId] ?? [];
+                            final isLoading = _loadingDetails[locatorId] ?? false;
+                            final deptCode = loc.department.code.toUpperCase();
+                            final isKnitting = deptCode == 'KNITTING';
+                            final isProcessing = deptCode == 'PROCESSING';
+                            final groupedData = _groupTrays(trays, isKnitting, isProcessing);
+  
+                            return LocatorExpansionItem(
+                              locator: loc,
+                              groupedData: groupedData,
+                              isLoading: isLoading,
+                              onExpansionChanged: (expanded) {
+                                if (expanded) _fetchWipData(locatorId);
+                              },
+                              onViewDetails: (group) => _showTrayDetailsDialog(group),
+                            );
+                          },
+                        ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

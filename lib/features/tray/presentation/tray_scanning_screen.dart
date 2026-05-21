@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/services.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
+import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
 import 'package:active_wear_scanning/core/widgets/barcode_scanner_dialog.dart';
 import 'package:active_wear_scanning/core/widgets/content_card.dart';
 import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
@@ -273,6 +274,8 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
           _planLines = List<PlanLineResponseModel>.from(apiResult.data);
           if (progressResult.success && progressResult.data != null) {
             existingProductionProgresses = progressResult.data as List<ProductionProgressResponseModel>;
+          } else if (!progressResult.success) {
+            _showError(progressResult.message ?? "Error loading production progresses");
           }
           if (trayDetailsModel.data != null) {
             availableTraysDetail = (trayDetailsModel.data as List).map((item) => item as TrayDetailsModel).toList();
@@ -297,12 +300,12 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
   void _showError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $message'), backgroundColor: Colors.red));
+    AppSnackBar.showError(context, message: message);
   }
 
   void _showSuccessMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Success: $message'), backgroundColor: Colors.green));
+    AppSnackBar.showSuccess(context, message: message);
   }
 
   void saveTrayAndProductionProgress() async {
@@ -395,72 +398,75 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9), // Lightest Industrial Grey
-      resizeToAvoidBottomInset: false,
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // ── Premium Header (Fixed) ────────────────────────────────────────
-            _buildPremiumHeader(context),
-
-            // ── Fixed Top Sections ───────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Machine Scanner Section
-                  _TrayFadeSlideTransition(delay: 0, child: _buildMachineScannerSection()),
-
-                  // Production Information Section
-                  if (_selectedPlanLine != null) ...[
-                    const SizedBox(height: 16),
-                    const _TrayFadeSlideTransition(
-                      delay: 100,
-                      child: Padding(
-                        padding: EdgeInsets.only(left: 4, bottom: 8),
-                        child: Text(
-                          'Production Intelligence',
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF263238)),
+    return PopScope(
+      canPop: !AppLoader.isVisible,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF1F5F9), // Lightest Industrial Grey
+        resizeToAvoidBottomInset: false,
+        body: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // ── Premium Header (Fixed) ────────────────────────────────────────
+              _buildPremiumHeader(context),
+  
+              // ── Fixed Top Sections ───────────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Machine Scanner Section
+                    _TrayFadeSlideTransition(delay: 0, child: _buildMachineScannerSection()),
+  
+                    // Production Information Section
+                    if (_selectedPlanLine != null) ...[
+                      const SizedBox(height: 16),
+                      const _TrayFadeSlideTransition(
+                        delay: 100,
+                        child: Padding(
+                          padding: EdgeInsets.only(left: 4, bottom: 8),
+                          child: Text(
+                            'Production Intelligence',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF263238)),
+                          ),
                         ),
                       ),
-                    ),
-                    _TrayFadeSlideTransition(delay: 150, child: _buildProductionInfoGrid()),
+                      _TrayFadeSlideTransition(delay: 150, child: _buildProductionInfoGrid()),
+                    ],
+  
+                    // Action Area
+                    if (_selectedPlanLine != null) ...[
+                      const SizedBox(height: 16),
+                      _TrayFadeSlideTransition(delay: 200, child: _buildActionArea()),
+                    ],
                   ],
-
-                  // Action Area
-                  if (_selectedPlanLine != null) ...[
-                    const SizedBox(height: 16),
-                    _TrayFadeSlideTransition(delay: 200, child: _buildActionArea()),
-                  ],
-                ],
+                ),
               ),
-            ),
-
-            // ── Scrollable Table Section ─────────────────────────────────────
-            if (_selectedPlanLine != null) ...[
-              const Padding(
-                padding: EdgeInsets.fromLTRB(20, 16, 16, 8),
-                child: _TrayFadeSlideTransition(
-                  delay: 250,
-                  child: Text(
-                    'Active Scanned Trays',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF263238)),
+  
+              // ── Scrollable Table Section ─────────────────────────────────────
+              if (_selectedPlanLine != null) ...[
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(20, 16, 16, 8),
+                  child: _TrayFadeSlideTransition(
+                    delay: 250,
+                    child: Text(
+                      'Active Scanned Trays',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF263238)),
+                    ),
                   ),
                 ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _buildScannedTraysTable(),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _buildScannedTraysTable(),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-            ] else 
-              const Spacer(),
-          ],
+                const SizedBox(height: 16),
+              ] else 
+                const Spacer(),
+            ],
+          ),
         ),
       ),
     );

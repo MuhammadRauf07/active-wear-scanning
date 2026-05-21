@@ -8,6 +8,7 @@ class SectionCard extends StatefulWidget {
   final double progressValue;
   final bool? isShowProgress;
   final VoidCallback onTap;
+  final bool enabled;
 
   const SectionCard({
     super.key,
@@ -17,6 +18,7 @@ class SectionCard extends StatefulWidget {
     required this.progressValue,
     this.isShowProgress,
     required this.onTap,
+    this.enabled = true,
   });
 
   @override
@@ -49,30 +51,29 @@ class _SectionCardState extends State<SectionCard> {
 
   @override
   Widget build(BuildContext context) {
-    final glowColor = _getGlowColor(widget.title);
-
     return Expanded(
       child: GestureDetector(
-        onTapDown: (_) => setState(() { _isHovered = true; }),
-        onTapUp: (_) => setState(() { _isHovered = false; }),
-        onTapCancel: () => setState(() { _isHovered = false; }),
-        onTap: widget.onTap,
+        onTapDown: widget.enabled ? (_) => setState(() { _isHovered = true; }) : null,
+        onTapUp: widget.enabled ? (_) => setState(() { _isHovered = false; }) : null,
+        onTapCancel: widget.enabled ? () => setState(() { _isHovered = false; }) : null,
+        onTap: widget.enabled ? widget.onTap : null,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOutCubic,
           height: 100,
           margin: const EdgeInsets.only(bottom: 12),
-          transform: _isHovered ? (Matrix4.identity()..scale(1.03)) : Matrix4.identity(),
+          transform: _isHovered && widget.enabled ? (Matrix4.identity()..scale(1.03)) : Matrix4.identity(),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
               // Soft Multi-layered Shadow
               BoxShadow(
-                color: const Color(0xFF0D47A1).withValues(alpha: _isHovered ? 0.3 : 0.15),
-                blurRadius: _isHovered ? 30 : 20,
+                color: (widget.enabled ? const Color(0xFF0D47A1) : const Color(0xFF64748B))
+                    .withValues(alpha: _isHovered && widget.enabled ? 0.3 : 0.15),
+                blurRadius: _isHovered && widget.enabled ? 30 : 20,
                 offset: const Offset(0, 12),
               ),
-              if (_isHovered)
+              if (_isHovered && widget.enabled)
                 BoxShadow(
                   color: Colors.white.withValues(alpha: 0.1),
                   blurRadius: 10,
@@ -86,86 +87,90 @@ class _SectionCardState extends State<SectionCard> {
               filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
               child: Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0D47A1).withValues(alpha: 0.85), // Glassy Royal Blue
+                  color: (widget.enabled ? const Color(0xFF0D47A1) : const Color(0xFF64748B))
+                      .withValues(alpha: widget.enabled ? 0.85 : 0.5), // Glassy Royal Blue vs Faded Slate
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.2),
+                    color: Colors.white.withValues(alpha: widget.enabled ? 0.2 : 0.1),
                     width: 1.5,
                   ),
                 ),
                 child: Stack(
                   children: [
                     // CONTENT
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 16, 20),
-                  child: Row(
-                    children: [
-                      // NEON ICON CIRCLE
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              Colors.white.withValues(alpha: 0.2),
-                              Colors.white.withValues(alpha: 0.05),
-                            ],
-                          ),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1.5),
-                        ),
-                        child: Center(
-                          child: Icon(
-                            _getSectionIcon(widget.title),
-                            color: Colors.white,
-                            size: 24,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      // TEXT
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                    Opacity(
+                      opacity: widget.enabled ? 1.0 : 0.45, // Premium faded glassmorphic aesthetic
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 16, 20),
+                        child: Row(
                           children: [
-                            Text(
-                              widget.title,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.3,
+                            // NEON ICON CIRCLE
+                            Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    Colors.white.withValues(alpha: 0.2),
+                                    Colors.white.withValues(alpha: 0.05),
+                                  ],
+                                ),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1.5),
+                              ),
+                              child: Center(
+                                child: Icon(
+                                  _getSectionIcon(widget.title),
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              widget.subtitle,
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.8),
-                                fontSize: 10,
-                                fontWeight: FontWeight.w500,
-                                letterSpacing: 0.1,
-                                height: 1.2,
+                            const SizedBox(width: 16),
+                            // TEXT
+                            Expanded(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    widget.title,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0.3,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    widget.subtitle,
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(alpha: 0.8),
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w500,
+                                      letterSpacing: 0.1,
+                                      height: 1.2,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
                               ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
       ),
-    ),
-    ),
     );
   }
 }

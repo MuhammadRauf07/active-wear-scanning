@@ -1,9 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
-import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
-import 'package:active_wear_scanning/core/widgets/content_card.dart';
-import 'package:active_wear_scanning/core/widgets/dynamic_info_display.dart';
-import 'package:active_wear_scanning/core/widgets/section_header.dart';
+import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
 import 'package:active_wear_scanning/features/batch/repo/batch_repo.dart';
 import 'package:active_wear_scanning/features/common-models/common_models.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
@@ -16,7 +13,7 @@ import 'package:active_wear_scanning/features/lapping/repo/lapping_repo.dart';
 import 'package:active_wear_scanning/features/processing/repo/processing_repo.dart';
 import 'package:flutter/material.dart';
 import 'package:active_wear_scanning/core/widgets/scanner_always_open.dart';
-import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
+
 
 class LappingDetailScreen extends StatefulWidget {
   final int batchHeaderId;
@@ -49,13 +46,6 @@ class LappingDetailScreen extends StatefulWidget {
 }
 
 class _LappingDetailScreenState extends State<LappingDetailScreen> {
-  static const _inputAndButtonHeight = 44.0;
-  static final _tableHeaderStyle = TextStyle(
-    fontSize: 12,
-    fontWeight: FontWeight.w600,
-    color: Colors.grey.shade700,
-  );
-  
   final _processingRepo = ProcessingRepo();
   final _batchRepo = BatchRepo();
   final _lappingRepo = LappingRepo();
@@ -68,9 +58,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
   final Set<int> _failedHandoverTrayIds = {};
   final Set<int> _failedCloseLappingIds = {};
 
-  final _trayBarcodeController = TextEditingController();
   final _trayQtyController = TextEditingController();
-  final _trayFocusNode = FocusNode();
 
   final Map<String, double> _trayOverrideQuantities = {};
 
@@ -128,7 +116,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
     if (code.isEmpty) return;
 
     if (_selectedWorkOrderId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a Work Order first')));
+      AppSnackBar.showError(context, message: 'Please select a Work Order first');
       return;
     }
     
@@ -137,7 +125,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
     AppLoader.hide(context);
     
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $error'), backgroundColor: Colors.red));
+      AppSnackBar.showError(context, message: error);
     }
   }
 
@@ -206,9 +194,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
     } else {
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${res.message}')),
-        );
+        AppSnackBar.showError(context, message: res.message ?? '');
       }
     }
   }
@@ -350,7 +336,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
       _trayOverrideQuantities[trayCode] = inputPcs;
       _scannedTraysByWO.putIfAbsent(_selectedWorkOrderId!, () => []);
       _scannedTraysByWO[_selectedWorkOrderId!]!.add(matchedTray!);
-      _focusNode.requestFocus();
+      FocusManager.instance.primaryFocus?.unfocus();
     });
     return null;
   }
@@ -368,109 +354,141 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9),
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildPremiumHeader(),
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+    return PopScope(
+      canPop: !AppLoader.isVisible,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF1F5F9),
+        body: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildPremiumHeader(),
+              Expanded(
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // ── 1. PROCESS FLOW RIBBON ──────────────────────────
-                          _buildProcessFlowRibbon(),
-                          const SizedBox(height: 16),
+                          // ── Upper Controls (Scrollable when constrained/overflow-safe) ──
+                          Flexible(
+                            flex: 5,
+                            fit: FlexFit.loose,
+                            child: SingleChildScrollView(
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // ── 1. PROCESS FLOW RIBBON ──────────────────────────
+                                    _buildProcessFlowRibbon(),
+                                    const SizedBox(height: 16),
 
-                          // ── 2. HUD METRICS GRID ────────────────────────────
-                          _buildAeroIntelligenceGrid(),
-                          const SizedBox(height: 16),
+                                    // ── 2. HUD METRICS GRID ────────────────────────────
+                                    _buildAeroIntelligenceGrid(),
+                                    const SizedBox(height: 16),
 
-                          // ── 3. WORK ORDER CONSOLE ──────────────────────────
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.05),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: WorkOrderSelectionCard(
-                              workOrders: _workOrders,
-                              selectedWorkOrderId: _selectedWorkOrderId,
-                              scannedTraysByWO: _scannedTraysByWO,
-                              trayOverrideQuantities: _trayOverrideQuantities,
-                              onSelected: (val) => setState(() => _selectedWorkOrderId = val),
-                            ),
-                          ),
-
-                          if (_selectedWorkOrderId != null) ...[
-                            const SizedBox(height: 16),
-                            Container(
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.05),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: LappingScannerUI(
-                                selectedWorkOrderId: _selectedWorkOrderId,
-                                scannedTraysByWO: _scannedTraysByWO,
-                                trayQtyController: _trayQtyController,
-                                focusNode: _focusNode,
-                                onScanPressed: _openScanner,
-                                childTable: Builder(
-                                  builder: (_) {
-                                    final traysToShow = _scannedTraysByWO[_selectedWorkOrderId] ?? [];
-                                    if (traysToShow.isNotEmpty) {
-                                      return LappingTrayTable(
+                                    // ── 3. WORK ORDER CONSOLE ──────────────────────────
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(alpha: 0.05),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
+                                      ),
+                                      child: WorkOrderSelectionCard(
+                                        workOrders: _workOrders,
                                         selectedWorkOrderId: _selectedWorkOrderId,
                                         scannedTraysByWO: _scannedTraysByWO,
                                         trayOverrideQuantities: _trayOverrideQuantities,
-                                        onRemove: (t, trayKey) {
-                                          setState(() {
-                                            _scannedTraysByWO[_selectedWorkOrderId]?.remove(t);
-                                            _trayOverrideQuantities.remove(trayKey);
-                                          });
-                                        },
-                                      );
-                                    } else {
-                                      return Container(
-                                        width: double.infinity,
-                                        padding: const EdgeInsets.symmetric(vertical: 40),
-                                        alignment: Alignment.center,
-                                        child: Text(
-                                          'No scanned trays yet. Start by scanning a tray barcode.',
-                                          style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
-                                        ),
-                                      );
-                                    }
-                                  },
+                                        onSelected: (val) => setState(() => _selectedWorkOrderId = val),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
-                          ],
+                          ),
+
+                          // ── Lower Scanned Table (Independently Scrollable) ──
+                          if (_selectedWorkOrderId != null)
+                            Expanded(
+                              flex: 4,
+                              child: Container(
+                                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.05),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
+                                      LappingScannerUI(
+                                        selectedWorkOrderId: _selectedWorkOrderId,
+                                        scannedTraysByWO: _scannedTraysByWO,
+                                        trayQtyController: _trayQtyController,
+                                        focusNode: _focusNode,
+                                        onScanPressed: _openScanner,
+                                      ),
+                                      Expanded(
+                                        child: Builder(
+                                          builder: (_) {
+                                            final traysToShow = _scannedTraysByWO[_selectedWorkOrderId] ?? [];
+                                            if (traysToShow.isNotEmpty) {
+                                              return LappingTrayTable(
+                                                selectedWorkOrderId: _selectedWorkOrderId,
+                                                scannedTraysByWO: _scannedTraysByWO,
+                                                trayOverrideQuantities: _trayOverrideQuantities,
+                                                onRemove: (t, trayKey) {
+                                                  setState(() {
+                                                    _scannedTraysByWO[_selectedWorkOrderId]?.remove(t);
+                                                    _trayOverrideQuantities.remove(trayKey);
+                                                  });
+                                                },
+                                              );
+                                            } else {
+                                              return Container(
+                                                width: double.infinity,
+                                                alignment: Alignment.center,
+                                                padding: const EdgeInsets.all(20),
+                                                child: Text(
+                                                  'No scanned trays yet. Start by scanning a tray barcode.',
+                                                  textAlign: TextAlign.center,
+                                                  style: TextStyle(
+                                                    color: Colors.grey.shade400,
+                                                    fontSize: 13,
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
                         ],
                       ),
-                    ),
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -610,10 +628,10 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
+      crossAxisCount: 3,
       mainAxisSpacing: 10,
       crossAxisSpacing: 10,
-      childAspectRatio: 3.2,
+      childAspectRatio: 3.8,
       children: [
         _buildHUDCard('BATCH #', widget.batchCode, Icons.tag_rounded),
         _buildHUDCard('MACHINE', widget.machine, Icons.precision_manufacturing_rounded),
@@ -658,10 +676,6 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
   }
 
   // Removed _buildScannerUI as it was extracted to LappingScannerUI.
-
-  void _showSnackBar(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
-  }
 
   // --- Submission Logic ---
   Future<void> _saveChanges() async {

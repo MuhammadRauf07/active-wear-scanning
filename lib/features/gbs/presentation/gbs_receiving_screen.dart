@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
+import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/content_card.dart';
 import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
@@ -306,7 +307,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
       AppLoader.hide(context);
       if (mounted) {
         if (isAllSuccess) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Saved Successfully")));
+          AppSnackBar.showSuccess(context, message: 'Saved successfully');
           // Delay to allow SnackBar and Loader cleanup
           Future.delayed(const Duration(milliseconds: 400), () {
             if (mounted) Navigator.of(context).pop(true);
@@ -323,25 +324,28 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $message'), backgroundColor: Colors.red));
+    AppSnackBar.showError(context, message: message);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9), // Lightest Industrial Grey
-      resizeToAvoidBottomInset: false,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildPremiumHeader(context),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                child: _buildScannedTraysSection(),
+    return PopScope(
+      canPop: !AppLoader.isVisible,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF1F5F9), // Lightest Industrial Grey
+        resizeToAvoidBottomInset: false,
+        body: SafeArea(
+          child: Column(
+            children: [
+              _buildPremiumHeader(context),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: _buildScannedTraysSection(),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

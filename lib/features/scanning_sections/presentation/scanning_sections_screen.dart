@@ -1,10 +1,5 @@
-import 'dart:io';
-import 'dart:ui';
-import 'package:active_wear_scanning/core/widgets/app_loader.dart';
-import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/features/batch/presentation/batch_list_screen.dart';
 import 'package:active_wear_scanning/features/gbs/presentation/gbs_receiving_screen.dart';
-import 'package:active_wear_scanning/features/header/order_header_screen.dart';
 import 'package:active_wear_scanning/features/processing/presentation/processing_screen.dart';
 import 'package:active_wear_scanning/features/induction/presentation/induction_store_screen.dart';
 import 'package:active_wear_scanning/features/scanning_sections/presentation/widgets/section_card.dart';
@@ -65,6 +60,7 @@ class ScanningSectionsScreen extends StatelessWidget {
                             sectionCode: 'DASH',
                             progressValue: 0.5,
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DashboardScreen())),
+                            enabled: false,
                           ),
                           SectionCard(
                             title: 'Tray Scanning',

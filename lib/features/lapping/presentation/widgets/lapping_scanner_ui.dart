@@ -7,7 +7,6 @@ class LappingScannerUI extends StatelessWidget {
   final TextEditingController trayQtyController;
   final FocusNode focusNode;
   final VoidCallback onScanPressed;
-  final Widget childTable;
 
   const LappingScannerUI({
     super.key,
@@ -16,7 +15,6 @@ class LappingScannerUI extends StatelessWidget {
     required this.trayQtyController,
     required this.focusNode,
     required this.onScanPressed,
-    required this.childTable,
   });
 
   @override
@@ -136,12 +134,6 @@ class LappingScannerUI extends StatelessWidget {
             ],
           ),
         ),
-
-        // ── Divider ──────────────────────────────────────────────────────
-        const Divider(height: 1, color: Color(0xFFCBD5E1)),
-
-        // ── Table ────────────────────────────────────────────────────────
-        childTable,
       ],
     );
   }

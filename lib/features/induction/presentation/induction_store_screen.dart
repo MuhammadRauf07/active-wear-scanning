@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
+import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/content_card.dart';
 import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
@@ -87,13 +88,13 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
     return false;
   }
 
-  void _processBluetoothScan(String scannedCode) {
+  Future<void> _processBluetoothScan(String scannedCode) async {
     final code = scannedCode.trim();
     if (code.isEmpty) return;
 
-    final error = _validateTrayForInduction(code);
-    if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $error'), backgroundColor: Colors.red));
+    final error = await _validateTrayForInduction(code);
+    if (error != null && mounted) {
+      AppSnackBar.showError(context, message: error);
     } else {
       setState(() {});
     }
@@ -292,19 +293,12 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
       AppLoader.hide(context);
       if (mounted) {
         if (isAllSuccess) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Induction Saved Successfully")),
-          );
+          AppSnackBar.showSuccess(context, message: 'Induction saved successfully');
           Future.delayed(const Duration(milliseconds: 400), () {
             if (mounted) Navigator.of(context).pop(true);
           });
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Failed to save some trays"),
-              backgroundColor: Colors.red,
-            ),
-          );
+          AppSnackBar.showError(context, message: 'Failed to save some trays');
         }
       }
     }
@@ -312,35 +306,38 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9), // Slate background
-      resizeToAvoidBottomInset: false,
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildPremiumHeader(),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+    return PopScope(
+      canPop: !AppLoader.isVisible,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF1F5F9), // Slate background
+        resizeToAvoidBottomInset: false,
+        body: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildPremiumHeader(),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: _buildScannedQueue(),
                   ),
-                  child: _buildScannedQueue(),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

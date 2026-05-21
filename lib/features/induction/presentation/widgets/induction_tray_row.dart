@@ -47,7 +47,7 @@ class InductionTrayRow extends StatelessWidget {
           Expanded(flex: 2, child: Text('${weight.toStringAsFixed(1)} g', textAlign: TextAlign.center, style: _cellStyle())),
           IconButton(
             onPressed: onRemove,
-            icon: const Icon(Icons.delete_sweep_rounded, color: Color(0xFFEF4444), size: 20),
+            icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 20),
             visualDensity: VisualDensity.compact,
           ),
         ],

@@ -1,17 +1,15 @@
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
-import 'package:active_wear_scanning/core/widgets/content_card.dart';
-import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
+import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
 import 'package:active_wear_scanning/core/widgets/scanner_always_open.dart';
 import 'package:active_wear_scanning/features/batch/model/batch_header_model.dart';
 import 'package:active_wear_scanning/features/batch/presentation/batch_scanning_screen.dart';
 import 'package:active_wear_scanning/features/batch/presentation/widgets/locked_batch_tray_table.dart';
 import 'package:active_wear_scanning/features/batch/repo/batch_repo.dart';
-import 'package:active_wear_scanning/features/batch/model/batch_header_model.dart';
 import 'package:active_wear_scanning/features/tray/repo/tray_scanning_repo.dart';
 import 'package:active_wear_scanning/features/tray/model/tray_details_model.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class BatchListScreen extends StatefulWidget {
   const BatchListScreen({super.key});
@@ -41,6 +39,33 @@ class _BatchListScreenState extends State<BatchListScreen>
   // trayDetailId → trayCode (all trays, used for sub-table tray code lookup)
   Map<int, String> _primaryTrayIdToCode = {};
 
+  // State variables for global Bluetooth scanning and draft selection
+  final FocusNode _keyboardFocusNode = FocusNode();
+  final StringBuffer _scannerBuffer = StringBuffer();
+  int? _selectedBatchHeaderId;
+  DateTime? _lastKeyPress;
+
+  void _onKey(RawKeyEvent event) {
+    if (event is RawKeyDownEvent) {
+      final now = DateTime.now();
+      if (_lastKeyPress != null &&
+          now.difference(_lastKeyPress!).inMilliseconds > 100) {
+        _scannerBuffer.clear();
+      }
+      _lastKeyPress = now;
+
+      if (event.logicalKey == LogicalKeyboardKey.enter) {
+        final code = _scannerBuffer.toString().trim();
+        _scannerBuffer.clear();
+        if (code.isNotEmpty) {
+          _handleExternalBluetoothScan(code);
+        }
+      } else if (event.character != null) {
+        _scannerBuffer.write(event.character!);
+      }
+    }
+  }
+
   late TabController _tabController;
 
   @override
@@ -49,12 +74,14 @@ class _BatchListScreenState extends State<BatchListScreen>
     _tabController = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _fetchAndGroupBatches();
+      _keyboardFocusNode.requestFocus();
     });
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _keyboardFocusNode.dispose();
     super.dispose();
   }
 
@@ -123,9 +150,7 @@ class _BatchListScreenState extends State<BatchListScreen>
       if (mounted) {
         AppLoader.hide(context);
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error: Failed to fetch batches')),
-        );
+        AppSnackBar.showError(context, message: 'Failed to fetch batches');
       }
     }
   }
@@ -159,59 +184,112 @@ class _BatchListScreenState extends State<BatchListScreen>
     }
   }
 
+  Future<String?> _validateAndAttachTrolley(int batchHeaderId, String code) async {
+    final cleanCode = code.trim().toLowerCase();
+    if (cleanCode.isEmpty) return 'Invalid trolly code';
+
+    final result = await _trayRepo.fetchAvailableTrayDetails();
+    if (!result.success || result.data == null) {
+      return 'Failed to fetch tray details';
+    }
+
+    final allTrays = result.data as List<TrayDetailsModel>;
+    final matched = allTrays.where((t) {
+      return (t.trayDetails?.trayCode ?? '').trim().toLowerCase() == cleanCode;
+    }).toList();
+
+    if (matched.isEmpty) return 'Trolly not found';
+
+    final trayDetail = matched.first.trayDetails;
+    if (trayDetail?.active != true) return 'Trolly is not active';
+    if ((trayDetail?.trayType ?? 0) != 4) {
+      return 'Invalid tray type. Only Type 4 (Trolly) allowed.';
+    }
+
+    final trolleyId = trayDetail!.id!;
+    final trolleyCode = trayDetail.trayCode ?? code;
+
+    // ── Uniqueness check: trolley must not be assigned to any other batch ─
+    final allBatches = [..._unlockedBatches, ..._lockedBatches];
+    for (final batch in allBatches) {
+      final existingId = batch.batchHeader.id;
+      if (existingId == batchHeaderId) continue; // skip current batch
+      final assignedTrolleyId = _trolleyDetailIdByBatch[existingId] ?? batch.batchHeader.trayDetailId;
+      if (assignedTrolleyId == trolleyId) {
+        final batchCode = batch.batchHeader.batchHeaderCode ?? 'another batch';
+        return 'Trolly already assigned to $batchCode';
+      }
+    }
+
+    setState(() {
+      _trolleyDetailIdByBatch[batchHeaderId] = trolleyId;
+      _trolleyCodeByBatch[batchHeaderId] = trolleyCode;
+    });
+
+    return null;
+  }
+
   Future<void> _scanTrolleyForBatch(int batchHeaderId) async {
     await ScannerAlwaysOpen.show(
       context,
       title: 'Scan Trolly',
       onResult: (scannedCode) async {
-        final code = scannedCode.trim().toLowerCase();
-        if (code.isEmpty) return 'Invalid trolly code';
-
         AppLoader.show(context, message: 'Validating trolly...');
-        final result = await _trayRepo.fetchAvailableTrayDetails();
+        final errorMsg = await _validateAndAttachTrolley(batchHeaderId, scannedCode);
         AppLoader.hide(context);
 
-        if (!result.success || result.data == null) {
-          return 'Failed to fetch tray details';
+        if (errorMsg == null) {
+          Navigator.of(context).pop(); // close scanner after success
         }
-
-        final allTrays = result.data as List<TrayDetailsModel>;
-        final matched = allTrays.where((t) {
-          return (t.trayDetails?.trayCode ?? '').trim().toLowerCase() == code;
-        }).toList();
-
-        if (matched.isEmpty) return 'Trolly not found';
-
-        final trayDetail = matched.first.trayDetails;
-        if (trayDetail?.active != true) return 'Trolly is not active';
-        if ((trayDetail?.trayType ?? 0) != 4) {
-          return 'Invalid tray type. Only Type 4 (Trolly) allowed.';
-        }
-
-        final trolleyId = trayDetail!.id!;
-        final trolleyCode = trayDetail.trayCode ?? code;
-
-        // ── Uniqueness check: trolley must not be assigned to any other batch ─
-        final allBatches = [..._unlockedBatches, ..._lockedBatches];
-        for (final batch in allBatches) {
-          final existingId = batch.batchHeader.id;
-          if (existingId == batchHeaderId) continue; // skip current batch
-          final assignedTrolleyId = _trolleyDetailIdByBatch[existingId] ?? batch.batchHeader.trayDetailId;
-          if (assignedTrolleyId == trolleyId) {
-            final batchCode = batch.batchHeader.batchHeaderCode ?? 'another batch';
-            return 'Trolly already assigned to $batchCode';
-          }
-        }
-
-        setState(() {
-          _trolleyDetailIdByBatch[batchHeaderId] = trolleyId;
-          _trolleyCodeByBatch[batchHeaderId] = trolleyCode;
-        });
-
-        Navigator.of(context).pop(); // close scanner after success
-        return null;
+        return errorMsg;
       },
     );
+  }
+
+  Future<void> _handleExternalBluetoothScan(String code) async {
+    if (code.isEmpty) return;
+
+    // 1. Exception check: Ensure batch is selected first
+    if (_selectedBatchHeaderId == null) {
+      HapticFeedback.heavyImpact();
+      AppSnackBar.showError(
+        context,
+        title: 'Batch Required',
+        message: 'Please select a draft batch first by checking its box on the left.',
+      );
+      return;
+    }
+
+    final activeId = _selectedBatchHeaderId!;
+
+    // 2. Validate and attach trolley
+    AppLoader.show(context, message: 'Validating trolley scanned...');
+    final errorMsg = await _validateAndAttachTrolley(activeId, code);
+    AppLoader.hide(context);
+
+    if (errorMsg != null) {
+      HapticFeedback.heavyImpact();
+      AppSnackBar.showError(
+        context,
+        title: 'Trolley Scan Error',
+        message: errorMsg,
+      );
+      return;
+    }
+
+    // 3. Success haptic
+    HapticFeedback.lightImpact();
+
+    // 4. Show success snackbar
+    AppSnackBar.showSuccess(
+      context,
+      message: 'Trolley attached successfully! Press the issue button to post.',
+    );
+
+    // Clear selection state
+    setState(() {
+      _selectedBatchHeaderId = null;
+    });
   }
 
   Future<void> _deleteBatch(BatchHeaderResponseModel header) async {
@@ -254,39 +332,18 @@ class _BatchListScreenState extends State<BatchListScreen>
 
     if (res.success) {
       _fetchAndGroupBatches();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Batch permanently deleted!'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      AppSnackBar.showSuccess(context, message: 'Batch permanently deleted!');
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Delete Failed: ${res.message}'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      AppSnackBar.showError(context, title: 'Delete Failed', message: res.message ?? '');
     }
   }
 
   void _handleLockRequest(BatchHeaderResponseModel batch, String? trolleyCode) {
     if (trolleyCode == null || trolleyCode.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
-              const SizedBox(width: 12),
-              const Text('TROLLEY REQUIRED: Please scan trolley first.', 
-                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
-            ],
-          ),
-          backgroundColor: Colors.red.shade700,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          margin: const EdgeInsets.all(16),
-        ),
+      AppSnackBar.showError(
+        context,
+        title: 'Trolley Required',
+        message: 'Please scan trolley first.',
       );
       return;
     }
@@ -345,12 +402,7 @@ class _BatchListScreenState extends State<BatchListScreen>
 
     if (!lockRes.success) {
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Issue Failed: ${lockRes.message}'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      AppSnackBar.showError(context, title: 'Issue Failed', message: lockRes.message ?? '');
       return;
     }
 
@@ -636,56 +688,63 @@ class _BatchListScreenState extends State<BatchListScreen>
 
     setState(() => _isLoading = false);
     _fetchAndGroupBatches();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Batch issued! $successCount/${lines.length} WIP transactions posted.',
-        ),
-        backgroundColor: Colors.green,
-      ),
-    );
+    AppSnackBar.showSuccess(context, message: 'Batch issued successfully');
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9),
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            CustomInspectionHeader(
-              heading: 'BATCH HISTORY',
-              subtitle: 'Manage your scanning batches',
-              isShowBackIcon: true,
-              topPadding: 0,
-              horizontalPadding: 16,
-              widget: ElevatedButton.icon(
-                onPressed: _navigateToAddBatch,
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: const Text('NEW BATCH',
-                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1B64A3),
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
-            ),
-            _buildPremiumTabBar(),
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
+    return PopScope(
+      canPop: !AppLoader.isVisible,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF1F5F9),
+        body: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            _keyboardFocusNode.requestFocus();
+          },
+          child: RawKeyboardListener(
+            focusNode: _keyboardFocusNode,
+            autofocus: true,
+            onKey: _onKey,
+            child: SafeArea(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _buildBatchList(_unlockedBatches, isLocked: false),
-                  _buildBatchList(_lockedBatches, isLocked: true),
+                  CustomInspectionHeader(
+                    heading: 'BATCH HISTORY',
+                    subtitle: 'Manage your scanning batches',
+                    isShowBackIcon: true,
+                    topPadding: 0,
+                    horizontalPadding: 16,
+                    widget: ElevatedButton.icon(
+                      onPressed: _navigateToAddBatch,
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                      label: const Text('NEW BATCH',
+                          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1B64A3),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                  ),
+                  _buildPremiumTabBar(),
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildBatchList(_unlockedBatches, isLocked: false),
+                        _buildBatchList(_lockedBatches, isLocked: true),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -773,6 +832,7 @@ class _BatchListScreenState extends State<BatchListScreen>
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Row(
         children: [
+          if (!isLocked) const SizedBox(width: 40),
           _buildHeaderCell('BATCH #', 2, align: TextAlign.center),
           _buildHeaderCell('MACHINE', 3, align: TextAlign.center),
           _buildHeaderCell('COLOR', 2, align: TextAlign.center),
@@ -844,6 +904,29 @@ class _BatchListScreenState extends State<BatchListScreen>
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
               children: [
+                if (!isLocked)
+                  SizedBox(
+                    width: 32,
+                    child: Checkbox(
+                      value: _selectedBatchHeaderId == headerId,
+                      activeColor: const Color(0xFF1B64A3),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      onChanged: (bool? checked) {
+                        setState(() {
+                          if (checked == true) {
+                            _selectedBatchHeaderId = headerId;
+                          } else {
+                            if (_selectedBatchHeaderId == headerId) {
+                              _selectedBatchHeaderId = null;
+                            }
+                          }
+                        });
+                      },
+                    ),
+                  ),
+                if (!isLocked) const SizedBox(width: 8),
                 // Data Columns
                 _buildDataCell(batchCode, 2, isBold: true, align: TextAlign.center),
                 _buildDataCell(machineName, 3, align: TextAlign.center),

@@ -1,6 +1,7 @@
 import 'dart:developer' as dev;
 
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
+import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/content_card.dart';
 import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
@@ -259,33 +260,38 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
     final isReworkBatch = _trays.isNotEmpty && _trays.any((t) => t.productionProgress.reworkFlag == true);
     final isReassignedBatch = _trays.isNotEmpty && _trays.any((t) => t.primaryTrayModel.isReAssigned == true);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildPremiumHeader(context),
-            Expanded(
-              child: AbsorbPointer(
-                absorbing: _isLoadingTrays,
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildBatchIntelligenceGrid(),
-                      const SizedBox(height: 12),
-                      _buildActionConsole(),
-                      if (_showTrays) ...[
-                        const SizedBox(height: 16),
-                        _buildTrayTableContainer(),
+    return PopScope(
+      canPop: !AppLoader.isVisible,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF1F5F9),
+        body: SafeArea(
+          child: Column(
+            children: [
+              _buildPremiumHeader(context),
+              Expanded(
+                child: AbsorbPointer(
+                  absorbing: _isLoadingTrays,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildBatchIntelligenceGrid(),
+                        const SizedBox(height: 12),
+                        _buildActionConsole(),
+                        if (_showTrays) ...[
+                          const SizedBox(height: 16),
+                          Expanded(
+                            child: _buildTrayTableContainer(),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -660,19 +666,32 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
               ],
             ),
           ),
-          ProcessingTrayTable(
-            trays: _trays,
-            isReworkMode: _isReworkMode,
-            selectedReworkTrayIds: _selectedReworkTrayIds,
-            onReworkToggle: (progressId, selected) {
-              setState(() {
-                if (selected) {
-                  _selectedReworkTrayIds.add(progressId);
-                } else {
-                  _selectedReworkTrayIds.remove(progressId);
-                }
-              });
-            },
+          Expanded(
+            child: ProcessingTrayTable(
+              trays: _trays,
+              isReworkMode: _isReworkMode,
+              selectedReworkTrayIds: _selectedReworkTrayIds,
+              onReworkToggle: (progressId, selected) {
+                setState(() {
+                  if (selected) {
+                    _selectedReworkTrayIds.add(progressId);
+                  } else {
+                    _selectedReworkTrayIds.remove(progressId);
+                  }
+                });
+              },
+              onSelectAllToggle: (selected) {
+                setState(() {
+                  if (selected) {
+                    _selectedReworkTrayIds.addAll(
+                      _trays.map((t) => t.productionProgress.id).whereType<int>(),
+                    );
+                  } else {
+                    _selectedReworkTrayIds.clear();
+                  }
+                });
+              },
+            ),
           ),
         ],
       ),
@@ -751,9 +770,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
           _trolleyDetailId = null;
           _isUpdatingTrolley = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Trolley free. Scan a new trolley before submitting.'), backgroundColor: Colors.orange),
-        );
+        AppSnackBar.showWarning(context, message: 'Trolley free. Scan a new trolley before submitting.');
       } else {
         setState(() => _isUpdatingTrolley = false);
         _showError('Free failed: ${updateRes.message}');
@@ -857,12 +874,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
         });
         // Close the scanner
         if (mounted) Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Trolley "$resolvedCode" attached successfully.'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        AppSnackBar.showSuccess(context, message: 'Trolley "$resolvedCode" attached successfully.');
         return null; // success
       } else {
         setState(() => _isUpdatingTrolley = false);
@@ -877,9 +889,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.red),
-    );
+    AppSnackBar.showError(context, message: msg);
   }
 
   // ── Confirm Start ─────────────────────────────────────────────────────────
@@ -940,9 +950,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
     if (!mounted) return;
 
     if (anyFailed) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Some trays failed to start. Please retry.'), backgroundColor: Colors.red),
-      );
+      AppSnackBar.showError(context, message: 'Some trays failed to start. Please retry.');
     } else {
       setState(() {
         _isBatchStarted = true;
@@ -1011,13 +1019,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
   void _confirmSubmit() {
     // ── Guard: trolley must be attached ───────────────────────────────────
     if (_trolleyDetailId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please scan a trolley before submitting.'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 4),
-        ),
-      );
+      AppSnackBar.showError(context, message: 'Please scan a trolley before submitting.');
       return;
     }
     String msg = 'Proceed with batch submission?';
@@ -1211,11 +1213,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
     } catch (e) {
       AppLoader.hide(context);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.red.shade800,
-          duration: const Duration(seconds: 5),
-        ));
+        AppSnackBar.showError(context, message: e.toString());
       }
     }
   }
