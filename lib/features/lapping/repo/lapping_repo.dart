@@ -1,3 +1,4 @@
+import 'dart:developer' as dev;
 import 'package:active_wear_scanning/core/api/services/api_service.dart';
 import 'package:active_wear_scanning/features/lapping/model/lapping_model.dart';
 
@@ -22,16 +23,26 @@ class LappingRepo {
     return result;
   }
   Future<PlexApiResult> fetchProductionProgress(Map<String, String> query) async {
-    final result = await _api.getList('/api/app/production-progresses', query: query);
+    final Map<String, String> finalQuery = {
+      'MaxResultCount': '1000',
+      'maxResultCount': '1000',
+      ...query,
+    };
+    final result = await _api.getList('/api/app/production-progresses', query: finalQuery);
 
     if (!result.success || result.data == null) return result;
 
     try {
       final List rawData = result.data is Map ? (result.data['items'] ?? []) : result.data;
-      final productionProgress = rawData
-          .map((item) => LappingModel.fromJson(Map<String, dynamic>.from(item)))
-          .toList();
-      return PlexApiResult(true, 200, "Success", productionProgress);
+      final list = <LappingModel>[];
+      for (final item in rawData) {
+        try {
+          list.add(LappingModel.fromJson(Map<String, dynamic>.from(item)));
+        } catch (e) {
+          dev.log("LappingRepo parsing error on production progress record: $e. Raw: $item");
+        }
+      }
+      return PlexApiResult(true, 200, "Success", list);
     } catch (e) {
       return PlexApiResult(false, 500, e.toString(), null);
     }

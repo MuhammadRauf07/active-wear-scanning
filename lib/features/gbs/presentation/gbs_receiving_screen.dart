@@ -370,11 +370,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
         ),
         child: Row(
           children: [
-            IconButton(
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0D47A1), size: 18),
-              visualDensity: VisualDensity.compact,
-            ),
+            const CustomBackButton(),
             const Expanded(
               child: Column(
                 mainAxisSize: MainAxisSize.min,

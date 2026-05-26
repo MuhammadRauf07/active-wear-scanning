@@ -21,7 +21,7 @@ class BatchRepo {
     if (!result.success || result.data == null) return result;
 
     try {
-      final List data = result.data as List;
+      final List data = result.data is Map ? (result.data['items'] ?? []) : result.data;
       final list = <ProductionProgressResponseModel>[];
       for (final item in data) {
         try {

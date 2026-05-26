@@ -60,7 +60,7 @@ class ScannerAlwaysOpen extends StatefulWidget {
 class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
   late final MobileScannerController _controller = MobileScannerController(
     autoStart: false,
-    detectionSpeed: DetectionSpeed.noDuplicates,
+    detectionSpeed: DetectionSpeed.unrestricted,
     formats: [BarcodeFormat.qrCode, BarcodeFormat.code128],
   );
   final _manualController = TextEditingController();
@@ -68,6 +68,10 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
   Timer? _duplicateAlertTimer;
   bool _isProcessing = false;
   String? _errorOverlayText;
+
+  String? _lastProcessedCode;
+  DateTime? _lastProcessedTime;
+  bool _lastScanWasSuccess = false;
 
   @override
   void initState() {
@@ -105,17 +109,19 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
 
     if (errorMessage == null) {
       HapticFeedback.lightImpact();
+      _lastScanWasSuccess = true;
       if (mounted) setState(() => _errorOverlayText = null);
     } else {
       HapticFeedback.heavyImpact();
+      _lastScanWasSuccess = false;
       if (mounted) setState(() => _errorOverlayText = errorMessage);
       _duplicateAlertTimer?.cancel();
-      _duplicateAlertTimer = Timer(const Duration(seconds: 1), () {
+      _duplicateAlertTimer = Timer(const Duration(seconds: 3), () {
         if (mounted) setState(() => _errorOverlayText = null);
       });
     }
 
-    await Future.delayed(const Duration(milliseconds: 1500));
+    await Future.delayed(const Duration(milliseconds: 150));
     if (mounted) _isProcessing = false;
   }
 
@@ -123,40 +129,66 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
     if (_isProcessing) return;
 
     for (final barcode in capture.barcodes) {
-      final raw = barcode.rawValue;
-      if (raw != null && raw.isNotEmpty) {
-        _isProcessing = true;
+      final raw = barcode.rawValue?.trim();
+      if (raw == null || raw.isEmpty) continue;
 
-        // Call the parent validation logic
-        String? errorMessage;
-        try {
-          errorMessage = await widget.onResult(raw.trim());
-        } catch (e) {
-          debugPrint("SCANNER ERROR: $e");
-          errorMessage = 'An unexpected error occurred';
+      final now = DateTime.now();
+
+      // Check if we are scanning the exact same code
+      if (raw == _lastProcessedCode) {
+        // Enforce a 2-second cooldown ONLY if the last scan of this code was a failure.
+        // If the last scan was a success (e.g. just added), we allow it to scan again
+        // immediately to show the "Already assigned" exception overlay.
+        if (!_lastScanWasSuccess &&
+            _lastProcessedTime != null &&
+            now.difference(_lastProcessedTime!).inMilliseconds < 2000) {
+          continue;
         }
+      }
 
-        if (errorMessage == null) {
-          // SUCCESS
-          HapticFeedback.lightImpact();
-          setState(() => _errorOverlayText = null);
-        } else {
-          // ERROR (Any of your 4 conditions)
-          HapticFeedback.heavyImpact();
-          setState(
-            () => _errorOverlayText = errorMessage,
-          ); // Set the specific message
+      _isProcessing = true;
+      _lastProcessedCode = raw;
+      _lastProcessedTime = now;
 
-          _duplicateAlertTimer?.cancel();
-          _duplicateAlertTimer = Timer(const Duration(seconds: 1), () {
-            if (mounted) setState(() => _errorOverlayText = null);
+      String? errorMessage;
+      try {
+        errorMessage = await widget.onResult(raw);
+      } catch (e) {
+        debugPrint("SCANNER ERROR: $e");
+        errorMessage = 'An unexpected error occurred';
+      }
+
+      if (errorMessage == null) {
+        HapticFeedback.lightImpact();
+        _lastScanWasSuccess = true;
+        _duplicateAlertTimer?.cancel();
+        if (mounted) {
+          setState(() {
+            _errorOverlayText = null;
           });
         }
-
-        // Wait a bit before allowing the next scan to prevent rapid-fire triggers
-        await Future.delayed(const Duration(milliseconds: 1500));
-        if (mounted) _isProcessing = false;
+      } else {
+        HapticFeedback.heavyImpact();
+        _lastScanWasSuccess = false;
+        _duplicateAlertTimer?.cancel();
+        if (mounted) {
+          setState(() {
+            _errorOverlayText = errorMessage;
+          });
+        }
+        _duplicateAlertTimer = Timer(const Duration(seconds: 3), () {
+          if (mounted) {
+            setState(() {
+              _errorOverlayText = null;
+            });
+          }
+        });
       }
+
+      // Briefly wait to prevent double-triggering in the same instant frame
+      await Future.delayed(const Duration(milliseconds: 150));
+      if (mounted) _isProcessing = false;
+      break; // Process one barcode per event
     }
   }
 

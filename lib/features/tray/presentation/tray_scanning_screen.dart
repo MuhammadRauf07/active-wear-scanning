@@ -491,11 +491,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
         ),
         child: Row(
           children: [
-            IconButton(
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0D47A1), size: 18),
-              visualDensity: VisualDensity.compact,
-            ),
+            const CustomBackButton(),
             const Expanded(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -778,9 +774,12 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       width: isFullWidth ? double.infinity : null,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isEditable ? const Color(0xFFFFFDE7) : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFB0BEC5), width: 1.5),
+        border: Border.all(
+          color: isEditable ? const Color(0xFFFFD54F) : const Color(0xFFB0BEC5),
+          width: 1.5,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -788,12 +787,20 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
         children: [
           Row(
             children: [
-              Icon(item['icon'], size: 12, color: const Color(0xFF1976D2)),
+              Icon(
+                item['icon'],
+                size: 12,
+                color: isEditable ? const Color(0xFFF57F17) : const Color(0xFF1976D2),
+              ),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   item['label'],
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF546E7A)),
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: isEditable ? const Color(0xFFE65100) : const Color(0xFF546E7A),
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -807,9 +814,9 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                 width: 60,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE3F2FD),
+                  color: const Color(0xFFFFF9C4),
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: const Color(0xFFBBDEFB), width: 1),
+                  border: Border.all(color: const Color(0xFFFFE082), width: 1),
                 ),
                 child: TextField(
                   controller: _overrideQuantityController,
@@ -818,7 +825,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w900,
-                    color: Color(0xFF0D47A1),
+                    color: Color(0xFFE65100),
                   ),
                   decoration: const InputDecoration(
                     contentPadding: EdgeInsets.only(top: 4),
@@ -826,6 +833,24 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                     border: InputBorder.none,
                   ),
                   keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                  ],
+                  onChanged: (val) {
+                    if (val.startsWith('0')) {
+                      _overrideQuantityController.text = val.replaceFirst(RegExp(r'^0+'), '');
+                      _overrideQuantityController.selection = TextSelection.fromPosition(
+                        TextPosition(offset: _overrideQuantityController.text.length),
+                      );
+                    }
+                  },
+                  onEditingComplete: () {
+                    final val = _overrideQuantityController.text.trim();
+                    if (val.isEmpty || (int.tryParse(val) ?? 0) <= 0) {
+                      _overrideQuantityController.text = _getPlanQuantityPerTray();
+                    }
+                    FocusScope.of(context).unfocus();
+                  },
                 ),
               ),
             )

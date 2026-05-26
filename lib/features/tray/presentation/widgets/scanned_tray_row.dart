@@ -87,35 +87,13 @@ class ScannedTrayRow extends StatelessWidget {
             ),
           ),
           
-          // Tubes (Input Pill)
+          // Tubes
           Expanded(
             flex: 2,
-            child: Center(
-              child: Container(
-                width: 50,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFCFD8DC), width: 1),
-                ),
-                child: TextField(
-                  controller: quantityController,
-                  keyboardType: TextInputType.number,
-                  textAlign: TextAlign.center,
-                  textAlignVertical: TextAlignVertical.center,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF263238), // Black text in input
-                  ),
-                  decoration: const InputDecoration(
-                    contentPadding: EdgeInsets.only(top: 4),
-                    isCollapsed: true,
-                    border: InputBorder.none,
-                  ),
-                ),
-              ),
+            child: Text(
+              quantityController.text,
+              textAlign: TextAlign.center,
+              style: _cellStyle,
             ),
           ),
           

@@ -1,5 +1,6 @@
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
+import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/features/batch/repo/batch_repo.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:active_wear_scanning/features/wip/model/wip_model.dart';
@@ -262,11 +263,7 @@ class _WIPScreenState extends State<WIPScreen> {
         ),
         child: Row(
           children: [
-            IconButton(
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0D47A1), size: 18),
-              visualDensity: VisualDensity.compact,
-            ),
+            const CustomBackButton(),
             const Expanded(
               child: Column(
                 mainAxisSize: MainAxisSize.min,

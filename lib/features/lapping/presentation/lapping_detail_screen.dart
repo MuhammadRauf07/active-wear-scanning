@@ -13,6 +13,7 @@ import 'package:active_wear_scanning/features/lapping/repo/lapping_repo.dart';
 import 'package:active_wear_scanning/features/processing/repo/processing_repo.dart';
 import 'package:flutter/material.dart';
 import 'package:active_wear_scanning/core/widgets/scanner_always_open.dart';
+import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 
 
 class LappingDetailScreen extends StatefulWidget {
@@ -513,11 +514,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
         ),
         child: Row(
           children: [
-            IconButton(
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0D47A1), size: 18),
-              visualDensity: VisualDensity.compact,
-            ),
+            const CustomBackButton(),
             Expanded(
               child: Column(
                 mainAxisSize: MainAxisSize.min,

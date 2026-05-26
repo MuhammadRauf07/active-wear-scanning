@@ -7,6 +7,7 @@ import 'package:active_wear_scanning/features/tray/presentation/tray_scanning_sc
 import 'package:active_wear_scanning/features/wip/presentation/wip_screen.dart';
 import 'package:active_wear_scanning/features/tray_tracking/presentation/tray_tracking_screen.dart';
 import 'package:active_wear_scanning/features/dashboard/presentation/dashboard_screen.dart';
+import 'package:active_wear_scanning/features/carton_packing/presentation/carton_packing_screen.dart';
 import 'package:flutter/material.dart';
 
 class ScanningSectionsScreen extends StatelessWidget {
@@ -128,6 +129,18 @@ class ScanningSectionsScreen extends StatelessWidget {
                           ),
                         ]),
                       ),
+                      _FadeSlideTransition(
+                        delay: 400,
+                        child: _buildRow(context, [
+                          SectionCard(
+                            title: 'Carton Packing',
+                            subtitle: 'Box goods for logistics and delivery',
+                            sectionCode: 'CART',
+                            progressValue: 0.5,
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CartonPackingScreen())),
+                          ),
+                        ]),
+                      ),
                       const SizedBox(height: 24),
                     ],
                   ),
@@ -229,7 +242,10 @@ class ScanningSectionsScreen extends StatelessWidget {
         children: [
           children[0],
           const SizedBox(width: 16),
-          children[1],
+          if (children.length > 1)
+            children[1]
+          else
+            const Expanded(child: SizedBox()),
         ],
       ),
     );

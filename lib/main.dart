@@ -4,6 +4,7 @@ import 'package:active_wear_scanning/features/gbs/repo/gbs_receiving_repo.dart';
 import 'package:active_wear_scanning/features/induction/repo/induction_repo.dart';
 import 'package:active_wear_scanning/features/scanning_sections/presentation/scanning_sections_screen.dart';
 import 'package:active_wear_scanning/features/tray/repo/tray_scanning_repo.dart';
+import 'package:active_wear_scanning/features/carton_packing/repo/carton_packing_repo.dart';
 import 'package:active_wear_scanning/features/user/model/active_wear_user.dart';
 import 'package:active_wear_scanning/features/user/repo/active_wear_user.dart';
 import 'package:active_wear_scanning/features/user/repo/profile.dart';
@@ -26,6 +27,7 @@ void main() {
   injectSingleton(TrayScanningRepo());
   injectSingleton(GBSReceivingRepo());
   injectSingleton(InductionRepo());
+  injectSingleton(CartonPackingRepo());
 
   runApp(
     PlexApp(

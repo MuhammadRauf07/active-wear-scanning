@@ -1,3 +1,4 @@
+import 'dart:developer' as dev;
 import 'package:active_wear_scanning/core/api/plex-result/plex_api_result.dart';
 import 'package:active_wear_scanning/core/api/services/api_service.dart';
 import 'package:active_wear_scanning/features/common-models/common_models.dart';
@@ -24,13 +25,25 @@ class ProcessingRepo {
   }
 
   Future<PlexApiResult> fetchProductionProgress(Map<String, String> query) async {
-    final result = await _api.getList('/api/app/production-progresses', query: query);
+    final Map<String, String> finalQuery = {
+      'MaxResultCount': '1000',
+      'maxResultCount': '1000',
+      ...query,
+    };
+    final result = await _api.getList('/api/app/production-progresses', query: finalQuery);
     
     if (!result.success || result.data == null) return result;
 
     try {
-      final data = result.data as List;
-      final list = data.map((item) => ProductionProgressResponseModel.fromJson(item)).toList();
+      final List data = result.data is Map ? (result.data['items'] ?? []) : result.data;
+      final list = <ProductionProgressResponseModel>[];
+      for (final item in data) {
+        try {
+          list.add(ProductionProgressResponseModel.fromJson(Map<String, dynamic>.from(item)));
+        } catch (e) {
+          dev.log("ProcessingRepo parsing error on production progress record: $e. Raw: $item");
+        }
+      }
       return PlexApiResult(true, 200, "Success", list);
     } catch (e) {
       return PlexApiResult(false, 500, e.toString(), null);
