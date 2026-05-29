@@ -8,6 +8,7 @@ import 'package:active_wear_scanning/features/wip/presentation/wip_screen.dart';
 import 'package:active_wear_scanning/features/tray_tracking/presentation/tray_tracking_screen.dart';
 import 'package:active_wear_scanning/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:active_wear_scanning/features/carton_packing/presentation/carton_packing_screen.dart';
+import 'package:active_wear_scanning/features/md_receiving/presentation/md_receiving_screen.dart';
 import 'package:flutter/material.dart';
 
 class ScanningSectionsScreen extends StatelessWidget {
@@ -138,6 +139,13 @@ class ScanningSectionsScreen extends StatelessWidget {
                             sectionCode: 'CART',
                             progressValue: 0.5,
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CartonPackingScreen())),
+                          ),
+                          SectionCard(
+                            title: 'MD Receiving',
+                            subtitle: 'Log incoming MD material items',
+                            sectionCode: 'MDRC',
+                            progressValue: 0.5,
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const MdReceivingScreen())),
                           ),
                         ]),
                       ),

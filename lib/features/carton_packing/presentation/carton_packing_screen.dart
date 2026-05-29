@@ -27,6 +27,9 @@ class _CartonPackingScreenState extends State<CartonPackingScreen> {
   final Map<int, List<PackingInstructionLineResponse>> _groupLinesCache = {};
   int? _expandedGroupId;
 
+  final Set<int> _packedCartonDetailIds = {};
+  final Map<int, List<int>> _groupDetailIdsCache = {};
+
   final _cartonPackingRepo = fromPlex<CartonPackingRepo>();
 
   // Active Sale Order constraints
@@ -42,6 +45,34 @@ class _CartonPackingScreenState extends State<CartonPackingScreen> {
   void initState() {
     super.initState();
     HardwareKeyboard.instance.addHandler(_onHardwareKey);
+    _fetchPackedCartonIds();
+  }
+
+  Future<void> _fetchPackedCartonIds() async {
+    try {
+      final res = await _cartonPackingRepo.fetchProductionProgress({
+        'SubOperation': 'Packing',
+      });
+      if (res.success && res.data != null) {
+        final List rawList = res.data is Map ? (res.data['items'] ?? []) : res.data;
+        final Set<int> packedIds = {};
+        for (final item in rawList) {
+          if (item is Map) {
+            final pp = item['productionProgress'] ?? item;
+            final id = pp['packingInstructionLineDetailId'] as int?;
+            if (id != null) {
+              packedIds.add(id);
+            }
+          }
+        }
+        setState(() {
+          _packedCartonDetailIds.clear();
+          _packedCartonDetailIds.addAll(packedIds);
+        });
+      }
+    } catch (e) {
+      debugPrint("❌ Error fetching packed carton IDs: $e");
+    }
   }
 
   @override
@@ -114,6 +145,12 @@ class _CartonPackingScreenState extends State<CartonPackingScreen> {
         final header = model.packingInstructionHeader;
         final headerId = header.id;
         final saleOrderId = header.saleOrderMstId;
+        final lineDetailId = model.packingInstructionLineDetail.id;
+
+        // Check if already packed/saved in database
+        if (_packedCartonDetailIds.contains(lineDetailId)) {
+          return 'This carton is already packed and saved!';
+        }
 
         // Restriction Check: Enforce that scanned cartons must belong to the first scanned Sale Order
         if (_activeSaleOrderId != null && saleOrderId != _activeSaleOrderId) {
@@ -174,6 +211,19 @@ class _CartonPackingScreenState extends State<CartonPackingScreen> {
           }
         }
 
+        // Fetch all details for this Carton Group if not cached yet to compute packed count
+        if (!_groupDetailIdsCache.containsKey(headerId)) {
+          AppLoader.show(context, message: 'Caching Carton Group details...');
+          final detailsResult = await _cartonPackingRepo.fetchPackingInstructionDetailsByHeaderId(headerId);
+          if (detailsResult.success && detailsResult.data != null) {
+            final details = detailsResult.data as List<PackingInstructionResponseModel>;
+            final ids = details.map((d) => d.packingInstructionLineDetail.id).toList();
+            setState(() {
+              _groupDetailIdsCache[headerId] = ids;
+            });
+          }
+        }
+
         setState(() {
           _expandedGroupId = headerId;
           _scannedCartons.add(model);
@@ -193,23 +243,98 @@ class _CartonPackingScreenState extends State<CartonPackingScreen> {
   Future<void> saveCartonPackingData() async {
     if (_scannedCartons.isEmpty) return;
 
-    AppLoader.show(context, message: 'Saving carton packing logs...');
-    bool isAllSuccess = true;
+    AppLoader.show(context, message: 'Saving carton packing logs & WIP transactions...');
+    int successCount = 0;
+    final List<String> failedCartons = [];
 
     try {
-      // Simulate backend validation & transaction post
-      await Future.delayed(const Duration(milliseconds: 1000));
+      for (final model in _scannedCartons) {
+        // ── 1. Create Production Progress ──
+        final progressPayload = {
+          'subOperation': 'Packing',
+          'date': DateTime.now().toIso8601String(),
+          'transactionType': 2,
+          'operatorDescription': 'system',
+          'primaryQuantity': 1.0,
+          'secondaryQuantity': 1.0,
+          'operationId': 4,
+          'shiftId': 1,
+          'locatorId': 13,
+          'packingInstructionLineDetailId': model.packingInstructionLineDetail.id,
+        };
+
+        final res = await _cartonPackingRepo.createProductionProgress(progressPayload);
+        if (res.success) {
+          // ── 2. Extract Resolved Progress ID ──
+          int? progressId;
+          final dynamic data = res.data;
+          if (data is Map) {
+            progressId = data['id'] ?? data['productionProgress']?['id'];
+          } else if (data is int) {
+            progressId = data;
+          }
+
+          // Refetch fallback if progressId is null or 0
+          if (progressId == null || progressId == 0) {
+            debugPrint("⚠️ ProductionProgress ID is null/0 in immediate response. Fetching via PackingInstructionLineDetailId...");
+            final refetchRes = await _cartonPackingRepo.fetchProductionProgress({
+              'PackingInstructionLineDetailId': model.packingInstructionLineDetail.id.toString(),
+            });
+            if (refetchRes.success && refetchRes.data != null) {
+              final List rawList = refetchRes.data is Map ? (refetchRes.data['items'] ?? []) : refetchRes.data;
+              if (rawList.isNotEmpty && rawList.first is Map) {
+                final firstItem = rawList.first;
+                if (firstItem.containsKey('productionProgress')) {
+                  progressId = firstItem['productionProgress']?['id'] as int?;
+                } else {
+                  progressId = firstItem['id'] as int?;
+                }
+                debugPrint("✅ Re-fetched ProductionProgress ID: $progressId");
+              }
+            }
+          }
+
+          // ── 3. Create WIP Transaction ──
+          final wipPayload = {
+            'subOperation': 'Packing',
+            'transactionDate': DateTime.now().toIso8601String(),
+            'transactionType': 2,
+            'operatorDescription': 'system',
+            'primaryQuantity': 1.0,
+            'secondaryQuantity': 1.0,
+            'operationId': 4,
+            'shiftId': 1,
+            'locatorId': 13,
+            'packingInstructionLineDetailId': model.packingInstructionLineDetail.id,
+            if (progressId != null && progressId > 0) 'progressId': progressId,
+          };
+
+          final wipRes = await _cartonPackingRepo.createWipTransaction(wipPayload);
+          if (wipRes.success) {
+            successCount++;
+          } else {
+            failedCartons.add('${model.packingInstructionLineDetail.uniqueId} (WIP-fail)');
+          }
+        } else {
+          failedCartons.add('${model.packingInstructionLineDetail.uniqueId} (PP-fail)');
+        }
+      }
     } catch (e) {
-      isAllSuccess = false;
       debugPrint("❌ Carton Packing Save Error: $e");
     } finally {
       AppLoader.hide(context);
       if (mounted) {
-        if (isAllSuccess) {
-          AppSnackBar.showSuccess(context, message: 'Saved successfully');
+        if (failedCartons.isEmpty && successCount == _scannedCartons.length) {
+          AppSnackBar.showSuccess(context, message: 'Saved successfully ($successCount carton(s))');
+          await _fetchPackedCartonIds();
           Future.delayed(const Duration(milliseconds: 400), () {
             if (mounted) Navigator.of(context).pop(true);
           });
+        } else if (successCount > 0) {
+          _showError(
+            "Saved $successCount carton(s) successfully.\n"
+            "Failed cartons: ${failedCartons.join(', ')}",
+          );
         } else {
           _showError("Failed to save carton packing data.");
         }
@@ -528,8 +653,11 @@ class _CartonPackingScreenState extends State<CartonPackingScreen> {
   Widget _buildCartonGroupSpecsPanel(PackingInstructionHeader header, List<PackingInstructionLineResponse> lines, bool isExpanded) {
     final headerId = header.id;
     
-    // Count scanned cartons belonging to this group
-    final scannedCount = _scannedCartons.where((c) => c.packingInstructionHeader.id == headerId).length;
+    // Count scanned cartons (database packed + session scanned) belonging to this group
+    final detailIds = _groupDetailIdsCache[headerId] ?? [];
+    final dbPackedCount = detailIds.where((id) => _packedCartonDetailIds.contains(id)).length;
+    final sessionScannedCount = _scannedCartons.where((c) => c.packingInstructionHeader.id == headerId).length;
+    final totalScannedCount = dbPackedCount + sessionScannedCount;
     
     final weightUom = _getUomString(header.weight.toInt());
     final dimsUom = _getUomString(header.measurementUom);
@@ -580,7 +708,7 @@ class _CartonPackingScreenState extends State<CartonPackingScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '$scannedCount / ${header.noCartons} Cartons Scanned',
+                          '$totalScannedCount / ${header.noCartons} Cartons Scanned',
                           style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF78909C)),
                         ),
                       ],

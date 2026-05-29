@@ -707,20 +707,20 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
 
       // --- Step 2 & 3: Sequential Processing (Audit -> BatchLine -> Progress) ---
       // Determine Handover Location
-      int nextLocatorId = 3; 
       final baseProgress = allScannedTrays.first.productionProgress;
+      int nextLocatorId = baseProgress?.locatorId ?? 3; 
       final handoverOpId = widget.nextOperationId ?? baseProgress?.operationId;
 
       if (handoverOpId != null) {
         final locRes = await _batchRepo.fetchLocators(operationId: handoverOpId);
         if (locRes.success && locRes.data != null) {
-          final locList = locRes.data as List;
+          final List locList = locRes.data is Map ? (locRes.data['items'] ?? []) : locRes.data;
           final matchingEntry = locList.cast<Map>().firstWhere(
                 (entry) => (entry['operation']?['id'] ?? entry['locator']?['operationId'])?.toString() == handoverOpId.toString(),
             orElse: () => {},
           );
           if (matchingEntry.isNotEmpty) {
-            nextLocatorId = matchingEntry['locator']?['id'] as int? ?? 3;
+            nextLocatorId = matchingEntry['locator']?['id'] as int? ?? (baseProgress?.locatorId ?? 3);
           }
         }
       }
@@ -818,9 +818,14 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
           if (pp.id != null) {
             final nativeWipRes = await _batchRepo.fetchWipTransactionsByProgressId(pp.id!);
             if (nativeWipRes.success && nativeWipRes.data != null) {
-              final items = nativeWipRes.data as List<Map<String, dynamic>>;
-              if (items.isNotEmpty) {
-                wipId = items.first['wipTransaction']?['id'] as int?;
+              final List rawItems = nativeWipRes.data is Map ? (nativeWipRes.data['items'] ?? []) : nativeWipRes.data;
+              final items = rawItems.cast<Map<String, dynamic>>();
+              final match = items.firstWhere(
+                (e) => (e['wipTransaction']?['progressId'] ?? e['progressId'] ?? e['wipTransaction']?['productionProgressId'] ?? e['productionProgressId'])?.toString() == pp.id.toString(),
+                orElse: () => {},
+              );
+              if (match.isNotEmpty) {
+                wipId = match['wipTransaction']?['id'] as int?;
               }
             }
           }

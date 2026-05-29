@@ -92,6 +92,62 @@ class CartonPackingRepo {
       return PlexApiResult(false, 500, e.toString(), null);
     }
   }
+
+  Future<PlexApiResult> createProductionProgress(Map<String, dynamic> data) async {
+    try {
+      return await _api.post('/api/app/production-progresses', body: data);
+    } catch (e) {
+      debugPrint("❌ Create Production Progress error: $e");
+      return PlexApiResult(false, 500, e.toString(), null);
+    }
+  }
+
+  Future<PlexApiResult> createWipTransaction(Map<String, dynamic> data) async {
+    try {
+      return await _api.post('/api/app/w-iPTransactions', body: data);
+    } catch (e) {
+      debugPrint("❌ Create WIP Transaction error: $e");
+      return PlexApiResult(false, 500, e.toString(), null);
+    }
+  }
+
+  Future<PlexApiResult> fetchProductionProgress(Map<String, String> query) async {
+    try {
+      final Map<String, String> finalQuery = {
+        'MaxResultCount': '1000',
+        'maxResultCount': '1000',
+        ...query,
+      };
+      return await _api.getList('/api/app/production-progresses', query: finalQuery);
+    } catch (e) {
+      debugPrint("❌ Fetch Production Progress error: $e");
+      return PlexApiResult(false, 500, e.toString(), null);
+    }
+  }
+
+  Future<PlexApiResult> fetchPackingInstructionDetailsByHeaderId(int headerId) async {
+    try {
+      final result = await _api.getList(
+        '/api/app/packing-instruction-line-details',
+        query: {
+          'PackingInstructionHeaderId': headerId.toString(),
+          'MaxResultCount': '1000',
+        },
+      );
+
+      if (!result.success || result.data == null) return result;
+
+      final List rawData = result.data is Map ? result.data['items'] : result.data;
+      final items = rawData
+          .map((e) => PackingInstructionResponseModel.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+
+      return PlexApiResult(true, 200, "Success", items);
+    } catch (e) {
+      debugPrint("❌ Fetch Packing Instruction Line Details Parse Error: $e");
+      return PlexApiResult(false, 500, e.toString(), null);
+    }
+  }
 }
 
 

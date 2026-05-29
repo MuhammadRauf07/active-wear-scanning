@@ -13,7 +13,7 @@ class LappingRepo {
     );
 
     if (result.success && result.data != null) {
-      final List data = result.data as List;
+      final List data = result.data is Map ? (result.data['items'] ?? []) : result.data;
       if (data.isNotEmpty) {
         return PlexApiResult(true, 200, "Success", data.first);
       } else {

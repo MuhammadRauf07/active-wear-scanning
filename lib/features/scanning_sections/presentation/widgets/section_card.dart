@@ -39,6 +39,7 @@ class _SectionCardState extends State<SectionCard> {
     if (t.contains('wip')) return Icons.bolt_rounded;
     if (t.contains('tracking')) return Icons.radar_rounded;
     if (t.contains('carton packing') || t.contains('cartanization')) return Icons.inventory_2_rounded;
+    if (t.contains('md receiving') || t.contains('md')) return Icons.move_to_inbox_rounded;
     return Icons.widgets_rounded;
   }
 
@@ -48,6 +49,7 @@ class _SectionCardState extends State<SectionCard> {
     if (t.contains('wip')) return const Color(0xFF00E676); // Neon Green
     if (t.contains('processing')) return const Color(0xFFFF1744); // Electric Red
     if (t.contains('carton packing') || t.contains('cartanization')) return const Color(0xFFFF9100); // Orange
+    if (t.contains('md receiving') || t.contains('md')) return const Color(0xFFD500F9); // Neon Purple
     return const Color(0xFFFFD600); // Vivid Yellow
   }
 

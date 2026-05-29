@@ -1045,16 +1045,17 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
   Future<void> _submitBatch() async {
     AppLoader.show(context, message: 'Submitting...');
     try {
+      final baseProgress = _trays.isNotEmpty ? _trays.first.productionProgress : null;
       final targetOpId = widget.nextOperationId ?? widget.currentOperationId;
-      int nextLocatorId = 10;
+      int nextLocatorId = baseProgress?.locatorId ?? 10;
       final locRes = await _processingRepo.fetchLocators(operationId: targetOpId);
       if (locRes.success && locRes.data != null) {
-        final locList = locRes.data as List;
+        final List locList = locRes.data is Map ? (locRes.data['items'] ?? []) : locRes.data;
         final match = locList.cast<Map>().firstWhere(
           (e) => (e['operation']?['id'] ?? e['locator']?['operationId'])?.toString() == targetOpId.toString(),
           orElse: () => {},
         );
-        if (match.isNotEmpty) nextLocatorId = match['locator']?['id'] as int? ?? 10;
+        if (match.isNotEmpty) nextLocatorId = match['locator']?['id'] as int? ?? (baseProgress?.locatorId ?? 10);
       }
 
       final List<int> newFailedTrayIds = [];
@@ -1078,15 +1079,15 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
             final updRes = await _processingRepo.updateProductionProgress(pp.id!, json);
             if (!updRes.success) throw Exception('Update failed: ${updRes.message}');
 
-            int rewLoc = 10;
+            int rewLoc = pp.locatorId ?? 10;
             final rewRes = await _processingRepo.fetchLocators(operationId: _reworkTargetOpId!);
             if (rewRes.success && rewRes.data != null) {
-              final rl = rewRes.data as List;
+              final List rl = rewRes.data is Map ? (rewRes.data['items'] ?? []) : rewRes.data;
               final rm = rl.cast<Map>().firstWhere(
                     (e) => (e['operation']?['id'] ?? e['locator']?['operationId'])?.toString() == _reworkTargetOpId.toString(),
                 orElse: () => {},
               );
-              if (rm.isNotEmpty) rewLoc = rm['locator']?['id'] as int? ?? 10;
+              if (rm.isNotEmpty) rewLoc = rm['locator']?['id'] as int? ?? (pp.locatorId ?? 10);
             }
 
             final newJ = pp.toJson();
