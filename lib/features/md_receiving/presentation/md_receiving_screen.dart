@@ -167,9 +167,9 @@ class _MdReceivingScreenState extends State<MdReceivingScreen> {
           continue;
         }
 
-        // ── 1. Update original Production Progress locatorId to 14 ──
+        // ── 1. Update original Production Progress toLocatorId to 14 ──
         final Map<String, dynamic> updatePayload = Map<String, dynamic>.from(rawProgress);
-        updatePayload['locatorId'] = 14;
+        updatePayload['toLocatorId'] = 14;
 
         final updateRes = await _mdReceivingRepo.updateProductionProgress(progressId, updatePayload);
         if (!updateRes.success) {
@@ -179,9 +179,9 @@ class _MdReceivingScreenState extends State<MdReceivingScreen> {
 
         // ── 2. Create Negative WIP Transaction (locator 13 -> 14) ──
         final negativeWipPayload = {
-          'subOperation': 'Packing',
+          'subOperation': 'Locator Transfer',
           'transactionDate': DateTime.now().toIso8601String(),
-          'transactionType': 2,
+          'transactionType': 1,
           'operatorDescription': 'system',
           'primaryQuantity': -1.0,
           'secondaryQuantity': -1.0,
@@ -203,11 +203,11 @@ class _MdReceivingScreenState extends State<MdReceivingScreen> {
         final positiveWipPayload = {
           'subOperation': 'MD Receiving',
           'transactionDate': DateTime.now().toIso8601String(),
-          'transactionType': 2,
+          'transactionType': 0,
           'operatorDescription': 'system',
           'primaryQuantity': 1.0,
           'secondaryQuantity': 1.0,
-          'operationId': 5, // MD Receiving operationId
+          'operationId': 4, // Mapped to 4 per request
           'shiftId': 1,
           'locatorId': 14,
           'toLocatorId': null,

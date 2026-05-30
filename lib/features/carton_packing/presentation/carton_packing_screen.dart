@@ -253,7 +253,7 @@ class _CartonPackingScreenState extends State<CartonPackingScreen> {
         final progressPayload = {
           'subOperation': 'Packing',
           'date': DateTime.now().toIso8601String(),
-          'transactionType': 2,
+          'transactionType': 0,
           'operatorDescription': 'system',
           'primaryQuantity': 1.0,
           'secondaryQuantity': 1.0,
@@ -298,7 +298,7 @@ class _CartonPackingScreenState extends State<CartonPackingScreen> {
           final wipPayload = {
             'subOperation': 'Packing',
             'transactionDate': DateTime.now().toIso8601String(),
-            'transactionType': 2,
+            'transactionType': 0,
             'operatorDescription': 'system',
             'primaryQuantity': 1.0,
             'secondaryQuantity': 1.0,
