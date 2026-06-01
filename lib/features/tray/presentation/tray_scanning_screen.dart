@@ -288,10 +288,6 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     AppSnackBar.showError(context, message: message);
   }
 
-  void _showSuccessMessage(String message) {
-    if (!mounted) return;
-    AppSnackBar.showSuccess(context, message: message);
-  }
 
   void saveTrayAndProductionProgress() async {
     if (_scannedTrays.isEmpty) return;
@@ -363,7 +359,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       }
 
       if (mounted) {
-        _showSuccessMessage('Saved successfully!');
+        AppSnackBar.showSuccess(context, message: 'Saved successfully!');
         setState(() {
           _scannedTrays.clear();
           _quantityControllers.clear();
