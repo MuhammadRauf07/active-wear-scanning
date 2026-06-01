@@ -540,7 +540,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         _buildConfigurationPanel(),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 10),
                         Expanded(
                           child: AnimatedSwitcher(
                             duration: const Duration(milliseconds: 400),
@@ -560,9 +560,9 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                                     crossAxisAlignment: CrossAxisAlignment.stretch,
                                     children: [
                                       _buildLiveDashboard(),
-                                      const SizedBox(height: 16),
+                                      const SizedBox(height: 10),
                                       _buildWOSummary(),
-                                      const SizedBox(height: 16),
+                                      const SizedBox(height: 10),
                                       Expanded(
                                         child: _buildScannedSection(),
                                       ),
@@ -770,7 +770,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
   ) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.04),
           borderRadius: BorderRadius.circular(10),
@@ -779,7 +779,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
         child: Column(
           children: [
             Icon(icon, color: color, size: 16),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
               value,
               style: TextStyle(
@@ -981,7 +981,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
               ),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
                   child: Column(
                     children: [
                       SizedBox(
@@ -1010,9 +1010,9 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 10),
                       _buildCapacityProgress(),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 10),
                       const TrayTableHeader(actionColumnWidth: 44),
                       Expanded(
                         child: _scannedTrays.isEmpty
@@ -1266,7 +1266,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: EdgeInsets.zero,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFB0BEC5), width: 1.5),
@@ -1356,7 +1356,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
 
   Widget _buildTableHeaderCell(String text) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
       child: Text(
         text,
         textAlign: TextAlign.center,
@@ -1371,7 +1371,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
 
   Widget _buildTableCell(String text, {bool isBold = false}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       child: Text(
         text,
         textAlign: TextAlign.center,

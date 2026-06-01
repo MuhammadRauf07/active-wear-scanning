@@ -5,12 +5,8 @@ import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
 import 'package:active_wear_scanning/core/widgets/barcode_scanner_dialog.dart';
-import 'package:active_wear_scanning/core/widgets/content_card.dart';
-import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
-import 'package:active_wear_scanning/core/widgets/dynamic_info_display.dart';
 import 'package:active_wear_scanning/core/widgets/empty_scan_state.dart';
 import 'package:active_wear_scanning/core/widgets/scanner_always_open.dart';
-import 'package:active_wear_scanning/core/widgets/section_header.dart';
 import 'package:active_wear_scanning/core/widgets/tray_table_header.dart';
 import 'package:active_wear_scanning/features/tray/model/scanned_tray.dart';
 import 'package:active_wear_scanning/features/tray/presentation/widgets/scanned_tray_row.dart';
@@ -21,8 +17,6 @@ import 'package:active_wear_scanning/features/tray/repo/tray_scanning_repo.dart'
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:flutter/material.dart';
 import 'package:plex/plex_di/plex_dependency_injection.dart';
-
-import '../../../core/widgets/custom_expanded_async_dropdown.dart';
 
 class TrayScanningScreen extends StatefulWidget {
   const TrayScanningScreen({super.key});
@@ -42,15 +36,6 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   List<TrayDetailsModel> availableTraysDetail = [];
   List<ProductionProgressResponseModel> existingProductionProgresses = [];
   PlanLineResponseModel? _selectedPlanLine;
-
-  static const _inputAndButtonHeight = 42.0;
-  static const _borderColor = Colors.blue;
-
-  static final _labelStyle = TextStyle(
-    fontSize: 14,
-    fontWeight: FontWeight.w500,
-    color: Colors.black87,
-  );
 
   // Bluetooth Scanner Support
   String _barcodeBuffer = '';
@@ -589,58 +574,49 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Left: Barcode Scanner Visual ──────────────────────────────
+                // ── Left: Scan/Active Machine Button ──────────────────────────
                 Expanded(
                   flex: 4,
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        height: 90, // Reduced height to prevent overflow
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0D47A1).withValues(alpha: 0.05),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFF0D47A1).withValues(alpha: 0.2), width: 1.5),
+                      Text(
+                        _machineBarcode.isEmpty
+                            ? 'Scan Machine'
+                            : 'Active Machine: ${_machineBarcode.toUpperCase()}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF546E7A),
                         ),
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            Icon(Icons.precision_manufacturing_rounded, size: 40, color: const Color(0xFF0D47A1).withValues(alpha: 0.5)),
-                            if (_machineBarcode.isNotEmpty)
-                              Positioned(
-                                bottom: 8,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF455A64),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    _machineBarcode,
-                                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.white),
-                                  ),
-                                ),
-                              ),
-                            // Industrial Corners
-                            Positioned(top: 8, left: 8, child: _cornerBracket(top: true, left: true, color: const Color(0xFF0D47A1))),
-                            Positioned(top: 8, right: 8, child: _cornerBracket(top: true, left: false, color: const Color(0xFF0D47A1))),
-                            Positioned(bottom: 8, left: 8, child: _cornerBracket(top: false, left: true, color: const Color(0xFF0D47A1))),
-                            Positioned(bottom: 8, right: 8, child: _cornerBracket(top: false, left: false, color: const Color(0xFF0D47A1))),
-                          ],
-                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
                       SizedBox(
                         width: double.infinity,
-                        height: 38, // Slightly more compact button
-                        child: ElevatedButton.icon(
-                          onPressed: _onScanMachineBarcode,
-                          icon: const Icon(Icons.precision_manufacturing_rounded, size: 18),
-                          label: const Text('SCAN MACHINE', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 10, letterSpacing: 0.5)),
+                        height: 48,
+                        child: ElevatedButton(
+                          onPressed: _scannedTrays.isEmpty ? _onScanMachineBarcode : null,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF0D47A1),
+                            backgroundColor: _machineBarcode.isEmpty
+                                ? const Color(0xFF0D47A1)
+                                : const Color(0xFF455A64),
                             foregroundColor: Colors.white,
+                            disabledBackgroundColor: Colors.grey.shade200,
+                            disabledForegroundColor: Colors.grey.shade400,
                             elevation: 0,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          child: const Text(
+                            'SCAN MACHINE',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 11,
+                              letterSpacing: 0.5,
+                            ),
                           ),
                         ),
                       ),
@@ -648,49 +624,36 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                   ),
                 ),
                 const SizedBox(width: 16),
-                // ── Right: Work Order Selection ──────────────────────────────
+                // ── Right: Work Order Selection (or placeholder) ──────────────
                 Expanded(
                   flex: 5,
                   child: _machineBarcode.isEmpty
-                      ? Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const SizedBox(height: 20),
-                            Icon(Icons.touch_app_rounded, color: Colors.grey.withValues(alpha: 0.3), size: 30),
-                            const SizedBox(height: 8),
-                            Text(
-                              'AWAITING SCAN',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(fontSize: 10, color: Colors.grey.shade500, fontWeight: FontWeight.w900, letterSpacing: 1),
-                            ),
-                          ],
-                        )
+                      ? const SizedBox.shrink()
                       : Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
                               'Work Order Select',
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF546E7A)),
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF546E7A),
+                              ),
                             ),
                             const SizedBox(height: 8),
-                            Container(
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
-                              ),
-                              child: WorkOrderDropdown(
-                                planLines: _planLines,
-                                selectedPlanLine: _selectedPlanLine,
-                                onChanged: (newValue) {
-                                  setState(() {
-                                    _selectedPlanLine = newValue;
-                                    if (_selectedPlanLine != null) {
-                                      _overrideQuantityController.text = _getPlanQuantityPerTray();
-                                    }
-                                  });
-                                },
-                              ),
+                            WorkOrderDropdown(
+                              enabled: _scannedTrays.isEmpty,
+                              planLines: _planLines,
+                              selectedPlanLine: _selectedPlanLine,
+                              onChanged: (newValue) {
+                                setState(() {
+                                  _selectedPlanLine = newValue;
+                                  if (_selectedPlanLine != null) {
+                                    _overrideQuantityController.text =
+                                        _getPlanQuantityPerTray();
+                                  }
+                                });
+                              },
                             ),
                           ],
                         ),
@@ -698,21 +661,6 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _cornerBracket({required bool top, required bool left, required Color color}) {
-    return Container(
-      width: 12,
-      height: 12,
-      decoration: BoxDecoration(
-        border: Border(
-          top: top ? BorderSide(color: color.withValues(alpha: 0.5), width: 2) : BorderSide.none,
-          bottom: !top ? BorderSide(color: color.withValues(alpha: 0.5), width: 2) : BorderSide.none,
-          left: left ? BorderSide(color: color.withValues(alpha: 0.5), width: 2) : BorderSide.none,
-          right: !left ? BorderSide(color: color.withValues(alpha: 0.5), width: 2) : BorderSide.none,
         ),
       ),
     );

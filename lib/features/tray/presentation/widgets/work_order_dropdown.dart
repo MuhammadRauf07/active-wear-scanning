@@ -6,12 +6,14 @@ class WorkOrderDropdown extends StatefulWidget {
   final List<PlanLineResponseModel>? planLines;
   final PlanLineResponseModel? selectedPlanLine;
   final ValueChanged<PlanLineResponseModel?> onChanged;
+  final bool enabled;
 
   const WorkOrderDropdown({
     super.key,
     required this.planLines,
     required this.selectedPlanLine,
     required this.onChanged,
+    this.enabled = true,
   });
 
   @override
@@ -42,6 +44,7 @@ class _WorkOrderDropdownState extends State<WorkOrderDropdown> with SingleTicker
   }
 
   void _toggleDropdown() {
+    if (!widget.enabled) return;
     setState(() {
       _isOpen = !_isOpen;
       if (_isOpen) {
@@ -63,12 +66,15 @@ class _WorkOrderDropdownState extends State<WorkOrderDropdown> with SingleTicker
           onTap: _toggleDropdown,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 250),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            height: 48,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8F9FA), // Very subtle off-white
+              color: widget.enabled ? const Color(0xFFF8F9FA) : Colors.grey.shade100, // Very subtle off-white or grey
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: _isOpen ? const Color(0xFF1B64A3) : const Color(0xFFCFD8DC),
+                color: !widget.enabled
+                    ? Colors.grey.shade300
+                    : (_isOpen ? const Color(0xFF1B64A3) : const Color(0xFFCFD8DC)),
                 width: 1.2,
               ),
             ),
@@ -78,15 +84,20 @@ class _WorkOrderDropdownState extends State<WorkOrderDropdown> with SingleTicker
                   child: widget.selectedPlanLine == null
                       ? Text(
                           'Work Order Selection',
-                          style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontWeight: FontWeight.w400),
+                          style: TextStyle(
+                            color: widget.enabled ? Colors.grey.shade600 : Colors.grey.shade400,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                          ),
                         )
                       : Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
                               widget.selectedPlanLine!.workOrderHeader.workOrderCode,
-                              style: const TextStyle(
-                                color: Color(0xFF263238),
+                              style: TextStyle(
+                                color: widget.enabled ? const Color(0xFF263238) : Colors.grey.shade500,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -94,7 +105,7 @@ class _WorkOrderDropdownState extends State<WorkOrderDropdown> with SingleTicker
                             Text(
                               widget.selectedPlanLine!.item.description,
                               style: TextStyle(
-                                color: Colors.grey.shade600,
+                                color: widget.enabled ? Colors.grey.shade600 : Colors.grey.shade400,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w500,
                               ),
@@ -108,7 +119,9 @@ class _WorkOrderDropdownState extends State<WorkOrderDropdown> with SingleTicker
                   turns: _rotateAnimation,
                   child: Icon(
                     Icons.arrow_drop_down_rounded, 
-                    color: _isOpen ? const Color(0xFF1B64A3) : const Color(0xFF546E7A),
+                    color: !widget.enabled
+                        ? Colors.grey.shade400
+                        : (_isOpen ? const Color(0xFF1B64A3) : const Color(0xFF546E7A)),
                     size: 24,
                   ),
                 ),
