@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:active_wear_scanning/core/theme/app_theme.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
@@ -94,6 +95,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
         await _loadExistingBatchTrays(progresses);
       }
     } else {
+      HapticFeedbackHelper.scanError();
       AppSnackBar.showError(
         context,
         title: 'Fetch Failed',
@@ -209,6 +211,10 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
   }
 
   void _onKey(RawKeyEvent event) {
+    if (AppLoader.isVisible) {
+      _barcodeBuffer = '';
+      return;
+    }
     if (event is RawKeyDownEvent) {
       final now = DateTime.now();
       if (_lastKeyPress != null &&
@@ -233,6 +239,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     final code = scannedCode.trim();
     if (code.isEmpty) return;
     if (_selectedMachine == null) {
+      HapticFeedbackHelper.scanError();
       AppSnackBar.showError(context, message: 'Please select a machine first');
       return;
     }
@@ -240,21 +247,73 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     final error = await _validateTrayForScan(code);
     AppLoader.hide(context);
     if (error != null) {
+      HapticFeedbackHelper.scanError();
       AppSnackBar.showError(context, message: error);
     }
   }
 
   Future<void> _onScanTray() async {
     if (_selectedMachine == null) {
+      HapticFeedbackHelper.scanError();
       AppSnackBar.showError(context, message: 'Please select a machine first');
       return;
     }
+    HapticFeedbackHelper.buttonClick();
     await Future.delayed(const Duration(milliseconds: 300));
     await ScannerAlwaysOpen.show(
       context,
       title: 'Scan Trays',
       onResult: (scannedCode) async {
         return await _validateTrayForScan(scannedCode);
+      },
+      scannedItemsBuilder: (context) {
+        if (_scannedTrays.isEmpty) {
+          return const Center(
+            child: Text(
+              'No trays scanned yet',
+              style: TextStyle(color: Color(0xFF90A4AE), fontSize: 13),
+            ),
+          );
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+          itemCount: _scannedTrays.length,
+          itemBuilder: (context, index) {
+            final tray = _scannedTrays[index];
+            return Card(
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              color: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: BorderSide(color: Colors.grey.shade200),
+              ),
+              child: ListTile(
+                dense: true,
+                leading: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFE3F2FD),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.qr_code_2_rounded, color: Colors.blue, size: 20),
+                ),
+                title: Text(
+                  tray.primaryTrayModel.trayCode ?? '-',
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF263238)),
+                ),
+                subtitle: Text(
+                  'Size: ${tray.item.sizeDescription ?? '-'} • Pcs: ${tray.primaryTrayModel.trayQuantity ?? 0}',
+                  style: const TextStyle(fontSize: 11, color: Color(0xFF78909C)),
+                ),
+                trailing: Text(
+                  '#${index + 1}',
+                  style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.grey, fontSize: 11),
+                ),
+              ),
+            );
+          },
+        );
       },
     );
   }
@@ -376,6 +435,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                 '0');
       _quantityControllers.add(TextEditingController(text: defaultQty));
     });
+    HapticFeedbackHelper.scanSuccess();
     return null;
   }
 
@@ -401,6 +461,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
 
       if (!res.success) {
         AppLoader.hide(context);
+        HapticFeedbackHelper.scanError();
         AppSnackBar.showError(context, title: 'Failed to create batch', message: res.message ?? '');
         return;
       }
@@ -438,6 +499,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
 
     if (batchHeaderId == 0) {
       AppLoader.hide(context);
+      HapticFeedbackHelper.scanError();
       AppSnackBar.showError(context, message: 'Invalid Batch ID generated.');
       return;
     }
@@ -515,6 +577,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     }
 
     AppLoader.hide(context);
+    HapticFeedbackHelper.scanSuccess();
     Navigator.pop(context, true);
   }
 
@@ -634,24 +697,17 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
             ),
             ElevatedButton.icon(
               onPressed: (_selectedMachine != null && _scannedTrays.isNotEmpty)
-                  ? _saveBatchChanges
+                  ? () {
+                      HapticFeedbackHelper.buttonClick();
+                      _saveBatchChanges();
+                    }
                   : null,
               icon: const Icon(Icons.save_rounded, size: 16),
               label: const Text(
                 'SAVE BATCH',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11),
               ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2E7D32),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+              style: AppTheme.saveButtonStyle(
+                isEnabled: (_selectedMachine != null && _scannedTrays.isNotEmpty),
               ),
             ),
           ],
@@ -873,6 +929,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                         itemLabel: (m) => m.resource?.brand ?? 'Unknown',
                         isReadOnly: _scannedTrays.isNotEmpty,
                         onChanged: (val) {
+                          HapticFeedbackHelper.buttonClick();
                           setState(() {
                             _selectedMachine = val;
                             _selectedColor = null;
@@ -909,8 +966,10 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                             selectedValue: _selectedColor,
                             itemLabel: (c) => c.segmentCode?.description ?? '-',
                             isReadOnly: _scannedTrays.isNotEmpty,
-                            onChanged: (val) =>
-                                setState(() => _selectedColor = val),
+                            onChanged: (val) {
+                              HapticFeedbackHelper.buttonClick();
+                              setState(() => _selectedColor = val);
+                            },
                           ),
                         ],
                       ),
@@ -988,7 +1047,10 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                         width: double.infinity,
                         height: 44,
                         child: ElevatedButton.icon(
-                          onPressed: _onScanTray,
+                          onPressed: () {
+                            HapticFeedbackHelper.buttonClick();
+                            _onScanTray();
+                          },
                           icon: const Icon(
                             Icons.add_circle_outline_rounded,
                             size: 20,

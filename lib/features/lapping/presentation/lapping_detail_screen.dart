@@ -1,4 +1,6 @@
 import 'package:flutter/services.dart';
+import 'package:active_wear_scanning/core/theme/app_theme.dart';
+import 'package:active_wear_scanning/core/utils/barcode_buffer_parser.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
 import 'package:active_wear_scanning/features/batch/repo/batch_repo.dart';
@@ -64,8 +66,8 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
   final Map<String, double> _trayOverrideQuantities = {};
 
   final FocusNode _focusNode = FocusNode();
-  String _barcodeBuffer = '';
-  DateTime? _lastKeyPress;
+  // Bluetooth Scanner Support
+  final _barcodeParser = BarcodeBufferParser();
 
   @override
   void dispose() {
@@ -85,31 +87,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
   }
 
   bool _onHardwareKey(KeyEvent event) {
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return false;
-
-    final now = DateTime.now();
-    if (_lastKeyPress != null && now.difference(_lastKeyPress!).inMilliseconds > 200) {
-      _barcodeBuffer = '';
-    }
-    _lastKeyPress = now;
-
-    final ch = event.character;
-    final isEnter = event.logicalKey == LogicalKeyboardKey.enter ||
-        event.logicalKey == LogicalKeyboardKey.numpadEnter ||
-        ch == '\n' || ch == '\r';
-
-    if (isEnter) {
-      if (_barcodeBuffer.isNotEmpty) {
-        final code = _barcodeBuffer;
-        _barcodeBuffer = '';
-        debugPrint('📡 BT Scanner (Lapping) → code: $code');
-        _processBluetoothScan(code);
-        return true; // consume the Enter key
-      }
-    } else if (ch != null && ch.isNotEmpty) {
-      _barcodeBuffer += ch;
-    }
-    return false;
+    return _barcodeParser.handleKey(event, _processBluetoothScan);
   }
 
   Future<void> _processBluetoothScan(String scannedCode) async {
@@ -117,6 +95,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
     if (code.isEmpty) return;
 
     if (_selectedWorkOrderId == null) {
+      HapticFeedbackHelper.scanError();
       AppSnackBar.showError(context, message: 'Please select a Work Order first');
       return;
     }
@@ -126,6 +105,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
     AppLoader.hide(context);
     
     if (error != null) {
+      HapticFeedbackHelper.scanError();
       AppSnackBar.showError(context, message: error);
     }
   }
@@ -339,16 +319,58 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
       _scannedTraysByWO[_selectedWorkOrderId!]!.add(matchedTray!);
       FocusManager.instance.primaryFocus?.unfocus();
     });
+    HapticFeedbackHelper.scanSuccess();
     return null;
   }
 
   void _openScanner() async {
+    HapticFeedbackHelper.buttonClick();
     await Future.delayed(const Duration(milliseconds: 300));
     await ScannerAlwaysOpen.show(
       context,
       title: 'Scan Tray',
       onResult: (scannedCode) async {
         return await _onTrayScanned(scannedCode);
+      },
+      scannedItemsBuilder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSubState) {
+            final currentWOTrays = _selectedWorkOrderId != null ? (_scannedTraysByWO[_selectedWorkOrderId!] ?? []) : [];
+            if (currentWOTrays.isEmpty) {
+              return const Center(
+                child: Text(
+                  'No trays scanned yet',
+                  style: TextStyle(color: Color(0xFF90A4AE), fontSize: 13),
+                ),
+              );
+            }
+            return Container(
+              margin: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFFB0BEC5),
+                  width: 1.5,
+                  strokeAlign: BorderSide.strokeAlignOutside,
+                ),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: LappingTrayTable(
+                selectedWorkOrderId: _selectedWorkOrderId,
+                scannedTraysByWO: _scannedTraysByWO,
+                trayOverrideQuantities: _trayOverrideQuantities,
+                onRemove: (t, trayKey) {
+                  setState(() {
+                    _scannedTraysByWO[_selectedWorkOrderId]?.remove(t);
+                    _trayOverrideQuantities.remove(trayKey);
+                  });
+                  setSubState(() {});
+                },
+              ),
+            );
+          },
+        );
       },
     );
   }
@@ -532,7 +554,12 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
               ),
             ),
             ElevatedButton.icon(
-              onPressed: _isLoading ? null : _saveChanges,
+              onPressed: _isLoading
+                  ? null
+                  : () {
+                      HapticFeedbackHelper.buttonClick();
+                      _saveChanges();
+                    },
               icon: Icon(
                 _failedHandoverTrayIds.isNotEmpty || _failedCloseLappingIds.isNotEmpty
                     ? Icons.replay_rounded
@@ -543,7 +570,6 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
                 _failedHandoverTrayIds.isNotEmpty || _failedCloseLappingIds.isNotEmpty
                     ? 'RETRY HANDOVER (${_failedHandoverTrayIds.length + _failedCloseLappingIds.length})'
                     : 'SUBMIT BATCH',
-                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 11),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: _failedHandoverTrayIds.isNotEmpty || _failedCloseLappingIds.isNotEmpty
@@ -552,8 +578,14 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
                 foregroundColor: Colors.white,
                 elevation: 0,
                 disabledBackgroundColor: Colors.grey.shade200,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                minimumSize: const Size(0, 44),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                textStyle: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                ),
               ),
             ),
           ],
@@ -1037,12 +1069,14 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
         _failedCloseLappingIds.clear();
       });
 
+      HapticFeedbackHelper.scanSuccess();
       _showDialog('Success', 'Trays successfully assigned to new machine.', isSuccess: true, onDismiss: () {
         Navigator.pop(context, true); 
       });
     } catch (e) {
       AppLoader.hide(context);
       setState(() => _isLoading = false);
+      HapticFeedbackHelper.scanError();
       _showDialog('Save Changes Error', e.toString());
     }
   }

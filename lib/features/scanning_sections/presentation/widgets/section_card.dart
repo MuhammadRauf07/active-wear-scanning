@@ -40,6 +40,7 @@ class _SectionCardState extends State<SectionCard> {
     if (t.contains('tracking')) return Icons.radar_rounded;
     if (t.contains('carton packing') || t.contains('cartanization')) return Icons.inventory_2_rounded;
     if (t.contains('md receiving') || t.contains('md')) return Icons.move_to_inbox_rounded;
+    if (t.contains('po') || t.contains('style')) return Icons.style_rounded;
     return Icons.widgets_rounded;
   }
 

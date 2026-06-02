@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:plex/plex_di/plex_dependency_injection.dart';
+import 'package:active_wear_scanning/core/theme/app_theme.dart';
+import 'package:active_wear_scanning/core/utils/barcode_buffer_parser.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
 import 'package:active_wear_scanning/core/widgets/empty_scan_state.dart';
@@ -38,8 +40,7 @@ class _CartonPackingScreenState extends State<CartonPackingScreen> {
   String? _activeCustomerName;
 
   // Bluetooth Scanner Support
-  String _barcodeBuffer = '';
-  DateTime? _lastKeyPress;
+  final _barcodeParser = BarcodeBufferParser();
 
   @override
   void initState() {
@@ -82,31 +83,7 @@ class _CartonPackingScreenState extends State<CartonPackingScreen> {
   }
 
   bool _onHardwareKey(KeyEvent event) {
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return false;
-
-    final now = DateTime.now();
-    if (_lastKeyPress != null && now.difference(_lastKeyPress!).inMilliseconds > 200) {
-      _barcodeBuffer = '';
-    }
-    _lastKeyPress = now;
-
-    final ch = event.character;
-    final isEnter = event.logicalKey == LogicalKeyboardKey.enter ||
-        event.logicalKey == LogicalKeyboardKey.numpadEnter ||
-        ch == '\n' || ch == '\r';
-
-    if (isEnter) {
-      if (_barcodeBuffer.isNotEmpty) {
-        final code = _barcodeBuffer;
-        _barcodeBuffer = '';
-        debugPrint('📡 BT Scanner (Carton Packing) → code: $code');
-        _processBluetoothScan(code);
-        return true;
-      }
-    } else if (ch != null && ch.isNotEmpty) {
-      _barcodeBuffer += ch;
-    }
-    return false;
+    return _barcodeParser.handleKey(event, _processBluetoothScan);
   }
 
   Future<void> _processBluetoothScan(String scannedCode) async {
@@ -122,6 +99,57 @@ class _CartonPackingScreenState extends State<CartonPackingScreen> {
       title: 'Carton Packing Scan',
       onResult: (scannedCode) {
         return _validateCartonForScan(scannedCode);
+      },
+      scannedItemsBuilder: (context) {
+        if (_scannedCartons.isEmpty) {
+          return const Center(
+            child: Text(
+              'No cartons scanned yet',
+              style: TextStyle(color: Color(0xFF90A4AE), fontSize: 13),
+            ),
+          );
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+          itemCount: _scannedCartons.length,
+          itemBuilder: (context, index) {
+            final carton = _scannedCartons[index];
+            return Card(
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              color: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: BorderSide(color: Colors.grey.shade200),
+              ),
+              child: ListTile(
+                dense: true,
+                leading: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFFFF3E0),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.inventory_2_rounded, color: Colors.orange, size: 20),
+                ),
+                title: Text(
+                  carton.packingInstructionLineDetail.uniqueId.isNotEmpty
+                      ? carton.packingInstructionLineDetail.uniqueId
+                      : '-',
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF263238)),
+                ),
+                subtitle: Text(
+                  'Group: ${carton.packingInstructionHeader.cartonGroup} • Size: ${carton.packingInstructionHeader.sizeDescription} • Packs: ${carton.packingInstructionHeader.packsPerCarton}',
+                  style: const TextStyle(fontSize: 11, color: Color(0xFF78909C)),
+                ),
+                trailing: Text(
+                  '#${index + 1}',
+                  style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.grey, fontSize: 11),
+                ),
+              ),
+            );
+          },
+        );
       },
     );
     setState(() {});
@@ -228,6 +256,7 @@ class _CartonPackingScreenState extends State<CartonPackingScreen> {
           _expandedGroupId = headerId;
           _scannedCartons.add(model);
         });
+        HapticFeedbackHelper.scanSuccess();
         return null;
       } else {
         return result.message ?? 'Unique ID not found in Packing Instructions';
@@ -325,6 +354,7 @@ class _CartonPackingScreenState extends State<CartonPackingScreen> {
       AppLoader.hide(context);
       if (mounted) {
         if (failedCartons.isEmpty && successCount == _scannedCartons.length) {
+          HapticFeedbackHelper.scanSuccess();
           AppSnackBar.showSuccess(context, message: 'Saved successfully ($successCount carton(s))');
           await _fetchPackedCartonIds();
           Future.delayed(const Duration(milliseconds: 400), () {
@@ -343,6 +373,7 @@ class _CartonPackingScreenState extends State<CartonPackingScreen> {
   }
 
   void _showError(String message) {
+    HapticFeedbackHelper.scanError();
     AppSnackBar.showError(context, message: message);
   }
 
@@ -431,17 +462,15 @@ class _CartonPackingScreenState extends State<CartonPackingScreen> {
               ),
             ),
             ElevatedButton.icon(
-              onPressed: _hasScannedCartons ? saveCartonPackingData : null,
+              onPressed: _hasScannedCartons
+                  ? () {
+                      HapticFeedbackHelper.buttonClick();
+                      saveCartonPackingData();
+                    }
+                  : null,
               icon: const Icon(Icons.save_rounded, size: 16),
-              label: const Text('SAVE CHANGES', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2E7D32),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                disabledBackgroundColor: Colors.grey.shade200,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
+              label: const Text('SAVE CHANGES'),
+              style: AppTheme.saveButtonStyle(isEnabled: _hasScannedCartons),
             ),
           ],
         ),
@@ -486,7 +515,10 @@ class _CartonPackingScreenState extends State<CartonPackingScreen> {
                 SizedBox(
                   height: 38,
                   child: ElevatedButton.icon(
-                    onPressed: _onScanCarton,
+                    onPressed: () {
+                      HapticFeedbackHelper.buttonClick();
+                      _onScanCarton();
+                    },
                     icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
                     label: const Text('SCAN CARTON', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 10)),
                     style: ElevatedButton.styleFrom(

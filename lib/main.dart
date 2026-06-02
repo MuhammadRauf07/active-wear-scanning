@@ -6,6 +6,7 @@ import 'package:active_wear_scanning/features/scanning_sections/presentation/sca
 import 'package:active_wear_scanning/features/tray/repo/tray_scanning_repo.dart';
 import 'package:active_wear_scanning/features/carton_packing/repo/carton_packing_repo.dart';
 import 'package:active_wear_scanning/features/md_receiving/repo/md_receiving_repo.dart';
+import 'package:active_wear_scanning/features/po_style/repo/po_style_repo.dart';
 import 'package:active_wear_scanning/features/user/model/active_wear_user.dart';
 import 'package:active_wear_scanning/features/user/repo/active_wear_user.dart';
 import 'package:active_wear_scanning/features/user/repo/profile.dart';
@@ -30,6 +31,7 @@ void main() {
   injectSingleton(InductionRepo());
   injectSingleton(CartonPackingRepo());
   injectSingleton(MdReceivingRepo());
+  injectSingleton(PoStyleRepo());
 
   runApp(
     PlexApp(

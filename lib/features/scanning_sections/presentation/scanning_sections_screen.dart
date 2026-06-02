@@ -9,6 +9,7 @@ import 'package:active_wear_scanning/features/tray_tracking/presentation/tray_tr
 import 'package:active_wear_scanning/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:active_wear_scanning/features/carton_packing/presentation/carton_packing_screen.dart';
 import 'package:active_wear_scanning/features/md_receiving/presentation/md_receiving_screen.dart';
+import 'package:active_wear_scanning/features/po_style/presentation/po_style_screen.dart';
 import 'package:flutter/material.dart';
 
 class ScanningSectionsScreen extends StatelessWidget {
@@ -18,7 +19,7 @@ class ScanningSectionsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        color: const Color(0xFFE3F2FD), // Solid Sky Blue
+        color: const Color(0xFFF1F5F9), // Slate Grey to match secondary screens
         child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -149,6 +150,18 @@ class ScanningSectionsScreen extends StatelessWidget {
                           ),
                         ]),
                       ),
+                      _FadeSlideTransition(
+                        delay: 500,
+                        child: _buildRow(context, [
+                          SectionCard(
+                            title: 'PO Style',
+                            subtitle: 'Manage production PO styles',
+                            sectionCode: 'POST',
+                            progressValue: 0.5,
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PoStyleScreen())),
+                          ),
+                        ]),
+                      ),
                       const SizedBox(height: 24),
                     ],
                   ),
@@ -260,11 +273,24 @@ class ScanningSectionsScreen extends StatelessWidget {
   }
 }
 
-class _FadeSlideTransition extends StatelessWidget {
+class _FadeSlideTransition extends StatefulWidget {
   final Widget child;
   final int delay;
 
   const _FadeSlideTransition({required this.child, required this.delay});
+
+  @override
+  State<_FadeSlideTransition> createState() => _FadeSlideTransitionState();
+}
+
+class _FadeSlideTransitionState extends State<_FadeSlideTransition> {
+  late Future<void> _delayFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _delayFuture = Future.delayed(Duration(milliseconds: widget.delay));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -274,7 +300,7 @@ class _FadeSlideTransition extends StatelessWidget {
       curve: Curves.easeOutCubic,
       builder: (context, value, child) {
         return FutureBuilder(
-          future: Future.delayed(Duration(milliseconds: delay)),
+          future: _delayFuture,
           builder: (context, snapshot) {
             final isVisible = snapshot.connectionState == ConnectionState.done;
             return AnimatedOpacity(
@@ -288,7 +314,7 @@ class _FadeSlideTransition extends StatelessWidget {
           },
         );
       },
-      child: child,
+      child: widget.child,
     );
   }
 }

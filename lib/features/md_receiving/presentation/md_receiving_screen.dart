@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:plex/plex_di/plex_dependency_injection.dart';
+import 'package:active_wear_scanning/core/theme/app_theme.dart';
+import 'package:active_wear_scanning/core/utils/barcode_buffer_parser.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
 import 'package:active_wear_scanning/core/widgets/empty_scan_state.dart';
@@ -22,8 +24,7 @@ class _MdReceivingScreenState extends State<MdReceivingScreen> {
   final _mdReceivingRepo = fromPlex<MdReceivingRepo>();
 
   // Bluetooth Scanner Support
-  String _barcodeBuffer = '';
-  DateTime? _lastKeyPress;
+  final _barcodeParser = BarcodeBufferParser();
 
   @override
   void initState() {
@@ -38,31 +39,7 @@ class _MdReceivingScreenState extends State<MdReceivingScreen> {
   }
 
   bool _onHardwareKey(KeyEvent event) {
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return false;
-
-    final now = DateTime.now();
-    if (_lastKeyPress != null && now.difference(_lastKeyPress!).inMilliseconds > 200) {
-      _barcodeBuffer = '';
-    }
-    _lastKeyPress = now;
-
-    final ch = event.character;
-    final isEnter = event.logicalKey == LogicalKeyboardKey.enter ||
-        event.logicalKey == LogicalKeyboardKey.numpadEnter ||
-        ch == '\n' || ch == '\r';
-
-    if (isEnter) {
-      if (_barcodeBuffer.isNotEmpty) {
-        final code = _barcodeBuffer;
-        _barcodeBuffer = '';
-        debugPrint('📡 BT Scanner (MD Receiving) → code: $code');
-        _processBluetoothScan(code);
-        return true;
-      }
-    } else if (ch != null && ch.isNotEmpty) {
-      _barcodeBuffer += ch;
-    }
-    return false;
+    return _barcodeParser.handleKey(event, _processBluetoothScan);
   }
 
   Future<void> _processBluetoothScan(String scannedCode) async {
@@ -125,6 +102,7 @@ class _MdReceivingScreenState extends State<MdReceivingScreen> {
         _scannedCartons.add(model);
         _productionProgressMap[lineDetailId] = rawProgress;
       });
+      HapticFeedbackHelper.scanSuccess();
       return null;
     } catch (e) {
       debugPrint("❌ MD Receiving Validation Error: $e");
@@ -140,6 +118,57 @@ class _MdReceivingScreenState extends State<MdReceivingScreen> {
       title: 'MD Receiving Scan',
       onResult: (scannedCode) {
         return _validateScanCode(scannedCode);
+      },
+      scannedItemsBuilder: (context) {
+        if (_scannedCartons.isEmpty) {
+          return const Center(
+            child: Text(
+              'No cartons scanned yet',
+              style: TextStyle(color: Color(0xFF90A4AE), fontSize: 13),
+            ),
+          );
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+          itemCount: _scannedCartons.length,
+          itemBuilder: (context, index) {
+            final carton = _scannedCartons[index];
+            return Card(
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              color: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: BorderSide(color: Colors.grey.shade200),
+              ),
+              child: ListTile(
+                dense: true,
+                leading: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFFFF3E0),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.inventory_2_rounded, color: Colors.orange, size: 20),
+                ),
+                title: Text(
+                  carton.packingInstructionLineDetail.uniqueId.isNotEmpty
+                      ? carton.packingInstructionLineDetail.uniqueId
+                      : '-',
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF263238)),
+                ),
+                subtitle: Text(
+                  'Group: ${carton.packingInstructionHeader.cartonGroup} • Size: ${carton.packingInstructionHeader.sizeDescription} • Packs: ${carton.packingInstructionHeader.packsPerCarton}',
+                  style: const TextStyle(fontSize: 11, color: Color(0xFF78909C)),
+                ),
+                trailing: Text(
+                  '#${index + 1}',
+                  style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.grey, fontSize: 11),
+                ),
+              ),
+            );
+          },
+        );
       },
     );
     setState(() {});
@@ -228,6 +257,7 @@ class _MdReceivingScreenState extends State<MdReceivingScreen> {
       AppLoader.hide(context);
       if (mounted) {
         if (failedItems.isEmpty && successCount == _scannedCartons.length) {
+          HapticFeedbackHelper.scanSuccess();
           AppSnackBar.showSuccess(context, message: 'Saved successfully ($successCount carton(s))');
           Future.delayed(const Duration(milliseconds: 400), () {
             if (mounted) Navigator.of(context).pop(true);
@@ -245,6 +275,7 @@ class _MdReceivingScreenState extends State<MdReceivingScreen> {
   }
 
   void _showError(String message) {
+    HapticFeedbackHelper.scanError();
     AppSnackBar.showError(context, message: message);
   }
 
@@ -295,7 +326,10 @@ class _MdReceivingScreenState extends State<MdReceivingScreen> {
           children: [
             IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () {
+                HapticFeedbackHelper.buttonClick();
+                Navigator.of(context).pop();
+              },
               style: IconButton.styleFrom(
                 foregroundColor: const Color(0xFF546E7A),
                 backgroundColor: const Color(0xFFECEFF1),
@@ -320,17 +354,15 @@ class _MdReceivingScreenState extends State<MdReceivingScreen> {
               ),
             ),
             ElevatedButton.icon(
-              onPressed: _hasScannedItems ? saveMdReceivingData : null,
+              onPressed: _hasScannedItems
+                  ? () {
+                      HapticFeedbackHelper.buttonClick();
+                      saveMdReceivingData();
+                    }
+                  : null,
               icon: const Icon(Icons.save_rounded, size: 16),
-              label: const Text('SAVE CHANGES', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2E7D32),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                disabledBackgroundColor: Colors.grey.shade200,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
+              label: const Text('SAVE CHANGES'),
+              style: AppTheme.saveButtonStyle(isEnabled: _hasScannedItems),
             ),
           ],
         ),
@@ -375,7 +407,10 @@ class _MdReceivingScreenState extends State<MdReceivingScreen> {
                 SizedBox(
                   height: 38,
                   child: ElevatedButton.icon(
-                    onPressed: _onScanItem,
+                    onPressed: () {
+                      HapticFeedbackHelper.buttonClick();
+                      _onScanItem();
+                    },
                     icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
                     label: const Text('SCAN ITEM', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 10)),
                     style: ElevatedButton.styleFrom(

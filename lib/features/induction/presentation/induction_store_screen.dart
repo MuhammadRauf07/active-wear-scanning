@@ -1,4 +1,6 @@
 import 'package:flutter/services.dart';
+import 'package:active_wear_scanning/core/theme/app_theme.dart';
+import 'package:active_wear_scanning/core/utils/barcode_buffer_parser.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
@@ -40,8 +42,8 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
     color: Colors.grey.shade700,
   );
 
-  String _barcodeBuffer = '';
-  DateTime? _lastKeyPress;
+  // Centralized Bluetooth Scanner Support
+  final _barcodeParser = BarcodeBufferParser();
 
   @override
   void initState() {
@@ -61,31 +63,7 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
   }
 
   bool _onHardwareKey(KeyEvent event) {
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return false;
-
-    final now = DateTime.now();
-    if (_lastKeyPress != null && now.difference(_lastKeyPress!).inMilliseconds > 200) {
-      _barcodeBuffer = '';
-    }
-    _lastKeyPress = now;
-
-    final ch = event.character;
-    final isEnter = event.logicalKey == LogicalKeyboardKey.enter ||
-        event.logicalKey == LogicalKeyboardKey.numpadEnter ||
-        ch == '\n' || ch == '\r';
-
-    if (isEnter) {
-      if (_barcodeBuffer.isNotEmpty) {
-        final code = _barcodeBuffer;
-        _barcodeBuffer = '';
-        debugPrint('📡 BT Scanner (Induction) → code: $code');
-        _processBluetoothScan(code);
-        return true;
-      }
-    } else if (ch != null && ch.isNotEmpty) {
-      _barcodeBuffer += ch;
-    }
-    return false;
+    return _barcodeParser.handleKey(event, _processBluetoothScan);
   }
 
   Future<void> _processBluetoothScan(String scannedCode) async {
@@ -94,6 +72,7 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
 
     final error = await _validateTrayForInduction(code);
     if (error != null && mounted) {
+      HapticFeedbackHelper.scanError();
       AppSnackBar.showError(context, message: error);
     } else {
       setState(() {});
@@ -128,6 +107,57 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
       title: 'Induction Store Scan',
       onResult: (scannedCode) {
         return _validateTrayForInduction(scannedCode);
+      },
+      scannedItemsBuilder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSubState) {
+            if (_scannedTrays.isEmpty) {
+              return const Center(
+                child: Text(
+                  'No trays scanned yet',
+                  style: TextStyle(color: Color(0xFF90A4AE), fontSize: 13),
+                ),
+              );
+            }
+            return Container(
+              margin: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFFB0BEC5),
+                  width: 1.5,
+                  strokeAlign: BorderSide.strokeAlignOutside,
+                ),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  const InductionTrayTableHeader(),
+                  Expanded(
+                    child: ListView.builder(
+                      padding: EdgeInsets.zero,
+                      itemCount: _scannedTrays.length,
+                      itemBuilder: (context, index) {
+                        return InductionTrayRow(
+                          index: index,
+                          tray: _scannedTrays[index],
+                          displayIndex: index,
+                          onRemove: () {
+                            setState(() {
+                              _scannedTrays.removeAt(index);
+                            });
+                            setSubState(() {});
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
       },
     );
     setState(() {});
@@ -191,7 +221,7 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
         ),
       );
     });
-
+    HapticFeedbackHelper.scanSuccess();
     return null;
   }
 
@@ -293,11 +323,13 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
       AppLoader.hide(context);
       if (mounted) {
         if (isAllSuccess) {
+          HapticFeedbackHelper.scanSuccess();
           AppSnackBar.showSuccess(context, message: 'Induction saved successfully');
           Future.delayed(const Duration(milliseconds: 400), () {
             if (mounted) Navigator.of(context).pop(true);
           });
         } else {
+          HapticFeedbackHelper.scanError();
           AppSnackBar.showError(context, message: 'Failed to save some trays');
         }
       }
@@ -380,16 +412,15 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
               ),
             ),
             ElevatedButton.icon(
-              onPressed: _onSave,
-              icon: const Icon(Icons.save_as_rounded, size: 16),
-              label: const Text('SAVE CHANGES', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2E7D32), // Success Green for save
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
+              onPressed: _scannedTrays.isEmpty
+                  ? null
+                  : () {
+                      HapticFeedbackHelper.buttonClick();
+                      _onSave();
+                    },
+              icon: const Icon(Icons.save_rounded, size: 16),
+              label: const Text('SAVE CHANGES'),
+              style: AppTheme.saveButtonStyle(isEnabled: _scannedTrays.isNotEmpty),
             ),
           ],
         ),

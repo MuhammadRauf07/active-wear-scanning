@@ -1,6 +1,7 @@
 import 'dart:ui';
-
 import 'package:flutter/services.dart';
+import 'package:active_wear_scanning/core/theme/app_theme.dart';
+import 'package:active_wear_scanning/core/utils/barcode_buffer_parser.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
@@ -37,9 +38,8 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   List<ProductionProgressResponseModel> existingProductionProgresses = [];
   PlanLineResponseModel? _selectedPlanLine;
 
-  // Bluetooth Scanner Support
-  String _barcodeBuffer = '';
-  DateTime? _lastKeyPress;
+  // Centralized Bluetooth Scanner Support
+  final _barcodeParser = BarcodeBufferParser();
 
   @override
   void initState() {
@@ -58,31 +58,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   }
 
   bool _onHardwareKey(KeyEvent event) {
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return false;
-
-    final now = DateTime.now();
-    if (_lastKeyPress != null && now.difference(_lastKeyPress!).inMilliseconds > 200) {
-      _barcodeBuffer = '';
-    }
-    _lastKeyPress = now;
-
-    final ch = event.character;
-    final isEnter = event.logicalKey == LogicalKeyboardKey.enter ||
-        event.logicalKey == LogicalKeyboardKey.numpadEnter ||
-        ch == '\n' || ch == '\r';
-
-    if (isEnter) {
-      if (_barcodeBuffer.isNotEmpty) {
-        final code = _barcodeBuffer;
-        _barcodeBuffer = '';
-        debugPrint('📡 BT Scanner → code: $code');
-        _processBluetoothScan(code);
-        return true; // consume the Enter so it doesn't submit a focused TextField
-      }
-    } else if (ch != null && ch.isNotEmpty) {
-      _barcodeBuffer += ch;
-    }
-    return false;
+    return _barcodeParser.handleKey(event, _processBluetoothScan);
   }
 
   Future<void> _processBluetoothScan(String scannedCode) async {
@@ -185,6 +161,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       _quantityControllers.add(controller);
     });
 
+    HapticFeedbackHelper.scanSuccess();
     return null;
   }
 
@@ -226,6 +203,60 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       onResult: (scannedCode) {
         return _validateTrayForScan(scannedCode);
       },
+      scannedItemsBuilder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSubState) {
+            if (_scannedTrays.isEmpty) {
+              return const Center(
+                child: Text(
+                  'No trays scanned yet',
+                  style: TextStyle(color: Color(0xFF90A4AE), fontSize: 13),
+                ),
+              );
+            }
+            return Container(
+              margin: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFFB0BEC5),
+                  width: 1.5,
+                  strokeAlign: BorderSide.strokeAlignOutside,
+                ),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  const TrayTableHeader(),
+                  Expanded(
+                    child: ListView.builder(
+                      padding: EdgeInsets.zero,
+                      itemCount: _scannedTrays.length,
+                      itemBuilder: (context, index) {
+                        return ScannedTrayRow(
+                          index: index,
+                          tray: _scannedTrays[index],
+                          quantityController: _quantityControllers[index],
+                          selectedPlanLine: _selectedPlanLine,
+                          onDelete: () {
+                            setState(() {
+                              _quantityControllers[index].dispose();
+                              _quantityControllers.removeAt(index);
+                              _scannedTrays.removeAt(index);
+                            });
+                            setSubState(() {});
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -236,6 +267,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     );
 
     if (scannedCode == null || !mounted) return;
+    HapticFeedbackHelper.scanSuccess();
     _fetchMachineData(scannedCode);
   }
 
@@ -285,6 +317,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
   void _showError(String message) {
     if (!mounted) return;
+    HapticFeedbackHelper.scanError();
     AppSnackBar.showError(context, message: message);
   }
 
@@ -359,6 +392,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       }
 
       if (mounted) {
+        HapticFeedbackHelper.scanSuccess();
         AppSnackBar.showSuccess(context, message: 'Saved successfully!');
         setState(() {
           _scannedTrays.clear();
@@ -490,17 +524,15 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
               ),
             ),
             ElevatedButton.icon(
-              onPressed: _scannedTrays.isEmpty ? null : saveTrayAndProductionProgress,
+              onPressed: _scannedTrays.isEmpty
+                  ? null
+                  : () {
+                      HapticFeedbackHelper.buttonClick();
+                      saveTrayAndProductionProgress();
+                    },
               icon: const Icon(Icons.save_rounded, size: 16),
-              label: const Text('SAVE CHANGES', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2E7D32),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                disabledBackgroundColor: Colors.grey.shade200,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
+              label: const Text('SAVE CHANGES'),
+              style: AppTheme.saveButtonStyle(isEnabled: _scannedTrays.isNotEmpty),
             ),
           ],
         ),
@@ -576,24 +608,39 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        _machineBarcode.isEmpty
-                            ? 'Scan Machine'
-                            : 'Active Machine: ${_machineBarcode.toUpperCase()}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF546E7A),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _machineBarcode.isEmpty
+                                  ? 'Scan Machine'
+                                  : 'Active Machine: ${_machineBarcode.toUpperCase()}',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF546E7A),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (_machineBarcode.isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            const _ActivePulseDot(),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 8),
                       SizedBox(
                         width: double.infinity,
                         height: 48,
                         child: ElevatedButton(
-                          onPressed: _scannedTrays.isEmpty ? _onScanMachineBarcode : null,
+                          onPressed: _scannedTrays.isEmpty
+                              ? () {
+                                  HapticFeedbackHelper.buttonClick();
+                                  _onScanMachineBarcode();
+                                }
+                              : null,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: _machineBarcode.isEmpty
                                 ? const Color(0xFF0D47A1)
@@ -819,7 +866,10 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       width: double.infinity,
       height: 44,
       child: ElevatedButton.icon(
-        onPressed: _onScanTray,
+        onPressed: () {
+          HapticFeedbackHelper.buttonClick();
+          _onScanTray();
+        },
         icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
         label: const Text(
           'TRAY SCAN',
@@ -879,6 +929,58 @@ class _TrayFadeSlideTransitionState extends State<_TrayFadeSlideTransition> {
         );
       },
       child: widget.child,
+    );
+  }
+}
+
+class _ActivePulseDot extends StatefulWidget {
+  const _ActivePulseDot();
+
+  @override
+  State<_ActivePulseDot> createState() => _ActivePulseDotState();
+}
+
+class _ActivePulseDotState extends State<_ActivePulseDot> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+    _animation = Tween<double>(begin: 3.0, end: 7.0).animate(_controller);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFF2E7D32), // Standard success green to match Save changes
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF2E7D32).withValues(alpha: 0.6),
+                blurRadius: _animation.value,
+                spreadRadius: _animation.value / 2,
+              )
+            ],
+          ),
+        );
+      },
     );
   }
 }
