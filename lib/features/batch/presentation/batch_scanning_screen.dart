@@ -267,49 +267,181 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
         return await _validateTrayForScan(scannedCode);
       },
       scannedItemsBuilder: (context) {
-        if (_scannedTrays.isEmpty) {
-          return const Center(
-            child: Text(
-              'No trays scanned yet',
-              style: TextStyle(color: Color(0xFF90A4AE), fontSize: 13),
-            ),
-          );
-        }
-        return ListView.builder(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-          itemCount: _scannedTrays.length,
-          itemBuilder: (context, index) {
-            final tray = _scannedTrays[index];
-            return Card(
-              margin: const EdgeInsets.symmetric(vertical: 4),
-              color: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-                side: BorderSide(color: Colors.grey.shade200),
+        return StatefulBuilder(
+          builder: (context, setSubState) {
+            if (_scannedTrays.isEmpty) {
+              return const Center(
+                child: Text(
+                  'No trays scanned yet',
+                  style: TextStyle(color: Color(0xFF90A4AE), fontSize: 13),
+                ),
+              );
+            }
+            return Container(
+              margin: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFFB0BEC5),
+                  width: 1.5,
+                  strokeAlign: BorderSide.strokeAlignOutside,
+                ),
               ),
-              child: ListTile(
-                dense: true,
-                leading: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFE3F2FD),
-                    shape: BoxShape.circle,
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  const TrayTableHeader(actionColumnWidth: 44),
+                  Expanded(
+                    child: ListView.builder(
+                      padding: EdgeInsets.zero,
+                      itemCount: _scannedTrays.length,
+                      itemBuilder: (context, index) {
+                        final tray = _scannedTrays[index];
+                        final qty = double.tryParse(_quantityControllers[index].text) ?? 0;
+                        final perTube = tray.item.perGarmentTube;
+                        final pcs = qty * perTube;
+                        final weight = qty * (tray.item.pieceWeight ?? 0);
+
+                        const cellStyle = TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF263238),
+                        );
+
+                        const blueCellStyle = TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1B64A3),
+                        );
+
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: index.isEven ? Colors.white : const Color(0xFFF8FAFC),
+                            border: Border(
+                              bottom: BorderSide(
+                                color: Colors.grey.withValues(alpha: 0.1),
+                                width: 1,
+                              ),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: Text(
+                                  tray.primaryTrayModel.trayCode ?? 'N/A',
+                                  textAlign: TextAlign.center,
+                                  style: blueCellStyle,
+                                ),
+                              ),
+                              Expanded(
+                                flex: 2,
+                                child: Text(
+                                  tray.workOrderHeader.workOrderCode ?? 'N/A',
+                                  textAlign: TextAlign.center,
+                                  style: cellStyle,
+                                ),
+                              ),
+                              Expanded(
+                                flex: 2,
+                                child: Text(
+                                  tray.item.sizeDescription ?? 'N/A',
+                                  textAlign: TextAlign.center,
+                                  style: cellStyle,
+                                ),
+                              ),
+                              Expanded(
+                                flex: 2,
+                                child: Text(
+                                  perTube.toStringAsFixed(0),
+                                  textAlign: TextAlign.center,
+                                  style: cellStyle,
+                                ),
+                              ),
+                              Expanded(
+                                flex: 2,
+                                child: Center(
+                                  child: Container(
+                                    width: 48,
+                                    height: 32,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF1F5F9),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: const Color(0xFFCFD8DC), width: 1),
+                                    ),
+                                    child: TextField(
+                                      controller: _quantityControllers[index],
+                                      textAlign: TextAlign.center,
+                                      keyboardType: TextInputType.number,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF263238),
+                                      ),
+                                      decoration: const InputDecoration(
+                                        contentPadding: EdgeInsets.only(top: 4),
+                                        isCollapsed: true,
+                                        border: InputBorder.none,
+                                      ),
+                                      onChanged: (val) {
+                                        setState(() {});
+                                        setSubState(() {});
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                flex: 2,
+                                child: Text(
+                                  pcs.toStringAsFixed(0),
+                                  textAlign: TextAlign.center,
+                                  style: cellStyle,
+                                ),
+                              ),
+                              Expanded(
+                                flex: 2,
+                                child: Text(
+                                  '${weight.toStringAsFixed(0)}g',
+                                  textAlign: TextAlign.center,
+                                  style: cellStyle,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () {
+                                    setState(() {
+                                      _scannedTrays.removeAt(index);
+                                      _quantityControllers.removeAt(index);
+                                    });
+                                    setSubState(() {});
+                                  },
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.withValues(alpha: 0.05),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(
+                                      Icons.delete_outline_rounded,
+                                      size: 18,
+                                      color: Colors.redAccent,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                   ),
-                  child: const Icon(Icons.qr_code_2_rounded, color: Colors.blue, size: 20),
-                ),
-                title: Text(
-                  tray.primaryTrayModel.trayCode ?? '-',
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF263238)),
-                ),
-                subtitle: Text(
-                  'Size: ${tray.item.sizeDescription ?? '-'} • Pcs: ${tray.primaryTrayModel.trayQuantity ?? 0}',
-                  style: const TextStyle(fontSize: 11, color: Color(0xFF78909C)),
-                ),
-                trailing: Text(
-                  '#${index + 1}',
-                  style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.grey, fontSize: 11),
-                ),
+                ],
               ),
             );
           },

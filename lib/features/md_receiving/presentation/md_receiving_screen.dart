@@ -120,51 +120,76 @@ class _MdReceivingScreenState extends State<MdReceivingScreen> {
         return _validateScanCode(scannedCode);
       },
       scannedItemsBuilder: (context) {
-        if (_scannedCartons.isEmpty) {
-          return const Center(
-            child: Text(
-              'No cartons scanned yet',
-              style: TextStyle(color: Color(0xFF90A4AE), fontSize: 13),
-            ),
-          );
-        }
-        return ListView.builder(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-          itemCount: _scannedCartons.length,
-          itemBuilder: (context, index) {
-            final carton = _scannedCartons[index];
-            return Card(
-              margin: const EdgeInsets.symmetric(vertical: 4),
-              color: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-                side: BorderSide(color: Colors.grey.shade200),
+        return StatefulBuilder(
+          builder: (context, setSubState) {
+            if (_scannedCartons.isEmpty) {
+              return const Center(
+                child: Text(
+                  'No cartons scanned yet',
+                  style: TextStyle(color: Color(0xFF90A4AE), fontSize: 13),
+                ),
+              );
+            }
+            return Container(
+              margin: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFFB0BEC5),
+                  width: 1.5,
+                  strokeAlign: BorderSide.strokeAlignOutside,
+                ),
               ),
-              child: ListTile(
-                dense: true,
-                leading: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFFFF3E0),
-                    shape: BoxShape.circle,
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  _buildTableHeader(),
+                  Expanded(
+                    child: ListView.builder(
+                      padding: EdgeInsets.zero,
+                      itemCount: _scannedCartons.length,
+                      itemBuilder: (context, index) {
+                        final reversedIndex = _scannedCartons.length - 1 - index;
+                        final model = _scannedCartons[reversedIndex];
+                        final code = model.packingInstructionLineDetail.uniqueId;
+                        return Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                          decoration: BoxDecoration(
+                            border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+                            color: reversedIndex.isEven ? Colors.white : const Color(0xFFF8FAFC),
+                          ),
+                          child: Row(
+                            children: [
+                              Text(
+                                '#${reversedIndex + 1}',
+                                style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.blueGrey, fontSize: 12),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Text(
+                                  code,
+                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF263238)),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_sweep_rounded, color: Colors.redAccent, size: 20),
+                                onPressed: () {
+                                  setState(() {
+                                    final lineDetailId = model.packingInstructionLineDetail.id;
+                                    _scannedCartons.removeAt(reversedIndex);
+                                    _productionProgressMap.remove(lineDetailId);
+                                  });
+                                  setSubState(() {});
+                                },
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                   ),
-                  child: const Icon(Icons.inventory_2_rounded, color: Colors.orange, size: 20),
-                ),
-                title: Text(
-                  carton.packingInstructionLineDetail.uniqueId.isNotEmpty
-                      ? carton.packingInstructionLineDetail.uniqueId
-                      : '-',
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF263238)),
-                ),
-                subtitle: Text(
-                  'Group: ${carton.packingInstructionHeader.cartonGroup} • Size: ${carton.packingInstructionHeader.sizeDescription} • Packs: ${carton.packingInstructionHeader.packsPerCarton}',
-                  style: const TextStyle(fontSize: 11, color: Color(0xFF78909C)),
-                ),
-                trailing: Text(
-                  '#${index + 1}',
-                  style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.grey, fontSize: 11),
-                ),
+                ],
               ),
             );
           },

@@ -101,51 +101,73 @@ class _CartonPackingScreenState extends State<CartonPackingScreen> {
         return _validateCartonForScan(scannedCode);
       },
       scannedItemsBuilder: (context) {
-        if (_scannedCartons.isEmpty) {
-          return const Center(
-            child: Text(
-              'No cartons scanned yet',
-              style: TextStyle(color: Color(0xFF90A4AE), fontSize: 13),
-            ),
-          );
-        }
-        return ListView.builder(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-          itemCount: _scannedCartons.length,
-          itemBuilder: (context, index) {
-            final carton = _scannedCartons[index];
-            return Card(
-              margin: const EdgeInsets.symmetric(vertical: 4),
-              color: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-                side: BorderSide(color: Colors.grey.shade200),
+        return StatefulBuilder(
+          builder: (context, setSubState) {
+            if (_scannedCartons.isEmpty) {
+              return const Center(
+                child: Text(
+                  'No cartons scanned yet',
+                  style: TextStyle(color: Color(0xFF90A4AE), fontSize: 13),
+                ),
+              );
+            }
+            return Container(
+              margin: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFFB0BEC5),
+                  width: 1.5,
+                  strokeAlign: BorderSide.strokeAlignOutside,
+                ),
               ),
-              child: ListTile(
-                dense: true,
-                leading: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFFFF3E0),
-                    shape: BoxShape.circle,
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  _buildCartonTableHeader(),
+                  Expanded(
+                    child: ListView.builder(
+                      padding: EdgeInsets.zero,
+                      itemCount: _scannedCartons.length,
+                      itemBuilder: (context, index) {
+                        final reversedIndex = _scannedCartons.length - 1 - index;
+                        final model = _scannedCartons[reversedIndex];
+                        return CartonPackingRow(
+                          index: reversedIndex,
+                          item: model,
+                          onRemove: () {
+                            setState(() {
+                              _scannedCartons.removeAt(reversedIndex);
+
+                              // Reset constraint if no cartons are left in checklist
+                              if (_scannedCartons.isEmpty) {
+                                _activeSaleOrderId = null;
+                                _activeSaleOrder = null;
+                                _activeCustomerName = null;
+                                _activeCartonGroups.clear();
+                                _groupLinesCache.clear();
+                                _expandedGroupId = null;
+                              } else {
+                                // Clean up groups if no scanned cartons left for that group
+                                final headerId = model.packingInstructionHeader.id;
+                                final remains = _scannedCartons.any((c) => c.packingInstructionHeader.id == headerId);
+                                if (!remains) {
+                                  _activeCartonGroups.removeWhere((g) => g.id == headerId);
+                                  _groupLinesCache.remove(headerId);
+                                  if (_expandedGroupId == headerId) {
+                                    _expandedGroupId = null;
+                                  }
+                                }
+                              }
+                            });
+                            setSubState(() {});
+                          },
+                        );
+                      },
+                    ),
                   ),
-                  child: const Icon(Icons.inventory_2_rounded, color: Colors.orange, size: 20),
-                ),
-                title: Text(
-                  carton.packingInstructionLineDetail.uniqueId.isNotEmpty
-                      ? carton.packingInstructionLineDetail.uniqueId
-                      : '-',
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF263238)),
-                ),
-                subtitle: Text(
-                  'Group: ${carton.packingInstructionHeader.cartonGroup} • Size: ${carton.packingInstructionHeader.sizeDescription} • Packs: ${carton.packingInstructionHeader.packsPerCarton}',
-                  style: const TextStyle(fontSize: 11, color: Color(0xFF78909C)),
-                ),
-                trailing: Text(
-                  '#${index + 1}',
-                  style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.grey, fontSize: 11),
-                ),
+                ],
               ),
             );
           },
