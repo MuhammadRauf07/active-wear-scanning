@@ -35,6 +35,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   final _overrideQuantityController = TextEditingController();
   String _productionType = 'good';
   final _quantityInputFieldController = TextEditingController();
+  final _remarksInputFieldController = TextEditingController();
 
   List<PlanLineResponseModel>? _planLines;
   List<TrayDetailsModel> availableTraysDetail = [];
@@ -55,6 +56,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     HardwareKeyboard.instance.removeHandler(_onHardwareKey);
     _overrideQuantityController.dispose();
     _quantityInputFieldController.dispose();
+    _remarksInputFieldController.dispose();
     for (final controller in _quantityControllers) {
       controller.dispose();
     }
@@ -286,6 +288,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       _selectedPlanLine = null;
       _productionType = 'good';
       _quantityInputFieldController.clear();
+      _remarksInputFieldController.clear();
     });
 
     AppLoader.show(context, message: 'Loading Machine Data...');
@@ -474,6 +477,9 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
             "shiftId": _selectedPlanLine!.planLine.shiftId,
             "machineId": _selectedPlanLine!.planLine.resourceId,
             "locatorId": 2,
+            "remarks": _remarksInputFieldController.text.trim().isNotEmpty
+                ? _remarksInputFieldController.text.trim()
+                : null,
           };
 
           if (_selectedPlanLine!.planLine.planHeaderId != 0) {
@@ -501,6 +507,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
             AppSnackBar.showSuccess(context, message: 'Successfully saved $successCount entries.');
             setState(() {
               _quantityInputFieldController.clear();
+              _remarksInputFieldController.clear();
               _machineBarcode = '';
               _planLines = null;
               _selectedPlanLine = null;
@@ -1151,6 +1158,44 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                 contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 border: InputBorder.none,
                 prefixIcon: Icon(Icons.add_box_rounded, color: Color(0xFF0D47A1)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'REMARKS',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF546E7A),
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
+            ),
+            child: TextField(
+              controller: _remarksInputFieldController,
+              keyboardType: TextInputType.text,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF263238),
+              ),
+              decoration: const InputDecoration(
+                hintText: 'Enter remarks (optional)...',
+                hintStyle: TextStyle(
+                  color: Color(0xFF94A3B8),
+                  fontSize: 13,
+                  fontWeight: FontWeight.normal,
+                ),
+                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                border: InputBorder.none,
+                prefixIcon: Icon(Icons.comment_rounded, color: Color(0xFF546E7A)),
               ),
             ),
           ),

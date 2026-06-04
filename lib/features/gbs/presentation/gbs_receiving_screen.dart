@@ -4,10 +4,7 @@ import 'package:active_wear_scanning/core/utils/barcode_buffer_parser.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
-import 'package:active_wear_scanning/core/widgets/content_card.dart';
-import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
 import 'package:active_wear_scanning/core/widgets/empty_scan_state.dart';
-import 'package:active_wear_scanning/core/widgets/section_header.dart';
 import 'package:active_wear_scanning/core/widgets/tray_table_header.dart';
 import 'package:active_wear_scanning/features/gbs/presentation/widgets/gbs_tray_row.dart';
 import 'package:active_wear_scanning/features/gbs/model/gbs_scanned_tray.dart';
@@ -28,9 +25,9 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
   final List<GBSScannedTray> _scannedTrays = [];
   final _trayScanningRepo = fromPlex<GBSReceivingRepo>();
   List<ProductionProgressResponseModel> availableTrayForGbs = [];
+  String _receivingType = 'gbs';
+  final Set<int> _selectedProgressIds = {};
 
-  static const _inputAndButtonHeight = 42.0;
-  static final _labelStyle = const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87);
   static final _tableHeaderStyle = TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700);
 
   // Centralized Bluetooth Scanner Support
@@ -66,9 +63,9 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
   }
 
   Future<void> _onInitialDataFetch() async {
-    AppLoader.show(context);
+    if (mounted) AppLoader.show(context);
     await _fetchLatestTraysSilently();
-    AppLoader.hide(context);
+    if (mounted) AppLoader.hide(context);
   }
 
   Future<void> _fetchLatestTraysSilently() async {
@@ -172,7 +169,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
     if (alreadyScanned) return 'Already assigned';
 
     // 2. Flexible Matching Logic
-    final match = availableTrayForGbs.where((t) {
+    final match = _filteredTrays.where((t) {
       final String tCode = (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase();
       final String pCode = (t.productionProgress.progressCode ?? '').trim().toLowerCase();
 
@@ -203,9 +200,9 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
     double perGarmentTube = match.item.perGarmentTube;
 
     if (targetItemId > 0) {
-      AppLoader.show(context, message: "Fetching item details...");
+      if (mounted) AppLoader.show(context, message: "Fetching item details...");
       final itemRes = await _trayScanningRepo.fetchItemDef(targetItemId);
-      AppLoader.hide(context);
+      if (mounted) AppLoader.hide(context);
       
       if (itemRes.success && itemRes.data != null) {
         final itemData = itemRes.data is Map ? itemRes.data as Map<String, dynamic> : {};
@@ -234,6 +231,133 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
     });
     HapticFeedbackHelper.scanSuccess();
     return null;
+  }
+
+  bool get _isSaveEnabled {
+    if (_receivingType == 'gbs') {
+      return _scannedTrays.isNotEmpty;
+    } else {
+      return _selectedProgressIds.isNotEmpty;
+    }
+  }
+
+  bool get _isAllSelected {
+    final filtered = _filteredTrays;
+    if (filtered.isEmpty) return false;
+    return filtered.every((t) => _selectedProgressIds.contains(t.productionProgress.id));
+  }
+
+  List<ProductionProgressResponseModel> get _filteredTrays {
+    if (_receivingType == 'sample') {
+      return availableTrayForGbs.where((t) => t.productionProgress.productNature == 1).toList();
+    } else if (_receivingType == 'c_grade') {
+      return availableTrayForGbs.where((t) => t.productionProgress.productGrade == 2).toList();
+    } else {
+      return availableTrayForGbs.where((t) => t.productionProgress.productNature != 1 && t.productionProgress.productGrade != 2).toList();
+    }
+  }
+
+  Future<void> saveSampleOrCGradeProgress() async {
+    if (_selectedProgressIds.isEmpty) return;
+
+    AppLoader.show(context, message: 'Saving Changes...');
+    bool isAllSuccess = true;
+
+    try {
+      final List<int> selectedIds = _selectedProgressIds.toList();
+      final int targetLocatorId = _receivingType == 'sample' ? 16 : 17;
+      final String subOpProgress = _receivingType == 'sample' ? "Sample Received" : "C Grade Received";
+      final String subOpWip = _receivingType == 'sample' ? "Sample Receiving" : "C Grade Receiving";
+
+      for (final id in selectedIds) {
+        final currentData = availableTrayForGbs.where((t) => t.productionProgress.id == id).firstOrNull;
+        if (currentData == null) continue;
+
+        // WIP Transaction Payload
+        Map<String, dynamic> wipPayload = {
+          "subOperation": subOpWip,
+          "transactionDate": DateTime.now().toIso8601String(),
+          "transactionType": 1,
+          "uom": currentData.workOrderLine.uom ?? 0,
+          "operatorDescription": "system",
+          "primaryQuantity": currentData.productionProgress.primaryQuantity ?? 0,
+          "secondaryQuantity": currentData.productionProgress.secondaryQuantity ?? 0,
+          "primaryUOM": currentData.productionProgress.primaryUOM ?? 0,
+          "secondaryUOM": currentData.productionProgress.secondaryUOM ?? 0,
+          "code": currentData.item.code ?? "",
+          "productGrade": currentData.productionProgress.productGrade ?? 0,
+          "productNature": currentData.productionProgress.productNature ?? 0,
+          "progressId": currentData.productionProgress.id,
+          "operationId": currentData.operation.id,
+          "workOrderHeaderId": currentData.workOrderHeader.id,
+          "workOrderLineId": currentData.workOrderLine.id,
+          "itemId": currentData.item.id,
+          "shiftId": currentData.shift.id,
+          "machineId": currentData.machineModel.id,
+          "planHeaderId": currentData.planHeader?.id,
+          "locatorId": targetLocatorId,
+          "processedItemId": currentData.processedItem?.id ?? currentData.item.id,
+        };
+
+        await _trayScanningRepo.postWipTransactions(wipPayload);
+
+        Map<String, dynamic> updateProductionEntry = {
+          "id": currentData.productionProgress.id,
+          "concurrencyStamp": currentData.productionProgress.concurrencyStamp,
+          "subOperation": subOpProgress,
+          "date": DateTime.now().toIso8601String(),
+          "transactionType": 1,
+          "operatorDescription": "system",
+          "primaryQuantity": currentData.productionProgress.primaryQuantity,
+          "primaryUOM": currentData.productionProgress.primaryUOM,
+          "secondaryQuantity": currentData.productionProgress.secondaryQuantity,
+          "secondaryUOM": currentData.productionProgress.secondaryUOM,
+          "wipStatus": currentData.productionProgress.wipStatus ?? 0,
+          "gbsFlag": true,
+          "pbsFlag": false,
+          "progressCode": currentData.productionProgress.progressCode,
+          "productGrade": currentData.productionProgress.productGrade,
+          "productNature": currentData.productionProgress.productNature,
+          "operationId": currentData.productionProgress.operationId,
+          "workOrderHeaderId": currentData.productionProgress.workOrderHeaderId,
+          "workOrderLineId": currentData.productionProgress.workOrderLineId,
+          "itemId": currentData.productionProgress.itemId,
+          "shiftId": currentData.productionProgress.shiftId,
+          "machineId": currentData.productionProgress.machineId,
+          "planHeaderId": currentData.productionProgress.planHeaderId,
+          "locatorId": targetLocatorId,
+          "batchHeaderId": currentData.productionProgress.batchHeaderId,
+          "remarks": currentData.productionProgress.remarks,
+        };
+
+        if (currentData.productionProgress.id != null) {
+          final res = await _trayScanningRepo.updateProductionProgress(
+            currentData.productionProgress.id!,
+            updateProductionEntry,
+          );
+          if (!res.success) {
+            throw Exception(res.message);
+          }
+        }
+      }
+    } catch (e) {
+      isAllSuccess = false;
+      debugPrint("❌ GBS Save Error: $e");
+    } finally {
+      AppLoader.hide(context);
+      if (mounted) {
+        if (isAllSuccess) {
+          HapticFeedbackHelper.scanSuccess();
+          AppSnackBar.showSuccess(context, message: 'Saved successfully');
+          setState(() {
+            _selectedProgressIds.clear();
+          });
+          _fetchLatestTraysSilently();
+        } else {
+          _showError("Failed to save some items. Please check logs.");
+        }
+      }
+    }
   }
 
   /// MAIN SAVE LOGIC (Fixed Black Screen & Added ProcessedItem)
@@ -370,10 +494,13 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
           child: Column(
             children: [
               _buildPremiumHeader(context),
+              _buildReceivingTypeRadioButtons(),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                  child: _buildScannedTraysSection(),
+                  child: _receivingType == 'gbs'
+                      ? _buildScannedTraysSection()
+                      : _buildSampleCGradeTableSection(),
                 ),
               ),
             ],
@@ -420,15 +547,19 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
               ),
             ),
             ElevatedButton.icon(
-              onPressed: _scannedTrays.isEmpty
+              onPressed: !_isSaveEnabled
                   ? null
                   : () {
                       HapticFeedbackHelper.buttonClick();
-                      saveWipTransactionsAndUpdateTray();
+                      if (_receivingType == 'gbs') {
+                        saveWipTransactionsAndUpdateTray();
+                      } else {
+                        saveSampleOrCGradeProgress();
+                      }
                     },
               icon: const Icon(Icons.save_rounded, size: 16),
               label: const Text('SAVE CHANGES'),
-              style: AppTheme.saveButtonStyle(isEnabled: _scannedTrays.isNotEmpty),
+              style: AppTheme.saveButtonStyle(isEnabled: _isSaveEnabled),
             ),
           ],
         ),
@@ -510,6 +641,300 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
                       );
                     },
                   ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReceivingTypeRadioButtons() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFB0BEC5), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'RECEIVING NATURE',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF546E7A),
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Expanded(
+                child: _buildRadioOption('GBS Receiving', 'gbs'),
+              ),
+              Expanded(
+                child: _buildRadioOption('Sample Receiving', 'sample'),
+              ),
+              Expanded(
+                child: _buildRadioOption('C Grade Receiving', 'c_grade'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRadioOption(String label, String value) {
+    final isSelected = _receivingType == value;
+    return InkWell(
+      onTap: () {
+        HapticFeedbackHelper.buttonClick();
+        setState(() {
+          _receivingType = value;
+          _selectedProgressIds.clear();
+        });
+      },
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Radio<String>(
+            value: value,
+            groupValue: _receivingType,
+            activeColor: const Color(0xFF0D47A1),
+            onChanged: (val) {
+              if (val != null) {
+                HapticFeedbackHelper.buttonClick();
+                setState(() {
+                  _receivingType = val;
+                  _selectedProgressIds.clear();
+                });
+              }
+            },
+          ),
+          Flexible(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? const Color(0xFF0D47A1) : const Color(0xFF37474F),
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSampleCGradeTableSection() {
+    final filtered = _filteredTrays;
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFFB0BEC5),
+          width: 1.5,
+          strokeAlign: BorderSide.strokeAlignOutside,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _receivingType == 'sample' ? 'SAMPLE PENDING ENTRIES' : 'C GRADE PENDING ENTRIES',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF263238), letterSpacing: 0.5),
+                    ),
+                    Text(
+                      '${filtered.length} Pending, ${_selectedProgressIds.length} Selected',
+                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF78909C)),
+                    ),
+                  ],
+                ),
+                SizedBox(
+                  height: 38,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      HapticFeedbackHelper.buttonClick();
+                      _fetchLatestTraysSilently();
+                    },
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: const Text('REFRESH', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 10)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0D47A1),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          _buildSampleCGradeTableHeader(),
+
+          Expanded(
+            child: filtered.isEmpty
+                ? const EmptyScanState(hasBorder: false)
+                : ListView.builder(
+                    padding: EdgeInsets.zero,
+                    itemCount: filtered.length,
+                    itemBuilder: (context, index) {
+                      return _buildSampleCGradeRow(filtered[index], index);
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSampleCGradeTableHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF1F5F9),
+        border: Border(
+          bottom: BorderSide(color: Color(0xFFB0BEC5), width: 1.5),
+        ),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 32,
+            child: Checkbox(
+              value: _isAllSelected,
+              activeColor: const Color(0xFF0D47A1),
+              onChanged: (val) {
+                HapticFeedbackHelper.buttonClick();
+                setState(() {
+                  if (val == true) {
+                    _selectedProgressIds.addAll(
+                      _filteredTrays.map((t) => t.productionProgress.id).whereType<int>(),
+                    );
+                  } else {
+                    _selectedProgressIds.clear();
+                  }
+                });
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(flex: 3, child: Text('Work Order', style: _tableHeaderStyle)),
+          Expanded(flex: 4, child: Text('Item / Date', style: _tableHeaderStyle)),
+          Expanded(flex: 2, child: Text('Tubes', textAlign: TextAlign.center, style: _tableHeaderStyle)),
+          Expanded(flex: 2, child: Text('Pcs', textAlign: TextAlign.center, style: _tableHeaderStyle)),
+          Expanded(flex: 3, child: Text('Remarks', style: _tableHeaderStyle)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSampleCGradeRow(ProductionProgressResponseModel item, int index) {
+    final pp = item.productionProgress;
+    final isSelected = _selectedProgressIds.contains(pp.id);
+    
+    String dateStr = '';
+    if (pp.date != null) {
+      dateStr = "${pp.date!.year}-${pp.date!.month.toString().padLeft(2, '0')}-${pp.date!.day.toString().padLeft(2, '0')} ${pp.date!.hour.toString().padLeft(2, '0')}:${pp.date!.minute.toString().padLeft(2, '0')}";
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      decoration: BoxDecoration(
+        color: index.isEven ? Colors.white : const Color(0xFFF8FAFC),
+        border: Border(
+          bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.1), width: 1),
+        ),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 32,
+            child: Checkbox(
+              value: isSelected,
+              activeColor: const Color(0xFF0D47A1),
+              onChanged: (val) {
+                HapticFeedbackHelper.buttonClick();
+                setState(() {
+                  if (val == true) {
+                    if (pp.id != null) _selectedProgressIds.add(pp.id!);
+                  } else {
+                    _selectedProgressIds.remove(pp.id);
+                  }
+                });
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 3,
+            child: Text(
+              item.workOrderHeader.workOrderCode ?? '-',
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238)),
+            ),
+          ),
+          Expanded(
+            flex: 4,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.item.description ?? '-',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1B64A3)),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  dateStr,
+                  style: TextStyle(fontSize: 9, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              pp.primaryQuantity?.toStringAsFixed(0) ?? '0',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238)),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              pp.secondaryQuantity?.toStringAsFixed(0) ?? '0',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238)),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              pp.remarks ?? '-',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10, 
+                fontStyle: pp.remarks != null ? FontStyle.normal : FontStyle.italic, 
+                color: pp.remarks != null ? const Color(0xFF263238) : Colors.grey.shade500,
+              ),
+            ),
           ),
         ],
       ),

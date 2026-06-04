@@ -1,3 +1,4 @@
+import 'dart:developer' as dev;
 import 'package:active_wear_scanning/core/api/plex-result/plex_api_result.dart';
 import 'package:active_wear_scanning/core/api/services/api_service.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
@@ -25,8 +26,6 @@ class GBSReceivingRepo {
       'TransactionType': '1',
       'MaxResultCount': '1000',
     };
-    final queryString = Uri(queryParameters: p).query;
-
     final result = await _api.getList(
       '/api/app/production-progresses',
       query: p,
@@ -50,7 +49,7 @@ class GBSReceivingRepo {
 
   ///
   Future<void> postWipTransactions(Map<String, dynamic> data) async {
-    print("ProductionProgressData :: ${data.toString()}");
+    dev.log("ProductionProgressData :: ${data.toString()}");
 
     await _api.post('/api/app/w-iPTransactions', body: data);
   }

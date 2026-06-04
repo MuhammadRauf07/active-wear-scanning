@@ -85,6 +85,7 @@ class ProductionProgress {
   final DateTime? creationTime;
   final String? creatorId;
   final int? id;
+  final String? remarks;
 
   var batchLinesId;
 
@@ -126,6 +127,7 @@ class ProductionProgress {
     this.creationTime,
     this.creatorId,
     this.id,
+    this.remarks,
   });
 
   factory ProductionProgress.fromJson(Map<String, dynamic> json) {
@@ -167,6 +169,7 @@ class ProductionProgress {
       creationTime: json['creationTime'] != null ? DateTime.parse(json['creationTime']) : null,
       creatorId: json['creatorId'],
       id: int.tryParse(json['id']?.toString() ?? ''),
+      remarks: json['remarks'],
     );
   }
 
@@ -205,6 +208,7 @@ class ProductionProgress {
       'batchLinesId': batchLinesId, // ✅ Added
       'concurrencyStamp': concurrencyStamp,
       'id': id,
+      'remarks': remarks,
     };
   }
 
@@ -246,6 +250,7 @@ class ProductionProgress {
     DateTime? creationTime,
     String? creatorId,
     int? id,
+    String? remarks,
   }) {
     return ProductionProgress(
       subOperation: subOperation ?? this.subOperation,
@@ -285,6 +290,7 @@ class ProductionProgress {
       creationTime: creationTime ?? this.creationTime,
       creatorId: creatorId ?? this.creatorId,
       id: id ?? this.id,
+      remarks: remarks ?? this.remarks,
     );
   }
 }
