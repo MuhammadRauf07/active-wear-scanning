@@ -51,7 +51,7 @@ class TrayScanningRepo {
 
     if (!result.success || result.data == null) return result;
 
-    print("PrintedResultOfPlanLines :: ${result.data.toString()}");
+    dev.log("PrintedResultOfPlanLines :: ${result.data.toString()}");
 
 
     try {
@@ -112,14 +112,14 @@ class TrayScanningRepo {
 
   ///
   Future<PlexApiResult> updateTrayDetails(Map<String, dynamic> data, int trayUpdateId) async {
-    print("ProductionProgressData :: ${data.toString()}");
+    dev.log("ProductionProgressData :: ${data.toString()}");
 
     return await _api.put('/api/app/tray-details/$trayUpdateId', body: data);
   }
 
   ///
   Future<PlexApiResult> saveProductionProgress(Map<String, dynamic> data) async {
-    print("ProductionProgressData :: ${data.toString()}");
+    dev.log("ProductionProgressData :: ${data.toString()}");
 
     return await _api.post('/api/app/production-progresses', body: data);
   }

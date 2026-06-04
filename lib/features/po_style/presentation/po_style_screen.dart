@@ -29,11 +29,15 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
   List<String> _customerPOs = [];
   String? _selectedCustomerPO;
 
+  List<String> _articles = [];
+  String? _selectedArticle;
+
   List<CostCenterLine> _costCenterLines = [];
   CostCenterLine? _selectedCostCenterLine;
   bool _isLoadingCostCenterLines = false;
 
   final Set<int> _selectedPoStyleIds = {};
+  String? _allocationMode;
 
   @override
   void initState() {
@@ -48,7 +52,10 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
       _selectedCustomer = null;
       _customerPOs = [];
       _selectedCustomerPO = null;
+      _articles = [];
+      _selectedArticle = null;
       _selectedPoStyleIds.clear();
+      _allocationMode = null;
     });
     final res = await _poStyleRepo.fetchPoStyles();
     if (mounted) {
@@ -78,6 +85,7 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
       _isLoadingCostCenterLines = true;
       _costCenterLines = [];
       _selectedCostCenterLine = null;
+      _allocationMode = null;
     });
     final res = await _poStyleRepo.fetchCostCenterLines();
     if (mounted) {
@@ -99,9 +107,12 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
       _selectedCustomer = val;
       _customerPOs = [];
       _selectedCustomerPO = null;
+      _articles = [];
+      _selectedArticle = null;
       _selectedPoStyleIds.clear();
       _costCenterLines = [];
       _selectedCostCenterLine = null;
+      _allocationMode = null;
     });
     if (val != null) {
       final uniquePOs = _poStyles
@@ -122,9 +133,36 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
     HapticFeedbackHelper.buttonClick();
     setState(() {
       _selectedCustomerPO = val;
+      _articles = [];
+      _selectedArticle = null;
       _selectedPoStyleIds.clear();
       _costCenterLines = [];
       _selectedCostCenterLine = null;
+      _allocationMode = null;
+    });
+    if (val != null && _selectedCustomer != null) {
+      final uniqueArticles = _poStyles
+          .where((item) => item.poStyle.customer == _selectedCustomer && item.poStyle.po == val)
+          .map((item) => item.poStyle.articleNo)
+          .whereType<String>()
+          .where((a) => a.isNotEmpty)
+          .toSet()
+          .toList();
+      uniqueArticles.sort();
+      setState(() {
+        _articles = uniqueArticles;
+      });
+    }
+  }
+
+  void _onArticleChanged(String? val) {
+    HapticFeedbackHelper.buttonClick();
+    setState(() {
+      _selectedArticle = val;
+      _selectedPoStyleIds.clear();
+      _costCenterLines = [];
+      _selectedCostCenterLine = null;
+      _allocationMode = null;
     });
     if (val != null) {
       _fetchCostCenterLines();
@@ -132,11 +170,12 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
   }
 
   List<PoStyleItem> get _filteredPoStyles {
-    if (_selectedCustomer == null || _selectedCustomerPO == null) return [];
+    if (_selectedCustomer == null || _selectedCustomerPO == null || _selectedArticle == null) return [];
     return _poStyles
         .where((item) =>
             item.poStyle.customer == _selectedCustomer &&
-            item.poStyle.po == _selectedCustomerPO)
+            item.poStyle.po == _selectedCustomerPO &&
+            item.poStyle.articleNo == _selectedArticle)
         .toList();
   }
 
@@ -363,6 +402,31 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
           if (_selectedCustomerPO != null) ...[
             const SizedBox(height: 16),
             const Text(
+              'SELECT ARTICLE',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF546E7A),
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+            CustomExpandedAsyncDropdown<String>(
+              selectedValue: _selectedArticle,
+              items: _articles,
+              hint: "Select Article...",
+              isShowSearch: true,
+              itemAsString: (art) => art,
+              borderColor: const Color(0xFFCFD8DC),
+              backgroundColor: Colors.white,
+              height: 48,
+              textSize: 13,
+              onChanged: _onArticleChanged,
+            ),
+          ],
+          if (_selectedArticle != null) ...[
+            const SizedBox(height: 16),
+            const Text(
               'SELECT COST CENTER LINE',
               style: TextStyle(
                 fontSize: 10,
@@ -393,9 +457,14 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
                       HapticFeedbackHelper.buttonClick();
                       setState(() {
                         _selectedCostCenterLine = val;
+                        _allocationMode = null;
+                        _selectedPoStyleIds.clear();
                       });
                     },
                   ),
+          ],
+          if (_selectedCostCenterLine != null) ...[
+            _buildAllocationModeButtons(),
           ],
         ],
       ),
@@ -404,7 +473,7 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
 
   Widget _buildPlaceholderContent() {
     final filtered = _filteredPoStyles;
-    final showTable = _selectedCostCenterLine != null && filtered.isNotEmpty;
+    final showTable = _selectedCostCenterLine != null && _allocationMode != null && filtered.isNotEmpty;
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -412,59 +481,7 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
         children: [
           _buildSelectionCard(),
           const SizedBox(height: 16),
-          if (!showTable)
-            Expanded(
-              child: Center(
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE3F2FD),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: const Color(0xFF90CAF9), width: 2),
-                        ),
-                        child: const Icon(
-                          Icons.assignment_turned_in_rounded,
-                          size: 36,
-                          color: Color(0xFF0D47A1),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'PO Style Details',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF263238),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _isLoadingPoStyles
-                            ? 'Loading PO Style records from server...'
-                            : _selectedCustomer == null
-                                ? 'Please select a customer from the dropdown above to view styles.'
-                                : _selectedCustomerPO == null
-                                    ? 'Active Customer: $_selectedCustomer\n\nPlease select a Customer PO to view styles.'
-                                    : _selectedCostCenterLine == null
-                                        ? 'Active Customer: $_selectedCustomer\nActive PO: $_selectedCustomerPO\n\nPlease select a Cost Center Line to view styles.'
-                                        : 'Active Customer: $_selectedCustomer\nActive PO: $_selectedCustomerPO\nActive Line: ${_selectedCostCenterLine!.name}\n\nNo records found for this combination.',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF78909C),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            )
-          else
+          if (showTable)
             Expanded(
               child: _buildPoStylesTable(filtered),
             ),
@@ -474,7 +491,8 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
   }
 
   Widget _buildPoStylesTable(List<PoStyleItem> items) {
-    final allSelected = items.isNotEmpty && items.every((i) => _selectedPoStyleIds.contains(i.poStyle.id));
+    final selectableItems = items.where(_isRowSelectable).toList();
+    final allSelected = selectableItems.isNotEmpty && selectableItems.every((i) => _selectedPoStyleIds.contains(i.poStyle.id));
     const headerStyle = TextStyle(
       fontSize: 10,
       fontWeight: FontWeight.w800,
@@ -497,145 +515,129 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
         ),
       ),
       clipBehavior: Clip.antiAlias,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SizedBox(
-              width: 1020,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Header
-                  Container(
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFF1F5F9),
-                      border: Border(
-                        bottom: BorderSide(color: Color(0xFFB0BEC5), width: 1.5),
-                      ),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: 48,
-                          child: Checkbox(
-                            value: allSelected,
-                            activeColor: const Color(0xFF0D47A1),
-                            onChanged: (val) {
-                              HapticFeedbackHelper.buttonClick();
-                              setState(() {
-                                if (val == true) {
-                                  _selectedPoStyleIds.addAll(items.map((i) => i.poStyle.id));
-                                } else {
-                                  _selectedPoStyleIds.clear();
-                                }
-                              });
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 90, child: Text('Customer', style: headerStyle)),
-                        const SizedBox(width: 110, child: Text('PO', style: headerStyle)),
-                        const SizedBox(width: 110, child: Text('Article No', style: headerStyle)),
-                        const SizedBox(width: 50, child: Text('Size', style: headerStyle)),
-                        const SizedBox(width: 110, child: Text('Color Code', style: headerStyle)),
-                        const SizedBox(width: 110, child: Text('Batch', style: headerStyle)),
-                        const SizedBox(width: 110, child: Text('Bundle No', style: headerStyle)),
-                        const SizedBox(width: 120, child: Text('Line', style: headerStyle)),
-                        const SizedBox(width: 120, child: Text('Line Desc', style: headerStyle)),
-                      ],
-                    ),
-                  ),
-                  // List of rows
-                  Expanded(
-                    child: ListView.separated(
-                      padding: EdgeInsets.zero,
-                      itemCount: items.length,
-                      separatorBuilder: (context, index) => const Divider(
-                        height: 1,
-                        color: Color(0xFFE2E8F0),
-                        thickness: 1,
-                      ),
-                      itemBuilder: (context, index) {
-                        final item = items[index];
-                        final isChecked = _selectedPoStyleIds.contains(item.poStyle.id);
-                        return Container(
-                          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-                          color: isChecked ? const Color(0xFFE3F2FD).withValues(alpha: 0.4) : null,
-                          child: Row(
-                            children: [
-                              SizedBox(
-                                width: 48,
-                                child: Checkbox(
-                                  value: isChecked,
-                                  activeColor: const Color(0xFF0D47A1),
-                                  onChanged: (val) {
-                                    HapticFeedbackHelper.buttonClick();
-                                    setState(() {
-                                      if (val == true) {
-                                        _selectedPoStyleIds.add(item.poStyle.id);
-                                      } else {
-                                        _selectedPoStyleIds.remove(item.poStyle.id);
-                                      }
-                                    });
-                                  },
-                                ),
-                              ),
-                              SizedBox(
-                                width: 90,
-                                child: Text(item.poStyle.customer ?? '-', style: cellStyle, overflow: TextOverflow.ellipsis),
-                              ),
-                              SizedBox(
-                                width: 110,
-                                child: Text(item.poStyle.po ?? '-', style: cellStyle, overflow: TextOverflow.ellipsis),
-                              ),
-                              SizedBox(
-                                width: 110,
-                                child: Text(item.poStyle.articleNo ?? '-', style: cellStyle, overflow: TextOverflow.ellipsis),
-                              ),
-                              SizedBox(
-                                width: 50,
-                                child: Text(item.poStyle.size ?? '-', style: cellStyle, overflow: TextOverflow.ellipsis),
-                              ),
-                              SizedBox(
-                                width: 110,
-                                child: Text(item.poStyle.colorCode ?? '-', style: cellStyle, overflow: TextOverflow.ellipsis),
-                              ),
-                              SizedBox(
-                                width: 110,
-                                child: Text(item.poStyle.lot ?? '-', style: cellStyle, overflow: TextOverflow.ellipsis),
-                              ),
-                              SizedBox(
-                                width: 110,
-                                child: Text(item.poStyle.bundleNo ?? '-', style: cellStyle, overflow: TextOverflow.ellipsis),
-                              ),
-                              SizedBox(
-                                width: 120,
-                                child: _buildLineCellText(item, isChecked),
-                              ),
-                              SizedBox(
-                                width: 120,
-                                child: _buildLineDescCellText(item, isChecked),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header
+          Container(
+            decoration: const BoxDecoration(
+              color: Color(0xFFF1F5F9),
+              border: Border(
+                bottom: BorderSide(color: Color(0xFFB0BEC5), width: 1.5),
               ),
             ),
-          );
-        },
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 48,
+                  child: Checkbox(
+                    value: allSelected,
+                    activeColor: const Color(0xFF0D47A1),
+                    onChanged: selectableItems.isEmpty ? null : (val) {
+                      HapticFeedbackHelper.buttonClick();
+                      setState(() {
+                        if (val == true) {
+                          _selectedPoStyleIds.addAll(selectableItems.map((i) => i.poStyle.id));
+                        } else {
+                          for (final i in selectableItems) {
+                            _selectedPoStyleIds.remove(i.poStyle.id);
+                          }
+                        }
+                      });
+                    },
+                  ),
+                ),
+                const Expanded(flex: 3, child: Text('Bundle', style: headerStyle)),
+                const Expanded(flex: 3, child: Text('Lot', style: headerStyle)),
+                const Expanded(flex: 3, child: Text('Color', style: headerStyle)),
+                const Expanded(flex: 2, child: Text('Size', style: headerStyle)),
+                const Expanded(flex: 2, child: Text('Qty', style: headerStyle)),
+                const Expanded(flex: 4, child: Text('Line', style: headerStyle)),
+              ],
+            ),
+          ),
+          // List of rows
+          Expanded(
+            child: ListView.separated(
+              padding: EdgeInsets.zero,
+              itemCount: items.length,
+              separatorBuilder: (context, index) => const Divider(
+                height: 1,
+                color: Color(0xFFE2E8F0),
+                thickness: 1,
+              ),
+              itemBuilder: (context, index) {
+                final item = items[index];
+                final isChecked = _selectedPoStyleIds.contains(item.poStyle.id);
+                final isSelectable = _isRowSelectable(item);
+                final currentCellStyle = isSelectable
+                    ? cellStyle
+                    : cellStyle.copyWith(color: const Color(0xFF94A3B8));
+                return Container(
+                  padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                  color: isChecked ? const Color(0xFFE3F2FD).withValues(alpha: 0.4) : null,
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 48,
+                        child: Checkbox(
+                          value: isChecked,
+                          activeColor: const Color(0xFF0D47A1),
+                          onChanged: isSelectable
+                              ? (val) {
+                                  HapticFeedbackHelper.buttonClick();
+                                  setState(() {
+                                    if (val == true) {
+                                      _selectedPoStyleIds.add(item.poStyle.id);
+                                    } else {
+                                      _selectedPoStyleIds.remove(item.poStyle.id);
+                                    }
+                                  });
+                                }
+                              : null,
+                        ),
+                      ),
+                      Expanded(
+                        flex: 3,
+                        child: Text(item.poStyle.bundleNo ?? '-', style: currentCellStyle, overflow: TextOverflow.ellipsis),
+                      ),
+                      Expanded(
+                        flex: 3,
+                        child: Text(item.poStyle.lot ?? '-', style: currentCellStyle, overflow: TextOverflow.ellipsis),
+                      ),
+                      Expanded(
+                        flex: 3,
+                        child: Text(item.poStyle.colorCode ?? '-', style: currentCellStyle, overflow: TextOverflow.ellipsis),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: Text(item.poStyle.size ?? '-', style: currentCellStyle, overflow: TextOverflow.ellipsis),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: Text(item.poStyle.quantity?.toString() ?? '-', style: currentCellStyle, overflow: TextOverflow.ellipsis),
+                      ),
+                      Expanded(
+                        flex: 4,
+                        child: _buildCurrentLineCellText(item, isChecked, isSelectable),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildLineCellText(PoStyleItem item, bool isChecked) {
-    final currentLine = item.poStyle.lineCode ?? '-';
+  Widget _buildCurrentLineCellText(PoStyleItem item, bool isChecked, bool isSelectable) {
+    final currentLine = item.poStyle.line ?? '-';
     if (isChecked && _selectedCostCenterLine != null) {
-      return Row(
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
@@ -643,76 +645,116 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
             style: const TextStyle(
               fontSize: 11,
               color: Color(0xFF78909C),
-              decoration: TextDecoration.lineThrough,
+              fontWeight: FontWeight.w500,
             ),
           ),
-          const SizedBox(width: 4),
-          const Icon(Icons.arrow_forward_rounded, size: 10, color: Color(0xFF0D47A1)),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Text(
-              _selectedCostCenterLine!.name,
-              style: const TextStyle(
-                fontSize: 11,
-                color: Color(0xFF0D47A1),
-                fontWeight: FontWeight.w700,
-              ),
-              overflow: TextOverflow.ellipsis,
+          const SizedBox(height: 2),
+          Text(
+            _selectedCostCenterLine!.description ?? '-',
+            style: const TextStyle(
+              fontSize: 11,
+              color: Color(0xFF0D47A1),
+              fontWeight: FontWeight.w700,
             ),
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       );
     }
     return Text(
       currentLine,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 11,
-        color: Color(0xFF263238),
+        color: isSelectable ? const Color(0xFF263238) : const Color(0xFF94A3B8),
         fontWeight: FontWeight.w500,
       ),
       overflow: TextOverflow.ellipsis,
     );
   }
 
-  Widget _buildLineDescCellText(PoStyleItem item, bool isChecked) {
-    final currentLineDesc = item.poStyle.line ?? '-';
-    if (isChecked && _selectedCostCenterLine != null) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            currentLineDesc,
-            style: const TextStyle(
-              fontSize: 11,
-              color: Color(0xFF78909C),
-              decoration: TextDecoration.lineThrough,
-            ),
-          ),
-          const SizedBox(width: 4),
-          const Icon(Icons.arrow_forward_rounded, size: 10, color: Color(0xFF0D47A1)),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Text(
-              _selectedCostCenterLine!.description ?? '',
-              style: const TextStyle(
-                fontSize: 11,
-                color: Color(0xFF0D47A1),
-                fontWeight: FontWeight.w700,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      );
+  bool _isRowSelectable(PoStyleItem item) {
+    if (_allocationMode == 'allocate') {
+      return item.poStyle.line == null || item.poStyle.line!.isEmpty;
+    } else if (_allocationMode == 're-allocate') {
+      return item.poStyle.line != null && item.poStyle.line!.isNotEmpty;
     }
-    return Text(
-      currentLineDesc,
-      style: const TextStyle(
-        fontSize: 11,
-        color: Color(0xFF263238),
-        fontWeight: FontWeight.w500,
+    return false;
+  }
+
+  Widget _buildAllocationModeButtons() {
+    if (_selectedCostCenterLine == null) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 16),
+        const Text(
+          'ALLOCATION OPTIONS',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF546E7A),
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _buildModeButton(
+                label: 'Allocate',
+                mode: 'allocate',
+                icon: Icons.playlist_add_rounded,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildModeButton(
+                label: 'Re-Allocate',
+                mode: 're-allocate',
+                icon: Icons.playlist_play_rounded,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildModeButton({required String label, required String mode, required IconData icon}) {
+    final isActive = _allocationMode == mode;
+    return OutlinedButton.icon(
+      onPressed: () {
+        HapticFeedbackHelper.buttonClick();
+        setState(() {
+          _allocationMode = mode;
+          _selectedPoStyleIds.clear(); // Clear selections when mode changes
+        });
+      },
+      icon: Icon(
+        icon,
+        size: 16,
+        color: isActive ? Colors.white : const Color(0xFF0D47A1),
       ),
-      overflow: TextOverflow.ellipsis,
+      label: Text(
+        label.toUpperCase(),
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+          color: isActive ? Colors.white : const Color(0xFF0D47A1),
+          letterSpacing: 0.5,
+        ),
+      ),
+      style: OutlinedButton.styleFrom(
+        backgroundColor: isActive ? const Color(0xFF0D47A1) : Colors.white,
+        side: BorderSide(
+          color: const Color(0xFF0D47A1),
+          width: isActive ? 0 : 1.5,
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
     );
   }
 }

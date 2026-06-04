@@ -186,7 +186,7 @@ class _BatchListScreenState extends State<BatchListScreen>
 
   Future<String?> _validateAndAttachTrolley(int batchHeaderId, String code) async {
     final cleanCode = code.trim().toLowerCase();
-    if (cleanCode.isEmpty) return 'Invalid trolly code';
+    if (cleanCode.isEmpty) return 'Invalid trolley code';
 
     final result = await _trayRepo.fetchAvailableTrayDetails();
     if (!result.success || result.data == null) {
@@ -198,12 +198,12 @@ class _BatchListScreenState extends State<BatchListScreen>
       return (t.trayDetails?.trayCode ?? '').trim().toLowerCase() == cleanCode;
     }).toList();
 
-    if (matched.isEmpty) return 'Trolly not found';
+    if (matched.isEmpty) return 'Trolley not found';
 
     final trayDetail = matched.first.trayDetails;
-    if (trayDetail?.active != true) return 'Trolly is not active';
+    if (trayDetail?.active != true) return 'Trolley is not active';
     if ((trayDetail?.trayType ?? 0) != 4) {
-      return 'Invalid tray type. Only Type 4 (Trolly) allowed.';
+      return 'Invalid type. Only Trolley is allowed.';
     }
 
     final trolleyId = trayDetail!.id!;
