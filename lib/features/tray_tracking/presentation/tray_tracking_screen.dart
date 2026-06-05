@@ -1,16 +1,11 @@
 import 'package:flutter/services.dart';
-import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
-import 'package:active_wear_scanning/core/widgets/content_card.dart';
 import 'package:active_wear_scanning/core/widgets/barcode_scanner_dialog.dart';
-import 'package:active_wear_scanning/core/widgets/section_header.dart';
 import 'package:active_wear_scanning/features/tray_tracking/model/tray_tracking_model.dart';
-import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
 import 'package:active_wear_scanning/features/tray_tracking/repo/tray_tracking_repo.dart';
 import 'package:active_wear_scanning/features/common-models/common_models.dart';
-import 'package:active_wear_scanning/features/tray_tracking/presentation/widgets/path_node.dart';
-import 'package:active_wear_scanning/features/tray_tracking/presentation/widgets/status_badge.dart';
-import 'package:active_wear_scanning/features/tray_tracking/presentation/widgets/tray_detail_card.dart';
+import 'package:active_wear_scanning/core/utils/barcode_buffer_parser.dart';
+import 'package:active_wear_scanning/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 class TrayTrackingScreen extends StatefulWidget {
@@ -33,51 +28,55 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
   String? _workOrderDescription;
   String? _errorMessage;
 
-  final FocusNode _focusNode = FocusNode();
-  String _barcodeBuffer = '';
-  DateTime? _lastKeyPress;
+  // Centralized Bluetooth Scanner Support
+  final _barcodeParser = BarcodeBufferParser();
+  late AnimationController _pulseController;
 
+  @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_onHardwareKey);
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
+  }
 
-  void _onKey(RawKeyEvent event) {
-    if (event is RawKeyDownEvent) {
-      final now = DateTime.now();
-      if (_lastKeyPress != null && now.difference(_lastKeyPress!).inMilliseconds > 200) {
-        _barcodeBuffer = '';
-      }
-      _lastKeyPress = now;
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onHardwareKey);
+    _pulseController.dispose();
+    _trayCodeController.dispose();
+    super.dispose();
+  }
 
-      if (event.logicalKey == LogicalKeyboardKey.enter) {
-        if (_barcodeBuffer.isNotEmpty) {
-          final code = _barcodeBuffer;
-          _barcodeBuffer = '';
-          _onTrayScanned(code);
-        }
-      } else if (event.character != null) {
-        _barcodeBuffer += event.character!;
-      }
-    }
+  bool _onHardwareKey(KeyEvent event) {
+    return _barcodeParser.handleKey(event, (code) {
+      _onTrayScanned(code);
+    });
   }
 
   Future<String?> _onTrayScanned(String code) async {
-    if (code.trim().isEmpty) return "Please enter tray code";
+    final cleanCode = code.trim();
+    if (cleanCode.isEmpty) return "Please enter tray code";
     
     setState(() {
       _isLoading = true;
       _errorMessage = null;
-      _trayCodeController.text = code;
+      _trayCodeController.text = cleanCode;
     });
 
-    final res = await _trayTrackingRepo.fetchTrayDetailByCode(code.trim());
+    final res = await _trayTrackingRepo.fetchTrayDetailByCode(cleanCode);
     
     setState(() => _isLoading = false);
 
     if (res.success && res.data != null) {
       setState(() {
-      final data = res.data is Map ? res.data as Map : {};
-      final trayMap = data['trayDetail'] ?? data;
-      _trayDetail = TrayTrackingDetailModel.fromJson(Map<String, dynamic>.from(trayMap));
-      
-      final batchMap = data['batchHeader'];
+        final data = res.data is Map ? res.data as Map : {};
+        final trayMap = data['trayDetail'] ?? data;
+        _trayDetail = TrayTrackingDetailModel.fromJson(Map<String, dynamic>.from(trayMap));
+        
+        final batchMap = data['batchHeader'];
         if (batchMap is Map) {
           _batchCode = batchMap['batchHeaderCode'];
           _color = batchMap['colorDescription'];
@@ -91,6 +90,7 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
         _itemDescription = data['knitItem']?['description'] ?? trayMap['description'];
         _workOrderDescription = data['workOrderHeader']?['description'];
       });
+      HapticFeedbackHelper.scanSuccess();
       return null;
     } else {
       setState(() {
@@ -103,7 +103,8 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
         _workOrderDescription = null;
         _errorMessage = res.message;
       });
-      return res.message ?? "Tray not found";
+      HapticFeedbackHelper.scanError();
+      return res.message;
     }
   }
 
@@ -118,109 +119,63 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
     }
   }
 
-  late AnimationController _pulseController;
-
-  @override
-  void initState() {
-    super.initState();
-    _focusNode.requestFocus();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _pulseController.dispose();
-    _focusNode.dispose();
-    _trayCodeController.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9), // Slate 100 Background
-      body: Stack(
-        children: [
-          // ── Background Layer: Technical Grid ─────────────────────────────
-          Positioned.fill(
-            child: CustomPaint(painter: _TechnicalGridPainter()),
-          ),
-
-          RawKeyboardListener(
-            focusNode: _focusNode,
-            autofocus: true,
-            onKey: _onKey,
-            child: SafeArea(
-              child: Column(
-                children: [
-                  CustomInspectionHeader(
-                    heading: 'Tray Tracking',
-                    subtitle: 'Track and monitor tray locations',
-                    isShowBackIcon: true,
-                    topPadding: 10,
-                    horizontalPadding: 16,
-                  ),
-                  Expanded(
-                    child: _isLoading 
-                      ? const Center(child: _TacticalLoader())
-                      : SingleChildScrollView(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              const SectionHeader(
-                                title: 'Scanning Section',
-                                subtitle: 'Scan a tray QR to track its current state',
-                              ),
-                              const SizedBox(height: 12),
-                              _buildScanningConsole(),
-                              
-                              const SizedBox(height: 24),
-
-                              if (_trayDetail != null) ...[
-                                const SectionHeader(
-                                  title: 'Tracking Details',
-                                  subtitle: 'Information for the identified tray',
-                                ),
-                                const SizedBox(height: 12),
-                                _buildTrackingDetailsHUD(),
-                                
-                                const SizedBox(height: 24),
-
-                                const SectionHeader(
-                                  title: 'Tracking Path',
-                                  subtitle: 'Real-time production flow visualization',
-                                ),
-                                const SizedBox(height: 16),
-                                _buildTrackingPathPipeline(),
-                              ] else if (_errorMessage != null) ...[
-                                _buildEmptyState(
-                                  icon: Icons.error_outline_rounded,
-                                  title: 'TRAY NOT FOUND',
-                                  message: _errorMessage!,
-                                  color: const Color(0xFFEF4444),
-                                ),
-                              ] else ...[
-                                _buildEmptyState(
-                                  icon: Icons.qr_code_scanner_rounded,
-                                  title: 'AWAITING SCAN',
-                                  message: 'Scan a tray QR to view details',
-                                  color: const Color(0xFF3B82F6),
-                                  isScanning: true,
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                  ),
-                ],
-              ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            CustomInspectionHeader(
+              heading: 'Tray Tracking',
+              subtitle: 'Track and monitor tray locations',
+              isShowBackIcon: true,
+              topPadding: 10,
+              horizontalPadding: 16,
             ),
-          ),
-        ],
+            Expanded(
+              child: _isLoading 
+                ? const Center(child: _TacticalLoader())
+                : Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildScanningConsole(),
+                        const SizedBox(height: 12),
+                        Expanded(
+                          child: _trayDetail != null
+                              ? Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    Expanded(
+                                      flex: 4,
+                                      child: _buildTrackingDetailsHUD(),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Expanded(
+                                      flex: 6,
+                                      child: _buildTrackingPathPipeline(),
+                                    ),
+                                  ],
+                                )
+                              : _errorMessage != null
+                                  ? Center(
+                                      child: _buildEmptyState(
+                                        icon: Icons.error_outline_rounded,
+                                        title: 'TRAY NOT FOUND',
+                                        message: _errorMessage!,
+                                        color: const Color(0xFFEF4444),
+                                      ),
+                                    )
+                                  : const SizedBox.shrink(),
+                        ),
+                      ],
+                    ),
+                  ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -231,9 +186,13 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+        border: Border.all(color: const Color(0xFF0D47A1).withValues(alpha: 0.12), width: 1.5),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4)),
+          BoxShadow(
+            color: const Color(0xFF0D47A1).withValues(alpha: 0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: Row(
@@ -245,7 +204,7 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
               decoration: BoxDecoration(
                 color: const Color(0xFFF8FAFC),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFCBD5E1)),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
               child: Center(
                 child: TextField(
@@ -272,7 +231,7 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
                 backgroundColor: const Color(0xFF0D47A1),
                 foregroundColor: Colors.white,
                 elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 18),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
@@ -283,90 +242,140 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
   }
 
   Widget _buildTrackingDetailsHUD() {
-    return Column(
-      children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFF3B82F6).withValues(alpha: 0.3), width: 1.5),
-            boxShadow: [
-              BoxShadow(color: const Color(0xFF3B82F6).withValues(alpha: 0.05), blurRadius: 20, offset: const Offset(0, 10)),
-            ],
-          ),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.qr_code_2_rounded, color: Color(0xFF3B82F6), size: 24),
-                  const SizedBox(width: 12),
-                  Text(
-                    _trayCodeController.text.toUpperCase(),
-                    style: const TextStyle(color: Color(0xFF1E293B), fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: 2),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.2)),
-                ),
-                child: const Text('ACTIVE LOGISTICS SIGNAL', style: TextStyle(color: Color(0xFF059669), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 2.2,
-          children: [
-            _buildDetailTile('CURRENT STATUS', 'ONLINE', Icons.radar_rounded, const Color(0xFF10B981), true),
-            _buildDetailTile('TRAY QUANTITY', '${_trayDetail?.trayQuantity?.toInt() ?? 0} UNITS', Icons.inventory_2_rounded, const Color(0xFF3B82F6), false),
-            _buildDetailTile('LOCATOR NAME', _locatorName ?? 'FLOOR', Icons.location_on_rounded, const Color(0xFFF59E0B), false),
-            _buildDetailTile('PROCESS TYPE', _trayDetail?.isReAssigned == true ? 'REASSIGNED' : 'PRIMARY', Icons.account_tree_rounded, const Color(0xFF8B5CF6), false),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDetailTile(String label, String value, IconData icon, Color color, bool pulse) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+        border: Border.all(color: const Color(0xFF0D47A1).withValues(alpha: 0.12), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0D47A1).withValues(alpha: 0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF1E3A8A), Color(0xFF0D47A1)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(30),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF0D47A1).withValues(alpha: 0.3),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.qr_code_2_rounded, color: Colors.white, size: 22),
+                        const SizedBox(width: 8),
+                        Text(
+                          _trayCodeController.text.toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildProminentLocator(_locatorName ?? 'FLOOR'),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _buildCompactMetric('QUANTITY', '${_trayDetail?.trayQuantity?.toInt() ?? 0} PCS', Icons.inventory_2_rounded, const Color(0xFF3B82F6), false),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildCompactMetric('TYPE', _trayDetail?.isReAssigned == true ? 'REASSIGN' : 'PRIMARY', Icons.account_tree_rounded, const Color(0xFF8B5CF6), false),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProminentLocator(String locator) {
+    const baseColor = Color(0xFFF59E0B);
+    final bgColor = baseColor.withValues(alpha: 0.06);
+    final borderColor = baseColor.withValues(alpha: 0.2);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor, width: 1.2),
       ),
       child: Row(
         children: [
-          if (pulse)
-            ScaleTransition(
-              scale: Tween(begin: 1.0, end: 1.2).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut)),
-              child: Icon(icon, size: 20, color: color),
-            )
-          else
-            Icon(icon, size: 20, color: color),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: baseColor,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: baseColor.withValues(alpha: 0.3),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: const Icon(Icons.location_on_rounded, size: 18, color: Colors.white),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(label, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF64748B), letterSpacing: 0.5)),
-                const SizedBox(height: 4),
-                Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Color(0xFF1E293B)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                const Text(
+                  'CURRENT LOCATOR',
+                  style: TextStyle(
+                    fontSize: 8,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFFD97706),
+                    letterSpacing: 1.0,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  locator.toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF92400E),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
             ),
           ),
@@ -375,135 +384,247 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
     );
   }
 
-  Widget _buildTrackingPathPipeline() {
+  Widget _buildCompactMetric(String label, String value, IconData icon, Color color, bool pulse) {
+    final baseColor = color;
+    final bgColor = baseColor.withValues(alpha: 0.05);
+    final borderColor = baseColor.withValues(alpha: 0.15);
+
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 20, offset: const Offset(0, 10)),
-        ],
+        color: bgColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor, width: 1.2),
       ),
       child: Column(
         children: [
-          _buildPipelineStep(Icons.description_rounded, 'ITEM DESCRIPTION', _itemDescription ?? '-', const Color(0xFF3B82F6), false),
-          _buildPipelineStep(Icons.assignment_rounded, 'WORK ORDER', _workOrderDescription ?? 'NOT ASSIGNED', const Color(0xFF6366F1), false),
-          _buildPipelineStep(Icons.qr_code_rounded, 'BATCH CODE', _batchCode ?? "PENDING", const Color(0xFF8B5CF6), false),
-          _buildPipelineStep(Icons.palette_rounded, 'COLOR', _color ?? "PENDING", const Color(0xFFEC4899), false),
-          _buildPipelineStep(Icons.precision_manufacturing_rounded, 'ACTIVE MACHINE', _machineName ?? 'IDLE', const Color(0xFF06B6D4), true),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (pulse)
+                ScaleTransition(
+                  scale: Tween(begin: 1.0, end: 1.2).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut)),
+                  child: Icon(icon, size: 13, color: baseColor),
+                )
+              else
+                Icon(icon, size: 13, color: baseColor),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 8,
+                    fontWeight: FontWeight.w900,
+                    color: baseColor.withValues(alpha: 0.8),
+                    letterSpacing: 0.5,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value.toUpperCase(),
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+              color: baseColor,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildPipelineStep(IconData icon, String label, String value, Color color, bool isLast) {
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.05),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: color.withValues(alpha: 0.2), width: 1.5),
-                ),
-                child: Icon(icon, size: 18, color: color),
-              ),
-              if (!isLast)
-                Expanded(
-                  child: Container(
-                    width: 2,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [color.withValues(alpha: 0.3), Colors.transparent],
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(width: 20),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF94A3B8), letterSpacing: 1)),
-                  const SizedBox(height: 6),
-                  Text(value.toUpperCase(), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF1E293B), letterSpacing: 0.5)),
-                ],
-              ),
-            ),
+  Widget _buildTrackingPathPipeline() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF0D47A1).withValues(alpha: 0.12), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0D47A1).withValues(alpha: 0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
+      child: Column(
+        children: [
+          Expanded(child: _buildPipelineStep(Icons.description_rounded, 'ITEM DESCRIPTION', _itemDescription ?? '-', const Color(0xFF3B82F6), true, false)),
+          Expanded(child: _buildPipelineStep(Icons.assignment_rounded, 'WORK ORDER', _workOrderDescription ?? 'NOT ASSIGNED', const Color(0xFF6366F1), false, false)),
+          Expanded(child: _buildPipelineStep(Icons.qr_code_rounded, 'BATCH#', _batchCode ?? "PENDING", const Color(0xFF8B5CF6), false, false)),
+          Expanded(child: _buildPipelineStep(Icons.palette_rounded, 'COLOR', _color ?? "PENDING", const Color(0xFFEC4899), false, false)),
+          Expanded(child: _buildPipelineStep(Icons.precision_manufacturing_rounded, 'MACHINE', _machineName ?? 'IDLE', const Color(0xFF06B6D4), false, true)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPipelineStep(IconData icon, String label, String value, Color color, bool isFirst, bool isLast) {
+    final bgColor = color.withValues(alpha: 0.04);
+    final borderColor = color.withValues(alpha: 0.12);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Left connector visual
+        SizedBox(
+          width: 32,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Column(
+                children: [
+                  Expanded(
+                    child: Container(
+                      width: 2,
+                      color: isFirst ? Colors.transparent : color.withValues(alpha: 0.25),
+                    ),
+                  ),
+                  Expanded(
+                    child: Container(
+                      width: 2,
+                      color: isLast ? Colors.transparent : color.withValues(alpha: 0.25),
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.25),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Icon(icon, size: 14, color: Colors.white),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Container(
+            margin: EdgeInsets.only(bottom: isLast ? 0 : 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: borderColor, width: 1.2),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 8,
+                    fontWeight: FontWeight.w900,
+                    color: color,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value.toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF1E293B),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildEmptyState({required IconData icon, required String title, required String message, required Color color, bool isScanning = false}) {
     return Container(
-      margin: const EdgeInsets.only(top: 40),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFF0D47A1).withValues(alpha: 0.12), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0D47A1).withValues(alpha: 0.03),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           if (isScanning)
             AnimatedBuilder(
               animation: _pulseController,
               builder: (context, child) {
                 return Container(
-                  padding: const EdgeInsets.all(32),
+                  padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
+                    color: color.withValues(alpha: 0.04),
                     border: Border.all(color: color.withValues(alpha: 1.0 - _pulseController.value), width: 2),
                   ),
-                  child: Icon(icon, size: 48, color: color.withValues(alpha: 0.5)),
+                  child: Icon(icon, size: 36, color: color),
                 );
               },
             )
           else
-            Icon(icon, size: 64, color: color.withValues(alpha: 0.3)),
-          const SizedBox(height: 24),
-          Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: color.withValues(alpha: 0.8), letterSpacing: 2)),
-          const SizedBox(height: 12),
-          Text(message, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B), height: 1.6)),
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: color.withValues(alpha: 0.05),
+              ),
+              child: Icon(icon, size: 36, color: color),
+            ),
+          const SizedBox(height: 20),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+              color: color,
+              letterSpacing: 2,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF64748B),
+              height: 1.5,
+            ),
+          ),
         ],
       ),
     );
   }
-}
-
-class _TechnicalGridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFF1E293B).withValues(alpha: 0.02)
-      ..strokeWidth = 1;
-
-    for (double i = 0; i < size.width; i += 30) {
-      canvas.drawLine(Offset(i, 0), Offset(i, size.height), paint);
-    }
-    for (double i = 0; i < size.height; i += 30) {
-      canvas.drawLine(Offset(0, i), Offset(size.width, i), paint);
-    }
-
-    paint.color = const Color(0xFF1E293B).withValues(alpha: 0.01);
-    for (double i = 0; i < size.width; i += 10) {
-      canvas.drawLine(Offset(i, 0), Offset(i, size.height), paint);
-    }
-    for (double i = 0; i < size.height; i += 10) {
-      canvas.drawLine(Offset(0, i), Offset(size.width, i), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _TacticalLoader extends StatelessWidget {

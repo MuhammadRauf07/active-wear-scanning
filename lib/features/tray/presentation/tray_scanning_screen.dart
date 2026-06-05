@@ -342,7 +342,8 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       final text = _quantityInputFieldController.text.trim();
       if (text.isEmpty) return false;
       final val = int.tryParse(text);
-      return val != null && val > 0;
+      if (val == null || val <= 0) return false;
+      return _remarksInputFieldController.text.trim().isNotEmpty;
     }
   }
 
@@ -752,10 +753,6 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          if (_machineBarcode.isNotEmpty) ...[
-                            const SizedBox(width: 8),
-                            const _ActivePulseDot(),
-                          ],
                         ],
                       ),
                       const SizedBox(height: 8),
@@ -804,7 +801,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              'Work Order Select',
+                              'Select Work Order ',
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
@@ -1055,6 +1052,15 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
   Widget _buildRadioOption(String label, String value) {
     final isSelected = _productionType == value;
+    Color optionColor;
+    if (value == 'sample') {
+      optionColor = const Color(0xFFF59E0B); // Amber/Yellow
+    } else if (value == 'c_grade') {
+      optionColor = const Color(0xFFEF4444); // Red
+    } else {
+      optionColor = const Color(0xFF0D47A1); // Primary Blue
+    }
+
     return InkWell(
       onTap: () {
         HapticFeedbackHelper.buttonClick();
@@ -1069,7 +1075,13 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
           Radio<String>(
             value: value,
             groupValue: _productionType,
-            activeColor: const Color(0xFF0D47A1),
+            activeColor: optionColor,
+            fillColor: WidgetStateProperty.resolveWith<Color>((states) {
+              if (states.contains(WidgetState.selected)) {
+                return optionColor;
+              }
+              return Colors.grey.shade400;
+            }),
             onChanged: (val) {
               if (val != null) {
                 HapticFeedbackHelper.buttonClick();
@@ -1086,7 +1098,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: isSelected ? const Color(0xFF0D47A1) : const Color(0xFF37474F),
+                color: isSelected ? optionColor : const Color(0xFF37474F),
               ),
               overflow: TextOverflow.ellipsis,
             ),
@@ -1149,7 +1161,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                 color: Color(0xFF0D47A1),
               ),
               decoration: const InputDecoration(
-                hintText: 'Enter quantity count...',
+                hintText: 'Enter Quantity',
                 hintStyle: TextStyle(
                   color: Color(0xFF94A3B8),
                   fontSize: 14,
@@ -1181,13 +1193,14 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
             child: TextField(
               controller: _remarksInputFieldController,
               keyboardType: TextInputType.text,
+              onChanged: (val) => setState(() {}),
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
                 color: Color(0xFF263238),
               ),
               decoration: const InputDecoration(
-                hintText: 'Enter remarks (optional)...',
+                hintText: 'Enter Remarks',
                 hintStyle: TextStyle(
                   color: Color(0xFF94A3B8),
                   fontSize: 13,
@@ -1248,58 +1261,6 @@ class _TrayFadeSlideTransitionState extends State<_TrayFadeSlideTransition> {
         );
       },
       child: widget.child,
-    );
-  }
-}
-
-class _ActivePulseDot extends StatefulWidget {
-  const _ActivePulseDot();
-
-  @override
-  State<_ActivePulseDot> createState() => _ActivePulseDotState();
-}
-
-class _ActivePulseDotState extends State<_ActivePulseDot> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat(reverse: true);
-    _animation = Tween<double>(begin: 3.0, end: 7.0).animate(_controller);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _animation,
-      builder: (context, child) {
-        return Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: const Color(0xFF2E7D32), // Standard success green to match Save changes
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF2E7D32).withValues(alpha: 0.6),
-                blurRadius: _animation.value,
-                spreadRadius: _animation.value / 2,
-              )
-            ],
-          ),
-        );
-      },
     );
   }
 }

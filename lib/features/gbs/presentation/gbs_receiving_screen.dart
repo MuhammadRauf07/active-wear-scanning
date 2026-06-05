@@ -689,6 +689,15 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
 
   Widget _buildRadioOption(String label, String value) {
     final isSelected = _receivingType == value;
+    Color optionColor;
+    if (value == 'sample') {
+      optionColor = const Color(0xFFF59E0B); // Amber/Yellow
+    } else if (value == 'c_grade') {
+      optionColor = const Color(0xFFEF4444); // Red
+    } else {
+      optionColor = const Color(0xFF0D47A1); // Primary Blue
+    }
+
     return InkWell(
       onTap: () {
         HapticFeedbackHelper.buttonClick();
@@ -703,7 +712,13 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
           Radio<String>(
             value: value,
             groupValue: _receivingType,
-            activeColor: const Color(0xFF0D47A1),
+            activeColor: optionColor,
+            fillColor: WidgetStateProperty.resolveWith<Color>((states) {
+              if (states.contains(WidgetState.selected)) {
+                return optionColor;
+              }
+              return Colors.grey.shade400;
+            }),
             onChanged: (val) {
               if (val != null) {
                 HapticFeedbackHelper.buttonClick();
@@ -720,7 +735,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: isSelected ? const Color(0xFF0D47A1) : const Color(0xFF37474F),
+                color: isSelected ? optionColor : const Color(0xFF37474F),
               ),
               overflow: TextOverflow.ellipsis,
             ),
