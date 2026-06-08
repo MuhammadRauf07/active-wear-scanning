@@ -1,6 +1,7 @@
 import 'dart:developer' as dev;
 import 'package:active_wear_scanning/core/api/plex-result/plex_api_result.dart';
 import 'package:active_wear_scanning/core/api/services/api_service.dart';
+import 'package:active_wear_scanning/features/common-models/common_models.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:active_wear_scanning/features/tray/model/plan_header_model.dart';
 import 'package:active_wear_scanning/features/tray/model/resource_model.dart';
@@ -127,5 +128,17 @@ class TrayScanningRepo {
   Future<PlexApiResult> fetchItemDef(int id) async {
     final result = await _api.getObject('/api/app/item-defs/$id');
     return result;
+  }
+
+  Future<PlexApiResult> fetchShifts() async {
+    final result = await _api.getList('/api/app/shifts');
+    if (!result.success || result.data == null) return result;
+    try {
+      final data = result.data as List;
+      final shifts = data.map((item) => Shift.fromJson(Map<String, dynamic>.from(item))).toList();
+      return PlexApiResult(true, 200, "Success", shifts);
+    } catch (e) {
+      return PlexApiResult(false, 500, e.toString(), null);
+    }
   }
 }

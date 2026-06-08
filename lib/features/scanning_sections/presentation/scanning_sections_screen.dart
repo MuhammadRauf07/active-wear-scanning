@@ -6,7 +6,6 @@ import 'package:active_wear_scanning/features/scanning_sections/presentation/wid
 import 'package:active_wear_scanning/features/tray/presentation/tray_scanning_screen.dart';
 import 'package:active_wear_scanning/features/wip/presentation/wip_screen.dart';
 import 'package:active_wear_scanning/features/tray_tracking/presentation/tray_tracking_screen.dart';
-import 'package:active_wear_scanning/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:active_wear_scanning/features/carton_packing/presentation/carton_packing_screen.dart';
 import 'package:active_wear_scanning/features/md_receiving/presentation/md_receiving_screen.dart';
 import 'package:active_wear_scanning/features/po_style/presentation/po_style_screen.dart';
@@ -58,25 +57,12 @@ class ScanningSectionsScreen extends StatelessWidget {
                         delay: 0,
                         child: _buildRow(context, [
                           SectionCard(
-                            title: 'Dashboard',
-                            subtitle: 'Primary system overview',
-                            sectionCode: 'DASH',
-                            progressValue: 0.5,
-                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DashboardScreen())),
-                            enabled: false,
-                          ),
-                          SectionCard(
                             title: 'Tray Scanning',
                             subtitle: 'Verify and trace manufacturing trays',
                             sectionCode: 'TRAY',
                             progressValue: 0.5,
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const TrayScanningScreen())),
                           ),
-                        ]),
-                      ),
-                      _FadeSlideTransition(
-                        delay: 100,
-                        child: _buildRow(context, [
                           SectionCard(
                             title: 'GBS Receiving',
                             subtitle: 'Handle goods-based stock incoming',
@@ -84,6 +70,11 @@ class ScanningSectionsScreen extends StatelessWidget {
                             progressValue: 0.5,
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GBSReceivingScreen())),
                           ),
+                        ]),
+                      ),
+                      _FadeSlideTransition(
+                        delay: 100,
+                        child: _buildRow(context, [
                           SectionCard(
                             title: 'Batch Creation',
                             subtitle: 'Initialize new production batches',
@@ -91,11 +82,6 @@ class ScanningSectionsScreen extends StatelessWidget {
                             progressValue: 0.5,
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const BatchListScreen())),
                           ),
-                        ]),
-                      ),
-                      _FadeSlideTransition(
-                        delay: 200,
-                        child: _buildRow(context, [
                           SectionCard(
                             title: 'Processing',
                             subtitle: 'Main production line tasks',
@@ -103,6 +89,11 @@ class ScanningSectionsScreen extends StatelessWidget {
                             progressValue: 0.5,
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ProcessingScreen())),
                           ),
+                        ]),
+                      ),
+                      _FadeSlideTransition(
+                        delay: 200,
+                        child: _buildRow(context, [
                           SectionCard(
                             title: 'Induction Store',
                             subtitle: 'Log materials to production store',
@@ -110,11 +101,6 @@ class ScanningSectionsScreen extends StatelessWidget {
                             progressValue: 0.5,
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const InductionStoreScreen())),
                           ),
-                        ]),
-                      ),
-                      _FadeSlideTransition(
-                        delay: 300,
-                        child: _buildRow(context, [
                           SectionCard(
                             title: 'WIP Monitoring',
                             subtitle: 'Real-time production flow',
@@ -122,6 +108,11 @@ class ScanningSectionsScreen extends StatelessWidget {
                             progressValue: 0.75,
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const WIPScreen())),
                           ),
+                        ]),
+                      ),
+                      _FadeSlideTransition(
+                        delay: 300,
+                        child: _buildRow(context, [
                           SectionCard(
                             title: 'Tray Tracking',
                             subtitle: 'Location history of production trays',
@@ -129,11 +120,6 @@ class ScanningSectionsScreen extends StatelessWidget {
                             progressValue: 0.5,
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const TrayTrackingScreen())),
                           ),
-                        ]),
-                      ),
-                      _FadeSlideTransition(
-                        delay: 400,
-                        child: _buildRow(context, [
                           SectionCard(
                             title: 'Carton Packing',
                             subtitle: 'Box goods for logistics and delivery',
@@ -141,6 +127,11 @@ class ScanningSectionsScreen extends StatelessWidget {
                             progressValue: 0.5,
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CartonPackingScreen())),
                           ),
+                        ]),
+                      ),
+                      _FadeSlideTransition(
+                        delay: 400,
+                        child: _buildRow(context, [
                           SectionCard(
                             title: 'MD Receiving',
                             subtitle: 'Log incoming MD material items',
@@ -148,11 +139,6 @@ class ScanningSectionsScreen extends StatelessWidget {
                             progressValue: 0.5,
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const MdReceivingScreen())),
                           ),
-                        ]),
-                      ),
-                      _FadeSlideTransition(
-                        delay: 500,
-                        child: _buildRow(context, [
                           SectionCard(
                             title: 'PO Style',
                             subtitle: 'Manage production PO styles',

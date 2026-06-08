@@ -17,6 +17,7 @@ import 'package:active_wear_scanning/features/tray/model/plan_header_model.dart'
 import 'package:active_wear_scanning/features/tray/model/tray_details_model.dart';
 import 'package:active_wear_scanning/features/tray/repo/tray_scanning_repo.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
+import 'package:active_wear_scanning/features/common-models/common_models.dart';
 import 'package:flutter/material.dart';
 import 'package:plex/plex_di/plex_dependency_injection.dart';
 
@@ -41,6 +42,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   List<TrayDetailsModel> availableTraysDetail = [];
   List<ProductionProgressResponseModel> existingProductionProgresses = [];
   PlanLineResponseModel? _selectedPlanLine;
+  List<Shift> _shifts = [];
 
   // Centralized Bluetooth Scanner Support
   final _barcodeParser = BarcodeBufferParser();
@@ -49,6 +51,57 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
   void initState() {
     super.initState();
     HardwareKeyboard.instance.addHandler(_onHardwareKey);
+    _loadShifts();
+  }
+
+  Future<void> _loadShifts() async {
+    try {
+      final res = await _trayScanningRepo.fetchShifts();
+      if (res.success && res.data != null) {
+        setState(() {
+          _shifts = List<Shift>.from(res.data);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading shifts: $e');
+    }
+  }
+
+  int _getCurrentShiftId() {
+    if (_shifts.isEmpty) {
+      return _selectedPlanLine?.planLine.shiftId ?? 1;
+    }
+
+    final now = DateTime.now();
+    final currentMinutes = now.hour * 60 + now.minute;
+
+    int parseTimeToMinutes(String timeStr) {
+      try {
+        final parts = timeStr.split(':');
+        final hours = int.parse(parts[0]);
+        final minutes = int.parse(parts[1]);
+        return hours * 60 + minutes;
+      } catch (e) {
+        return 0;
+      }
+    }
+
+    for (final shift in _shifts) {
+      final startMin = parseTimeToMinutes(shift.startTime);
+      final endMin = parseTimeToMinutes(shift.endTime);
+
+      if (startMin <= endMin) {
+        if (currentMinutes >= startMin && currentMinutes < endMin) {
+          return shift.id;
+        }
+      } else {
+        if (currentMinutes >= startMin || currentMinutes < endMin) {
+          return shift.id;
+        }
+      }
+    }
+
+    return _selectedPlanLine?.planLine.shiftId ?? 1;
   }
 
   @override
@@ -183,7 +236,6 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     }
 
     final plan = planLine.planLine;
-    final shift = planLine.shift;
     final workOrder = planLine.workOrderHeader;
     final item = planLine.item;
 
@@ -192,11 +244,14 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       return dateStr.split('T')[0].split(' ')[0];
     }
 
+    final matchedShiftId = _getCurrentShiftId();
+    final currentShift = _shifts.firstWhere((s) => s.id == matchedShiftId, orElse: () => planLine.shift);
+
     addField('Plan Date', Icons.calendar_today, 'Plan Date', formatDate(plan.planDate.toString()));
     addField('Knitting Tube', Icons.precision_manufacturing, 'Knitting Tube', plan.primaryPlanQuantity.toString());
     addField('Tubes Per Tray', Icons.grid_view, 'Tubes Per Tray', plan.quantityPerTray.toString());
     addField('Garment Pcs', Icons.checkroom, 'Garment Pcs', plan.secondaryPlanQuantity.toString());
-    addField('Shift Code', Icons.schedule, 'Shift Code', shift.code.toString());
+    addField('Shift Code', Icons.schedule, 'Shift Code', currentShift.code.toString());
     addField('Work Order Code', Icons.assignment, 'Work Order Code', workOrder.workOrderCode);
     addField('Work Order Date', Icons.event, 'Work Order Date', formatDate(workOrder.workOrderDate));
     addField('Item Description', Icons.description, 'Item Description', item.description);
@@ -300,8 +355,17 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       if (!mounted) return;
 
       if (apiResult.success && apiResult.data != null) {
+        final rawLines = List<PlanLineResponseModel>.from(apiResult.data);
+        final now = DateTime.now();
+        final todayStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+        
+        final filteredLines = rawLines.where((element) {
+          final planDate = element.planLine.planDate;
+          return planDate.startsWith(todayStr);
+        }).toList();
+
         setState(() {
-          _planLines = List<PlanLineResponseModel>.from(apiResult.data);
+          _planLines = filteredLines;
           if (progressResult.success && progressResult.data != null) {
             existingProductionProgresses = progressResult.data as List<ProductionProgressResponseModel>;
           } else if (!progressResult.success) {
@@ -362,10 +426,12 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
           final latestTray = trayResFetch.data as TrayDetailsModel;
           final latestTrayDetail = latestTray.trayDetails;
 
+          final matchedShiftId = _getCurrentShiftId();
+
           Map<String, dynamic> planData = {
             'trayCode': latestTrayDetail?.trayCode,
             'trayType': 1,
-            'shiftId': _selectedPlanLine!.planLine.shiftId,
+            'shiftId': matchedShiftId,
             'planLineId': _selectedPlanLine!.planLine.id,
             'workOrderHeaderId': _selectedPlanLine!.workOrderHeader.id,
             'workOrderLineId': _selectedPlanLine!.workOrderLine.id,
@@ -399,7 +465,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
             "workOrderHeaderId": _selectedPlanLine!.workOrderHeader.id,
             "workOrderLineId": _selectedPlanLine!.workOrderLine.id,
             "itemId": _selectedPlanLine!.planLine.itemId,
-            "shiftId": _selectedPlanLine!.planLine.shiftId,
+            "shiftId": matchedShiftId,
             "primaryTrayId": latestTrayDetail?.id,
             "secondaryTrayId": latestTrayDetail?.id,
             "machineId": _selectedPlanLine!.planLine.resourceId,
@@ -475,7 +541,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
             "workOrderHeaderId": _selectedPlanLine!.workOrderHeader.id,
             "workOrderLineId": _selectedPlanLine!.workOrderLine.id,
             "itemId": _selectedPlanLine!.planLine.itemId,
-            "shiftId": _selectedPlanLine!.planLine.shiftId,
+            "shiftId": _getCurrentShiftId(),
             "machineId": _selectedPlanLine!.planLine.resourceId,
             "locatorId": 2,
             "remarks": _remarksInputFieldController.text.trim().isNotEmpty
@@ -1067,6 +1133,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
         setState(() {
           _productionType = value;
           _quantityInputFieldController.clear();
+          _remarksInputFieldController.clear();
         });
       },
       child: Row(
@@ -1088,6 +1155,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                 setState(() {
                   _productionType = val;
                   _quantityInputFieldController.clear();
+                  _remarksInputFieldController.clear();
                 });
               }
             },

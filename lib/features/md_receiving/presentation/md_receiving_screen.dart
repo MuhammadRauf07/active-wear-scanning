@@ -10,6 +10,7 @@ import 'package:active_wear_scanning/core/widgets/empty_scan_state.dart';
 import 'package:active_wear_scanning/core/widgets/scanner_always_open.dart';
 import 'package:active_wear_scanning/features/md_receiving/repo/md_receiving_repo.dart';
 import 'package:active_wear_scanning/features/carton_packing/model/carton_packing_scanned_item.dart';
+import 'package:active_wear_scanning/features/carton_packing/presentation/widgets/carton_packing_row.dart';
 
 class MdReceivingScreen extends StatefulWidget {
   const MdReceivingScreen({super.key});
@@ -152,39 +153,17 @@ class _MdReceivingScreenState extends State<MdReceivingScreen> {
                       itemBuilder: (context, index) {
                         final reversedIndex = _scannedCartons.length - 1 - index;
                         final model = _scannedCartons[reversedIndex];
-                        final code = model.packingInstructionLineDetail.uniqueId;
-                        return Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                          decoration: BoxDecoration(
-                            border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
-                            color: reversedIndex.isEven ? Colors.white : const Color(0xFFF8FAFC),
-                          ),
-                          child: Row(
-                            children: [
-                              Text(
-                                '#${reversedIndex + 1}',
-                                style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.blueGrey, fontSize: 12),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Text(
-                                  code,
-                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF263238)),
-                                ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.delete_sweep_rounded, color: Colors.redAccent, size: 20),
-                                onPressed: () {
-                                  setState(() {
-                                    final lineDetailId = model.packingInstructionLineDetail.id;
-                                    _scannedCartons.removeAt(reversedIndex);
-                                    _productionProgressMap.remove(lineDetailId);
-                                  });
-                                  setSubState(() {});
-                                },
-                              ),
-                            ],
-                          ),
+                        return CartonPackingRow(
+                          index: reversedIndex,
+                          item: model,
+                          onRemove: () {
+                            setState(() {
+                              final lineDetailId = model.packingInstructionLineDetail.id;
+                              _scannedCartons.removeAt(reversedIndex);
+                              _productionProgressMap.remove(lineDetailId);
+                            });
+                            setSubState(() {});
+                          },
                         );
                       },
                     ),
@@ -462,39 +441,16 @@ class _MdReceivingScreenState extends State<MdReceivingScreen> {
                 itemBuilder: (context, index) {
                   final reversedIndex = _scannedCartons.length - 1 - index;
                   final model = _scannedCartons[reversedIndex];
-                  final code = model.packingInstructionLineDetail.uniqueId;
-
-                  return Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                    decoration: BoxDecoration(
-                      border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
-                      color: reversedIndex.isEven ? Colors.white : const Color(0xFFF8FAFC),
-                    ),
-                    child: Row(
-                      children: [
-                        Text(
-                          '#${reversedIndex + 1}',
-                          style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.blueGrey, fontSize: 12),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Text(
-                            code,
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF263238)),
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_sweep_rounded, color: Colors.redAccent, size: 20),
-                          onPressed: () {
-                            setState(() {
-                              final lineDetailId = model.packingInstructionLineDetail.id;
-                              _scannedCartons.removeAt(reversedIndex);
-                              _productionProgressMap.remove(lineDetailId);
-                            });
-                          },
-                        ),
-                      ],
-                    ),
+                  return CartonPackingRow(
+                    index: reversedIndex,
+                    item: model,
+                    onRemove: () {
+                      setState(() {
+                        final lineDetailId = model.packingInstructionLineDetail.id;
+                        _scannedCartons.removeAt(reversedIndex);
+                        _productionProgressMap.remove(lineDetailId);
+                      });
+                    },
                   );
                 },
               ),
@@ -506,20 +462,36 @@ class _MdReceivingScreenState extends State<MdReceivingScreen> {
   }
 
   Widget _buildTableHeader() {
+    const headerStyle = TextStyle(
+      fontSize: 10,
+      fontWeight: FontWeight.w700,
+      color: Color(0xFF455A64), // Slate Grey
+      letterSpacing: 0.2,
+    );
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
       decoration: const BoxDecoration(
-        color: Color(0xFFF1F5F9),
+        color: Color(0xFFF1F5F9), // Very light slate blue/grey
         border: Border(
           bottom: BorderSide(color: Color(0xFFB0BEC5), width: 1.5),
         ),
       ),
       child: const Row(
         children: [
-          Text('No.', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF455A64))),
-          SizedBox(width: 16),
-          Expanded(child: Text('MD Item Code / Barcode', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF455A64)))),
-          SizedBox(width: 44),
+          Expanded(
+            flex: 4,
+            child: Text('Carton ID', style: headerStyle),
+          ),
+          Expanded(
+            flex: 4,
+            child: Text('Carton Group', textAlign: TextAlign.center, style: headerStyle),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text('Packs/Carton', textAlign: TextAlign.center, style: headerStyle),
+          ),
+          SizedBox(width: 44), // space for delete action icon
         ],
       ),
     );

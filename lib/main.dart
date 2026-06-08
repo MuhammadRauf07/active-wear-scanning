@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:active_wear_scanning/core/config/app_config.dart';
 import 'package:active_wear_scanning/features/gbs/repo/gbs_receiving_repo.dart';
 import 'package:active_wear_scanning/features/induction/repo/induction_repo.dart';
@@ -10,6 +9,7 @@ import 'package:active_wear_scanning/features/po_style/repo/po_style_repo.dart';
 import 'package:active_wear_scanning/features/user/model/active_wear_user.dart';
 import 'package:active_wear_scanning/features/user/repo/active_wear_user.dart';
 import 'package:active_wear_scanning/features/user/repo/profile.dart';
+import 'package:active_wear_scanning/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:active_wear_scanning/features/user/repo/user_repo.dart';
 import 'package:flutter/material.dart';
 import 'package:plex/plex_di/plex_dependency_injection.dart';
@@ -35,6 +35,18 @@ void main() {
 
   runApp(
     PlexApp(
+      generateDrawerNavigationButton: (route) {
+        String labelText = route.title;
+        if (route.route == '/scanning') {
+          labelText = 'Operations';
+        } else if (route.route == '/dashboard') {
+          labelText = 'Dashboard';
+        }
+        return NavigationDrawerDestination(
+          icon: route.logo ?? const Icon(Icons.circle),
+          label: Text(labelText),
+        );
+      },
       appInfo: PlexAppInfo(title: 'Active Wear Scanning', appLogo: const Icon(Icons.qr_code_scanner), initialRoute: '/'),
       onInitializationComplete: () {
         // // Force the app to clear memory and demand a login every single time it boots
@@ -81,19 +93,37 @@ void main() {
         showBrightnessSwitch: false,
         showThemeSwitch: false,
         showAnimationSwitch: false,
-        disableExpandNavigationRail: true,
+        disableExpandNavigationRail: false,
         disableBottomNavigation: true,
         dashboardScreens: [
           PlexRoute(
             route: '/scanning',
-            title: 'Active Wear',
-            logo: const Icon(Icons.home_outlined),
-            selectedLogo: const Icon(Icons.home),
+            title: 'FOGLIGHT ACTIVEWEAR',
+            logo: const Icon(Icons.apps_outlined),
+            selectedLogo: const Icon(Icons.apps),
             screen: (context, {data}) => const ScanningSectionsScreen(),
+          ),
+          PlexRoute(
+            route: '/dashboard',
+            title: 'FOGLIGHT ACTIVEWEAR',
+            logo: const Icon(Icons.dashboard_outlined),
+            selectedLogo: const Icon(Icons.dashboard),
+            screen: (context, {data}) => const DashboardScreen(),
           ),
         ],
       ),
-      pages: [PlexRoute(route: '/scanning', title: 'Active Ware', screen: (context, {data}) => const ScanningSectionsScreen())],
+      pages: [
+        PlexRoute(
+          route: '/scanning',
+          title: 'FOGLIGHT ACTIVEWEAR',
+          screen: (context, {data}) => const ScanningSectionsScreen(),
+        ),
+        PlexRoute(
+          route: '/dashboard',
+          title: 'FOGLIGHT ACTIVEWEAR',
+          screen: (context, {data}) => const DashboardScreen(),
+        ),
+      ],
     ),
   );
 }

@@ -16,12 +16,9 @@ class DashboardScreen extends StatelessWidget {
             CustomInspectionHeader(
               heading: 'Dashboard',
               subtitle: 'View your orders overview',
-              isShowBackIcon: true,
+              isShowBackIcon: false,
               topPadding: 10,
               horizontalPadding: 12,
-              onBackPress: () {
-                Navigator.pop(context);
-              },
             ),
             Expanded(
               child: SingleChildScrollView(
