@@ -921,6 +921,9 @@ class PlanLine {
   final double secondaryQuantity;
   final String? cutsomerPO;
   final double cycleTime;
+  final String? planLineCode;
+  final double sampleQty;
+  final double cGradeQty;
   final int operationId;
   final int shiftId;
   final int resourceId;
@@ -930,7 +933,7 @@ class PlanLine {
   final int costCenterLineId;
   final int? saleOrderMstId;
   final int? saleOrderLineId;
-  final int planHeaderId;
+  final int? planHeaderId;
   final String concurrencyStamp;
   final String creationTime;
   final String? lastModificationTime;
@@ -953,6 +956,9 @@ class PlanLine {
     required this.secondaryQuantity,
     required this.cutsomerPO,
     required this.cycleTime,
+    this.planLineCode,
+    required this.sampleQty,
+    required this.cGradeQty,
     required this.operationId,
     required this.shiftId,
     required this.resourceId,
@@ -987,6 +993,9 @@ class PlanLine {
       secondaryQuantity: (json['secondaryQuantity'] as num?)?.toDouble() ?? 0,
       cutsomerPO: json['cutsomerPO'],
       cycleTime: (json['cycleTime'] as num?)?.toDouble() ?? 0,
+      planLineCode: json['planLineCode']?.toString(),
+      sampleQty: (json['sampleQty'] as num?)?.toDouble() ?? 0,
+      cGradeQty: (json['cGradeQty'] as num?)?.toDouble() ?? 0,
       operationId: (json['operationId'] as num?)?.toInt() ?? 0,
       shiftId: (json['shiftId'] as num?)?.toInt() ?? 0,
       resourceId: (json['resourceId'] as num?)?.toInt() ?? 0,
@@ -996,7 +1005,7 @@ class PlanLine {
       costCenterLineId: (json['costCenterLineId'] as num?)?.toInt() ?? 0,
       saleOrderMstId: (json['saleOrderMstId'] as num?)?.toInt(),
       saleOrderLineId: (json['saleOrderLineId'] as num?)?.toInt(),
-      planHeaderId: (json['planHeaderId'] as num?)?.toInt() ?? 0,
+      planHeaderId: (json['planHeaderId'] as num?)?.toInt(),
       concurrencyStamp: json['concurrencyStamp']?.toString() ?? '',
       creationTime: json['creationTime']?.toString() ?? '',
       lastModificationTime: json['lastModificationTime']?.toString(),

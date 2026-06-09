@@ -358,10 +358,16 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
         final rawLines = List<PlanLineResponseModel>.from(apiResult.data);
         final now = DateTime.now();
         final todayStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+        final currentShiftId = _getCurrentShiftId();
         
         final filteredLines = rawLines.where((element) {
           final planDate = element.planLine.planDate;
-          return planDate.startsWith(todayStr);
+          final dateMatches = planDate.startsWith(todayStr);
+          if (_shifts.isEmpty) {
+            return dateMatches;
+          }
+          final shiftMatches = element.planLine.shiftId == currentShiftId;
+          return dateMatches && shiftMatches;
         }).toList();
 
         setState(() {
@@ -408,6 +414,83 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
       final val = int.tryParse(text);
       if (val == null || val <= 0) return false;
       return _remarksInputFieldController.text.trim().isNotEmpty;
+    }
+  }
+
+  /// Fetch the plan-line, add [goodQty]/[sampleQty]/[cGradeQty] cumulatively, then PUT back.
+  Future<void> _updatePlanLineQuantity({
+    double goodQty = 0,
+    double sampleQty = 0,
+    double cGradeQty = 0,
+  }) async {
+    if (_selectedPlanLine == null) return;
+    final planLineId = _selectedPlanLine!.planLine.id;
+
+    try {
+      // 1. Fetch the latest state (concurrencyStamp + current quantities)
+      final fetchResult = await _trayScanningRepo.fetchPlanLineById(planLineId);
+      if (!fetchResult.success || fetchResult.data == null) {
+        debugPrint('Plan-line refresh failed: ${fetchResult.message}');
+        if (mounted) _showError('Plan-line refresh failed: ${fetchResult.message}');
+        return;
+      }
+
+      final latestPlanLine = fetchResult.data as PlanLine;
+
+      // 2. Build cumulative flat update payload.
+      // - No 'id' in the body per Swagger schema (id is passed in the URL).
+      // - Body must NOT be wrapped in 'input'.
+      // - quantityPerTray must be serialized as Int32 (not double).
+      // - Only flat ID fields (e.g., operationId) are used; nested objects are not part of PUT schema.
+      // - concurrencyStamp must be inside the flat body.
+      final Map<String, dynamic> updateData = {
+        'planDate': latestPlanLine.planDate,
+        'quantityPerTray': latestPlanLine.quantityPerTray.toInt(),
+        'cancelled': latestPlanLine.cancelled,
+        'primaryUOM': latestPlanLine.primaryUOM,
+        'primaryPlanQuantity': latestPlanLine.primaryPlanQuantity.toInt(),
+        'secondaryPlanQuantity': latestPlanLine.secondaryPlanQuantity.toInt(),
+        'secondaryUOM': latestPlanLine.secondaryUOM,
+        'primaryQuantity': (latestPlanLine.primaryQuantity + goodQty).toInt(),
+        'secondaryQuantity': latestPlanLine.secondaryQuantity.toInt(),
+        'cycleTime': latestPlanLine.cycleTime,
+        'sampleQty': (latestPlanLine.sampleQty + sampleQty).toInt(),
+        'cGradeQty': (latestPlanLine.cGradeQty + cGradeQty).toInt(),
+        'operationId': latestPlanLine.operationId,
+        'shiftId': latestPlanLine.shiftId,
+        'resourceId': latestPlanLine.resourceId,
+        'workOrderHeaderId': latestPlanLine.workOrderHeaderId,
+        'workOrderLineId': latestPlanLine.workOrderLineId,
+        'itemId': latestPlanLine.itemId,
+        'costCenterLineId': latestPlanLine.costCenterLineId,
+        'concurrencyStamp': latestPlanLine.concurrencyStamp,
+        // Optional nullable fields — only include when non-null
+        if (latestPlanLine.orderNo != null) 'orderNo': latestPlanLine.orderNo,
+        if (latestPlanLine.actualStartTime != null) 'actualStartTime': latestPlanLine.actualStartTime,
+        if (latestPlanLine.actualEndTime != null) 'actualEndTime': latestPlanLine.actualEndTime,
+        if (latestPlanLine.cutsomerPO != null) 'cutsomerPO': latestPlanLine.cutsomerPO,
+        if (latestPlanLine.planLineCode != null) 'planLineCode': latestPlanLine.planLineCode,
+        if (latestPlanLine.saleOrderMstId != null) 'saleOrderMstId': latestPlanLine.saleOrderMstId,
+        if (latestPlanLine.saleOrderLineId != null) 'saleOrderLineId': latestPlanLine.saleOrderLineId,
+        if (latestPlanLine.planHeaderId != null) 'planHeaderId': latestPlanLine.planHeaderId,
+      };
+
+      // 3. PUT — Flat body directly.
+      final updateResult = await _trayScanningRepo.updatePlanLine(
+        updateData,
+        planLineId,
+      );
+      if (!updateResult.success) {
+        debugPrint('Plan-line update failed: ${updateResult.message}');
+        if (mounted) {
+          _showError('Plan-line update failed: ${updateResult.message}');
+        }
+      }
+    } catch (e) {
+      debugPrint('_updatePlanLineQuantity error: $e');
+      if (mounted) {
+        _showError('Plan-line update error: $e');
+      }
     }
   }
 
@@ -472,7 +555,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
             "locatorId": 2,
           };
 
-          if (_selectedPlanLine!.planLine.planHeaderId != 0) {
+          if (_selectedPlanLine!.planLine.planHeaderId != null) {
             productionProgressData["planHeaderId"] = _selectedPlanLine!.planLine.planHeaderId;
           }
 
@@ -486,6 +569,16 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
             throw Exception(progRes.message);
           }
         }
+
+        // ── Cumulative good-quantity update on plan line ─────────────────
+        final totalScannedTubes = _scannedTrays.fold<double>(
+          0,
+          (sum, tray) {
+            final idx = _scannedTrays.indexOf(tray);
+            return sum + (double.tryParse(_quantityControllers[idx].text) ?? 0);
+          },
+        );
+        await _updatePlanLineQuantity(goodQty: totalScannedTubes);
 
         if (mounted) {
           HapticFeedbackHelper.scanSuccess();
@@ -549,7 +642,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                 : null,
           };
 
-          if (_selectedPlanLine!.planLine.planHeaderId != 0) {
+          if (_selectedPlanLine!.planLine.planHeaderId != null) {
             productionProgressData["planHeaderId"] = _selectedPlanLine!.planLine.planHeaderId;
           }
 
@@ -569,6 +662,14 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
         }
 
         if (successCount == results.length) {
+          // ── Cumulative sample/c-grade quantity update on plan line ────────
+          final int enteredQty = int.tryParse(qtyText) ?? 0;
+          if (_productionType == 'sample') {
+            await _updatePlanLineQuantity(sampleQty: enteredQty.toDouble());
+          } else {
+            await _updatePlanLineQuantity(cGradeQty: enteredQty.toDouble());
+          }
+
           if (mounted) {
             HapticFeedbackHelper.scanSuccess();
             AppSnackBar.showSuccess(context, message: 'Successfully saved $successCount entries.');

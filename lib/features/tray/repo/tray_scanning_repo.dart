@@ -130,6 +130,48 @@ class TrayScanningRepo {
     return result;
   }
 
+  /// Fetch a single plan-line by its ID to get the latest concurrencyStamp + quantities.
+  /// Uses the list endpoint with Id filter and extracts items[0].planLine from the wrapper.
+  Future<PlexApiResult> fetchPlanLineById(int planLineId) async {
+    // 1. Try the single get endpoint: GET /api/app/plan-lines/{id}
+    final singleResult = await _api.getObject('/api/app/plan-lines/$planLineId');
+    if (singleResult.success && singleResult.data != null) {
+      try {
+        final data = Map<String, dynamic>.from(singleResult.data as Map);
+        return PlexApiResult(true, 200, "Success", PlanLine.fromJson(data));
+      } catch (e) {
+        dev.log("fetchPlanLineById: failed to parse single plan-line: $e. Falling back to list endpoint.");
+      }
+    }
+
+    // 2. Fallback: GET /api/app/plan-lines list endpoint and filter locally
+    final result = await _api.getList('/api/app/plan-lines', query: {'Id': planLineId.toString()});
+    if (!result.success || result.data == null) return result;
+    try {
+      final List data = result.data as List;
+      for (final item in data) {
+        final wrapper = Map<String, dynamic>.from(item as Map);
+        final planLineJson = wrapper.containsKey('planLine')
+            ? Map<String, dynamic>.from(wrapper['planLine'] as Map)
+            : wrapper;
+        
+        final idVal = (planLineJson['id'] as num?)?.toInt();
+        if (idVal == planLineId) {
+          return PlexApiResult(true, 200, "Success", PlanLine.fromJson(planLineJson));
+        }
+      }
+      return PlexApiResult(false, 404, 'Plan line $planLineId not found in list fallback', null);
+    } catch (e) {
+      return PlexApiResult(false, 500, e.toString(), null);
+    }
+  }
+
+  /// PUT updated quantities back to plan-line
+  Future<PlexApiResult> updatePlanLine(Map<String, dynamic> data, int planLineId) async {
+    dev.log("UpdatePlanLineData :: ${data.toString()}");
+    return await _api.put('/api/app/plan-lines/$planLineId', body: data);
+  }
+
   Future<PlexApiResult> fetchShifts() async {
     final result = await _api.getList('/api/app/shifts');
     if (!result.success || result.data == null) return result;
