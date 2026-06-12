@@ -175,7 +175,7 @@ class _SnackBarOverlayState extends State<_SnackBarOverlay> with SingleTickerPro
       animation: _controller,
       builder: (context, child) {
         return Positioned(
-          bottom: 24 + _yOffsetAnimation.value,
+          bottom: 96 + _yOffsetAnimation.value,
           left: 16,
           right: 16,
           child: Opacity(

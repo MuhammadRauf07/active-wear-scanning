@@ -607,7 +607,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
       AppLoader.show(context, message: 'Saving $x entries...');
       try {
-        final List<Future<PlexApiResult>> postFutures = [];
+        final List<Map<String, dynamic>> payloads = [];
         final int nature = _productionType == 'sample' ? 1 : 0;
         final int grade = _productionType == 'c_grade' ? 2 : 0;
 
@@ -646,10 +646,22 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
             productionProgressData["planHeaderId"] = _selectedPlanLine!.planLine.planHeaderId;
           }
 
-          postFutures.add(_trayScanningRepo.saveProductionProgress(productionProgressData));
+          payloads.add(productionProgressData);
         }
 
-        final results = await Future.wait(postFutures);
+        // Execute API calls in batches of 15 to prevent connection/socket exhaustion
+        final List<PlexApiResult> results = [];
+        const int batchSize = 15;
+        for (int i = 0; i < payloads.length; i += batchSize) {
+          final end = (i + batchSize < payloads.length) ? i + batchSize : payloads.length;
+          final chunk = payloads.sublist(i, end);
+
+          final chunkFutures = chunk
+              .map((p) => _trayScanningRepo.saveProductionProgress(p))
+              .toList();
+          final chunkResults = await Future.wait(chunkFutures);
+          results.addAll(chunkResults);
+        }
 
         int successCount = 0;
         final List<String> errors = [];
@@ -1178,6 +1190,88 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     );
   }
 
+  void _handleProductionTypeChange(String newType) {
+    if (_productionType == newType) return;
+
+    if (_productionType == 'good' && _scannedTrays.isNotEmpty) {
+      showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFFF8FAFC),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Color(0xFFF59E0B)),
+                SizedBox(width: 8),
+                Text(
+                  'Confirm Switch',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+              ],
+            ),
+            content: const Text(
+              'Switching production nature will dismiss all scanned trays. Do you want to proceed?',
+              style: TextStyle(
+                fontSize: 13,
+                color: Color(0xFF475569),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(
+                    color: Color(0xFF64748B),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFEF4444),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                ),
+                onPressed: () {
+                  Navigator.pop(context);
+                  setState(() {
+                    _productionType = newType;
+                    _scannedTrays.clear();
+                    _quantityControllers.clear();
+                    _quantityInputFieldController.clear();
+                    _remarksInputFieldController.clear();
+                  });
+                },
+                child: const Text(
+                  'OK',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    } else {
+      setState(() {
+        _productionType = newType;
+        _quantityInputFieldController.clear();
+        _remarksInputFieldController.clear();
+      });
+    }
+  }
+
   Widget _buildProductionTypeRadioButtons() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1231,11 +1325,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     return InkWell(
       onTap: () {
         HapticFeedbackHelper.buttonClick();
-        setState(() {
-          _productionType = value;
-          _quantityInputFieldController.clear();
-          _remarksInputFieldController.clear();
-        });
+        _handleProductionTypeChange(value);
       },
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1253,11 +1343,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
             onChanged: (val) {
               if (val != null) {
                 HapticFeedbackHelper.buttonClick();
-                setState(() {
-                  _productionType = val;
-                  _quantityInputFieldController.clear();
-                  _remarksInputFieldController.clear();
-                });
+                _handleProductionTypeChange(val);
               }
             },
           ),
