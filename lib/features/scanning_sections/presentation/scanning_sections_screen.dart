@@ -140,8 +140,8 @@ class ScanningSectionsScreen extends StatelessWidget {
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const MdReceivingScreen())),
                           ),
                           SectionCard(
-                            title: 'PO Style',
-                            subtitle: 'Manage production PO styles',
+                            title: 'Stitching Line Scheduling',
+                            subtitle: 'Manage stitching line scheduling',
                             sectionCode: 'POST',
                             progressValue: 0.5,
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PoStyleScreen())),

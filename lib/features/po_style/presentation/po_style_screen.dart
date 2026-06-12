@@ -183,7 +183,7 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
     if (_selectedCostCenterLine == null || _selectedPoStyleIds.isEmpty) return;
 
     HapticFeedbackHelper.buttonClick();
-    AppLoader.show(context, message: 'Updating ${_selectedPoStyleIds.length} PO Styles...');
+    AppLoader.show(context, message: 'Updating ${_selectedPoStyleIds.length} Stitching Lines...');
 
     final selectedItems = _poStyles
         .where((item) => _selectedPoStyleIds.contains(item.poStyle.id))
@@ -217,13 +217,13 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
       if (mounted) {
         if (successCount == results.length) {
           HapticFeedbackHelper.scanSuccess();
-          AppSnackBar.showSuccess(context, message: 'Successfully updated $successCount PO Styles.');
+          AppSnackBar.showSuccess(context, message: 'Successfully updated $successCount Stitching Lines.');
           Navigator.of(context).pop();
         } else {
           HapticFeedbackHelper.scanError();
           AppSnackBar.showError(
             context,
-            message: 'Updated $successCount/${results.length} styles. Errors: ${errors.join(", ")}',
+            message: 'Updated $successCount/${results.length} stitching lines. Errors: ${errors.join(", ")}',
           );
           _fetchPoStyles();
         }
@@ -303,7 +303,7 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'PO Style',
+                    'Stitching Line Scheduling',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
@@ -311,7 +311,7 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
                     ),
                   ),
                   Text(
-                    'PO / DESIGN SPECIFICATION CONSOLE',
+                    'STITCHING LINE SCHEDULING CONSOLE',
                     style: TextStyle(
                       fontSize: 9,
                       color: Color(0xFF546E7A),
