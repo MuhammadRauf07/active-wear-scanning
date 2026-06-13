@@ -77,24 +77,10 @@ class GBSTrayRow extends StatelessWidget {
           ),
           Expanded(
             flex: 2,
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFCFD8DC), width: 1),
-                ),
-                child: Text(
-                  tray.primaryQuantity,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: Color(0xFF263238),
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
+            child: Text(
+              tray.primaryQuantity,
+              textAlign: TextAlign.center,
+              style: _cellStyle,
             ),
           ),
           Expanded(

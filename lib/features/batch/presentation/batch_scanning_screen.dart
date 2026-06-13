@@ -362,35 +362,24 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                               ),
                               Expanded(
                                 flex: 2,
-                                child: Center(
-                                  child: Container(
-                                    width: 48,
-                                    height: 32,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF1F5F9),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: const Color(0xFFCFD8DC), width: 1),
-                                    ),
-                                    child: TextField(
-                                      controller: _quantityControllers[index],
-                                      textAlign: TextAlign.center,
-                                      keyboardType: TextInputType.number,
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w800,
-                                        color: Color(0xFF263238),
-                                      ),
-                                      decoration: const InputDecoration(
-                                        contentPadding: EdgeInsets.only(top: 4),
-                                        isCollapsed: true,
-                                        border: InputBorder.none,
-                                      ),
-                                      onChanged: (val) {
-                                        setState(() {});
-                                        setSubState(() {});
-                                      },
-                                    ),
+                                child: TextField(
+                                  controller: _quantityControllers[index],
+                                  textAlign: TextAlign.center,
+                                  keyboardType: TextInputType.number,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF263238),
                                   ),
+                                  decoration: const InputDecoration(
+                                    contentPadding: EdgeInsets.zero,
+                                    isCollapsed: true,
+                                    border: InputBorder.none,
+                                  ),
+                                  onChanged: (val) {
+                                    setState(() {});
+                                    setSubState(() {});
+                                  },
                                 ),
                               ),
                               Expanded(
@@ -1351,32 +1340,17 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
           ),
           Expanded(
             flex: 2,
-            child: Center(
-              child: Container(
-                width: 48,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFCFD8DC), width: 1),
-                ),
-                child: TextField(
-                  controller: _quantityControllers[index],
-                  textAlign: TextAlign.center,
-                  keyboardType: TextInputType.number,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF263238),
-                  ),
-                  decoration: const InputDecoration(
-                    contentPadding: EdgeInsets.only(top: 4),
-                    isCollapsed: true,
-                    border: InputBorder.none,
-                  ),
-                  onChanged: (val) => setState(() {}),
-                ),
+            child: TextField(
+              controller: _quantityControllers[index],
+              textAlign: TextAlign.center,
+              keyboardType: TextInputType.number,
+              style: cellStyle,
+              decoration: const InputDecoration(
+                contentPadding: EdgeInsets.zero,
+                isCollapsed: true,
+                border: InputBorder.none,
               ),
+              onChanged: (val) => setState(() {}),
             ),
           ),
           Expanded(

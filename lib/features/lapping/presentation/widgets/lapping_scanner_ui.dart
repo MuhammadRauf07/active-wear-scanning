@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:active_wear_scanning/features/lapping/model/lapping_model.dart';
 
 class LappingScannerUI extends StatelessWidget {
@@ -76,6 +77,28 @@ class LappingScannerUI extends StatelessWidget {
                 child: TextField(
                   controller: trayQtyController,
                   keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    TextInputFormatter.withFunction((oldValue, newValue) {
+                      if (newValue.text.isEmpty) {
+                        return newValue;
+                      }
+                      if (newValue.text.startsWith('0')) {
+                        final clean = newValue.text.replaceFirst(RegExp(r'^0+'), '');
+                        if (clean.isEmpty) {
+                          return oldValue.text.isEmpty ? const TextEditingValue() : oldValue;
+                        }
+                        int selectionIndex = newValue.selection.end - (newValue.text.length - clean.length);
+                        if (selectionIndex < 0) selectionIndex = 0;
+                        if (selectionIndex > clean.length) selectionIndex = clean.length;
+                        return TextEditingValue(
+                          text: clean,
+                          selection: TextSelection.collapsed(offset: selectionIndex),
+                        );
+                      }
+                      return newValue;
+                    }),
+                  ],
                   textAlign: TextAlign.center,
                   focusNode: focusNode,
                   style: const TextStyle(

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:active_wear_scanning/core/widgets/content_card.dart';
 import 'package:active_wear_scanning/features/lapping/model/lapping_model.dart';
 import 'package:active_wear_scanning/features/lapping/model/work_order_summary.dart';
 
@@ -18,33 +17,6 @@ class WorkOrderSelectionCard extends StatelessWidget {
     required this.trayOverrideQuantities,
     required this.onSelected,
   });
-
-  static final _tableHeaderStyle = TextStyle(
-    fontSize: 12,
-    fontWeight: FontWeight.w600,
-    color: Colors.grey.shade700,
-  );
-
-  Widget _buildTableHeader() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Row(
-        children: [
-          Expanded(flex: 3, child: Text('WORK ORDER', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 6, child: Text('ITEM DESCRIPTION', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('TRAYS', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('TOTAL TUBES', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('RE-ASSIGN', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green))),
-          const SizedBox(width: 32),
-        ],
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:active_wear_scanning/core/widgets/content_card.dart';
 import 'package:active_wear_scanning/features/lapping/model/lapping_model.dart';
 
 class LappingTrayTable extends StatelessWidget {
@@ -15,36 +14,6 @@ class LappingTrayTable extends StatelessWidget {
     required this.trayOverrideQuantities,
     required this.onRemove,
   });
-
-  static final _tableHeaderStyle = TextStyle(
-    fontSize: 12,
-    fontWeight: FontWeight.w600,
-    color: Colors.grey.shade700,
-  );
-
-  Widget _buildScannedHeader() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Row(
-        children: [
-          Expanded(flex: 2, child: Text('TRAY CODE', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 4, child: Text('ITEM DESCRIPTION', style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('COLOR', textAlign: TextAlign.center, style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('SIZE', textAlign: TextAlign.center, style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('PCS/TUBE', textAlign: TextAlign.center, style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('TUBES', textAlign: TextAlign.center, style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('PCS', textAlign: TextAlign.center, style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          Expanded(flex: 2, child: Text('WEIGHT', textAlign: TextAlign.center, style: _tableHeaderStyle.copyWith(fontSize: 11, fontWeight: FontWeight.bold))),
-          const SizedBox(width: 44),
-        ],
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -82,8 +51,8 @@ class LappingTrayTable extends StatelessWidget {
               final t = traysToShow[index];
               final trayKey = t.primaryTrayModel.trayCode?.toLowerCase() ?? '';
               final qty = trayOverrideQuantities[trayKey] ?? 0;
-              final pw = t.item?.pieceWeight ?? 0;
-              final pgt = t.item?.perGarmentTube ?? 0;
+              final pw = t.item.pieceWeight ?? 0;
+              final pgt = t.item.perGarmentTube;
               final garmentPcs = pgt > 0 ? qty * pgt : 0;
 
               return Container(
@@ -95,18 +64,16 @@ class LappingTrayTable extends StatelessWidget {
                 child: Row(
                   children: [
                     Expanded(flex: 2, child: Text(t.primaryTrayModel.trayCode ?? '-', style: _cellStyle(isBold: true, color: const Color(0xFF0D47A1)))),
-                    Expanded(flex: 4, child: Text(t.processedItem?.description ?? t.item?.description ?? '-', maxLines: 2, overflow: TextOverflow.ellipsis, style: _cellStyle(isSmall: true))),
-                    Expanded(flex: 2, child: Text(t.item?.colorDescription ?? '-', textAlign: TextAlign.center, style: _cellStyle(isBold: true))),
-                    Expanded(flex: 2, child: Text(t.item?.sizeDescription ?? '-', textAlign: TextAlign.center, style: _cellStyle())),
+                    Expanded(flex: 4, child: Text(t.processedItem?.description ?? t.item.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: _cellStyle(isSmall: true))),
+                    Expanded(flex: 2, child: Text(t.item.colorDescription ?? '-', textAlign: TextAlign.center, style: _cellStyle(isBold: true))),
+                    Expanded(flex: 2, child: Text(t.item.sizeDescription ?? '-', textAlign: TextAlign.center, style: _cellStyle())),
                     Expanded(flex: 2, child: Text(pgt > 0 ? pgt.toStringAsFixed(0) : '-', textAlign: TextAlign.center, style: _cellStyle(color: const Color(0xFF1B64A3)))),
                     Expanded(
                       flex: 2,
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(4), border: Border.all(color: const Color(0xFFCBD5E1))),
-                          child: Text(qty.toStringAsFixed(0), textAlign: TextAlign.center, style: _cellStyle(isBold: true)),
-                        ),
+                      child: Text(
+                        qty.toStringAsFixed(0),
+                        textAlign: TextAlign.center,
+                        style: _cellStyle(isBold: true),
                       ),
                     ),
                     Expanded(flex: 2, child: Text(garmentPcs > 0 ? garmentPcs.toStringAsFixed(0) : '-', textAlign: TextAlign.center, style: _cellStyle(color: const Color(0xFF059669), isBold: true))),

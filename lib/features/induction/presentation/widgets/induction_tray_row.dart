@@ -33,15 +33,10 @@ class InductionTrayRow extends StatelessWidget {
           Expanded(flex: 2, child: Text(tray.sizeDescription.isNotEmpty ? tray.sizeDescription : '-', textAlign: TextAlign.center, style: _cellStyle())),
           Expanded(
             flex: 2,
-            child: Container(
-              margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: const Color(0xFFCBD5E1)),
-              ),
-              child: Text(tray.primaryQuantity, textAlign: TextAlign.center, style: _cellStyle(isBold: true)),
+            child: Text(
+              tray.primaryQuantity,
+              textAlign: TextAlign.center,
+              style: _cellStyle(isBold: true),
             ),
           ),
           Expanded(flex: 2, child: Text('${weight.toStringAsFixed(1)} g', textAlign: TextAlign.center, style: _cellStyle())),

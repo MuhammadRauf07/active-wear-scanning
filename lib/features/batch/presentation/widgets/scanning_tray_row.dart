@@ -77,24 +77,13 @@ class ScanningTrayRow extends StatelessWidget {
                   color: Colors.black),
             ),
           ),
-          // TUBES (quantity box)
+          // TUBES
           Expanded(
             flex: 2,
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  tubes.toStringAsFixed(0),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: Colors.black),
-                ),
-              ),
+            child: Text(
+              tubes.toStringAsFixed(0),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 10, color: Colors.black),
             ),
           ),
           // PCS

@@ -102,6 +102,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
     
     AppLoader.show(context, message: 'Validating Tray...');
     final error = await _onTrayScanned(code);
+    if (!mounted) return;
     AppLoader.hide(context);
     
     if (error != null) {
@@ -136,10 +137,10 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
       final Map<String, WorkOrderSummary> summaries = {};
 
       for (final tray in fetchedTrays) {
-        final woId = tray.workOrderHeader?.id;
-        final itemDesc = tray.processedItem?.description ?? tray.item?.description ?? '';
+        final woId = tray.workOrderHeader.id;
+        final itemDesc = tray.processedItem?.description ?? tray.item.description;
 
-        if (woId != null && itemDesc.isNotEmpty) {
+        if (itemDesc.isNotEmpty) {
           final compositeId = '${woId}_$itemDesc';
 
           if (summaries.containsKey(compositeId)) {
@@ -152,7 +153,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
               cumulativePieces: existing.cumulativePieces + (tray.productionProgress.primaryQuantity ?? 0),
             );
           } else {
-            final woDesc = tray.workOrderHeader?.description ?? '';
+            final woDesc = tray.workOrderHeader.description;
             summaries[compositeId] = WorkOrderSummary(
               id: compositeId,
               description: woDesc,
@@ -175,16 +176,16 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
     } else {
       setState(() => _isLoading = false);
       if (mounted) {
-        AppSnackBar.showError(context, message: res.message ?? '');
+        AppSnackBar.showError(context, message: res.message);
       }
     }
   }
 
   // --- Core Validation Logic (Updated for Tray-Detail Support) ---
   Future<String?> _onTrayScanned(String code) async {
-    if (_trayQtyController.text.trim().isEmpty) return 'Please add No. of Pcs before scanning!';
+    if (_trayQtyController.text.trim().isEmpty) return 'Please enter number of tubes before scanning!';
     final double inputPcs = double.tryParse(_trayQtyController.text) ?? 0;
-    if (inputPcs <= 0) return 'Pcs amount must be greater than 0!';
+    if (inputPcs <= 0) return 'Tubes amount must be greater than 0!';
 
     final trayCode = code.trim().toLowerCase();
     if (trayCode.isEmpty) return 'Invalid tray code';
@@ -207,12 +208,8 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
       return 'Limit exceeded! Max: ${activeSummary.cumulativePieces}';
     }
 
-    LappingModel? matchedTray;
-    matchedTray = _trays.where((t) => t.primaryTrayModel.trayCode?.toLowerCase() == trayCode).firstOrNull;
-
-    if (matchedTray == null) {
-      matchedTray = _rawActiveTrays.where((t) => t.primaryTrayModel.trayCode?.toLowerCase() == trayCode).firstOrNull;
-    }
+    LappingModel? matchedTray = _trays.where((t) => t.primaryTrayModel.trayCode?.toLowerCase() == trayCode).firstOrNull ??
+        _rawActiveTrays.where((t) => t.primaryTrayModel.trayCode?.toLowerCase() == trayCode).firstOrNull;
 
     // trayType validation — only Type 1 trays allowed
     if (matchedTray != null && (matchedTray.primaryTrayModel.trayType ?? 0) != 1) {
@@ -222,6 +219,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
     if (matchedTray == null) {
       AppLoader.show(context, message: "Searching system trays...");
       final trayRes = await _batchRepo.fetchTrayDetailByCode(trayCode);
+      if (!mounted) return 'Screen closed';
       AppLoader.hide(context);
 
       if (trayRes.success && trayRes.data != null) {
@@ -261,15 +259,17 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
     }
 
     // Fetch metadata from item-defs using main item ID
-    final mainItemId = matchedTray.item?.id ?? 0;
+    final mainItemId = matchedTray.item.id;
     final processedItemId = matchedTray.productionProgress.processedItemId;
-    String colorDesc = matchedTray.item?.colorDescription ?? '';
-    String sizeDesc = matchedTray.item?.sizeDescription ?? '';
-    double perGarmentTube = matchedTray.item?.perGarmentTube ?? 0;
+    String colorDesc = matchedTray.item.colorDescription ?? '';
+    String sizeDesc = matchedTray.item.sizeDescription ?? '';
+    double perGarmentTube = matchedTray.item.perGarmentTube;
 
     if (mainItemId > 0) {
+      if (!mounted) return 'Screen closed';
       AppLoader.show(context, message: 'Fetching item details...');
       final itemRes = await _lappingRepo.fetchItemDef(mainItemId);
+      if (!mounted) return 'Screen closed';
       AppLoader.hide(context);
       if (itemRes.success && itemRes.data != null) {
         final itemData = itemRes.data is Map ? itemRes.data as Map<String, dynamic> : {};
@@ -281,8 +281,10 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
 
     // If color still empty, try processedItemId as fallback
     if (colorDesc.isEmpty && processedItemId != null && processedItemId > 0) {
+      if (!mounted) return 'Screen closed';
       AppLoader.show(context, message: 'Fetching color details...');
       final processedRes = await _lappingRepo.fetchItemDef(processedItemId);
+      if (!mounted) return 'Screen closed';
       AppLoader.hide(context);
       if (processedRes.success && processedRes.data != null) {
         final pd = processedRes.data is Map ? processedRes.data as Map<String, dynamic> : {};
@@ -292,26 +294,24 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
     }
 
     // Rebuild matchedTray with enriched item
-    if (matchedTray.item != null) {
-      final updatedItem = matchedTray.item!.copyWith(
-        colorDescription: colorDesc,
-        sizeDescription: sizeDesc,
-        perGarmentTube: perGarmentTube,
-      );
-      matchedTray = LappingModel(
-        productionProgress: matchedTray.productionProgress,
-        operation: matchedTray.operation,
-        shift: matchedTray.shift,
-        machineModel: matchedTray.machineModel,
-        workOrderHeader: matchedTray.workOrderHeader,
-        workOrderLine: matchedTray.workOrderLine,
-        primaryTrayModel: matchedTray.primaryTrayModel,
-        item: updatedItem,
-        processedItem: matchedTray.processedItem,
-        planHeader: matchedTray.planHeader,
-        batchHeader: matchedTray.batchHeader,
-      );
-    }
+    final updatedItem = matchedTray.item.copyWith(
+      colorDescription: colorDesc,
+      sizeDescription: sizeDesc,
+      perGarmentTube: perGarmentTube,
+    );
+    matchedTray = LappingModel(
+      productionProgress: matchedTray.productionProgress,
+      operation: matchedTray.operation,
+      shift: matchedTray.shift,
+      machineModel: matchedTray.machineModel,
+      workOrderHeader: matchedTray.workOrderHeader,
+      workOrderLine: matchedTray.workOrderLine,
+      primaryTrayModel: matchedTray.primaryTrayModel,
+      item: updatedItem,
+      processedItem: matchedTray.processedItem,
+      planHeader: matchedTray.planHeader,
+      batchHeader: matchedTray.batchHeader,
+    );
 
     setState(() {
       _trayOverrideQuantities[trayCode] = inputPcs;
@@ -326,6 +326,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
   void _openScanner() async {
     HapticFeedbackHelper.buttonClick();
     await Future.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
     await ScannerAlwaysOpen.show(
       context,
       title: 'Scan Tray',
@@ -740,8 +741,8 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
       // --- Step 2 & 3: Sequential Processing (Audit -> BatchLine -> Progress) ---
       // Determine Handover Location
       final baseProgress = allScannedTrays.first.productionProgress;
-      int nextLocatorId = baseProgress?.locatorId ?? 3; 
-      final handoverOpId = widget.nextOperationId ?? baseProgress?.operationId;
+      int nextLocatorId = baseProgress.locatorId ?? 3; 
+      final handoverOpId = widget.nextOperationId ?? baseProgress.operationId;
 
       if (handoverOpId != null) {
         final locRes = await _batchRepo.fetchLocators(operationId: handoverOpId);
@@ -752,7 +753,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
             orElse: () => {},
           );
           if (matchingEntry.isNotEmpty) {
-            nextLocatorId = matchingEntry['locator']?['id'] as int? ?? (baseProgress?.locatorId ?? 3);
+            nextLocatorId = matchingEntry['locator']?['id'] as int? ?? (baseProgress.locatorId ?? 3);
           }
         }
       }
@@ -760,7 +761,6 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
       // Local helper function to run isolated lifecycle steps for a single tray
       Future<bool> processSingleTrayHandover(LappingModel scannedTray) async {
         final pp = scannedTray.productionProgress;
-        if (pp == null) return false;
 
         try {
           final double trayQty = _trayOverrideQuantities[scannedTray.primaryTrayModel.trayCode?.toLowerCase() ?? ''] ?? 0;
@@ -881,7 +881,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
               "itemId": scannedTray.item.id,
               "trayId": scannedTray.primaryTrayModel.id,
               "locatorId": nextLocatorId,
-              "processItemId": scannedTray.processedItem?.id ?? pp.processedItemId ?? scannedTray.item.id ?? 0,
+              "processItemId": scannedTray.processedItem?.id ?? pp.processedItemId ?? scannedTray.item.id,
               "active": true,
             });
 
@@ -940,7 +940,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
             finalJson.remove('creatorId');
             finalJson.remove('lastModificationTime');
             finalJson.remove('lastModifierId');
-            final finalRes = await _processingRepo.updateProductionProgress(targetProgressId!, finalJson);
+            final finalRes = await _processingRepo.updateProductionProgress(targetProgressId, finalJson);
             return finalRes.success;
           }
           
@@ -1060,6 +1060,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
         throw Exception('${_failedCloseLappingIds.length} lapping closure(s) failed. Please check network and retry.');
       }
 
+      if (!mounted) return;
       AppLoader.hide(context);
       setState(() {
         _isLoading = false;
@@ -1070,10 +1071,11 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
       });
 
       HapticFeedbackHelper.scanSuccess();
-      _showDialog('Success', 'Trays successfully assigned to new machine.', isSuccess: true, onDismiss: () {
-        Navigator.pop(context, true); 
+      _showDialog('Success', 'Trays successfully submitted to next operation.', isSuccess: true, onDismiss: () {
+        if (mounted) Navigator.pop(context, true); 
       });
     } catch (e) {
+      if (!mounted) return;
       AppLoader.hide(context);
       setState(() => _isLoading = false);
       HapticFeedbackHelper.scanError();
