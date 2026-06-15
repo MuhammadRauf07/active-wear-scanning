@@ -1582,6 +1582,9 @@ class _BatchOverlayDropdownState<T> extends State<_BatchOverlayDropdown<T>> with
   final LayerLink _layerLink = LayerLink();
   OverlayEntry? _overlayEntry;
 
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
   @override
   void initState() {
     super.initState();
@@ -1591,6 +1594,7 @@ class _BatchOverlayDropdownState<T> extends State<_BatchOverlayDropdown<T>> with
 
   @override
   void dispose() {
+    _searchController.dispose();
     _overlayEntry?.remove();
     _controller.dispose();
     super.dispose();
@@ -1619,6 +1623,8 @@ class _BatchOverlayDropdownState<T> extends State<_BatchOverlayDropdown<T>> with
     _overlayEntry = null;
     setState(() {
       _isOpen = false;
+      _searchQuery = '';
+      _searchController.clear();
       _controller.reverse();
     });
   }
@@ -1667,7 +1673,7 @@ class _BatchOverlayDropdownState<T> extends State<_BatchOverlayDropdown<T>> with
             duration: const Duration(milliseconds: 250),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8F9FA),
+              color: Colors.white, // Matching PO style drop down style
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
                 color: _isOpen ? const Color(0xFF1B64A3) : const Color(0xFFCFD8DC),
@@ -1694,6 +1700,12 @@ class _BatchOverlayDropdownState<T> extends State<_BatchOverlayDropdown<T>> with
   }
 
   Widget _buildDropdownMenu() {
+    final filteredItems = widget.items.where((item) {
+      final label = widget.itemLabel(item).toLowerCase();
+      final query = _searchQuery.toLowerCase();
+      return label.contains(query);
+    }).toList();
+
     return Container(
       constraints: const BoxConstraints(maxHeight: 280),
       decoration: BoxDecoration(
@@ -1705,34 +1717,82 @@ class _BatchOverlayDropdownState<T> extends State<_BatchOverlayDropdown<T>> with
         border: Border.all(color: const Color(0xFFCFD8DC), width: 1),
       ),
       clipBehavior: Clip.antiAlias,
-      child: ListView.separated(
-        shrinkWrap: true,
-        padding: EdgeInsets.zero,
-        itemCount: widget.items.length,
-        separatorBuilder: (context, index) => Divider(height: 1, color: Colors.grey.shade100),
-        itemBuilder: (context, index) {
-          final item = widget.items[index];
-          final isSelected = item == widget.selectedValue;
-
-          return InkWell(
-            onTap: () {
-              widget.onChanged(item);
-              _closeDropdown();
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              color: isSelected ? const Color(0xFFF1F5F9) : Colors.transparent,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(widget.itemLabel(item), style: TextStyle(color: isSelected ? const Color(0xFF1B64A3) : const Color(0xFF263238), fontSize: 12, fontWeight: FontWeight.w700)),
-                  ),
-                  if (isSelected) const Icon(Icons.check_rounded, color: Color(0xFF1B64A3), size: 16),
-                ],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (val) {
+                setState(() {
+                  _searchQuery = val;
+                });
+                _overlayEntry?.markNeedsBuild();
+              },
+              style: const TextStyle(fontSize: 13, color: Colors.black87),
+              decoration: InputDecoration(
+                hintText: "Search...",
+                hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+                prefixIcon: const Icon(Icons.search, size: 18, color: Colors.grey),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFFCFD8DC)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFFCFD8DC)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFF1B64A3)),
+                ),
               ),
             ),
-          );
-        },
+          ),
+          const Divider(height: 1, color: Color(0xFFCFD8DC)),
+          Flexible(
+            child: filteredItems.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Text(
+                      'No results found',
+                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                  )
+                : ListView.separated(
+                    shrinkWrap: true,
+                    padding: EdgeInsets.zero,
+                    itemCount: filteredItems.length,
+                    separatorBuilder: (context, index) => Divider(height: 1, color: Colors.grey.shade100),
+                    itemBuilder: (context, index) {
+                      final item = filteredItems[index];
+                      final isSelected = item == widget.selectedValue;
+
+                      return InkWell(
+                        onTap: () {
+                          widget.onChanged(item);
+                          _closeDropdown();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          color: isSelected ? const Color(0xFFF1F5F9) : Colors.transparent,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(widget.itemLabel(item), style: TextStyle(color: isSelected ? const Color(0xFF1B64A3) : const Color(0xFF263238), fontSize: 12, fontWeight: FontWeight.w700)),
+                              ),
+                              if (isSelected) const Icon(Icons.check_rounded, color: Color(0xFF1B64A3), size: 16),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
     );
   }
