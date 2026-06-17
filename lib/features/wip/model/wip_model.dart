@@ -11,8 +11,8 @@ class LocatorResponse {
 
   factory LocatorResponse.fromJson(Map<String, dynamic> json) {
     return LocatorResponse(
-      locator: Locator.fromJson(json['locator']),
-      department: Department.fromJson(json['department']),
+      locator: Locator.fromJson(json['locator'] ?? {}),
+      department: Department.fromJson(json['department'] ?? {}),
       operation: json['operation'] != null ? Operation.fromJson(json['operation']) : null,
     );
   }
@@ -37,11 +37,11 @@ class Locator {
 
   factory Locator.fromJson(Map<String, dynamic> json) {
     return Locator(
-      id: json['id'],
-      description: json['description'],
-      locatorCode: json['locatorCode'],
+      id: json['id'] ?? 0,
+      description: json['description'] ?? '',
+      locatorCode: json['locatorCode'] ?? '',
       logicalWH: json['logicalWH'],
-      departmentId: json['departmentId'],
+      departmentId: json['departmentId'] ?? 0,
       operationId: json['operationId'],
     );
   }
@@ -60,9 +60,9 @@ class Department {
 
   factory Department.fromJson(Map<String, dynamic> json) {
     return Department(
-      id: json['id'],
-      code: json['code'],
-      name: json['name'],
+      id: json['id'] ?? 0,
+      code: json['code'] ?? '',
+      name: json['name'] ?? '',
     );
   }
 }
@@ -80,9 +80,9 @@ class Operation {
 
   factory Operation.fromJson(Map<String, dynamic> json) {
     return Operation(
-      id: json['id'],
-      code: json['code'],
-      name: json['name'],
+      id: json['id'] ?? 0,
+      code: json['code'] ?? '',
+      name: json['name'] ?? '',
     );
   }
 }

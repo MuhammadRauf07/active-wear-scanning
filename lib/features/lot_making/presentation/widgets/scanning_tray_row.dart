@@ -1,7 +1,7 @@
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:flutter/material.dart';
 
-/// A single scanned tray row in the [BatchScanningScreen] tray table.
+/// A single scanned tray row in the [LotMakingScreen] tray table.
 ///
 /// The delete action is forwarded to the parent via [onDelete] so the parent
 /// can update [_scannedTrays], [_quantityControllers], and [_batchedProgressIds].

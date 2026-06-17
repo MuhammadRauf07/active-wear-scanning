@@ -3,11 +3,11 @@ import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/features/processing/model/batch_summary_item.dart';
 import 'package:active_wear_scanning/features/processing/presentation/processing_batch_details.dart';
 import 'package:active_wear_scanning/features/processing/presentation/widgets/batch_details_table.dart';
-import 'package:active_wear_scanning/features/batch/model/batch_header_model.dart';
-import 'package:active_wear_scanning/features/tray/repo/tray_scanning_repo.dart';
-import 'package:active_wear_scanning/features/tray/model/tray_details_model.dart';
+import 'package:active_wear_scanning/features/lot_making/model/lot_header_model.dart';
+import 'package:active_wear_scanning/features/knitting_production/repo/knitting_production_repo.dart';
+import 'package:active_wear_scanning/features/knitting_production/model/tray_details_model.dart';
 import '../../../core/widgets/app_loader.dart';
-import '../../batch/repo/batch_repo.dart';
+import '../../lot_making/repo/lot_repo.dart';
 import '../repo/processing_repo.dart';
 import '../../gbs/model/production_progress.dart';
 import '../../common-models/common_models.dart';
@@ -44,8 +44,8 @@ class ProcessingScreen extends StatefulWidget {
 
 class _ProcessingScreenState extends State<ProcessingScreen> {
   final _processingRepo = ProcessingRepo();
-  final _batchRepo = BatchRepo();
-  final _trayRepo = TrayScanningRepo();
+  final _lotRepo = LotRepo();
+  final _trayRepo = KnittingProductionRepo();
   final _batchBarcodeController = TextEditingController();
 
   List<Operation> _operations = [];
@@ -116,11 +116,54 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
   }
 
   Future<void> _fetchAllBatchCounts() async {
-    final List<Future> futures = [];
-    for (var op in _operations) {
-      futures.add(_fetchBatchCount(op.id));
+    final res = await _processingRepo.fetchProductionProgress({
+      'TransactionType': '2',
+    });
+
+    if (res.success && res.data != null) {
+      final allRecords = res.data as List<ProductionProgressResponseModel>;
+
+      // Group records by operationId in memory
+      final Map<int, List<ProductionProgressResponseModel>> recordsByOp = {};
+      for (var r in allRecords) {
+        if (r.productionProgress.transactionType != 2) continue;
+        final opId = r.productionProgress.operationId;
+        if (opId != null) {
+          recordsByOp.putIfAbsent(opId, () => []).add(r);
+        }
+      }
+
+      final newCounts = <int, int>{};
+      for (var op in _operations) {
+        final list = recordsByOp[op.id] ?? [];
+        final uniqueBatches = <int>{};
+        for (var r in list) {
+          final bhId = r.productionProgress.batchHeaderId;
+          if (bhId != null) {
+            if (_isBatchDisposed(op.id, bhId)) continue;
+            uniqueBatches.add(bhId);
+          }
+        }
+
+        // Inject non-expired optimistic cache counts
+        final pending = _optimisticCache[op.id] ?? [];
+        final now = DateTime.now();
+        pending.removeWhere((x) => now.difference(x.timestamp).inSeconds > 25);
+        for (final opt in pending) {
+          if (!_isBatchDisposed(op.id, opt.batchHeaderId)) {
+            uniqueBatches.add(opt.batchHeaderId);
+          }
+        }
+
+        newCounts[op.id] = uniqueBatches.length;
+      }
+
+      if (mounted) {
+        setState(() {
+          _opBatchCounts = newCounts;
+        });
+      }
     }
-    await Future.wait(futures);
   }
 
   bool _isBatchDisposed(int operationId, int bhId) {
@@ -225,16 +268,16 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
           final bhId = entry.key;
           final groupRecords = entry.value;
 
-          final bhRes = await _batchRepo.fetchBatchHeaderById(bhId);
+          final bhRes = await _lotRepo.fetchLotHeaderById(bhId);
           if (bhRes.success && bhRes.data != null) {
-            final bhFull = BatchHeaderResponseModel.fromJson(bhRes.data);
+            final bhFull = LotHeaderResponseModel.fromJson(bhRes.data);
 
             // Prefer batch header machine (the user-selected machine when creating the batch).
             // When bhFull.machine is null (API returns machineId as scalar only), fetch by ID.
             String? machineCode =
                 bhFull.machine?.brand ?? bhFull.machine?.resourceCode;
             if (machineCode == null && bhFull.batchHeader.machineId != null) {
-              final mRes = await _batchRepo.fetchMachineById(
+              final mRes = await _lotRepo.fetchMachineById(
                 bhFull.batchHeader.machineId!,
               );
               if (mRes.success && mRes.data != null) {

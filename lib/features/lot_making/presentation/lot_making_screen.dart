@@ -10,38 +10,38 @@ import 'package:active_wear_scanning/core/widgets/scanner_always_open.dart';
 import 'package:active_wear_scanning/core/widgets/section_header.dart';
 import 'package:active_wear_scanning/core/widgets/empty_scan_state.dart';
 import 'package:active_wear_scanning/core/widgets/tray_table_header.dart';
-import 'package:active_wear_scanning/features/batch/model/batch_color_model.dart';
-import 'package:active_wear_scanning/features/batch/model/batch_header_model.dart';
-import 'package:active_wear_scanning/features/batch/model/batch_machine_model.dart';
-import 'package:active_wear_scanning/features/batch/repo/batch_repo.dart';
+import 'package:active_wear_scanning/features/lot_making/model/lot_color_model.dart';
+import 'package:active_wear_scanning/features/lot_making/model/lot_header_model.dart';
+import 'package:active_wear_scanning/features/lot_making/model/lot_machine_model.dart';
+import 'package:active_wear_scanning/features/lot_making/repo/lot_repo.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
-import 'package:active_wear_scanning/features/tray/model/scanned_tray.dart';
+import 'package:active_wear_scanning/features/knitting_production/model/scanned_tray.dart';
 import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
 
-class BatchScanningScreen extends StatefulWidget {
-  final BatchHeaderResponseModel? existingBatch;
+class LotMakingScreen extends StatefulWidget {
+  final LotHeaderResponseModel? existingBatch;
   final List<ProductionProgressResponseModel>? preloadedTrays;
 
-  const BatchScanningScreen({
+  const LotMakingScreen({
     super.key,
     this.existingBatch,
     this.preloadedTrays,
   });
 
   @override
-  State<BatchScanningScreen> createState() => _BatchScanningScreenState();
+  State<LotMakingScreen> createState() => _LotMakingScreenState();
 }
 
-class _BatchScanningScreenState extends State<BatchScanningScreen> {
-  final _batchRepo = BatchRepo();
+class _LotMakingScreenState extends State<LotMakingScreen> {
+  final _lotRepo = LotRepo();
 
-  List<BatchMachineModel> _machines = [];
-  BatchMachineModel? _selectedMachine;
+  List<LotMachineModel> _machines = [];
+  LotMachineModel? _selectedMachine;
   bool _isLoading = true;
 
-  List<BatchColorModel> _colors = [];
-  BatchColorModel? _selectedColor;
+  List<LotColorModel> _colors = [];
+  LotColorModel? _selectedColor;
   bool _isLoadingColors = false;
 
   final List<ProductionProgressResponseModel> _scannedTrays = [];
@@ -50,7 +50,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
 
   List<ProductionProgressResponseModel> productionProgressTrays = [];
 
-  final Set<int> _batchedProgressIds = {};
+  final Set<int> _lotProgressIds = {};
   final Map<int, int> _trayProcessedItemId = {};
 
   Set<String>? _referenceRoutingCodes;
@@ -69,7 +69,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
       _fetchMachines();
       _fetchColors();
       _fetchProductionProgresses();
-      _fetchBatchedProgressIds();
+      _fetchLotProgressIds();
     });
   }
 
@@ -84,7 +84,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
   }
 
   Future<void> _fetchProductionProgresses() async {
-    final result = await _batchRepo.fetchProductionProgress();
+    final result = await _lotRepo.fetchProductionProgress();
     if (!mounted) return;
     if (result.success && result.data != null) {
       final progresses = result.data as List<ProductionProgressResponseModel>;
@@ -92,7 +92,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
         productionProgressTrays = progresses;
       });
       if (widget.existingBatch != null) {
-        await _loadExistingBatchTrays(progresses);
+        await _loadExistingLotTrays(progresses);
       }
     } else {
       HapticFeedbackHelper.scanError();
@@ -104,14 +104,14 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     }
   }
 
-  Future<void> _loadExistingBatchTrays(
+  Future<void> _loadExistingLotTrays(
     List<ProductionProgressResponseModel> allProgresses,
   ) async {
     if (widget.existingBatch == null) return;
     final batchHeaderId = widget.existingBatch!.batchHeader.id;
     if (batchHeaderId == null) return;
 
-    final linesRes = await _batchRepo.fetchBatchLines(
+    final linesRes = await _lotRepo.fetchLotLines(
       batchHeaderId: batchHeaderId,
     );
     if (!linesRes.success || linesRes.data == null) return;
@@ -146,27 +146,27 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     }
   }
 
-  Future<void> _fetchBatchedProgressIds() async {
-    final result = await _batchRepo.fetchBatchLines();
+  Future<void> _fetchLotProgressIds() async {
+    final result = await _lotRepo.fetchLotLines();
     if (result.success && result.data != null) {
       final lines = result.data as List<Map<String, dynamic>>;
       final ids = lines
           .map((l) => l['batchLines']?['progressId'] as int?)
           .whereType<int>()
           .toSet();
-      if (mounted) setState(() => _batchedProgressIds.addAll(ids));
+      if (mounted) setState(() => _lotProgressIds.addAll(ids));
     }
   }
 
   Future<void> _fetchMachines() async {
     setState(() => _isLoading = true);
     AppLoader.show(context, message: 'Loading Machines...');
-    final result = await _batchRepo.fetchBatchMachines();
+    final result = await _lotRepo.fetchLotMachines();
     if (!mounted) return;
 
     if (result.success && result.data != null) {
       setState(() {
-        _machines = result.data as List<BatchMachineModel>;
+        _machines = result.data as List<LotMachineModel>;
         _isLoading = false;
         if (widget.existingBatch?.machine != null) {
           final editMachineId = widget.existingBatch!.machine!.id;
@@ -187,12 +187,12 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
   Future<void> _fetchColors() async {
     setState(() => _isLoadingColors = true);
     AppLoader.show(context, message: 'Fetching Colors...');
-    final result = await _batchRepo.fetchBatchColors();
+    final result = await _lotRepo.fetchLotColors();
     if (!mounted) return;
 
     if (result.success && result.data != null) {
       setState(() {
-        _colors = result.data as List<BatchColorModel>;
+        _colors = result.data as List<LotColorModel>;
         _isLoadingColors = false;
         if (widget.existingBatch?.colorCode != null) {
           final editColorId = widget.existingBatch!.colorCode!.id;
@@ -442,7 +442,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
   Future<String?> _validateTrayForScan(String scannedCode) async {
     final code = scannedCode.trim();
     if (code.isEmpty) return 'Invalid tray code';
-    if (_selectedColor == null) return 'Please select a batch Color first';
+    if (_selectedColor == null) return 'Please select a lot Color first';
     if (_scannedTrays.any(
       (t) =>
           (t.primaryTrayModel?.trayCode ?? '').trim().toLowerCase() ==
@@ -466,15 +466,15 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     if ((tray.primaryTrayModel?.trayType ?? 0) != 1)
       return 'Invalid tray type.';
     final progressId = tray.productionProgress.id;
-    if (progressId != null && _batchedProgressIds.contains(progressId))
-      return 'Tray already assigned to a batch';
+    if (progressId != null && _lotProgressIds.contains(progressId))
+      return 'Tray already assigned to a lot';
 
     final workOrderLineId =
         tray.productionProgress.workOrderLineId ?? tray.workOrderLine?.id;
     final colorDescription = _selectedColor!.segmentCode?.description;
     if (colorDescription == null) return 'Selected Color has no description';
 
-    final colorRes = await _batchRepo.fetchWorkOrderLineDetails(
+    final colorRes = await _lotRepo.fetchWorkOrderLineDetails(
       workOrderLineId!,
       colorDescription,
     );
@@ -497,7 +497,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
       processedItemId = detail['knitItemId'] ?? tray.item?.id ?? 0;
     }
 
-    final routingRes = await _batchRepo.fetchItemRoutings(processedItemId);
+    final routingRes = await _lotRepo.fetchItemRoutings(processedItemId);
     if (!routingRes.success || routingRes.data == null)
       return 'Routing validation error: ${routingRes.message}';
 
@@ -560,16 +560,16 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     return null;
   }
 
-  Future<void> _saveBatchChanges() async {
+  Future<void> _saveLotChanges() async {
     if (_scannedTrays.isEmpty) return;
     AppLoader.show(context);
 
     int batchHeaderId;
     final batchCode = widget.existingBatch?.batchHeader.batchHeaderCode ??
-        "BCH-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}";
+        "LOT-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}";
 
     if (widget.existingBatch == null) {
-      final res = await _batchRepo.createBatchHeader({
+      final res = await _lotRepo.createLotHeader({
         "planDate": DateTime.now().toIso8601String(),
         "colorDescription": _selectedColor?.segmentCode?.description ?? "N/A",
         "batchHeaderCode": batchCode,
@@ -583,12 +583,12 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
       if (!res.success) {
         AppLoader.hide(context);
         HapticFeedbackHelper.scanError();
-        AppSnackBar.showError(context, title: 'Failed to create batch', message: res.message ?? '');
+        AppSnackBar.showError(context, title: 'Failed to create lot', message: res.message ?? '');
         return;
       }
 
       final data = res.data as Map;
-      dev.log('🚀 BatchHeader Create Full Response: $data');
+      dev.log('🚀 LotHeader Create Full Response: $data');
 
       final rawId = data['id'] ??
           data['batchHeader']?['id'] ??
@@ -596,10 +596,10 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
           0;
       batchHeaderId = int.tryParse(rawId.toString()) ?? 0;
 
-      // FALLBACK: If server returned 0, try to find the batch by its code
+      // FALLBACK: If server returned 0, try to find the lot by its code
       if (batchHeaderId == 0) {
         dev.log('⚠️ Server returned ID 0. Attempting ID recovery by code: $batchCode');
-        final allRes = await _batchRepo.fetchBatchHeaders();
+        final allRes = await _lotRepo.fetchLotHeaders();
         if (allRes.success && allRes.data != null) {
           final List allBatches = allRes.data as List;
           for (var b in allBatches) {
@@ -608,7 +608,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
             final bHeader = bMap['batchHeader'] ?? bMap;
             if (bHeader['batchHeaderCode'] == batchCode) {
               batchHeaderId = bHeader['id'] ?? 0;
-              dev.log('✅ Recovered Batch ID: $batchHeaderId');
+              dev.log('`✅ Recovered Lot ID: $batchHeaderId');
               break;
             }
           }
@@ -621,7 +621,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
     if (batchHeaderId == 0) {
       AppLoader.hide(context);
       HapticFeedbackHelper.scanError();
-      AppSnackBar.showError(context, message: 'Invalid Batch ID generated.');
+      AppSnackBar.showError(context, message: 'Invalid Lot ID generated.');
       return;
     }
 
@@ -651,12 +651,12 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
       ppPayload.remove('lastModifierId');
 
       dev.log('🚀 Updating ProductionProgress for tray ${tray.primaryTrayModel.trayCode} to Op: $_referenceMinOperationId');
-      final resPP = await _batchRepo.updateProductionProgress(pp.id!, ppPayload);
+      final resPP = await _lotRepo.updateProductionProgress(pp.id!, ppPayload);
       if (!resPP.success) {
         dev.log('❌ Failed to update production progress: ${resPP.message}');
       }
 
-      // 2. Create the Batch Line
+      // 2. Create the Lot Line
       final linePayload = {
         "planDate": DateTime.now().toIso8601String(),
         "transactionDate": DateTime.now().toIso8601String(),
@@ -678,20 +678,20 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
         "processItemId": _trayProcessedItemId[tray.primaryTrayModel.id],
       };
 
-      dev.log('🚀 POSTing BatchLine: $linePayload');
-      final resLine = await _batchRepo.createBatchLine(linePayload);
+      dev.log('🚀 POSTing LotLine: $linePayload');
+      final resLine = await _lotRepo.createLotLine(linePayload);
 
       if (resLine.success && resLine.data != null) {
         final lineId = (resLine.data as Map)['id'];
         final trayId = tray.primaryTrayModel.id;
         if (trayId != null) {
-          final trayData = await _batchRepo.fetchTrayDetailById(trayId);
+          final trayData = await _lotRepo.fetchTrayDetailById(trayId);
           if (trayData.success && trayData.data != null) {
             final map = Map<String, dynamic>.from(trayData.data as Map);
             map['batchHeaderId'] = batchHeaderId;
             map['batchLineId'] = lineId;
             map['trayQuantity'] = qty.toInt();
-            await _batchRepo.updateTrayDetails(trayId, map);
+            await _lotRepo.updateTrayDetails(trayId, map);
           }
         }
       }
@@ -791,21 +791,21 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
         child: Row(
           children: [
             const CustomBackButton(),
-            const Expanded(
+            Expanded(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Batch Scanning',
+                  const Text(
+                    'Lot Making',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
                       color: Color(0xFF263238),
                     ),
                   ),
-                  Text(
-                    'INITIALIZE MANUFACTURING BATCHES',
+                  const Text(
+                    'SCAN TRAYS TO MAKE LOT',
                     style: TextStyle(
                       fontSize: 9,
                       color: Color(0xFF546E7A),
@@ -820,12 +820,12 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
               onPressed: (_selectedMachine != null && _scannedTrays.isNotEmpty)
                   ? () {
                       HapticFeedbackHelper.buttonClick();
-                      _saveBatchChanges();
+                      _saveLotChanges();
                     }
                   : null,
               icon: const Icon(Icons.save_rounded, size: 16),
               label: const Text(
-                'SAVE BATCH',
+                'SAVE LOT',
               ),
               style: AppTheme.saveButtonStyle(
                 isEnabled: (_selectedMachine != null && _scannedTrays.isNotEmpty),
@@ -880,7 +880,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                     ),
                     SizedBox(width: 8),
                     Text(
-                      'BATCH SCAN SUMMARY',
+                      'LOT SCAN SUMMARY',
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w900,
@@ -997,82 +997,44 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: const BoxDecoration(
-              color: Color(0xFFF8FAFC),
-              border: Border(
-                bottom: BorderSide(color: Color(0xFFB0BEC5), width: 1.5),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF8FAFC),
+                  border: Border(
+                    bottom: BorderSide(color: Color(0xFFB0BEC5), width: 1.5),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.tune_rounded,
+                      size: 16,
+                      color: Color(0xFF1B64A3),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'LOT CONFIGURATION',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF1B64A3),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.tune_rounded,
-                  size: 16,
-                  color: Color(0xFF1B64A3),
-                ),
-                const SizedBox(width: 8),
-                const Text(
-                  'BATCH CONFIGURATION',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF1B64A3),
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'MACHINE',
-                        style: TextStyle(
-                          fontSize: 8,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF78909C),
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      _BatchOverlayDropdown<BatchMachineModel>(
-                        hint: "Select machine...",
-                        items: _machines,
-                        selectedValue: _selectedMachine,
-                        itemLabel: (m) => m.resource?.brand ?? 'Unknown',
-                        isReadOnly: _scannedTrays.isNotEmpty,
-                        onChanged: (val) {
-                          HapticFeedbackHelper.buttonClick();
-                          setState(() {
-                            _selectedMachine = val;
-                            _selectedColor = null;
-                          });
-                          if (val != null) _fetchColors();
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: AnimatedOpacity(
-                    duration: const Duration(milliseconds: 300),
-                    opacity: _selectedMachine != null ? 1.0 : 0.0,
-                    child: IgnorePointer(
-                      ignoring: _selectedMachine == null,
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'COLOR',
+                            'MACHINE',
                             style: TextStyle(
                               fontSize: 8,
                               fontWeight: FontWeight.w800,
@@ -1081,31 +1043,69 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                             ),
                           ),
                           const SizedBox(height: 6),
-                          _BatchOverlayDropdown<BatchColorModel>(
-                            hint: "Select color...",
-                            items: _colors,
-                            selectedValue: _selectedColor,
-                            itemLabel: (c) => c.segmentCode?.description ?? '-',
+                          _LotOverlayDropdown<LotMachineModel>(
+                            hint: "Select machine...",
+                            items: _machines,
+                            selectedValue: _selectedMachine,
+                            itemLabel: (m) => m.resource?.brand ?? 'Unknown',
                             isReadOnly: _scannedTrays.isNotEmpty,
                             onChanged: (val) {
                               HapticFeedbackHelper.buttonClick();
-                              setState(() => _selectedColor = val);
+                              setState(() {
+                                _selectedMachine = val;
+                                _selectedColor = null;
+                              });
+                              if (val != null) _fetchColors();
                             },
                           ),
                         ],
                       ),
                     ),
-                  ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 300),
+                        opacity: _selectedMachine != null ? 1.0 : 0.0,
+                        child: IgnorePointer(
+                          ignoring: _selectedMachine == null,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'COLOR',
+                                style: TextStyle(
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF78909C),
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              _LotOverlayDropdown<LotColorModel>(
+                                hint: "Select color...",
+                                items: _colors,
+                                selectedValue: _selectedColor,
+                                itemLabel: (c) => c.segmentCode?.description ?? '-',
+                                isReadOnly: _scannedTrays.isNotEmpty,
+                                onChanged: (val) {
+                                  HapticFeedbackHelper.buttonClick();
+                                  setState(() => _selectedColor = val);
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
-    ),
-  ),
-);
-}
+    );
+  }
 
 
   Widget _buildScannedSection() {
@@ -1173,11 +1173,11 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
                             _onScanTray();
                           },
                           icon: const Icon(
-                            Icons.add_circle_outline_rounded,
+                            Icons.qr_code_scanner_rounded,
                             size: 20,
                           ),
                           label: const Text(
-                            'SCAN NEW TRAY',
+                            'SCAN TRAY',
                             style: TextStyle(
                               fontWeight: FontWeight.w800,
                               fontSize: 12,
@@ -1553,7 +1553,7 @@ class _BatchScanningScreenState extends State<BatchScanningScreen> {
   }
 }
 
-class _BatchOverlayDropdown<T> extends StatefulWidget {
+class _LotOverlayDropdown<T> extends StatefulWidget {
   final String hint;
   final List<T> items;
   final T? selectedValue;
@@ -1561,7 +1561,7 @@ class _BatchOverlayDropdown<T> extends StatefulWidget {
   final ValueChanged<T?> onChanged;
   final bool isReadOnly;
 
-  const _BatchOverlayDropdown({
+  const _LotOverlayDropdown({
     required this.hint,
     required this.items,
     required this.selectedValue,
@@ -1571,10 +1571,10 @@ class _BatchOverlayDropdown<T> extends StatefulWidget {
   });
 
   @override
-  State<_BatchOverlayDropdown<T>> createState() => _BatchOverlayDropdownState<T>();
+  State<_LotOverlayDropdown<T>> createState() => _LotOverlayDropdownState<T>();
 }
 
-class _BatchOverlayDropdownState<T> extends State<_BatchOverlayDropdown<T>> with SingleTickerProviderStateMixin {
+class _LotOverlayDropdownState<T> extends State<_LotOverlayDropdown<T>> with SingleTickerProviderStateMixin {
   bool _isOpen = false;
   late AnimationController _controller;
   late Animation<double> _rotateAnimation;

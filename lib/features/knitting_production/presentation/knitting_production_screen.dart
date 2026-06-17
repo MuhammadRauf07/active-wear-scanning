@@ -10,26 +10,26 @@ import 'package:active_wear_scanning/core/widgets/barcode_scanner_dialog.dart';
 import 'package:active_wear_scanning/core/widgets/empty_scan_state.dart';
 import 'package:active_wear_scanning/core/widgets/scanner_always_open.dart';
 import 'package:active_wear_scanning/core/widgets/tray_table_header.dart';
-import 'package:active_wear_scanning/features/tray/model/scanned_tray.dart';
-import 'package:active_wear_scanning/features/tray/presentation/widgets/scanned_tray_row.dart';
-import 'package:active_wear_scanning/features/tray/presentation/widgets/work_order_dropdown.dart';
-import 'package:active_wear_scanning/features/tray/model/plan_header_model.dart';
-import 'package:active_wear_scanning/features/tray/model/tray_details_model.dart';
-import 'package:active_wear_scanning/features/tray/repo/tray_scanning_repo.dart';
+import 'package:active_wear_scanning/features/knitting_production/model/scanned_tray.dart';
+import 'package:active_wear_scanning/features/knitting_production/presentation/widgets/scanned_tray_row.dart';
+import 'package:active_wear_scanning/features/knitting_production/presentation/widgets/work_order_dropdown.dart';
+import 'package:active_wear_scanning/features/knitting_production/model/plan_header_model.dart';
+import 'package:active_wear_scanning/features/knitting_production/model/tray_details_model.dart';
+import 'package:active_wear_scanning/features/knitting_production/repo/knitting_production_repo.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:active_wear_scanning/features/common-models/common_models.dart';
 import 'package:flutter/material.dart';
 import 'package:plex/plex_di/plex_dependency_injection.dart';
 
-class TrayScanningScreen extends StatefulWidget {
-  const TrayScanningScreen({super.key});
+class KnittingProductionScreen extends StatefulWidget {
+  const KnittingProductionScreen({super.key});
 
   @override
-  State<TrayScanningScreen> createState() => _TrayScanningScreenState();
+  State<KnittingProductionScreen> createState() => _KnittingProductionScreenState();
 }
 
-class _TrayScanningScreenState extends State<TrayScanningScreen> {
-  final _trayScanningRepo = fromPlex<TrayScanningRepo>();
+class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
+  final _trayScanningRepo = fromPlex<KnittingProductionRepo>();
   String _machineBarcode = '';
   final List<ScannedTray> _scannedTrays = [];
   final List<TextEditingController> _quantityControllers = [];
@@ -130,7 +130,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
     } else {
       // Treat as tray scan
       if (_productionType != 'good') {
-        _showError('Tray scanning is not for Sample and C Grade production.');
+        _showError('Knitting Production is not for Sample and C Grade production.');
         return;
       }
       final error = await _validateTrayForScan(code);
@@ -728,30 +728,30 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Machine Scanner Section
-                    _TrayFadeSlideTransition(delay: 0, child: _buildMachineScannerSection()),
+                    _KnittingProductionFadeSlideTransition(delay: 0, child: _buildMachineScannerSection()),
   
                     // Production Information Section
                     if (_selectedPlanLine != null) ...[
                       const SizedBox(height: 16),
-                      const _TrayFadeSlideTransition(
+                      const _KnittingProductionFadeSlideTransition(
                         delay: 100,
                         child: Padding(
                           padding: EdgeInsets.only(left: 4, bottom: 8),
                           child: Text(
-                            'Production Intelligence',
+                            'PRODUCTION INTELLIGENCE',
                             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF263238)),
                           ),
                         ),
                       ),
-                      _TrayFadeSlideTransition(delay: 150, child: _buildProductionInfoGrid()),
+                      _KnittingProductionFadeSlideTransition(delay: 150, child: _buildProductionInfoGrid()),
                       const SizedBox(height: 12),
-                      _TrayFadeSlideTransition(delay: 180, child: _buildProductionTypeRadioButtons()),
+                      _KnittingProductionFadeSlideTransition(delay: 180, child: _buildProductionTypeRadioButtons()),
                     ],
   
                     // Action Area
                     if (_selectedPlanLine != null && _productionType == 'good') ...[
                       const SizedBox(height: 16),
-                      _TrayFadeSlideTransition(delay: 200, child: _buildActionArea()),
+                      _KnittingProductionFadeSlideTransition(delay: 200, child: _buildActionArea()),
                     ],
                   ],
                 ),
@@ -762,10 +762,10 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                 if (_productionType == 'good') ...[
                   const Padding(
                     padding: EdgeInsets.fromLTRB(20, 16, 16, 8),
-                    child: _TrayFadeSlideTransition(
+                    child: _KnittingProductionFadeSlideTransition(
                       delay: 250,
                       child: Text(
-                        'Active Scanned Trays',
+                        'ACTIVE SCANNED TRAYS',
                         style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF263238)),
                       ),
                     ),
@@ -821,7 +821,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Tray Scanning',
+                    'Knitting Production',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF263238)),
                   ),
                   Text(
@@ -922,7 +922,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                             child: Text(
                               _machineBarcode.isEmpty
                                   ? 'Scan Machine'
-                                  : 'Active Machine: ${_machineBarcode.toUpperCase()}',
+                                  : 'ACTIVE MACHINE: ${_machineBarcode.toUpperCase()}',
                               style: const TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
@@ -980,7 +980,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              'Select Work Order ',
+                              'SELECT WORK ORDER',
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
@@ -1177,7 +1177,7 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
         },
         icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
         label: const Text(
-          'TRAY SCAN',
+          'SCAN TRAY',
           style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12, letterSpacing: 0.5),
         ),
         style: ElevatedButton.styleFrom(
@@ -1296,13 +1296,13 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
           Row(
             children: [
               Expanded(
-                child: _buildRadioOption('Good Production', 'good'),
+                child: _buildRadioOption('GOOD PRODUCTION', 'good'),
               ),
               Expanded(
-                child: _buildRadioOption('Sample', 'sample'),
+                child: _buildRadioOption('SAMPLE', 'sample'),
               ),
               Expanded(
-                child: _buildRadioOption('C Grade Production', 'c_grade'),
+                child: _buildRadioOption('C-GRADE PRODUCTION', 'c_grade'),
               ),
             ],
           ),
@@ -1474,17 +1474,17 @@ class _TrayScanningScreenState extends State<TrayScanningScreen> {
 
 }
 
-class _TrayFadeSlideTransition extends StatefulWidget {
+class _KnittingProductionFadeSlideTransition extends StatefulWidget {
   final Widget child;
   final int delay;
 
-  const _TrayFadeSlideTransition({required this.child, required this.delay});
+  const _KnittingProductionFadeSlideTransition({required this.child, required this.delay});
 
   @override
-  State<_TrayFadeSlideTransition> createState() => _TrayFadeSlideTransitionState();
+  State<_KnittingProductionFadeSlideTransition> createState() => _KnittingProductionFadeSlideTransitionState();
 }
 
-class _TrayFadeSlideTransitionState extends State<_TrayFadeSlideTransition> {
+class _KnittingProductionFadeSlideTransitionState extends State<_KnittingProductionFadeSlideTransition> {
   late Future<void> _delayFuture;
 
   @override

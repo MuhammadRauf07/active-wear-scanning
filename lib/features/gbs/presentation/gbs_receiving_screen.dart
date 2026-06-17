@@ -540,7 +540,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF263238)),
                   ),
                   Text(
-                    'Modular Receiving HUD',
+                    'Receive Knitting Production in GBS',
                     style: TextStyle(fontSize: 10, color: Color(0xFF546E7A), fontWeight: FontWeight.w600, letterSpacing: 0.3),
                   ),
                 ],
@@ -596,7 +596,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF263238), letterSpacing: 0.5),
                     ),
                     Text(
-                      '${_scannedTrays.length} Units Assigned',
+                      '${_scannedTrays.length} Tray(s) Received',
                       style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: const Color(0xFF78909C)),
                     ),
                   ],
@@ -751,13 +751,13 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
           Row(
             children: [
               Expanded(
-                child: _buildRadioOption('GBS Receiving', 'gbs'),
+                child: _buildRadioOption('GOOD PRODUCTION RECEIVING', 'gbs'),
               ),
               Expanded(
-                child: _buildRadioOption('Sample Receiving', 'sample'),
+                child: _buildRadioOption('SAMPLE RECEIVING', 'sample'),
               ),
               Expanded(
-                child: _buildRadioOption('C Grade Receiving', 'c_grade'),
+                child: _buildRadioOption('C-GRADE RECEIVING', 'c_grade'),
               ),
             ],
           ),

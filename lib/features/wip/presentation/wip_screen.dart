@@ -1,14 +1,14 @@
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
-import 'package:active_wear_scanning/features/batch/repo/batch_repo.dart';
+import 'package:active_wear_scanning/features/lot_making/repo/lot_repo.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:active_wear_scanning/features/wip/model/wip_model.dart';
 import 'package:active_wear_scanning/features/wip/model/wip_group.dart';
 import 'package:active_wear_scanning/features/wip/presentation/widgets/locator_expansion_item.dart';
 import 'package:active_wear_scanning/features/wip/repo/wip_repo.dart';
 import 'package:active_wear_scanning/features/common-models/common_models.dart';
-import 'package:active_wear_scanning/features/batch/model/batch_header_model.dart';
+import 'package:active_wear_scanning/features/lot_making/model/lot_header_model.dart';
 import 'package:flutter/material.dart';
 
 class WIPScreen extends StatefulWidget {
@@ -20,7 +20,7 @@ class WIPScreen extends StatefulWidget {
 
 class _WIPScreenState extends State<WIPScreen> {
   final _wipRepo = WipRepo();
-  final _batchRepo = BatchRepo();
+  final _lotRepo = LotRepo();
   List<LocatorResponse> _locators = [];
   Map<int, List<ProductionProgressResponseModel>> _locatorTrays = {};
   Map<int, bool> _loadingDetails = {};
@@ -86,7 +86,7 @@ class _WIPScreenState extends State<WIPScreen> {
           String sizeDesc = tray.item.sizeDescription ?? '';
 
           if (mainItemId > 0) {
-            final itemRes = await _batchRepo.fetchItemDef(mainItemId);
+            final itemRes = await _lotRepo.fetchItemDef(mainItemId);
             if (itemRes.success && itemRes.data != null) {
               final d = itemRes.data is Map ? itemRes.data as Map<String, dynamic> : {};
               if (d['perGarmentTube'] != null) perGarmentTube = (d['perGarmentTube'] as num).toDouble();
@@ -108,13 +108,13 @@ class _WIPScreenState extends State<WIPScreen> {
 
           // Case A: Tray is in a Batch (Processing/Dyeing)
           if (bhId != null) {
-            final bhRes = await _batchRepo.fetchBatchHeaderById(bhId);
+            final bhRes = await _lotRepo.fetchLotHeaderById(bhId);
             if (bhRes.success && bhRes.data != null) {
-              final bhFull = BatchHeaderResponseModel.fromJson(bhRes.data);
+              final bhFull = LotHeaderResponseModel.fromJson(bhRes.data);
               if (bhFull.machine != null) {
                 finalMachine = bhFull.machine;
               } else if (bhFull.batchHeader.machineId != null) {
-                final mRes = await _batchRepo.fetchMachineById(bhFull.batchHeader.machineId!);
+                final mRes = await _lotRepo.fetchMachineById(bhFull.batchHeader.machineId!);
                 if (mRes.success && mRes.data != null) {
                   final mData = mRes.data as Map<String, dynamic>;
                   finalMachine = MachineModel.fromJson(mData['resource'] ?? mData);
@@ -125,7 +125,7 @@ class _WIPScreenState extends State<WIPScreen> {
           // Case B: No Batch (Knitting) - Prefer resourceId from PrimaryTrayModel
           // This represents the 'Knitting basic machine' assigned during initial scanning
           else if (trayResourceId != null) {
-            final mRes = await _batchRepo.fetchMachineById(trayResourceId);
+            final mRes = await _lotRepo.fetchMachineById(trayResourceId);
             if (mRes.success && mRes.data != null) {
               final mData = mRes.data as Map<String, dynamic>;
               finalMachine = MachineModel.fromJson(mData['resource'] ?? mData);
@@ -165,23 +165,23 @@ class _WIPScreenState extends State<WIPScreen> {
           groups[key] = WIPGroup(title1: wo, title2: machine, subtitle: item, trays: []);
         }
       } else if (isProcessing) {
-        // Group by Batch No + Machine + Color (As requested)
-        final batch = t.batchHeader?.batchHeaderCode ?? t.productionProgress.batchHeaderId?.toString() ?? '-';
+        // Group by Lot No + Machine + Color
+        final lot = t.batchHeader?.batchHeaderCode ?? t.productionProgress.batchHeaderId?.toString() ?? '-';
         final machine = t.machineModel.brand ?? t.machineModel.resourceCode ?? '-';
         final color = t.batchHeader?.colorDescription ?? t.item.colorDescription ?? '-';
-        key = "${batch}_${machine}_$color";
+        key = "${lot}_${machine}_$color";
         
         if (!groups.containsKey(key)) {
-          groups[key] = WIPGroup(title1: batch, title2: machine, title3: color, trays: []);
+          groups[key] = WIPGroup(title1: lot, title2: machine, title3: color, trays: []);
         }
       } else {
-        // Default Group by Batch No + Color
-        final batch = t.batchHeader?.batchHeaderCode ?? t.productionProgress.batchHeaderId?.toString() ?? '-';
+        // Default Group by Lot No + Color
+        final lot = t.batchHeader?.batchHeaderCode ?? t.productionProgress.batchHeaderId?.toString() ?? '-';
         final color = t.batchHeader?.colorDescription ?? t.item.colorDescription ?? '-';
-        key = "${batch}_$color";
+        key = "${lot}_$color";
         
         if (!groups.containsKey(key)) {
-          groups[key] = WIPGroup(title1: batch, title2: color, trays: []);
+          groups[key] = WIPGroup(title1: lot, title2: color, trays: []);
         }
       }
       groups[key]!.trays.add(t);
@@ -318,7 +318,7 @@ class _WIPScreenState extends State<WIPScreen> {
       final machineId = group.trays.first.productionProgress.machineId;
       if (machineId != null) {
         AppLoader.show(context, message: 'Loading Capacity...');
-        final res = await _batchRepo.fetchMachineById(machineId);
+        final res = await _lotRepo.fetchMachineById(machineId);
         AppLoader.hide(context);
         if (res.success && res.data != null) {
           final mData = res.data as Map<String, dynamic>;
@@ -395,7 +395,7 @@ class _WIPScreenState extends State<WIPScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text('BATCH SUMMARY CONSOLE', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 0.8)),
+                                    const Text('LOT SUMMARY CONSOLE', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 0.8)),
                                     Text(
                                       '${group.title1} • ${group.title2}${group.title3 != null ? ' • ${group.title3}' : ''}'.toUpperCase(),
                                       style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.5),

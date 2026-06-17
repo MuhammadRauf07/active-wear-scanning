@@ -3,11 +3,11 @@ import 'package:active_wear_scanning/core/api/plex-result/plex_api_result.dart';
 import 'package:active_wear_scanning/core/api/services/api_service.dart';
 import 'package:active_wear_scanning/features/common-models/common_models.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
-import 'package:active_wear_scanning/features/tray/model/plan_header_model.dart';
-import 'package:active_wear_scanning/features/tray/model/resource_model.dart';
-import 'package:active_wear_scanning/features/tray/model/tray_details_model.dart';
+import 'package:active_wear_scanning/features/knitting_production/model/plan_header_model.dart';
+import 'package:active_wear_scanning/features/knitting_production/model/resource_model.dart';
+import 'package:active_wear_scanning/features/knitting_production/model/tray_details_model.dart';
 
-class TrayScanningRepo {
+class KnittingProductionRepo {
   final ApiService _api = ApiService();
 
   Future<PlexApiResult> fetchResource(String serialNumber) async {
@@ -38,7 +38,7 @@ class TrayScanningRepo {
         try {
           list.add(ProductionProgressResponseModel.fromJson(Map<String, dynamic>.from(item)));
         } catch (e) {
-          dev.log("TrayScanningRepo parsing error on production progress record: $e. Raw: $item");
+          dev.log("KnittingProductionRepo parsing error on production progress record: $e. Raw: $item");
         }
       }
       return PlexApiResult(true, 200, "Success", list);

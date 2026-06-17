@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 
-/// Expandable sub-table shown under a locked batch row in [BatchListScreen].
+/// Expandable sub-table shown under a locked lot row in [LotListScreen].
 ///
 /// Receives the raw batch-line maps and a [trayIdToCode] lookup so it can
 /// resolve tray codes from `trayId` without needing parent state directly.
-class LockedBatchTrayTable extends StatelessWidget {
+class LockedLotTrayTable extends StatelessWidget {
   final List<Map<String, dynamic>> lines;
 
   /// Maps `TrayDetail.id → trayCode`. Built from [_primaryTrayIdToCode] in parent.
   final Map<int, String> trayIdToCode;
 
-  const LockedBatchTrayTable({
+  const LockedLotTrayTable({
     super.key,
     required this.lines,
     required this.trayIdToCode,
@@ -29,7 +29,7 @@ class LockedBatchTrayTable extends StatelessWidget {
         line['primaryTray']?['trayCode']?.toString() ??
         line['tray']?['trayCode']?.toString();
     if (embedded != null && embedded.isNotEmpty) return embedded;
-    // Path 2: lookup via trayId (the actual field name posted by batch scanning)
+    // Path 2: lookup via trayId (the actual field name posted by lot making)
     final trayId = line['batchLines']?['trayId'] as int?;
     if (trayId != null) {
       final fromMap = trayIdToCode[trayId];
@@ -53,7 +53,7 @@ class LockedBatchTrayTable extends StatelessWidget {
             Icon(Icons.info_outline_rounded, size: 14, color: Color(0xFF94A3B8)),
             SizedBox(width: 8),
             Text(
-              'No tray details found in this batch.',
+              'No tray details found in this lot.',
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
@@ -171,5 +171,5 @@ class LockedBatchTrayTable extends StatelessWidget {
       ),
     );
   }
-  }
+}
 

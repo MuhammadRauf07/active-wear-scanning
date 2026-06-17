@@ -1,11 +1,11 @@
 import 'dart:developer' as dev;
 import 'package:active_wear_scanning/core/api/plex-result/plex_api_result.dart';
 import 'package:active_wear_scanning/core/api/services/api_service.dart';
-import 'package:active_wear_scanning/features/batch/model/batch_color_model.dart';
-import 'package:active_wear_scanning/features/batch/model/batch_machine_model.dart';
+import 'package:active_wear_scanning/features/lot_making/model/lot_color_model.dart';
+import 'package:active_wear_scanning/features/lot_making/model/lot_machine_model.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 
-class BatchRepo {
+class LotRepo {
   final ApiService _api = ApiService();
 
   Future<PlexApiResult> fetchProductionProgress({Map<String, String>? query}) async {
@@ -27,7 +27,7 @@ class BatchRepo {
         try {
           list.add(ProductionProgressResponseModel.fromJson(Map<String, dynamic>.from(item)));
         } catch (e) {
-          dev.log("BatchRepo parsing error on production progress record: $e. Raw: $item");
+          dev.log("LotRepo parsing error on production progress record: $e. Raw: $item");
         }
       }
       return PlexApiResult(true, 200, "Success", list);
@@ -82,17 +82,17 @@ class BatchRepo {
     return result;
   }
 
-  Future<PlexApiResult> createBatchHeader(Map<String, dynamic> data) async {
+  Future<PlexApiResult> createLotHeader(Map<String, dynamic> data) async {
     final result = await _api.post('/api/app/batch-headers', body: data);
     return result;
   }
 
-  Future<PlexApiResult> deleteBatchHeader(int id) async {
+  Future<PlexApiResult> deleteLotHeader(int id) async {
     final result = await _api.delete('/api/app/batch-headers/$id');
     return result;
   }
 
-  Future<PlexApiResult> updateBatchHeader(int id, Map<String, dynamic> data) async {
+  Future<PlexApiResult> updateLotHeader(int id, Map<String, dynamic> data) async {
     final result = await _api.put('/api/app/batch-headers/$id', body: data);
     return result;
   }
@@ -107,17 +107,17 @@ class BatchRepo {
     return result;
   }
 
-  Future<PlexApiResult> fetchBatchHeaders() async {
+  Future<PlexApiResult> fetchLotHeaders() async {
     final result = await _api.getList('/api/app/batch-headers');
     return result;
   }
 
-  Future<PlexApiResult> fetchBatchHeaderById(int id) async {
+  Future<PlexApiResult> fetchLotHeaderById(int id) async {
     final result = await _api.getObject('/api/app/batch-headers/$id');
     return result;
   }
 
-  Future<PlexApiResult> fetchBatchLines({int? batchHeaderId}) async {
+  Future<PlexApiResult> fetchLotLines({int? batchHeaderId}) async {
     final query = {
       'maxResultCount': '1000',
       if (batchHeaderId != null) 'batchHeaderId': batchHeaderId.toString(),
@@ -126,22 +126,22 @@ class BatchRepo {
     return result;
   }
 
-  Future<PlexApiResult> createBatchLine(Map<String, dynamic> data) async {
+  Future<PlexApiResult> createLotLine(Map<String, dynamic> data) async {
     final result = await _api.post('/api/app/batch-liness', body: data);
     return result;
   }
 
-  Future<PlexApiResult> deleteBatchLine(int id) async {
+  Future<PlexApiResult> deleteLotLine(int id) async {
     final result = await _api.delete('/api/app/batch-liness/$id');
     return result;
   }
 
-  Future<PlexApiResult> updateBatchLine(int id, Map<String, dynamic> data) async {
+  Future<PlexApiResult> updateLotLine(int id, Map<String, dynamic> data) async {
     final result = await _api.put('/api/app/batch-liness/$id', body: data);
     return result;
   }
 
-  Future<PlexApiResult> fetchBatchLinesByProgressId(int progressId) async {
+  Future<PlexApiResult> fetchLotLinesByProgressId(int progressId) async {
     final result = await _api.getList(
       '/api/app/batch-liness', 
       query: {
@@ -165,28 +165,28 @@ class BatchRepo {
     return result;
   }
 
-  Future<PlexApiResult> fetchBatchColors() async {
+  Future<PlexApiResult> fetchLotColors() async {
     final result = await _api.getList('/api/app/segment-codes', query: {'SegmentTypeId': '629'});
     
     if (!result.success || result.data == null) return result;
 
     try {
-      final data = result.data as List<Map<String, dynamic>>;
-      final list = data.map((item) => BatchColorModel.fromJson(item)).toList();
+      final data = result.data as List;
+      final list = data.map((item) => LotColorModel.fromJson(Map<String, dynamic>.from(item))).toList();
       return PlexApiResult(true, 200, "Success", list);
     } catch (e) {
       return PlexApiResult(false, 500, e.toString(), null);
     }
   }
 
-  Future<PlexApiResult> fetchBatchMachines() async {
+  Future<PlexApiResult> fetchLotMachines() async {
     final result = await _api.getList('/api/app/resources', query: {'ResourceTypeId': '2'});
     
     if (!result.success || result.data == null) return result;
 
     try {
-      final data = result.data as List<Map<String, dynamic>>;
-      final list = data.map((item) => BatchMachineModel.fromJson(item)).toList();
+      final data = result.data as List;
+      final list = data.map((item) => LotMachineModel.fromJson(Map<String, dynamic>.from(item))).toList();
       return PlexApiResult(true, 200, "Success", list);
     } catch (e) {
       return PlexApiResult(false, 500, e.toString(), null);
@@ -222,7 +222,7 @@ class BatchRepo {
     return result;
   }
 
-  Future<PlexApiResult> postBatchHeaderRouting(Map<String, dynamic> data) async {
+  Future<PlexApiResult> postLotHeaderRouting(Map<String, dynamic> data) async {
     final result = await _api.post('/api/app/batch-header-routings', body: data);
     return result;
   }

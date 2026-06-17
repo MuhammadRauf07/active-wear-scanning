@@ -1,13 +1,13 @@
 import 'package:active_wear_scanning/core/api/plex-result/plex_api_result.dart';
 import 'package:active_wear_scanning/core/api/services/api_service.dart';
 import 'package:active_wear_scanning/features/common-models/common_models.dart';
-import 'package:active_wear_scanning/features/po_style/model/po_style_model.dart';
+import 'package:active_wear_scanning/features/stitching_line_schedule/model/stitching_line_schedule_model.dart';
 import 'package:flutter/foundation.dart';
 
-class PoStyleRepo {
+class StitchingLineScheduleRepo {
   final ApiService _api = ApiService();
 
-  Future<PlexApiResult> fetchPoStyles() async {
+  Future<PlexApiResult> fetchStitchingLineSchedules() async {
     final result = await _api.getList('/api/app/po-styles', query: {
       'MaxResultCount': '1000',
     });
@@ -15,18 +15,18 @@ class PoStyleRepo {
 
     try {
       final List rawData = result.data is Map ? (result.data['items'] ?? []) : result.data;
-      final List<PoStyleItem> list = [];
+      final List<StitchingLineScheduleItem> list = [];
       for (var i = 0; i < rawData.length; i++) {
         try {
           final item = Map<String, dynamic>.from(rawData[i] as Map);
-          list.add(PoStyleItem.fromJson(item));
+          list.add(StitchingLineScheduleItem.fromJson(item));
         } catch (e) {
           return PlexApiResult(false, 500, 'Parse error at index $i: $e', null);
         }
       }
       return PlexApiResult(true, 200, "Success", list);
     } catch (e) {
-      debugPrint("❌ PoStyleRepo PoStyles Parse Error: $e");
+      debugPrint("❌ StitchingLineScheduleRepo fetchStitchingLineSchedules Parse Error: $e");
       return PlexApiResult(false, 500, e.toString(), null);
     }
   }
@@ -53,12 +53,12 @@ class PoStyleRepo {
       }
       return PlexApiResult(true, 200, "Success", list);
     } catch (e) {
-      debugPrint("❌ PoStyleRepo CostCenterLines Parse Error: $e");
+      debugPrint("❌ StitchingLineScheduleRepo CostCenterLines Parse Error: $e");
       return PlexApiResult(false, 500, e.toString(), null);
     }
   }
 
-  Future<PlexApiResult> updatePoStyle(int id, Map<String, dynamic> data) async {
+  Future<PlexApiResult> updateStitchingLineSchedule(int id, Map<String, dynamic> data) async {
     return await _api.put('/api/app/po-styles/$id', body: data);
   }
 }

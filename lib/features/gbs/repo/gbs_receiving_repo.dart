@@ -2,7 +2,7 @@ import 'dart:developer' as dev;
 import 'package:active_wear_scanning/core/api/plex-result/plex_api_result.dart';
 import 'package:active_wear_scanning/core/api/services/api_service.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
-import 'package:active_wear_scanning/features/tray/model/tray_details_model.dart';
+import 'package:active_wear_scanning/features/knitting_production/model/tray_details_model.dart';
 import 'package:flutter/cupertino.dart';
 
 class GBSReceivingRepo {

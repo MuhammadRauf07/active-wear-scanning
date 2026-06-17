@@ -6,22 +6,22 @@ import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/custom_expanded_async_dropdown.dart';
 import 'package:active_wear_scanning/features/common-models/common_models.dart';
-import 'package:active_wear_scanning/features/po_style/model/po_style_model.dart';
-import 'package:active_wear_scanning/features/po_style/repo/po_style_repo.dart';
+import 'package:active_wear_scanning/features/stitching_line_schedule/model/stitching_line_schedule_model.dart';
+import 'package:active_wear_scanning/features/stitching_line_schedule/repo/stitching_line_schedule_repo.dart';
 import 'package:plex/plex_di/plex_dependency_injection.dart';
 
-class PoStyleScreen extends StatefulWidget {
-  const PoStyleScreen({super.key});
+class StitchingLineScheduleScreen extends StatefulWidget {
+  const StitchingLineScheduleScreen({super.key});
 
   @override
-  State<PoStyleScreen> createState() => _PoStyleScreenState();
+  State<StitchingLineScheduleScreen> createState() => _StitchingLineScheduleScreenState();
 }
 
-class _PoStyleScreenState extends State<PoStyleScreen> {
-  final _poStyleRepo = fromPlex<PoStyleRepo>();
+class _StitchingLineScheduleScreenState extends State<StitchingLineScheduleScreen> {
+  final _stitchingLineScheduleRepo = fromPlex<StitchingLineScheduleRepo>();
 
-  List<PoStyleItem> _poStyles = [];
-  bool _isLoadingPoStyles = false;
+  List<StitchingLineScheduleItem> _stitchingLineSchedules = [];
+  bool _isLoadingStitchingLineSchedules = false;
 
   List<String> _customers = [];
   String? _selectedCustomer;
@@ -36,45 +36,45 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
   CostCenterLine? _selectedCostCenterLine;
   bool _isLoadingCostCenterLines = false;
 
-  final Set<int> _selectedPoStyleIds = {};
+  final Set<int> _selectedStitchingLineScheduleIds = {};
   String? _allocationMode;
 
   @override
   void initState() {
     super.initState();
-    _fetchPoStyles();
+    _fetchStitchingLineSchedules();
   }
 
-  Future<void> _fetchPoStyles() async {
+  Future<void> _fetchStitchingLineSchedules() async {
     setState(() {
-      _isLoadingPoStyles = true;
+      _isLoadingStitchingLineSchedules = true;
       _customers = [];
       _selectedCustomer = null;
       _customerPOs = [];
       _selectedCustomerPO = null;
       _articles = [];
       _selectedArticle = null;
-      _selectedPoStyleIds.clear();
+      _selectedStitchingLineScheduleIds.clear();
       _allocationMode = null;
     });
-    final res = await _poStyleRepo.fetchPoStyles();
+    final res = await _stitchingLineScheduleRepo.fetchStitchingLineSchedules();
     if (mounted) {
       if (res.success && res.data != null) {
-        final allStyles = res.data as List<PoStyleItem>;
+        final allStyles = res.data as List<StitchingLineScheduleItem>;
         final uniqueCustomers = allStyles
-            .map((item) => item.poStyle.customer)
+            .map((item) => item.stitchingLineSchedule.customer)
             .whereType<String>()
             .where((c) => c.isNotEmpty)
             .toSet()
             .toList();
         uniqueCustomers.sort();
         setState(() {
-          _poStyles = allStyles;
+          _stitchingLineSchedules = allStyles;
           _customers = uniqueCustomers;
-          _isLoadingPoStyles = false;
+          _isLoadingStitchingLineSchedules = false;
         });
       } else {
-        setState(() => _isLoadingPoStyles = false);
+        setState(() => _isLoadingStitchingLineSchedules = false);
         AppSnackBar.showError(context, message: res.message);
       }
     }
@@ -87,7 +87,7 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
       _selectedCostCenterLine = null;
       _allocationMode = null;
     });
-    final res = await _poStyleRepo.fetchCostCenterLines();
+    final res = await _stitchingLineScheduleRepo.fetchCostCenterLines();
     if (mounted) {
       if (res.success && res.data != null) {
         setState(() {
@@ -109,15 +109,15 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
       _selectedCustomerPO = null;
       _articles = [];
       _selectedArticle = null;
-      _selectedPoStyleIds.clear();
+      _selectedStitchingLineScheduleIds.clear();
       _costCenterLines = [];
       _selectedCostCenterLine = null;
       _allocationMode = null;
     });
     if (val != null) {
-      final uniquePOs = _poStyles
-          .where((item) => item.poStyle.customer == val)
-          .map((item) => item.poStyle.po)
+      final uniquePOs = _stitchingLineSchedules
+          .where((item) => item.stitchingLineSchedule.customer == val)
+          .map((item) => item.stitchingLineSchedule.po)
           .whereType<String>()
           .where((p) => p.isNotEmpty)
           .toSet()
@@ -135,15 +135,15 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
       _selectedCustomerPO = val;
       _articles = [];
       _selectedArticle = null;
-      _selectedPoStyleIds.clear();
+      _selectedStitchingLineScheduleIds.clear();
       _costCenterLines = [];
       _selectedCostCenterLine = null;
       _allocationMode = null;
     });
     if (val != null && _selectedCustomer != null) {
-      final uniqueArticles = _poStyles
-          .where((item) => item.poStyle.customer == _selectedCustomer && item.poStyle.po == val)
-          .map((item) => item.poStyle.articleNo)
+      final uniqueArticles = _stitchingLineSchedules
+          .where((item) => item.stitchingLineSchedule.customer == _selectedCustomer && item.stitchingLineSchedule.po == val)
+          .map((item) => item.stitchingLineSchedule.articleNo)
           .whereType<String>()
           .where((a) => a.isNotEmpty)
           .toSet()
@@ -159,7 +159,7 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
     HapticFeedbackHelper.buttonClick();
     setState(() {
       _selectedArticle = val;
-      _selectedPoStyleIds.clear();
+      _selectedStitchingLineScheduleIds.clear();
       _costCenterLines = [];
       _selectedCostCenterLine = null;
       _allocationMode = null;
@@ -169,33 +169,33 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
     }
   }
 
-  List<PoStyleItem> get _filteredPoStyles {
+  List<StitchingLineScheduleItem> get _filteredStitchingLineSchedules {
     if (_selectedCustomer == null || _selectedCustomerPO == null || _selectedArticle == null) return [];
-    return _poStyles
+    return _stitchingLineSchedules
         .where((item) =>
-            item.poStyle.customer == _selectedCustomer &&
-            item.poStyle.po == _selectedCustomerPO &&
-            item.poStyle.articleNo == _selectedArticle)
+            item.stitchingLineSchedule.customer == _selectedCustomer &&
+            item.stitchingLineSchedule.po == _selectedCustomerPO &&
+            item.stitchingLineSchedule.articleNo == _selectedArticle)
         .toList();
   }
 
   Future<void> _saveChanges() async {
-    if (_selectedCostCenterLine == null || _selectedPoStyleIds.isEmpty) return;
+    if (_selectedCostCenterLine == null || _selectedStitchingLineScheduleIds.isEmpty) return;
 
     HapticFeedbackHelper.buttonClick();
-    AppLoader.show(context, message: 'Updating ${_selectedPoStyleIds.length} Stitching Lines...');
+    AppLoader.show(context, message: 'Updating ${_selectedStitchingLineScheduleIds.length} Stitching Lines...');
 
-    final selectedItems = _poStyles
-        .where((item) => _selectedPoStyleIds.contains(item.poStyle.id))
+    final selectedItems = _stitchingLineSchedules
+        .where((item) => _selectedStitchingLineScheduleIds.contains(item.stitchingLineSchedule.id))
         .toList();
     final List<Future<PlexApiResult>> updateFutures = [];
 
     for (final item in selectedItems) {
-      final updatedModel = item.poStyle.copyWith(
+      final updatedModel = item.stitchingLineSchedule.copyWith(
         lineCode: _selectedCostCenterLine!.name,
         line: _selectedCostCenterLine!.description,
       );
-      updateFutures.add(_poStyleRepo.updatePoStyle(item.poStyle.id, updatedModel.toJson()));
+      updateFutures.add(_stitchingLineScheduleRepo.updateStitchingLineSchedule(item.stitchingLineSchedule.id, updatedModel.toJson()));
     }
 
     try {
@@ -225,7 +225,7 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
             context,
             message: 'Updated $successCount/${results.length} stitching lines. Errors: ${errors.join(", ")}',
           );
-          _fetchPoStyles();
+          _fetchStitchingLineSchedules();
         }
       }
     } catch (e) {
@@ -277,7 +277,7 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
   }
 
   Widget _buildPremiumHeader(BuildContext context) {
-    final hasSelection = _selectedCostCenterLine != null && _selectedPoStyleIds.isNotEmpty;
+    final hasSelection = _selectedCostCenterLine != null && _selectedStitchingLineScheduleIds.isNotEmpty;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       child: Container(
@@ -303,7 +303,7 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Stitching Line Scheduling',
+                    'Stitching Line Schedule',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
@@ -311,7 +311,7 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
                     ),
                   ),
                   Text(
-                    'STITCHING LINE SCHEDULING CONSOLE',
+                    'STITCHING LINE SCHEDULE CONSOLE',
                     style: TextStyle(
                       fontSize: 9,
                       color: Color(0xFF546E7A),
@@ -355,7 +355,7 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          _isLoadingPoStyles
+          _isLoadingStitchingLineSchedules
               ? const Center(
                   child: Padding(
                     padding: EdgeInsets.symmetric(vertical: 8.0),
@@ -458,7 +458,7 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
                       setState(() {
                         _selectedCostCenterLine = val;
                         _allocationMode = null;
-                        _selectedPoStyleIds.clear();
+                        _selectedStitchingLineScheduleIds.clear();
                       });
                     },
                   ),
@@ -472,7 +472,7 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
   }
 
   Widget _buildPlaceholderContent() {
-    final filtered = _filteredPoStyles;
+    final filtered = _filteredStitchingLineSchedules;
     final showTable = _selectedCostCenterLine != null && _allocationMode != null && filtered.isNotEmpty;
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -490,9 +490,9 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
     );
   }
 
-  Widget _buildPoStylesTable(List<PoStyleItem> items) {
+  Widget _buildPoStylesTable(List<StitchingLineScheduleItem> items) {
     final selectableItems = items.where(_isRowSelectable).toList();
-    final allSelected = selectableItems.isNotEmpty && selectableItems.every((i) => _selectedPoStyleIds.contains(i.poStyle.id));
+    final allSelected = selectableItems.isNotEmpty && selectableItems.every((i) => _selectedStitchingLineScheduleIds.contains(i.stitchingLineSchedule.id));
     const headerStyle = TextStyle(
       fontSize: 10,
       fontWeight: FontWeight.w800,
@@ -538,10 +538,10 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
                       HapticFeedbackHelper.buttonClick();
                       setState(() {
                         if (val == true) {
-                          _selectedPoStyleIds.addAll(selectableItems.map((i) => i.poStyle.id));
+                          _selectedStitchingLineScheduleIds.addAll(selectableItems.map((i) => i.stitchingLineSchedule.id));
                         } else {
                           for (final i in selectableItems) {
-                            _selectedPoStyleIds.remove(i.poStyle.id);
+                            _selectedStitchingLineScheduleIds.remove(i.stitchingLineSchedule.id);
                           }
                         }
                       });
@@ -569,7 +569,7 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
               ),
               itemBuilder: (context, index) {
                 final item = items[index];
-                final isChecked = _selectedPoStyleIds.contains(item.poStyle.id);
+                final isChecked = _selectedStitchingLineScheduleIds.contains(item.stitchingLineSchedule.id);
                 final isSelectable = _isRowSelectable(item);
                 final currentCellStyle = isSelectable
                     ? cellStyle
@@ -589,9 +589,9 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
                                   HapticFeedbackHelper.buttonClick();
                                   setState(() {
                                     if (val == true) {
-                                      _selectedPoStyleIds.add(item.poStyle.id);
+                                      _selectedStitchingLineScheduleIds.add(item.stitchingLineSchedule.id);
                                     } else {
-                                      _selectedPoStyleIds.remove(item.poStyle.id);
+                                      _selectedStitchingLineScheduleIds.remove(item.stitchingLineSchedule.id);
                                     }
                                   });
                                 }
@@ -600,23 +600,23 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
                       ),
                       Expanded(
                         flex: 3,
-                        child: Text(item.poStyle.bundleNo ?? '-', style: currentCellStyle, overflow: TextOverflow.ellipsis),
+                        child: Text(item.stitchingLineSchedule.bundleNo ?? '-', style: currentCellStyle, overflow: TextOverflow.ellipsis),
                       ),
                       Expanded(
                         flex: 3,
-                        child: Text(item.poStyle.lot ?? '-', style: currentCellStyle, overflow: TextOverflow.ellipsis),
+                        child: Text(item.stitchingLineSchedule.lot ?? '-', style: currentCellStyle, overflow: TextOverflow.ellipsis),
                       ),
                       Expanded(
                         flex: 3,
-                        child: Text(item.poStyle.colorCode ?? '-', style: currentCellStyle, overflow: TextOverflow.ellipsis),
+                        child: Text(item.stitchingLineSchedule.colorCode ?? '-', style: currentCellStyle, overflow: TextOverflow.ellipsis),
                       ),
                       Expanded(
                         flex: 2,
-                        child: Text(item.poStyle.size ?? '-', style: currentCellStyle, overflow: TextOverflow.ellipsis),
+                        child: Text(item.stitchingLineSchedule.size ?? '-', style: currentCellStyle, overflow: TextOverflow.ellipsis),
                       ),
                       Expanded(
                         flex: 2,
-                        child: Text(item.poStyle.quantity?.toString() ?? '-', style: currentCellStyle, overflow: TextOverflow.ellipsis),
+                        child: Text(item.stitchingLineSchedule.quantity?.toString() ?? '-', style: currentCellStyle, overflow: TextOverflow.ellipsis),
                       ),
                       Expanded(
                         flex: 4,
@@ -633,8 +633,8 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
     );
   }
 
-  Widget _buildCurrentLineCellText(PoStyleItem item, bool isChecked, bool isSelectable) {
-    final currentLine = item.poStyle.line ?? '-';
+  Widget _buildCurrentLineCellText(StitchingLineScheduleItem item, bool isChecked, bool isSelectable) {
+    final currentLine = item.stitchingLineSchedule.line ?? '-';
     if (isChecked && _selectedCostCenterLine != null) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -672,11 +672,11 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
     );
   }
 
-  bool _isRowSelectable(PoStyleItem item) {
+  bool _isRowSelectable(StitchingLineScheduleItem item) {
     if (_allocationMode == 'allocate') {
-      return item.poStyle.line == null || item.poStyle.line!.isEmpty;
+      return item.stitchingLineSchedule.line == null || item.stitchingLineSchedule.line!.isEmpty;
     } else if (_allocationMode == 're-allocate') {
-      return item.poStyle.line != null && item.poStyle.line!.isNotEmpty;
+      return item.stitchingLineSchedule.line != null && item.stitchingLineSchedule.line!.isNotEmpty;
     }
     return false;
   }
@@ -727,7 +727,7 @@ class _PoStyleScreenState extends State<PoStyleScreen> {
         HapticFeedbackHelper.buttonClick();
         setState(() {
           _allocationMode = mode;
-          _selectedPoStyleIds.clear(); // Clear selections when mode changes
+          _selectedStitchingLineScheduleIds.clear(); // Clear selections when mode changes
         });
       },
       icon: Icon(

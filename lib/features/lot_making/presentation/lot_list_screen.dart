@@ -2,47 +2,47 @@ import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
 import 'package:active_wear_scanning/core/widgets/scanner_always_open.dart';
-import 'package:active_wear_scanning/features/batch/model/batch_header_model.dart';
-import 'package:active_wear_scanning/features/batch/presentation/batch_scanning_screen.dart';
-import 'package:active_wear_scanning/features/batch/presentation/widgets/locked_batch_tray_table.dart';
-import 'package:active_wear_scanning/features/batch/repo/batch_repo.dart';
-import 'package:active_wear_scanning/features/tray/repo/tray_scanning_repo.dart';
-import 'package:active_wear_scanning/features/tray/model/tray_details_model.dart';
+import 'package:active_wear_scanning/features/lot_making/model/lot_header_model.dart';
+import 'package:active_wear_scanning/features/lot_making/presentation/lot_making_screen.dart';
+import 'package:active_wear_scanning/features/lot_making/presentation/widgets/locked_lot_tray_table.dart';
+import 'package:active_wear_scanning/features/lot_making/repo/lot_repo.dart';
+import 'package:active_wear_scanning/features/knitting_production/repo/knitting_production_repo.dart';
+import 'package:active_wear_scanning/features/knitting_production/model/tray_details_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-class BatchListScreen extends StatefulWidget {
-  const BatchListScreen({super.key});
+class LotListScreen extends StatefulWidget {
+  const LotListScreen({super.key});
 
   @override
-  State<BatchListScreen> createState() => _BatchListScreenState();
+  State<LotListScreen> createState() => _LotListScreenState();
 }
 
-class _BatchListScreenState extends State<BatchListScreen>
+class _LotListScreenState extends State<LotListScreen>
     with SingleTickerProviderStateMixin {
-  final _batchRepo = BatchRepo();
-  final _trayRepo = TrayScanningRepo();
+  final _lotRepo = LotRepo();
+  final _trayRepo = KnittingProductionRepo();
   bool _isLoading = true;
 
-  List<BatchHeaderResponseModel> _unlockedBatches = [];
-  List<BatchHeaderResponseModel> _lockedBatches = [];
+  List<LotHeaderResponseModel> _unlockedLots = [];
+  List<LotHeaderResponseModel> _lockedLots = [];
 
-  // Maps batchHeaderId → raw batch-line records linked to that batch
-  Map<int, List<Map<String, dynamic>>> _groupedBatchLinesByHeader = {};
+  // Maps batchHeaderId → raw batch-line records linked to that lot
+  Map<int, List<Map<String, dynamic>>> _groupedLotLinesByHeader = {};
 
   // Trolley state: batchHeaderId → trolley trayDetail ID & tray code
-  final Map<int, int> _trolleyDetailIdByBatch = {};
-  final Map<int, String> _trolleyCodeByBatch = {};
+  final Map<int, int> _trolleyDetailIdByLot = {};
+  final Map<int, String> _trolleyCodeByLot = {};
 
   // Expand/collapse state for locked batch tray details
-  final Set<int> _expandedLockedBatchIds = {};
+  final Set<int> _expandedLockedLotIds = {};
   // trayDetailId → trayCode (all trays, used for sub-table tray code lookup)
   Map<int, String> _primaryTrayIdToCode = {};
 
   // State variables for global Bluetooth scanning and draft selection
   final FocusNode _keyboardFocusNode = FocusNode();
   final StringBuffer _scannerBuffer = StringBuffer();
-  int? _selectedBatchHeaderId;
+  int? _selectedLotHeaderId;
   DateTime? _lastKeyPress;
 
   void _onKey(RawKeyEvent event) {
@@ -73,7 +73,7 @@ class _BatchListScreenState extends State<BatchListScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _fetchAndGroupBatches();
+      _fetchAndGroupLots();
       _keyboardFocusNode.requestFocus();
     });
   }
@@ -85,12 +85,12 @@ class _BatchListScreenState extends State<BatchListScreen>
     super.dispose();
   }
 
-  Future<void> _fetchAndGroupBatches() async {
+  Future<void> _fetchAndGroupLots() async {
     setState(() => _isLoading = true);
-    AppLoader.show(context, message: 'Loading Batch History...');
+    AppLoader.show(context, message: 'Loading Lot History...');
 
-    final headerResult = await _batchRepo.fetchBatchHeaders();
-    final batchLinesResult = await _batchRepo.fetchBatchLines();
+    final headerResult = await _lotRepo.fetchLotHeaders();
+    final batchLinesResult = await _lotRepo.fetchLotLines();
     final trayDetailsResult = await _trayRepo.fetchAvailableTrayDetails();
 
     // Build trayDetailId → trayCode lookup map (reused for trolleys + sub-table)
@@ -107,23 +107,23 @@ class _BatchListScreenState extends State<BatchListScreen>
     if (mounted && headerResult.success) {
       final headerData = headerResult.data as List<Map<String, dynamic>>? ?? [];
       final headers = headerData
-          .map((e) => BatchHeaderResponseModel.fromJson(e))
+          .map((e) => LotHeaderResponseModel.fromJson(e))
           .toList();
-      _unlockedBatches = headers
+      _unlockedLots = headers
           .where((h) => h.batchHeader.lockFlag == false)
           .toList();
-      _lockedBatches = headers
+      _lockedLots = headers
           .where((h) => h.batchHeader.lockFlag == true)
           .toList();
 
-      // Pre-populate trolley maps from persisted trayDetailId on all batches
-      for (final batch in headers) {
-        final batchId = batch.batchHeader.id;
-        final trayDetailId = batch.batchHeader.trayDetailId;
+      // Pre-populate trolley maps from persisted trayDetailId on all lots
+      for (final lot in headers) {
+        final batchId = lot.batchHeader.id;
+        final trayDetailId = lot.batchHeader.trayDetailId;
         if (batchId != null && trayDetailId != null) {
-          _trolleyDetailIdByBatch[batchId] = trayDetailId;
+          _trolleyDetailIdByLot[batchId] = trayDetailId;
           final trayCode = trayIdToCode[trayDetailId];
-          if (trayCode != null) _trolleyCodeByBatch[batchId] = trayCode;
+          if (trayCode != null) _trolleyCodeByLot[batchId] = trayCode;
         }
       }
 
@@ -131,18 +131,18 @@ class _BatchListScreenState extends State<BatchListScreen>
       final Map<int, List<Map<String, dynamic>>> grouped = {};
       if (batchLinesResult.success && batchLinesResult.data != null) {
         final rawLines = batchLinesResult.data as List<Map<String, dynamic>>;
-        debugPrint('📦 Total batch-lines fetched: ${rawLines.length}');
+        debugPrint('📦 Total lot-lines fetched: ${rawLines.length}');
         for (var line in rawLines) {
           final id = line['batchLines']?['batchHeaderId'] as int?;
           if (id != null) grouped.putIfAbsent(id, () => []).add(line);
         }
       }
       debugPrint(
-        '📊 Grouped batch-lines: ${grouped.map((k, v) => MapEntry(k, v.length))}',
+        '📊 Grouped lot-lines: ${grouped.map((k, v) => MapEntry(k, v.length))}',
       );
 
       setState(() {
-        _groupedBatchLinesByHeader = grouped;
+        _groupedLotLinesByHeader = grouped;
         _isLoading = false;
       });
       AppLoader.hide(context);
@@ -150,41 +150,41 @@ class _BatchListScreenState extends State<BatchListScreen>
       if (mounted) {
         AppLoader.hide(context);
         setState(() => _isLoading = false);
-        AppSnackBar.showError(context, message: 'Failed to fetch batches');
+        AppSnackBar.showError(context, message: 'Failed to fetch lots');
       }
     }
   }
 
-  void _navigateToAddBatch() async {
+  void _navigateToAddLot() async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const BatchScanningScreen()),
+      MaterialPageRoute(builder: (context) => const LotMakingScreen()),
     );
     if (result == true) {
-      _fetchAndGroupBatches();
+      _fetchAndGroupLots();
     }
   }
 
-  void _navigateToEditBatch(BatchHeaderResponseModel batchHeaderModel) async {
-    AppLoader.show(context, message: 'Loading Batch...');
+  void _navigateToEditLot(LotHeaderResponseModel lotHeaderModel) async {
+    AppLoader.show(context, message: 'Loading Lot...');
     await Future.delayed(const Duration(milliseconds: 300)); // Allow loader to render
     AppLoader.hide(context);
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => BatchScanningScreen(
-          existingBatch: batchHeaderModel,
+        builder: (context) => LotMakingScreen(
+          existingBatch: lotHeaderModel,
           preloadedTrays:
-              const [], // Edit screen loads its own trays from batch-lines
+              const [], // Edit screen loads its own trays from lot-lines
         ),
       ),
     );
     if (result == true) {
-      _fetchAndGroupBatches();
+      _fetchAndGroupLots();
     }
   }
 
-  Future<String?> _validateAndAttachTrolley(int batchHeaderId, String code) async {
+  Future<String?> _validateAndAttachTrolley(int lotHeaderId, String code) async {
     final cleanCode = code.trim().toLowerCase();
     if (cleanCode.isEmpty) return 'Invalid trolley code';
 
@@ -209,33 +209,33 @@ class _BatchListScreenState extends State<BatchListScreen>
     final trolleyId = trayDetail!.id!;
     final trolleyCode = trayDetail.trayCode ?? code;
 
-    // ── Uniqueness check: trolley must not be assigned to any other batch ─
-    final allBatches = [..._unlockedBatches, ..._lockedBatches];
-    for (final batch in allBatches) {
-      final existingId = batch.batchHeader.id;
-      if (existingId == batchHeaderId) continue; // skip current batch
-      final assignedTrolleyId = _trolleyDetailIdByBatch[existingId] ?? batch.batchHeader.trayDetailId;
+    // ── Uniqueness check: trolley must not be assigned to any other lot ─
+    final allLots = [..._unlockedLots, ..._lockedLots];
+    for (final lot in allLots) {
+      final existingId = lot.batchHeader.id;
+      if (existingId == lotHeaderId) continue; // skip current lot
+      final assignedTrolleyId = _trolleyDetailIdByLot[existingId] ?? lot.batchHeader.trayDetailId;
       if (assignedTrolleyId == trolleyId) {
-        final batchCode = batch.batchHeader.batchHeaderCode ?? 'another batch';
-        return 'Trolly already assigned to $batchCode';
+        final batchCode = lot.batchHeader.batchHeaderCode ?? 'another lot';
+        return 'Trolley already assigned to $batchCode';
       }
     }
 
     setState(() {
-      _trolleyDetailIdByBatch[batchHeaderId] = trolleyId;
-      _trolleyCodeByBatch[batchHeaderId] = trolleyCode;
+      _trolleyDetailIdByLot[lotHeaderId] = trolleyId;
+      _trolleyCodeByLot[lotHeaderId] = trolleyCode;
     });
 
     return null;
   }
 
-  Future<void> _scanTrolleyForBatch(int batchHeaderId) async {
+  Future<void> _scanTrolleyForLot(int lotHeaderId) async {
     await ScannerAlwaysOpen.show(
       context,
-      title: 'Scan Trolly',
+      title: 'Scan Trolley',
       onResult: (scannedCode) async {
-        AppLoader.show(context, message: 'Validating trolly...');
-        final errorMsg = await _validateAndAttachTrolley(batchHeaderId, scannedCode);
+        AppLoader.show(context, message: 'Validating trolley...');
+        final errorMsg = await _validateAndAttachTrolley(lotHeaderId, scannedCode);
         AppLoader.hide(context);
 
         if (errorMsg == null) {
@@ -249,18 +249,18 @@ class _BatchListScreenState extends State<BatchListScreen>
   Future<void> _handleExternalBluetoothScan(String code) async {
     if (code.isEmpty) return;
 
-    // 1. Exception check: Ensure batch is selected first
-    if (_selectedBatchHeaderId == null) {
+    // 1. Exception check: Ensure lot is selected first
+    if (_selectedLotHeaderId == null) {
       HapticFeedback.heavyImpact();
       AppSnackBar.showError(
         context,
-        title: 'Batch Required',
-        message: 'Please select a draft batch first by checking its box on the left.',
+        title: 'Lot Required',
+        message: 'Please select a draft lot first by checking its box on the left.',
       );
       return;
     }
 
-    final activeId = _selectedBatchHeaderId!;
+    final activeId = _selectedLotHeaderId!;
 
     // 2. Validate and attach trolley
     AppLoader.show(context, message: 'Validating trolley scanned...');
@@ -288,17 +288,17 @@ class _BatchListScreenState extends State<BatchListScreen>
 
     // Clear selection state
     setState(() {
-      _selectedBatchHeaderId = null;
+      _selectedLotHeaderId = null;
     });
   }
 
-  Future<void> _deleteBatch(BatchHeaderResponseModel header) async {
+  Future<void> _deleteLot(LotHeaderResponseModel header) async {
     final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete Batch?'),
+        title: const Text('Delete Lot?'),
         content: Text(
-          'Are you sure you want to delete batch ${header.batchHeader.batchHeaderCode}?',
+          'Are you sure you want to delete lot ${header.batchHeader.batchHeaderCode}?',
         ),
         actions: [
           TextButton(
@@ -318,27 +318,27 @@ class _BatchListScreenState extends State<BatchListScreen>
     setState(() => _isLoading = true);
     final headerId = header.batchHeader.id!;
 
-    // 1. Delete all batch-lines linked to this batch
-    final linkedLines = _groupedBatchLinesByHeader[headerId] ?? [];
+    // 1. Delete all batch-lines linked to this lot
+    final linkedLines = _groupedLotLinesByHeader[headerId] ?? [];
     for (var line in linkedLines) {
       final lineId = line['batchLines']?['id'] as int?;
-      if (lineId != null) await _batchRepo.deleteBatchLine(lineId);
+      if (lineId != null) await _lotRepo.deleteLotLine(lineId);
     }
 
-    // 2. Delete the Batch Header
-    final res = await _batchRepo.deleteBatchHeader(headerId);
+    // 2. Delete the Lot Header
+    final res = await _lotRepo.deleteLotHeader(headerId);
 
     setState(() => _isLoading = false);
 
     if (res.success) {
-      _fetchAndGroupBatches();
-      AppSnackBar.showSuccess(context, message: 'Batch permanently deleted!');
+      _fetchAndGroupLots();
+      AppSnackBar.showSuccess(context, message: 'Lot permanently deleted!');
     } else {
       AppSnackBar.showError(context, title: 'Delete Failed', message: res.message ?? '');
     }
   }
 
-  void _handleLockRequest(BatchHeaderResponseModel batch, String? trolleyCode) {
+  void _handleLockRequest(LotHeaderResponseModel lot, String? trolleyCode) {
     if (trolleyCode == null || trolleyCode.isEmpty) {
       AppSnackBar.showError(
         context,
@@ -347,14 +347,14 @@ class _BatchListScreenState extends State<BatchListScreen>
       );
       return;
     }
-    _lockBatch(batch);
+    _lockLot(lot);
   }
 
-  Future<void> _lockBatch(BatchHeaderResponseModel header) async {
+  Future<void> _lockLot(LotHeaderResponseModel header) async {
     final headerId = header.batchHeader.id!;
 
     // Double safety check
-    if (!_trolleyDetailIdByBatch.containsKey(headerId)) {
+    if (!_trolleyDetailIdByLot.containsKey(headerId)) {
       _handleLockRequest(header, null);
       return;
     }
@@ -362,9 +362,9 @@ class _BatchListScreenState extends State<BatchListScreen>
     final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Issue Batch?'),
+        title: const Text('Issue Lot?'),
         content: Text(
-          'Are you sure you want to issue batch ${header.batchHeader.batchHeaderCode}?\n\n',
+          'Are you sure you want to issue lot ${header.batchHeader.batchHeaderCode}?\n\n',
         ),
         actions: [
           TextButton(
@@ -374,7 +374,7 @@ class _BatchListScreenState extends State<BatchListScreen>
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text(
-              'Issue Batch',
+              'Issue Lot',
               style: TextStyle(color: Colors.orange),
             ),
           ),
@@ -387,8 +387,8 @@ class _BatchListScreenState extends State<BatchListScreen>
     setState(() => _isLoading = true);
     final bh = header.batchHeader;
 
-    // ── Step 1: Set lockFlag = true on batch header ──────────────────────────
-    final lockRes = await _batchRepo.updateBatchHeader(headerId, {
+    // ── Step 1: Set lockFlag = true on lot header ──────────────────────────
+    final lockRes = await _lotRepo.updateLotHeader(headerId, {
       'planDate': bh.planDate,
       'colorDescription': bh.colorDescription,
       'lockFlag': true,
@@ -396,7 +396,7 @@ class _BatchListScreenState extends State<BatchListScreen>
       'machineId': bh.machineId,
       'colorCode': bh.colorCodeId,
       'shiftId': bh.shiftId,
-      'trayDetailId': _trolleyDetailIdByBatch[headerId] ?? bh.trayDetailId,
+      'trayDetailId': _trolleyDetailIdByLot[headerId] ?? bh.trayDetailId,
       'concurrencyStamp': bh.concurrencyStamp,
     });
 
@@ -406,14 +406,14 @@ class _BatchListScreenState extends State<BatchListScreen>
       return;
     }
 
-    // ── Step 1b: POST batch-header-routings (once per batch) ────────────────
-    final lines = _groupedBatchLinesByHeader[headerId] ?? [];
+    // ── Step 1b: POST lot-header-routings (once per lot) ────────────────
+    final lines = _groupedLotLinesByHeader[headerId] ?? [];
     final firstLine = lines.isNotEmpty ? lines.first : null;
     final firstItemId =
         (firstLine?['batchLines'] as Map<String, dynamic>?)?['itemId'] as int?;
 
     if (firstItemId != null) {
-      final routingRes = await _batchRepo.fetchItemRoutings(firstItemId);
+      final routingRes = await _lotRepo.fetchItemRoutings(firstItemId);
       if (routingRes.success && routingRes.data != null) {
         final routingItems = routingRes.data as List;
         for (final r in routingItems) {
@@ -423,7 +423,7 @@ class _BatchListScreenState extends State<BatchListScreen>
           final sequence = rMap['itemRouting']?['seq'] as int?;
 
           if (routingCode != null && operationId != null) {
-            final res = await _batchRepo.postBatchHeaderRouting({
+            final res = await _lotRepo.postLotHeaderRouting({
               'code': routingCode,
               'batchHeaderId': headerId,
               'operationId': operationId,
@@ -432,15 +432,15 @@ class _BatchListScreenState extends State<BatchListScreen>
             });
             debugPrint(
               res.success
-                  ? '✅ BatchHeaderRouting posted: code=$routingCode opId=$operationId'
-                  : '❌ BatchHeaderRouting failed: code=$routingCode → ${res.message}',
+                  ? '✅ LotHeaderRouting posted: code=$routingCode opId=$operationId'
+                  : '❌ LotHeaderRouting failed: code=$routingCode → ${res.message}',
             );
           }
         }
       }
     }
 
-    // ── Step 2: POST WIP transaction & production-progress for each batch-line ─
+    // ── Step 2: POST WIP transaction & production-progress for each lot-line ─
     int successCount = 0;
 
     for (final line in lines) {
@@ -454,7 +454,7 @@ class _BatchListScreenState extends State<BatchListScreen>
       int? minOpId;
       final itemId = bl['itemId'] as int?;
       if (itemId != null) {
-        final routingRes = await _batchRepo.fetchItemRoutings(itemId);
+        final routingRes = await _lotRepo.fetchItemRoutings(itemId);
         if (routingRes.success && routingRes.data != null) {
           final routingItems = routingRes.data as List;
           final opIds = routingItems
@@ -473,7 +473,7 @@ class _BatchListScreenState extends State<BatchListScreen>
       final workOrderLineId = bl['workOrderLineId'] as int?;
       final colorDescription = bh.colorDescription;
       if (workOrderLineId != null && colorDescription != null) {
-        final woRes = await _batchRepo.fetchWorkOrderLineDetails(
+        final woRes = await _lotRepo.fetchWorkOrderLineDetails(
           workOrderLineId,
           colorDescription,
         );
@@ -501,7 +501,7 @@ class _BatchListScreenState extends State<BatchListScreen>
       int dynamicLocatorId = 10; // Default fallback
       final targetOpId = minOpId ?? progress?['operationId'];
       if (targetOpId != null) {
-        final locRes = await _batchRepo.fetchLocators(operationId: targetOpId);
+        final locRes = await _lotRepo.fetchLocators(operationId: targetOpId);
         if (locRes.success && locRes.data != null) {
           final locList = locRes.data as List;
           // Use .toString() comparison to avoid int vs String mismatch
@@ -544,7 +544,7 @@ class _BatchListScreenState extends State<BatchListScreen>
         'itemId': bl['itemId'],
         'shiftId': progress?['shiftId'] ?? bh.shiftId,
         'primaryTrayId': bl['trayId'],
-        'secondaryTrayId': _trolleyDetailIdByBatch[headerId],
+        'secondaryTrayId': _trolleyDetailIdByLot[headerId],
         'machineId': progress?['machineId'] ?? bh.machineId,
         'planHeaderId': progress?['planHeaderId'],
         'locatorId': dynamicLocatorId,
@@ -553,7 +553,7 @@ class _BatchListScreenState extends State<BatchListScreen>
         'processedItemId': processedItemId,
       };
 
-      final wipRes = await _batchRepo.postWipTransaction(wipData);
+      final wipRes = await _lotRepo.postWipTransaction(wipData);
       if (wipRes.success) {
         successCount++;
         debugPrint('✅ WIP issued for tray ${bl["trayId"]}');
@@ -585,7 +585,7 @@ class _BatchListScreenState extends State<BatchListScreen>
         'itemId': bl['itemId'],
         'shiftId': progress?['shiftId'] ?? bh.shiftId,
         'primaryTrayId': bl['trayId'],
-        'secondaryTrayId': _trolleyDetailIdByBatch[headerId],
+        'secondaryTrayId': _trolleyDetailIdByLot[headerId],
         'machineId': progress?['machineId'] ?? bh.machineId,
         'planHeaderId': progress?['planHeaderId'],
         'locatorId': dynamicLocatorId,
@@ -594,11 +594,11 @@ class _BatchListScreenState extends State<BatchListScreen>
         'processedItemId': processedItemId,
       };
 
-      final progRes = await _batchRepo.postProductionProgress(progressData);
+      final progRes = await _lotRepo.postProductionProgress(progressData);
       if (progRes.success) {
         debugPrint('✅ ProductionProgress issued for tray ${bl["trayId"]}');
 
-        // ── Step 2c: Update the BatchLine itself to reflect the new locator ──
+        // ── Step 2c: Update the LotLine itself to reflect the new locator ──
         final blId = bl['id'] as int?;
         if (blId != null) {
           // Clean Business DTO: Include all business fields but exclude read-only system metadata.
@@ -624,7 +624,7 @@ class _BatchListScreenState extends State<BatchListScreen>
                 bl['processItemId'], // Send original value to keep it unchanged
             'concurrencyStamp': bl['concurrencyStamp'],
           };
-          await _batchRepo.updateBatchLine(blId, cleanBlDto);
+          await _lotRepo.updateLotLine(blId, cleanBlDto);
         }
       } else {
         debugPrint(
@@ -656,7 +656,7 @@ class _BatchListScreenState extends State<BatchListScreen>
       // ── Step 2c: Update tray-details to empty it ─────────────────────────────
       final trayId = bl['trayId'] as int?;
       if (trayId != null) {
-        final trayRes = await _batchRepo.fetchTrayDetailById(trayId);
+        final trayRes = await _lotRepo.fetchTrayDetailById(trayId);
         if (trayRes.success && trayRes.data != null) {
           final trayMap = Map<String, dynamic>.from(
             trayRes.data as Map<String, dynamic>,
@@ -674,7 +674,7 @@ class _BatchListScreenState extends State<BatchListScreen>
           trayMap['locatorId'] = null;
           trayMap['trayQuantity'] = "0";
 
-          final updateRes = await _batchRepo.updateTrayDetails(trayId, trayMap);
+          final updateRes = await _lotRepo.updateTrayDetails(trayId, trayMap);
           if (updateRes.success) {
             debugPrint('✅ TrayDetails emptied for reusable tray=$trayId');
           } else {
@@ -687,8 +687,8 @@ class _BatchListScreenState extends State<BatchListScreen>
     }
 
     setState(() => _isLoading = false);
-    _fetchAndGroupBatches();
-    AppSnackBar.showSuccess(context, message: 'Batch issued successfully');
+    _fetchAndGroupLots();
+    AppSnackBar.showSuccess(context, message: 'Lot issued successfully');
   }
 
   @override
@@ -711,15 +711,15 @@ class _BatchListScreenState extends State<BatchListScreen>
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   CustomInspectionHeader(
-                    heading: 'BATCH HISTORY',
-                    subtitle: 'Manage your scanning batches',
+                    heading: 'LOT HISTORY',
+                    subtitle: 'Manage your scanning lots',
                     isShowBackIcon: true,
                     topPadding: 0,
                     horizontalPadding: 16,
                     widget: ElevatedButton.icon(
-                      onPressed: _navigateToAddBatch,
+                      onPressed: _navigateToAddLot,
                       icon: const Icon(Icons.add_rounded, size: 18),
-                      label: const Text('NEW BATCH',
+                      label: const Text('NEW LOT',
                           style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF1B64A3),
@@ -736,8 +736,8 @@ class _BatchListScreenState extends State<BatchListScreen>
                     child: TabBarView(
                       controller: _tabController,
                       children: [
-                        _buildBatchList(_unlockedBatches, isLocked: false),
-                        _buildBatchList(_lockedBatches, isLocked: true),
+                        _buildLotList(_unlockedLots, isLocked: false),
+                        _buildLotList(_lockedLots, isLocked: true),
                       ],
                     ),
                   ),
@@ -786,9 +786,9 @@ class _BatchListScreenState extends State<BatchListScreen>
     );
   }
 
-  Widget _buildBatchList(List<BatchHeaderResponseModel> batches,
+  Widget _buildLotList(List<LotHeaderResponseModel> lots,
       {required bool isLocked}) {
-    if (batches.isEmpty) {
+    if (lots.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -797,7 +797,7 @@ class _BatchListScreenState extends State<BatchListScreen>
                 size: 64, color: Colors.grey.shade300),
             const SizedBox(height: 16),
             Text(
-              isLocked ? 'No issued batches found' : 'No draft batches found',
+              isLocked ? 'No issued lots found' : 'No draft lots found',
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
@@ -809,7 +809,7 @@ class _BatchListScreenState extends State<BatchListScreen>
       );
     }
 
-    batches.sort(
+    lots.sort(
         (a, b) => (b.batchHeader.id ?? 0).compareTo((a.batchHeader.id ?? 0)));
 
     return Column(
@@ -818,9 +818,9 @@ class _BatchListScreenState extends State<BatchListScreen>
         Expanded(
           child: ListView.builder(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            itemCount: batches.length,
+            itemCount: lots.length,
             itemBuilder: (context, index) =>
-                _buildBatchCard(batches[index], isLocked: isLocked),
+                _buildLotCard(lots[index], isLocked: isLocked),
           ),
         ),
       ],
@@ -833,7 +833,7 @@ class _BatchListScreenState extends State<BatchListScreen>
       child: Row(
         children: [
           if (!isLocked) const SizedBox(width: 40),
-          _buildHeaderCell('BATCH #', 2, align: TextAlign.center),
+          _buildHeaderCell('LOT #', 2, align: TextAlign.center),
           _buildHeaderCell('MACHINE', 3, align: TextAlign.center),
           _buildHeaderCell('COLOR', 2, align: TextAlign.center),
           _buildHeaderCell('TRAYS', 1, align: TextAlign.center),
@@ -871,24 +871,24 @@ class _BatchListScreenState extends State<BatchListScreen>
     );
   }
 
-  Widget _buildBatchCard(BatchHeaderResponseModel batch,
+  Widget _buildLotCard(LotHeaderResponseModel lot,
       {required bool isLocked}) {
-    final headerId = batch.batchHeader.id ?? 0;
-    final batchCode = batch.batchHeader.batchHeaderCode ?? "Undef";
-    final machineName = batch.machine?.brand ?? 'Unknown';
-    final colorDesc = batch.batchHeader.colorDescription ?? '-';
-    final trays = _groupedBatchLinesByHeader[headerId]?.length ?? 0;
-    final trolleyCode = _trolleyCodeByBatch[headerId];
+    final headerId = lot.batchHeader.id ?? 0;
+    final batchCode = lot.batchHeader.batchHeaderCode ?? "Undef";
+    final machineName = lot.machine?.brand ?? 'Unknown';
+    final colorDesc = lot.batchHeader.colorDescription ?? '-';
+    final trays = _groupedLotLinesByHeader[headerId]?.length ?? 0;
+    final trolleyCode = _trolleyCodeByLot[headerId];
 
     double totalWeight = 0;
-    for (final line in (_groupedBatchLinesByHeader[headerId] ?? [])) {
+    for (final line in (_groupedLotLinesByHeader[headerId] ?? [])) {
       final qty =
           (line['batchLines']?['primaryQuantity'] as num?)?.toDouble() ?? 0;
       final pw = (line['item']?['pieceWeight'] as num?)?.toDouble() ?? 0;
       totalWeight += qty * pw;
     }
 
-    final isExpanded = _expandedLockedBatchIds.contains(headerId);
+    final isExpanded = _expandedLockedLotIds.contains(headerId);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
@@ -908,7 +908,7 @@ class _BatchListScreenState extends State<BatchListScreen>
                   SizedBox(
                     width: 32,
                     child: Checkbox(
-                      value: _selectedBatchHeaderId == headerId,
+                      value: _selectedLotHeaderId == headerId,
                       activeColor: const Color(0xFF1B64A3),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(4),
@@ -916,10 +916,10 @@ class _BatchListScreenState extends State<BatchListScreen>
                       onChanged: (bool? checked) {
                         setState(() {
                           if (checked == true) {
-                            _selectedBatchHeaderId = headerId;
+                            _selectedLotHeaderId = headerId;
                           } else {
-                            if (_selectedBatchHeaderId == headerId) {
-                              _selectedBatchHeaderId = null;
+                            if (_selectedLotHeaderId == headerId) {
+                              _selectedLotHeaderId = null;
                             }
                           }
                         });
@@ -940,7 +940,7 @@ class _BatchListScreenState extends State<BatchListScreen>
                   flex: 2,
                   child: Center(
                     child: GestureDetector(
-                      onTap: isLocked ? null : () => _scanTrolleyForBatch(headerId),
+                      onTap: isLocked ? null : () => _scanTrolleyForLot(headerId),
                       child: trolleyCode != null
                           ? Text(
                               trolleyCode,
@@ -974,19 +974,19 @@ class _BatchListScreenState extends State<BatchListScreen>
                         _buildSmallIconButton(
                             Icons.edit_rounded,
                             const Color(0xFF1B64A3),
-                            () => _navigateToEditBatch(batch)),
+                            () => _navigateToEditLot(lot)),
                         const SizedBox(width: 6),
                         _buildSmallIconButton(
                             Icons.lock_open_rounded,
                             trolleyCode == null 
                                 ? Colors.grey.shade400 
                                 : const Color(0xFFE67E22),
-                            () => _handleLockRequest(batch, trolleyCode)),
+                            () => _handleLockRequest(lot, trolleyCode)),
                         const SizedBox(width: 6),
                         _buildSmallIconButton(
                             Icons.delete_outline_rounded,
                             Colors.red,
-                            () => _deleteBatch(batch)),
+                            () => _deleteLot(lot)),
                       ],
                     ),
                   ),
@@ -995,9 +995,9 @@ class _BatchListScreenState extends State<BatchListScreen>
                   GestureDetector(
                     onTap: () => setState(() {
                       if (isExpanded) {
-                        _expandedLockedBatchIds.remove(headerId);
+                        _expandedLockedLotIds.remove(headerId);
                       } else {
-                        _expandedLockedBatchIds.add(headerId);
+                        _expandedLockedLotIds.add(headerId);
                       }
                     }),
                     child: SizedBox(
@@ -1015,8 +1015,8 @@ class _BatchListScreenState extends State<BatchListScreen>
             ),
           ),
           if (isLocked && isExpanded)
-            LockedBatchTrayTable(
-              lines: _groupedBatchLinesByHeader[headerId] ?? [],
+            LockedLotTrayTable(
+              lines: _groupedLotLinesByHeader[headerId] ?? [],
               trayIdToCode: _primaryTrayIdToCode,
             ),
         ],

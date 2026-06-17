@@ -1,11 +1,11 @@
-class BatchColorModel {
+class LotColorModel {
   final SegmentCode? segmentCode;
   final SegmentType? segmentType;
 
-  BatchColorModel({this.segmentCode, this.segmentType});
+  LotColorModel({this.segmentCode, this.segmentType});
 
-  factory BatchColorModel.fromJson(Map<String, dynamic> json) {
-    return BatchColorModel(
+  factory LotColorModel.fromJson(Map<String, dynamic> json) {
+    return LotColorModel(
       segmentCode: json['segmentCode'] != null ? SegmentCode.fromJson(json['segmentCode']) : null,
       segmentType: json['segmentType'] != null ? SegmentType.fromJson(json['segmentType']) : null,
     );

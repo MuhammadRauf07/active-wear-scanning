@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:active_wear_scanning/features/tray/model/scanned_tray.dart';
-import 'package:active_wear_scanning/features/tray/model/plan_header_model.dart';
+import 'package:active_wear_scanning/features/knitting_production/model/scanned_tray.dart';
+import 'package:active_wear_scanning/features/knitting_production/model/plan_header_model.dart';
 
 class ScannedTrayRow extends StatelessWidget {
   final int index;

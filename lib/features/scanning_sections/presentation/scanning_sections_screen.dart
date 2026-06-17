@@ -1,14 +1,14 @@
-import 'package:active_wear_scanning/features/batch/presentation/batch_list_screen.dart';
+import 'package:active_wear_scanning/features/lot_making/presentation/lot_list_screen.dart';
 import 'package:active_wear_scanning/features/gbs/presentation/gbs_receiving_screen.dart';
 import 'package:active_wear_scanning/features/processing/presentation/processing_screen.dart';
 import 'package:active_wear_scanning/features/induction/presentation/induction_store_screen.dart';
 import 'package:active_wear_scanning/features/scanning_sections/presentation/widgets/section_card.dart';
-import 'package:active_wear_scanning/features/tray/presentation/tray_scanning_screen.dart';
+import 'package:active_wear_scanning/features/knitting_production/presentation/knitting_production_screen.dart';
 import 'package:active_wear_scanning/features/wip/presentation/wip_screen.dart';
 import 'package:active_wear_scanning/features/tray_tracking/presentation/tray_tracking_screen.dart';
 import 'package:active_wear_scanning/features/carton_packing/presentation/carton_packing_screen.dart';
 import 'package:active_wear_scanning/features/md_receiving/presentation/md_receiving_screen.dart';
-import 'package:active_wear_scanning/features/po_style/presentation/po_style_screen.dart';
+import 'package:active_wear_scanning/features/stitching_line_schedule/presentation/stitching_line_schedule_screen.dart';
 import 'package:flutter/material.dart';
 
 class ScanningSectionsScreen extends StatelessWidget {
@@ -57,11 +57,11 @@ class ScanningSectionsScreen extends StatelessWidget {
                         delay: 0,
                         child: _buildRow(context, [
                           SectionCard(
-                            title: 'Tray Scanning',
+                            title: 'Knitting Production',
                             subtitle: 'Verify and trace manufacturing trays',
                             sectionCode: 'TRAY',
                             progressValue: 0.5,
-                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const TrayScanningScreen())),
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const KnittingProductionScreen())),
                           ),
                           SectionCard(
                             title: 'GBS Receiving',
@@ -76,11 +76,11 @@ class ScanningSectionsScreen extends StatelessWidget {
                         delay: 100,
                         child: _buildRow(context, [
                           SectionCard(
-                            title: 'Batch Creation',
-                            subtitle: 'Initialize new production batches',
+                            title: 'Lot Making',
+                            subtitle: 'Initialize new production lots',
                             sectionCode: 'TRAY',
                             progressValue: 0.5,
-                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const BatchListScreen())),
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LotListScreen())),
                           ),
                           SectionCard(
                             title: 'Processing',
@@ -140,11 +140,11 @@ class ScanningSectionsScreen extends StatelessWidget {
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const MdReceivingScreen())),
                           ),
                           SectionCard(
-                            title: 'Stitching Line Scheduling',
-                            subtitle: 'Manage stitching line scheduling',
+                            title: 'Stitching Line Schedule',
+                            subtitle: 'Manage stitching line schedule',
                             sectionCode: 'POST',
                             progressValue: 0.5,
-                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PoStyleScreen())),
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const StitchingLineScheduleScreen())),
                           ),
                         ]),
                       ),
@@ -200,7 +200,7 @@ class ScanningSectionsScreen extends StatelessWidget {
   Widget _buildKPIGrid() {
     return Row(
       children: [
-        _buildKPICard('Active Batches', '12', Icons.layers_outlined, Colors.blue),
+        _buildKPICard('Active Lots', '12', Icons.layers_outlined, Colors.blue),
         const SizedBox(width: 12),
         _buildKPICard("Today's Output", '1,240', Icons.check_circle_outline, Colors.green),
         const SizedBox(width: 12),

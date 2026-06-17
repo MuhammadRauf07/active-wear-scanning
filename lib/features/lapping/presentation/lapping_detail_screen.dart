@@ -3,7 +3,7 @@ import 'package:active_wear_scanning/core/theme/app_theme.dart';
 import 'package:active_wear_scanning/core/utils/barcode_buffer_parser.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
-import 'package:active_wear_scanning/features/batch/repo/batch_repo.dart';
+import 'package:active_wear_scanning/features/lot_making/repo/lot_repo.dart';
 import 'package:active_wear_scanning/features/common-models/common_models.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:active_wear_scanning/features/lapping/model/lapping_model.dart';
@@ -50,7 +50,7 @@ class LappingDetailScreen extends StatefulWidget {
 
 class _LappingDetailScreenState extends State<LappingDetailScreen> {
   final _processingRepo = ProcessingRepo();
-  final _batchRepo = BatchRepo();
+  final _lotRepo = LotRepo();
   final _lappingRepo = LappingRepo();
   bool _isLoading = false;
   List<LappingModel> _trays = [];
@@ -218,7 +218,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
 
     if (matchedTray == null) {
       AppLoader.show(context, message: "Searching system trays...");
-      final trayRes = await _batchRepo.fetchTrayDetailByCode(trayCode);
+      final trayRes = await _lotRepo.fetchTrayDetailByCode(trayCode);
       if (!mounted) return 'Screen closed';
       AppLoader.hide(context);
 
@@ -548,7 +548,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF263238)),
                   ),
                   Text(
-                    'BATCH: ${widget.batchCode}',
+                    'LOT: ${widget.batchCode}',
                     style: const TextStyle(fontSize: 10, color: Color(0xFF546E7A), fontWeight: FontWeight.w600, letterSpacing: 0.5),
                   ),
                 ],
@@ -663,7 +663,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
       crossAxisSpacing: 10,
       childAspectRatio: 3.8,
       children: [
-        _buildHUDCard('BATCH #', widget.batchCode, Icons.tag_rounded),
+        _buildHUDCard('LOT #', widget.batchCode, Icons.tag_rounded),
         _buildHUDCard('MACHINE', widget.machine, Icons.precision_manufacturing_rounded),
         _buildHUDCard('COLOR', widget.color, Icons.palette_rounded),
         _buildHUDCard('OPERATION', 'LAPPING', Icons.account_tree_rounded),
@@ -745,7 +745,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
       final handoverOpId = widget.nextOperationId ?? baseProgress.operationId;
 
       if (handoverOpId != null) {
-        final locRes = await _batchRepo.fetchLocators(operationId: handoverOpId);
+        final locRes = await _lotRepo.fetchLocators(operationId: handoverOpId);
         if (locRes.success && locRes.data != null) {
           final List locList = locRes.data is Map ? (locRes.data['items'] ?? []) : locRes.data;
           final matchingEntry = locList.cast<Map>().firstWhere(
@@ -848,7 +848,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
           // --- 2. FETCH PREVIOUS WIP TRANSACTION (From the tray's state prior to Handover) ---
           int? wipId;
           if (pp.id != null) {
-            final nativeWipRes = await _batchRepo.fetchWipTransactionsByProgressId(pp.id!);
+            final nativeWipRes = await _lotRepo.fetchWipTransactionsByProgressId(pp.id!);
             if (nativeWipRes.success && nativeWipRes.data != null) {
               final List rawItems = nativeWipRes.data is Map ? (nativeWipRes.data['items'] ?? []) : nativeWipRes.data;
               final items = rawItems.cast<Map<String, dynamic>>();
@@ -865,7 +865,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
           // --- 3. CREATE BATCH LINE (Cross-linked to established WIP logically) ---
           int? blId;
           if (wipId != null) {
-            final blRes = await _batchRepo.createBatchLine({
+            final blRes = await _lotRepo.createLotLine({
               "planDate": DateTime.now().toIso8601String(),
               "transactionDate": DateTime.now().toIso8601String(),
               "primaryQuantity": trayQty,
@@ -890,7 +890,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
           }
 
           // --- 4. UPDATE TRAY DETAILS LOGIC (Visual State Link) ---
-          final tRes = await _batchRepo.fetchTrayDetailById(scannedTray.primaryTrayModel.id!);
+          final tRes = await _lotRepo.fetchTrayDetailById(scannedTray.primaryTrayModel.id!);
           if (tRes.success) {
             final tData = tRes.data['trayDetail'] ?? tRes.data;
             Map<String, dynamic> trayUpd = Map<String, dynamic>.from(tData);
@@ -908,7 +908,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
             if (blId != null) {
                trayUpd["batchLinesId"] = blId; 
             }
-            final updTrayRes = await _batchRepo.updateTrayDetails(scannedTray.primaryTrayModel.id!, trayUpd);
+            final updTrayRes = await _lotRepo.updateTrayDetails(scannedTray.primaryTrayModel.id!, trayUpd);
             if (!updTrayRes.success) return false;
           } else {
             return false;

@@ -8,8 +8,8 @@ import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
 import 'package:active_wear_scanning/core/widgets/dynamic_info_display.dart';
 import 'package:active_wear_scanning/core/widgets/scanner_always_open.dart';
 import 'package:active_wear_scanning/core/widgets/section_header.dart';
-import 'package:active_wear_scanning/features/batch/model/batch_header_model.dart';
-import 'package:active_wear_scanning/features/batch/repo/batch_repo.dart';
+import 'package:active_wear_scanning/features/lot_making/model/lot_header_model.dart';
+import 'package:active_wear_scanning/features/lot_making/repo/lot_repo.dart';
 import 'package:active_wear_scanning/features/common-models/common_models.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:active_wear_scanning/features/lapping/presentation/lapping_detail_screen.dart';
@@ -55,7 +55,7 @@ class ProcessingBatchDetailsScreen extends StatefulWidget {
 
 class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScreen> {
   final _processingRepo = ProcessingRepo();
-  final _batchRepo = BatchRepo();
+  final _lotRepo = LotRepo();
   bool _showTrays = false;
   bool _isLoadingTrays = false;
   List<ProductionProgressResponseModel> _trays = [];
@@ -102,7 +102,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
 
   Future<void> _fetchMachineCapacity() async {
     if (widget.machineId == null) return;
-    final res = await _batchRepo.fetchMachineById(widget.machineId!);
+    final res = await _lotRepo.fetchMachineById(widget.machineId!);
     if (res.success && res.data != null) {
       final mData = res.data as Map<String, dynamic>;
       final mJson = mData['resource'] ?? mData;
@@ -120,13 +120,13 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
   // ── Fetch batch header to resolve current trolley ────────────────────────
   Future<void> _fetchBatchHeader() async {
     try {
-      final res = await _batchRepo.fetchBatchHeaderById(widget.batchHeaderId);
+      final res = await _lotRepo.fetchLotHeaderById(widget.batchHeaderId);
       if (!res.success || res.data == null) return;
-      final bh = BatchHeaderResponseModel.fromJson(
+      final bh = LotHeaderResponseModel.fromJson(
           res.data as Map<String, dynamic>);
       final trayDetailId = bh.batchHeader.trayDetailId;
       if (trayDetailId != null) {
-        final trayRes = await _batchRepo.fetchTrayDetailById(trayDetailId);
+        final trayRes = await _lotRepo.fetchTrayDetailById(trayDetailId);
         if (trayRes.success && trayRes.data != null) {
           final trayRaw = trayRes.data as Map<String, dynamic>;
           // API may return nested {trayDetail:{...}} or flat object
@@ -191,7 +191,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
             double perGarmentTube = tray.item.perGarmentTube ?? 0;
 
             if (mainItemId > 0) {
-              final itemRes = await _batchRepo.fetchItemDef(mainItemId);
+              final itemRes = await _lotRepo.fetchItemDef(mainItemId);
               if (itemRes.success && itemRes.data != null) {
                 final itemData = itemRes.data is Map ? itemRes.data as Map<String, dynamic> : {};
                 // perGarmentTube always from main item
@@ -206,7 +206,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
 
             // If color is still empty, try processedItemId as fallback
             if (colorDesc.isEmpty && processedItemId != null && processedItemId > 0) {
-              final processedRes = await _batchRepo.fetchItemDef(processedItemId);
+              final processedRes = await _lotRepo.fetchItemDef(processedItemId);
               if (processedRes.success && processedRes.data != null) {
                 final pd = processedRes.data is Map ? processedRes.data as Map<String, dynamic> : {};
                 if (pd['colorDescription'] != null) colorDesc = pd['colorDescription'];
@@ -739,16 +739,16 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
     setState(() => _isUpdatingTrolley = true);
     AppLoader.show(context, message: 'Freeing trolley...');
     try {
-      final bhRes = await _batchRepo.fetchBatchHeaderById(widget.batchHeaderId);
+      final bhRes = await _lotRepo.fetchLotHeaderById(widget.batchHeaderId);
       if (!bhRes.success || bhRes.data == null) {
         AppLoader.hide(context);
         setState(() => _isUpdatingTrolley = false);
         _showError('Failed to fetch batch header');
         return;
       }
-      final bh = BatchHeaderResponseModel.fromJson(
+      final bh = LotHeaderResponseModel.fromJson(
           bhRes.data as Map<String, dynamic>).batchHeader;
-      final updateRes = await _batchRepo.updateBatchHeader(widget.batchHeaderId, {
+      final updateRes = await _lotRepo.updateLotHeader(widget.batchHeaderId, {
         'planDate': bh.planDate,
         'colorDescription': bh.colorDescription,
         'lockFlag': bh.lockFlag ?? false,
@@ -800,7 +800,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
     AppLoader.show(context, message: 'Validating trolley...');
     try {
       // 1. Look up tray detail by code
-      final result = await _batchRepo.fetchTrayDetailByCode(code);
+      final result = await _lotRepo.fetchTrayDetailByCode(code);
       AppLoader.hide(context);
 
       if (!result.success || result.data == null) {
@@ -841,15 +841,15 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
 
       // 5. Attach: fetch fresh batch header and PUT with new trayDetailId
       AppLoader.show(context, message: 'Attaching trolley...');
-      final bhRes = await _batchRepo.fetchBatchHeaderById(widget.batchHeaderId);
+      final bhRes = await _lotRepo.fetchLotHeaderById(widget.batchHeaderId);
       if (!bhRes.success || bhRes.data == null) {
         AppLoader.hide(context);
         setState(() => _isUpdatingTrolley = false);
         return 'Failed to fetch batch header';
       }
-      final bh = BatchHeaderResponseModel.fromJson(
+      final bh = LotHeaderResponseModel.fromJson(
           bhRes.data as Map<String, dynamic>).batchHeader;
-      final updateRes = await _batchRepo.updateBatchHeader(widget.batchHeaderId, {
+      final updateRes = await _lotRepo.updateLotHeader(widget.batchHeaderId, {
         'planDate': bh.planDate,
         'colorDescription': bh.colorDescription,
         'lockFlag': bh.lockFlag ?? false,

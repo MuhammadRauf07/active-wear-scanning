@@ -1,23 +1,23 @@
-class PoStyleItem {
-  final PoStyleModel poStyle;
-  final PoAllocationLineModel? poAllocationLine;
+class StitchingLineScheduleItem {
+  final StitchingLineScheduleModel stitchingLineSchedule;
+  final StitchingLineScheduleAllocationModel? poAllocationLine;
 
-  PoStyleItem({
-    required this.poStyle,
+  StitchingLineScheduleItem({
+    required this.stitchingLineSchedule,
     this.poAllocationLine,
   });
 
-  factory PoStyleItem.fromJson(Map<String, dynamic> json) {
-    return PoStyleItem(
-      poStyle: PoStyleModel.fromJson(Map<String, dynamic>.from(json['poStyle'] as Map)),
+  factory StitchingLineScheduleItem.fromJson(Map<String, dynamic> json) {
+    return StitchingLineScheduleItem(
+      stitchingLineSchedule: StitchingLineScheduleModel.fromJson(Map<String, dynamic>.from(json['poStyle'] as Map)),
       poAllocationLine: json['poAllocationLine'] != null
-          ? PoAllocationLineModel.fromJson(Map<String, dynamic>.from(json['poAllocationLine'] as Map))
+          ? StitchingLineScheduleAllocationModel.fromJson(Map<String, dynamic>.from(json['poAllocationLine'] as Map))
           : null,
     );
   }
 }
 
-class PoStyleModel {
+class StitchingLineScheduleModel {
   final String? operation;
   final String? bundleQrCode;
   final String? so;
@@ -44,7 +44,7 @@ class PoStyleModel {
   final String? creatorId;
   final int id;
 
-  PoStyleModel({
+  StitchingLineScheduleModel({
     this.operation,
     this.bundleQrCode,
     this.so,
@@ -72,8 +72,8 @@ class PoStyleModel {
     required this.id,
   });
 
-  factory PoStyleModel.fromJson(Map<String, dynamic> json) {
-    return PoStyleModel(
+  factory StitchingLineScheduleModel.fromJson(Map<String, dynamic> json) {
+    return StitchingLineScheduleModel(
       operation: json['operation'],
       bundleQrCode: json['bundleQrCode'],
       so: json['so'],
@@ -132,11 +132,11 @@ class PoStyleModel {
     };
   }
 
-  PoStyleModel copyWith({
+  StitchingLineScheduleModel copyWith({
     String? lineCode,
     String? line,
   }) {
-    return PoStyleModel(
+    return StitchingLineScheduleModel(
       operation: operation,
       bundleQrCode: bundleQrCode,
       so: so,
@@ -166,7 +166,7 @@ class PoStyleModel {
   }
 }
 
-class PoAllocationLineModel {
+class StitchingLineScheduleAllocationModel {
   final String? colorCode;
   final String? garmentDescription;
   final String? sizeDescription;
@@ -182,7 +182,7 @@ class PoAllocationLineModel {
   final String? creatorId;
   final int id;
 
-  PoAllocationLineModel({
+  StitchingLineScheduleAllocationModel({
     this.colorCode,
     this.garmentDescription,
     this.sizeDescription,
@@ -199,8 +199,8 @@ class PoAllocationLineModel {
     required this.id,
   });
 
-  factory PoAllocationLineModel.fromJson(Map<String, dynamic> json) {
-    return PoAllocationLineModel(
+  factory StitchingLineScheduleAllocationModel.fromJson(Map<String, dynamic> json) {
+    return StitchingLineScheduleAllocationModel(
       colorCode: json['colorCode'],
       garmentDescription: json['garmentDescription'],
       sizeDescription: json['sizeDescription'],

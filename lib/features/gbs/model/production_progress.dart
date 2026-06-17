@@ -1,5 +1,5 @@
 import 'package:active_wear_scanning/features/common-models/common_models.dart';
-import 'package:active_wear_scanning/features/batch/model/batch_header_model.dart';
+import 'package:active_wear_scanning/features/lot_making/model/lot_header_model.dart';
 
 class ProductionProgressResponseModel {
   final ProductionProgress productionProgress;
@@ -12,7 +12,7 @@ class ProductionProgressResponseModel {
   final Item item;
   final Item? processedItem;
   final PlanHeader? planHeader;
-  final BatchHeaderModel? batchHeader;
+  final LotHeaderModel? batchHeader;
 
   ProductionProgressResponseModel({
     required this.productionProgress,
@@ -55,7 +55,7 @@ class ProductionProgressResponseModel {
       processedItem: json['processedItem'] != null ? Item.fromJson(json['processedItem']) : null,
       primaryTrayModel: finalPTM,
       planHeader: json['planHeader'] != null ? PlanHeader.fromJson(json['planHeader']) : null,
-      batchHeader: json['batchHeader'] != null ? BatchHeaderModel.fromJson(json['batchHeader']) : null,
+      batchHeader: json['batchHeader'] != null ? LotHeaderModel.fromJson(json['batchHeader']) : null,
     );
   }
 
@@ -70,7 +70,7 @@ class ProductionProgressResponseModel {
     Item? item,
     Item? processedItem,
     PlanHeader? planHeader,
-    BatchHeaderModel? batchHeader,
+    LotHeaderModel? batchHeader,
   }) {
     return ProductionProgressResponseModel(
       productionProgress: productionProgress ?? this.productionProgress,

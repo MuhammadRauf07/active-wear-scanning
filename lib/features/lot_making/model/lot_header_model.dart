@@ -1,17 +1,17 @@
 import 'package:active_wear_scanning/features/common-models/common_models.dart';
-import 'package:active_wear_scanning/features/batch/model/batch_color_model.dart';
+import 'package:active_wear_scanning/features/lot_making/model/lot_color_model.dart';
 
-class BatchHeaderResponseModel {
-  final BatchHeaderModel batchHeader;
+class LotHeaderResponseModel {
+  final LotHeaderModel batchHeader;
   final MachineModel? machine;
   final SegmentCode? colorCode;
   final Shift? shift;
 
-  BatchHeaderResponseModel({required this.batchHeader, this.machine, this.colorCode, this.shift});
+  LotHeaderResponseModel({required this.batchHeader, this.machine, this.colorCode, this.shift});
 
-  factory BatchHeaderResponseModel.fromJson(Map<String, dynamic> json) {
-    return BatchHeaderResponseModel(
-      batchHeader: BatchHeaderModel.fromJson(json['batchHeader'] ?? json),
+  factory LotHeaderResponseModel.fromJson(Map<String, dynamic> json) {
+    return LotHeaderResponseModel(
+      batchHeader: LotHeaderModel.fromJson(json['batchHeader'] ?? json),
       machine: (json['machine'] != null) 
           ? MachineModel.fromJson(json['machine']) 
           : (json['resourceCode'] != null || json['brand'] != null) 
@@ -25,7 +25,7 @@ class BatchHeaderResponseModel {
   }
 }
 
-class BatchHeaderModel {
+class LotHeaderModel {
   final int? id;
   final String? creationTime;
   final String? creatorId;
@@ -41,7 +41,7 @@ class BatchHeaderModel {
   final int? trayDetailId;
   final String? concurrencyStamp;
 
-  BatchHeaderModel({
+  LotHeaderModel({
     this.id,
     this.creationTime,
     this.creatorId,
@@ -58,8 +58,8 @@ class BatchHeaderModel {
     this.concurrencyStamp,
   });
 
-  factory BatchHeaderModel.fromJson(Map<String, dynamic> json) {
-    return BatchHeaderModel(
+  factory LotHeaderModel.fromJson(Map<String, dynamic> json) {
+    return LotHeaderModel(
       id: json['id'],
       creationTime: json['creationTime'],
       creatorId: json['creatorId'],

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:active_wear_scanning/features/tray/model/plan_header_model.dart';
+import 'package:active_wear_scanning/features/knitting_production/model/plan_header_model.dart';
 
 class WorkOrderDropdown extends StatefulWidget {
   final List<PlanLineResponseModel>? planLines;
@@ -141,7 +141,7 @@ class _WorkOrderDropdownState extends State<WorkOrderDropdown> with SingleTicker
               Expanded(
                 child: widget.selectedPlanLine == null
                     ? Text(
-                        'Work Order Selection',
+                        'WORK ORDER SELECTION',
                         style: TextStyle(
                           color: widget.enabled ? Colors.grey.shade600 : Colors.grey.shade400,
                           fontSize: 13,
@@ -228,7 +228,7 @@ class _WorkOrderDropdownState extends State<WorkOrderDropdown> with SingleTicker
               },
               style: const TextStyle(fontSize: 13, color: Colors.black87),
               decoration: InputDecoration(
-                hintText: "Search Work Order...",
+                hintText: "SEARCH WORK ORDER",
                 hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
                 prefixIcon: const Icon(Icons.search, size: 18, color: Colors.grey),
                 isDense: true,
