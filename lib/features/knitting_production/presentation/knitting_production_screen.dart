@@ -52,6 +52,11 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
     super.initState();
     HardwareKeyboard.instance.addHandler(_onHardwareKey);
     _loadShifts();
+    _quantityInputFieldController.addListener(_onQuantityChanged);
+  }
+
+  void _onQuantityChanged() {
+    setState(() {});
   }
 
   Future<void> _loadShifts() async {
@@ -108,6 +113,7 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_onHardwareKey);
     _overrideQuantityController.dispose();
+    _quantityInputFieldController.removeListener(_onQuantityChanged);
     _quantityInputFieldController.dispose();
     _remarksInputFieldController.dispose();
     for (final controller in _quantityControllers) {
@@ -939,7 +945,7 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
                         width: double.infinity,
                         height: 48,
                         child: ElevatedButton(
-                          onPressed: _scannedTrays.isEmpty
+                          onPressed: (_scannedTrays.isEmpty && _quantityInputFieldController.text.trim().isEmpty)
                               ? () {
                                   HapticFeedbackHelper.buttonClick();
                                   _onScanMachineBarcode();
@@ -989,7 +995,7 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
                             ),
                             const SizedBox(height: 8),
                             WorkOrderDropdown(
-                              enabled: _scannedTrays.isEmpty,
+                              enabled: _scannedTrays.isEmpty && _quantityInputFieldController.text.trim().isEmpty,
                               planLines: _planLines,
                               selectedPlanLine: _selectedPlanLine,
                               onChanged: (newValue) {
@@ -1365,6 +1371,7 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
 
   Widget _buildQuantityInputFieldSection() {
     final title = _productionType == 'sample' ? 'Sample Quantity' : 'C Grade Quantity';
+    final isRemarksEnabled = _quantityInputFieldController.text.trim().isNotEmpty;
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1411,9 +1418,9 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
                 setState(() {});
               },
               style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF0D47A1),
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1E293B),
               ),
               decoration: const InputDecoration(
                 hintText: 'Enter Quantity',
@@ -1441,29 +1448,36 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
           const SizedBox(height: 12),
           Container(
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
+              color: isRemarksEnabled ? const Color(0xFFF8FAFC) : const Color(0xFFF1F5F9),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
+              border: Border.all(
+                color: isRemarksEnabled ? const Color(0xFFCBD5E1) : const Color(0xFFE2E8F0),
+                width: 1.5,
+              ),
             ),
             child: TextField(
               controller: _remarksInputFieldController,
+              enabled: isRemarksEnabled,
               keyboardType: TextInputType.text,
               onChanged: (val) => setState(() {}),
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF263238),
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: isRemarksEnabled ? const Color(0xFF1E293B) : const Color(0xFF94A3B8),
               ),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: 'Enter Remarks',
-                hintStyle: TextStyle(
+                hintStyle: const TextStyle(
                   color: Color(0xFF94A3B8),
-                  fontSize: 13,
+                  fontSize: 14,
                   fontWeight: FontWeight.normal,
                 ),
-                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 border: InputBorder.none,
-                prefixIcon: Icon(Icons.comment_rounded, color: Color(0xFF546E7A)),
+                prefixIcon: Icon(
+                  Icons.comment_rounded,
+                  color: isRemarksEnabled ? const Color(0xFF0D47A1) : const Color(0xFF94A3B8),
+                ),
               ),
             ),
           ),
