@@ -37,6 +37,7 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
   String _productionType = 'good';
   final _quantityInputFieldController = TextEditingController();
   final _remarksInputFieldController = TextEditingController();
+  bool _usePreviousShift = false;
 
   List<PlanLineResponseModel>? _planLines;
   List<TrayDetailsModel> availableTraysDetail = [];
@@ -65,6 +66,7 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
       if (res.success && res.data != null) {
         setState(() {
           _shifts = List<Shift>.from(res.data);
+          _shifts.sort((a, b) => a.startTime.compareTo(b.startTime));
         });
       }
     } catch (e) {
@@ -107,6 +109,75 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
     }
 
     return _selectedPlanLine?.planLine.shiftId ?? 1;
+  }
+
+  Map<String, dynamic> _getTargetShiftAndDate() {
+    final now = DateTime.now();
+    final todayStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
+    if (_shifts.isEmpty) {
+      return {
+        'shiftId': _selectedPlanLine?.planLine.shiftId ?? 1,
+        'dateStr': todayStr,
+      };
+    }
+
+    final currentShiftId = _getCurrentShiftId();
+    final currentShiftIndex = _shifts.indexWhere((s) => s.id == currentShiftId);
+    if (currentShiftIndex == -1) {
+      return {
+        'shiftId': currentShiftId,
+        'dateStr': todayStr,
+      };
+    }
+
+    // Determine if the current shift is C shift and it is past midnight (hour < 6)
+    final currentShift = _shifts[currentShiftIndex];
+    final isCShift = currentShift.code.toUpperCase() == 'C' || currentShiftIndex == 2;
+    final isPastMidnight = isCShift && now.hour < 6;
+
+    int targetShiftId = currentShiftId;
+    String targetDateStr = todayStr;
+
+    if (_usePreviousShift) {
+      if (currentShiftIndex == 0) { // A Shift
+        // Previous shift is C Shift (last shift)
+        final prevShift = _shifts.last;
+        targetShiftId = prevShift.id;
+        final yesterday = now.subtract(const Duration(days: 1));
+        targetDateStr = "${yesterday.year}-${yesterday.month.toString().padLeft(2, '0')}-${yesterday.day.toString().padLeft(2, '0')}";
+      } else if (isCShift) { // C Shift
+        // Previous shift is B Shift (second shift)
+        final prevShift = _shifts[1];
+        targetShiftId = prevShift.id;
+        if (isPastMidnight) {
+          // B Shift occurred yesterday
+          final yesterday = now.subtract(const Duration(days: 1));
+          targetDateStr = "${yesterday.year}-${yesterday.month.toString().padLeft(2, '0')}-${yesterday.day.toString().padLeft(2, '0')}";
+        } else {
+          // B Shift occurred today
+          targetDateStr = todayStr;
+        }
+      } else { // B Shift
+        // Previous shift is A Shift (first shift)
+        final prevShift = _shifts[0];
+        targetShiftId = prevShift.id;
+        targetDateStr = todayStr;
+      }
+    } else {
+      // Normal shift logic
+      if (isPastMidnight) {
+        final yesterday = now.subtract(const Duration(days: 1));
+        targetDateStr = "${yesterday.year}-${yesterday.month.toString().padLeft(2, '0')}-${yesterday.day.toString().padLeft(2, '0')}";
+      } else {
+        targetDateStr = todayStr;
+      }
+    }
+
+    return {
+      'shiftId': targetShiftId,
+      'dateStr': targetDateStr,
+    };
   }
 
   @override
@@ -250,17 +321,19 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
       return dateStr.split('T')[0].split(' ')[0];
     }
 
-    final matchedShiftId = _getCurrentShiftId();
-    final currentShift = _shifts.firstWhere((s) => s.id == matchedShiftId, orElse: () => planLine.shift);
+    final totalWoPlanQty = planLine.workOrderLine.tubesAfterAdjustment;
+    final remainingWoPlanQty = totalWoPlanQty - plan.primaryQuantity;
 
     addField('Plan Date', Icons.calendar_today, 'Plan Date', formatDate(plan.planDate.toString()));
     addField('Knitting Tube', Icons.precision_manufacturing, 'Knitting Tube', plan.primaryPlanQuantity.toString());
     addField('Tubes Per Tray', Icons.grid_view, 'Tubes Per Tray', plan.quantityPerTray.toString());
     addField('Garment Pcs', Icons.checkroom, 'Garment Pcs', plan.secondaryPlanQuantity.toString());
-    addField('Shift Code', Icons.schedule, 'Shift Code', currentShift.code.toString());
+    addField('Shift Code', Icons.schedule, 'Shift Code', planLine.shift.code.toString());
     addField('Work Order Code', Icons.assignment, 'Work Order Code', workOrder.workOrderCode);
     addField('Work Order Date', Icons.event, 'Work Order Date', formatDate(workOrder.workOrderDate));
     addField('Item Description', Icons.description, 'Item Description', item.description);
+    addField('Total WO Plan QTY', Icons.analytics_rounded, 'Total WO Plan QTY', totalWoPlanQty.toStringAsFixed(0));
+    addField('Remaining WO Plan QTY', Icons.hourglass_empty_rounded, 'Remaining WO Plan QTY', remainingWoPlanQty.toStringAsFixed(0));
 
     return result;
   }
@@ -362,17 +435,17 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
 
       if (apiResult.success && apiResult.data != null) {
         final rawLines = List<PlanLineResponseModel>.from(apiResult.data);
-        final now = DateTime.now();
-        final todayStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
-        final currentShiftId = _getCurrentShiftId();
+        final targetInfo = _getTargetShiftAndDate();
+        final String targetDateStr = targetInfo['dateStr'];
+        final int targetShiftId = targetInfo['shiftId'];
         
         final filteredLines = rawLines.where((element) {
           final planDate = element.planLine.planDate;
-          final dateMatches = planDate.startsWith(todayStr);
+          final dateMatches = planDate.startsWith(targetDateStr);
           if (_shifts.isEmpty) {
             return dateMatches;
           }
-          final shiftMatches = element.planLine.shiftId == currentShiftId;
+          final shiftMatches = element.planLine.shiftId == targetShiftId;
           return dateMatches && shiftMatches;
         }).toList();
 
@@ -423,9 +496,10 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
     }
   }
 
-  /// Fetch the plan-line, add [goodQty]/[sampleQty]/[cGradeQty] cumulatively, then PUT back.
+  /// Fetch the plan-line, add [goodQty]/[goodPcs]/[sampleQty]/[cGradeQty] cumulatively, then PUT back.
   Future<void> _updatePlanLineQuantity({
     double goodQty = 0,
+    double goodPcs = 0,
     double sampleQty = 0,
     double cGradeQty = 0,
   }) async {
@@ -443,6 +517,13 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
 
       final latestPlanLine = fetchResult.data as PlanLine;
 
+      if (goodQty > 0) {
+        final double limit = _selectedPlanLine!.workOrderLine.tubesAfterAdjustment;
+        if (latestPlanLine.primaryQuantity + goodQty > limit) {
+          throw Exception('Primary quantity (${(latestPlanLine.primaryQuantity + goodQty).toInt()}) cannot exceed tubes after adjustment (${limit.toInt()}).');
+        }
+      }
+
       // 2. Build cumulative flat update payload.
       // - No 'id' in the body per Swagger schema (id is passed in the URL).
       // - Body must NOT be wrapped in 'input'.
@@ -458,7 +539,7 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
         'secondaryPlanQuantity': latestPlanLine.secondaryPlanQuantity.toInt(),
         'secondaryUOM': latestPlanLine.secondaryUOM,
         'primaryQuantity': (latestPlanLine.primaryQuantity + goodQty).toInt(),
-        'secondaryQuantity': latestPlanLine.secondaryQuantity.toInt(),
+        'secondaryQuantity': (latestPlanLine.secondaryQuantity + goodPcs).toInt(),
         'cycleTime': latestPlanLine.cycleTime,
         'sampleQty': (latestPlanLine.sampleQty + sampleQty).toInt(),
         'cGradeQty': (latestPlanLine.cGradeQty + cGradeQty).toInt(),
@@ -506,6 +587,27 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
     if (_productionType == 'good') {
       AppLoader.show(context, message: 'Saving Changes...');
       try {
+        final totalScannedTubes = _scannedTrays.fold<double>(
+          0,
+          (sum, tray) {
+            final idx = _scannedTrays.indexOf(tray);
+            return sum + (double.tryParse(_quantityControllers[idx].text) ?? 0);
+          },
+        );
+
+        // Pre-validate that primary quantity does not exceed tubes after adjustment
+        final fetchResult = await _trayScanningRepo.fetchPlanLineById(_selectedPlanLine!.planLine.id);
+        if (!fetchResult.success || fetchResult.data == null) {
+          throw Exception('Plan-line refresh failed: ${fetchResult.message}');
+        }
+        final latestPlanLine = fetchResult.data as PlanLine;
+        final double currentPrimaryQty = latestPlanLine.primaryQuantity;
+        final double limit = _selectedPlanLine!.workOrderLine.tubesAfterAdjustment;
+
+        if (currentPrimaryQty + totalScannedTubes > limit) {
+          throw Exception('Primary quantity (${(currentPrimaryQty + totalScannedTubes).toInt()}) cannot exceed tubes after adjustment (${limit.toInt()}). Remaining allowable tubes: ${(limit - currentPrimaryQty).toInt()}.');
+        }
+
         for (int i = 0; i < _scannedTrays.length; i++) {
           final trayResFetch = await _trayScanningRepo.fetchTrayById(_scannedTrays[i].trayUpdateId!);
           if (!trayResFetch.success || trayResFetch.data == null) {
@@ -515,12 +617,12 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
           final latestTray = trayResFetch.data as TrayDetailsModel;
           final latestTrayDetail = latestTray.trayDetails;
 
-          final matchedShiftId = _getCurrentShiftId();
+          final targetShiftId = _selectedPlanLine!.planLine.shiftId;
 
           Map<String, dynamic> planData = {
             'trayCode': latestTrayDetail?.trayCode,
             'trayType': 1,
-            'shiftId': matchedShiftId,
+            'shiftId': targetShiftId,
             'planLineId': _selectedPlanLine!.planLine.id,
             'workOrderHeaderId': _selectedPlanLine!.workOrderHeader.id,
             'workOrderLineId': _selectedPlanLine!.workOrderLine.id,
@@ -554,7 +656,7 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
             "workOrderHeaderId": _selectedPlanLine!.workOrderHeader.id,
             "workOrderLineId": _selectedPlanLine!.workOrderLine.id,
             "itemId": _selectedPlanLine!.planLine.itemId,
-            "shiftId": matchedShiftId,
+            "shiftId": targetShiftId,
             "primaryTrayId": latestTrayDetail?.id,
             "secondaryTrayId": latestTrayDetail?.id,
             "machineId": _selectedPlanLine!.planLine.resourceId,
@@ -577,14 +679,22 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
         }
 
         // ── Cumulative good-quantity update on plan line ─────────────────
-        final totalScannedTubes = _scannedTrays.fold<double>(
+         _scannedTrays.fold<double>(
           0,
           (sum, tray) {
             final idx = _scannedTrays.indexOf(tray);
             return sum + (double.tryParse(_quantityControllers[idx].text) ?? 0);
           },
         );
-        await _updatePlanLineQuantity(goodQty: totalScannedTubes);
+        final totalScannedPcs = _scannedTrays.fold<double>(
+          0,
+          (sum, tray) {
+            final idx = _scannedTrays.indexOf(tray);
+            final qty = double.tryParse(_quantityControllers[idx].text) ?? 0;
+            return sum + (qty * tray.perGarmentTube);
+          },
+        );
+        await _updatePlanLineQuantity(goodQty: totalScannedTubes, goodPcs: totalScannedPcs);
 
         if (mounted) {
           HapticFeedbackHelper.scanSuccess();
@@ -640,7 +750,7 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
             "workOrderHeaderId": _selectedPlanLine!.workOrderHeader.id,
             "workOrderLineId": _selectedPlanLine!.workOrderLine.id,
             "itemId": _selectedPlanLine!.planLine.itemId,
-            "shiftId": _getCurrentShiftId(),
+            "shiftId": _selectedPlanLine!.planLine.shiftId,
             "machineId": _selectedPlanLine!.planLine.resourceId,
             "locatorId": 2,
             "remarks": _remarksInputFieldController.text.trim().isNotEmpty
@@ -1009,6 +1119,57 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
                                 });
                               },
                             ),
+                            const SizedBox(height: 12),
+                            InkWell(
+                              onTap: (_scannedTrays.isEmpty && _quantityInputFieldController.text.trim().isEmpty)
+                                  ? () {
+                                      HapticFeedbackHelper.buttonClick();
+                                      setState(() {
+                                        _usePreviousShift = !_usePreviousShift;
+                                      });
+                                      if (_machineBarcode.isNotEmpty) {
+                                        _fetchMachineData(_machineBarcode);
+                                      }
+                                    }
+                                  : null,
+                              borderRadius: BorderRadius.circular(6),
+                              child: Row(
+                                children: [
+                                  SizedBox(
+                                    height: 24,
+                                    width: 24,
+                                    child: Checkbox(
+                                      value: _usePreviousShift,
+                                      activeColor: const Color(0xFF0D47A1),
+                                      onChanged: (_scannedTrays.isEmpty && _quantityInputFieldController.text.trim().isEmpty)
+                                          ? (value) {
+                                              if (value != null) {
+                                                HapticFeedbackHelper.buttonClick();
+                                                setState(() {
+                                                  _usePreviousShift = value;
+                                                });
+                                                if (_machineBarcode.isNotEmpty) {
+                                                  _fetchMachineData(_machineBarcode);
+                                                }
+                                              }
+                                            }
+                                          : null,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Expanded(
+                                    child: Text(
+                                      'Add to Previous Shift',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF37474F),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
                 ),
@@ -1035,13 +1196,15 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
       {'label': 'WORK ORDER DATE', 'icon': Icons.event_note_rounded, 'value': info['Work Order Date']?['value']},
       {'label': 'GARMENT PCS', 'icon': Icons.checkroom_rounded, 'value': info['Garment Pcs']?['value']},
       {'label': 'KNITTING TUBE', 'icon': Icons.settings_suggest_rounded, 'value': info['Knitting Tube']?['value']},
+      {'label': 'TUBES PER TRAY', 'icon': Icons.flag_rounded, 'value': info['Tubes Per Tray']?['value']},
       
       // Row 2: Targets & Performance
-      {'label': 'TUBES PER TRAY', 'icon': Icons.flag_rounded, 'value': info['Knitting Tube']?['value']},
       {'label': 'SHIFT', 'icon': Icons.timer_rounded, 'value': info['Shift Code']?['value']},
       {'label': 'SCANNED TRAYS', 'icon': Icons.layers_rounded, 'value': '${_scannedTrays.length}'},
       {'label': 'SCANNED TUBES', 'icon': Icons.analytics_rounded, 'value': totalUnits.toStringAsFixed(0)},
       {'label': 'TRAY CAPACITY', 'icon': Icons.grid_view_rounded, 'isEditable': true},
+      {'label': 'TOTAL WO PLAN QTY', 'icon': Icons.analytics_rounded, 'value': info['Total WO Plan QTY']?['value']},
+      {'label': 'REMAINING WO PLAN QTY', 'icon': Icons.hourglass_empty_rounded, 'value': info['Remaining WO Plan QTY']?['value']},
 
       // Row 3: Full Width Details
       {'label': 'ITEM DESCRIPTION', 'icon': Icons.description_rounded, 'value': info['Item Description']?['value'], 'isFullWidth': true},
@@ -1053,16 +1216,16 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 5,
+            crossAxisCount: 6,
             crossAxisSpacing: 8,
             mainAxisSpacing: 8,
-            childAspectRatio: 1.8, // More compact aspect ratio
+            childAspectRatio: 1.5,
           ),
-          itemCount: 10,
+          itemCount: 12,
           itemBuilder: (context, index) => _buildMetricCard(allItems[index]),
         ),
         const SizedBox(height: 8),
-        _buildMetricCard(allItems[10]),
+        _buildMetricCard(allItems[12]),
       ],
     );
   }
