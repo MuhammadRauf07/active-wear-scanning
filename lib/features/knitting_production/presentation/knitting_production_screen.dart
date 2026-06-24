@@ -40,10 +40,12 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
   bool _usePreviousShift = false;
 
   List<PlanLineResponseModel>? _planLines;
+  List<PlanLineResponseModel> _allRawPlanLines = [];
   List<TrayDetailsModel> availableTraysDetail = [];
   List<ProductionProgressResponseModel> existingProductionProgresses = [];
   PlanLineResponseModel? _selectedPlanLine;
   List<Shift> _shifts = [];
+  final Map<int, List<PlanLineResponseModel>> _allPlanLinesForWorkOrderLines = {};
 
   // Centralized Bluetooth Scanner Support
   final _barcodeParser = BarcodeBufferParser();
@@ -304,6 +306,16 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
     return null;
   }
 
+  double _getSumPrimaryQuantityForWorkOrder(int workOrderLineId) {
+    final globalLines = _allPlanLinesForWorkOrderLines[workOrderLineId];
+    if (globalLines != null && globalLines.isNotEmpty) {
+      return globalLines.fold<double>(0.0, (sum, line) => sum + line.planLine.primaryQuantity);
+    }
+    return _allRawPlanLines
+        .where((line) => line.planLine.workOrderLineId == workOrderLineId)
+        .fold<double>(0.0, (sum, line) => sum + line.planLine.primaryQuantity);
+  }
+
   Map<String, dynamic> _buildPlanLineDetailsMap(PlanLineResponseModel planLine) {
     final result = <String, dynamic>{};
     void addField(String key, IconData icon, String label, String? value) {
@@ -322,7 +334,8 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
     }
 
     final totalWoPlanQty = planLine.workOrderLine.tubesAfterAdjustment;
-    final remainingWoPlanQty = totalWoPlanQty - plan.primaryQuantity;
+    final sumPrimaryQty = _getSumPrimaryQuantityForWorkOrder(plan.workOrderLineId);
+    final remainingWoPlanQty = totalWoPlanQty - sumPrimaryQty;
 
     addField('Plan Date', Icons.calendar_today, 'Plan Date', formatDate(plan.planDate.toString()));
     addField('Knitting Tube', Icons.precision_manufacturing, 'Knitting Tube', plan.primaryPlanQuantity.toString());
@@ -419,10 +432,12 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
     setState(() {
       _machineBarcode = scannedCode;
       _planLines = null;
+      _allRawPlanLines = [];
       _selectedPlanLine = null;
       _productionType = 'good';
       _quantityInputFieldController.clear();
       _remarksInputFieldController.clear();
+      _allPlanLinesForWorkOrderLines.clear();
     });
 
     AppLoader.show(context, message: 'Loading Machine Data...');
@@ -449,8 +464,22 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
           return dateMatches && shiftMatches;
         }).toList();
 
+        // Fetch global plan lines for all unique workOrderLineIds
+        final uniqueWOLineIds = rawLines.map((e) => e.planLine.workOrderLineId).toSet().toList();
+        for (final wId in uniqueWOLineIds) {
+          try {
+            final globalRes = await _trayScanningRepo.fetchPlanLinesByWorkOrderLineId(wId);
+            if (globalRes.success && globalRes.data != null) {
+              _allPlanLinesForWorkOrderLines[wId] = List<PlanLineResponseModel>.from(globalRes.data);
+            }
+          } catch (e) {
+            debugPrint('Error fetching global plan lines for workOrderLineId $wId: $e');
+          }
+        }
+
         setState(() {
           _planLines = filteredLines;
+          _allRawPlanLines = rawLines;
           if (progressResult.success && progressResult.data != null) {
             existingProductionProgresses = progressResult.data as List<ProductionProgressResponseModel>;
           } else if (!progressResult.success) {
@@ -517,12 +546,7 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
 
       final latestPlanLine = fetchResult.data as PlanLine;
 
-      if (goodQty > 0) {
-        final double limit = _selectedPlanLine!.workOrderLine.tubesAfterAdjustment;
-        if (latestPlanLine.primaryQuantity + goodQty > limit) {
-          throw Exception('Primary quantity (${(latestPlanLine.primaryQuantity + goodQty).toInt()}) cannot exceed tubes after adjustment (${limit.toInt()}).');
-        }
-      }
+      // No restriction here. Warning confirmation dialog will handle the check before save.
 
       // 2. Build cumulative flat update payload.
       // - No 'id' in the body per Swagger schema (id is passed in the URL).
@@ -595,18 +619,123 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
           },
         );
 
-        // Pre-validate that primary quantity does not exceed tubes after adjustment
-        final fetchResult = await _trayScanningRepo.fetchPlanLineById(_selectedPlanLine!.planLine.id);
-        if (!fetchResult.success || fetchResult.data == null) {
-          throw Exception('Plan-line refresh failed: ${fetchResult.message}');
+        final targetWorkOrderLineId = _selectedPlanLine!.planLine.workOrderLineId;
+
+        // Refresh and check that primary quantity does not exceed tubes after adjustment.
+        // If it does, warn user with overproduction warning confirmation dialog.
+        if (mounted) AppLoader.show(context, message: 'Refreshing plan data...');
+        final apiResult = await _trayScanningRepo.loadWorkOrderBySerialNumber(_machineBarcode);
+        if (!apiResult.success || apiResult.data == null) {
+          if (mounted) AppLoader.hide(context);
+          throw Exception('Failed to refresh work order data: ${apiResult.message}');
         }
-        final latestPlanLine = fetchResult.data as PlanLine;
-        final double currentPrimaryQty = latestPlanLine.primaryQuantity;
+        
+        final freshRawLines = List<PlanLineResponseModel>.from(apiResult.data);
+
+        // Fetch global plan lines for the targetWorkOrderLineId
+        final globalRes = await _trayScanningRepo.fetchPlanLinesByWorkOrderLineId(targetWorkOrderLineId);
+        if (!globalRes.success || globalRes.data == null) {
+          if (mounted) AppLoader.hide(context);
+          throw Exception('Failed to refresh global plan lines: ${globalRes.message}');
+        }
+        final freshGlobalLines = List<PlanLineResponseModel>.from(globalRes.data);
+
+        if (mounted) {
+          setState(() {
+            _allRawPlanLines = freshRawLines;
+            _allPlanLinesForWorkOrderLines[targetWorkOrderLineId] = freshGlobalLines;
+            
+            final matchedIndex = freshRawLines.indexWhere((element) => element.planLine.id == _selectedPlanLine!.planLine.id);
+            if (matchedIndex != -1) {
+              _selectedPlanLine = freshRawLines[matchedIndex];
+            } else {
+              final globalMatchedIndex = freshGlobalLines.indexWhere((element) => element.planLine.id == _selectedPlanLine!.planLine.id);
+              if (globalMatchedIndex != -1) {
+                _selectedPlanLine = freshGlobalLines[globalMatchedIndex];
+              }
+            }
+          });
+        }
+        if (mounted) AppLoader.hide(context);
+
+        double sumPrimaryQty = 0;
+        for (final line in freshGlobalLines) {
+          if (line.planLine.workOrderLineId == targetWorkOrderLineId) {
+            sumPrimaryQty += line.planLine.primaryQuantity;
+          }
+        }
         final double limit = _selectedPlanLine!.workOrderLine.tubesAfterAdjustment;
 
-        if (currentPrimaryQty + totalScannedTubes > limit) {
-          throw Exception('Primary quantity (${(currentPrimaryQty + totalScannedTubes).toInt()}) cannot exceed tubes after adjustment (${limit.toInt()}). Remaining allowable tubes: ${(limit - currentPrimaryQty).toInt()}.');
+        bool proceed = true;
+        if (sumPrimaryQty + totalScannedTubes > limit) {
+          if (mounted) {
+            proceed = await showDialog<bool>(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) {
+                return AlertDialog(
+                  backgroundColor: const Color(0xFFF8FAFC),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  title: const Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded, color: Color(0xFFF59E0B)),
+                      SizedBox(width: 8),
+                      Text(
+                        'Overproduction Alert',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF1E293B),
+                        ),
+                      ),
+                    ],
+                  ),
+                  content: const Text(
+                    'Plan production has been scanned. More production will be taken as shortfall. Do you want to proceed?',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF475569),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(
+                          color: Color(0xFF64748B),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0D47A1),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      ),
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text(
+                        'OK',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ) ?? false;
+          } else {
+            proceed = false;
+          }
         }
+
+        if (!proceed) return;
+
+        if (mounted) AppLoader.show(context, message: 'Saving Changes...');
 
         for (int i = 0; i < _scannedTrays.length; i++) {
           final trayResFetch = await _trayScanningRepo.fetchTrayById(_scannedTrays[i].trayUpdateId!);
@@ -837,73 +966,70 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
               // ── Premium Header (Fixed) ────────────────────────────────────────
               _buildPremiumHeader(context),
   
-              // ── Fixed Top Sections ───────────────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Machine Scanner Section
-                    _KnittingProductionFadeSlideTransition(delay: 0, child: _buildMachineScannerSection()),
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Machine Scanner Section
+                      _KnittingProductionFadeSlideTransition(delay: 0, child: _buildMachineScannerSection()),
   
-                    // Production Information Section
-                    if (_selectedPlanLine != null) ...[
-                      const SizedBox(height: 16),
-                      const _KnittingProductionFadeSlideTransition(
-                        delay: 100,
-                        child: Padding(
-                          padding: EdgeInsets.only(left: 4, bottom: 8),
-                          child: Text(
-                            'PRODUCTION INTELLIGENCE',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF263238)),
+                      // Production Information Section
+                      if (_selectedPlanLine != null) ...[
+                        const SizedBox(height: 16),
+                        const _KnittingProductionFadeSlideTransition(
+                          delay: 100,
+                          child: Padding(
+                            padding: EdgeInsets.only(left: 4, bottom: 8),
+                            child: Text(
+                              'PRODUCTION INTELLIGENCE',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF263238)),
+                            ),
                           ),
                         ),
-                      ),
-                      _KnittingProductionFadeSlideTransition(delay: 150, child: _buildProductionInfoGrid()),
-                      const SizedBox(height: 12),
-                      _KnittingProductionFadeSlideTransition(delay: 180, child: _buildProductionTypeRadioButtons()),
-                    ],
+                        _KnittingProductionFadeSlideTransition(delay: 150, child: _buildProductionInfoGrid()),
+                        const SizedBox(height: 12),
+                        _KnittingProductionFadeSlideTransition(delay: 180, child: _buildProductionTypeRadioButtons()),
+                      ],
   
-                    // Action Area
-                    if (_selectedPlanLine != null && _productionType == 'good') ...[
-                      const SizedBox(height: 16),
-                      _KnittingProductionFadeSlideTransition(delay: 200, child: _buildActionArea()),
+                      // Action Area
+                      if (_selectedPlanLine != null && _productionType == 'good') ...[
+                        const SizedBox(height: 16),
+                        _KnittingProductionFadeSlideTransition(delay: 200, child: _buildActionArea()),
+                      ],
+  
+                      // Scrollable Section (Table or Input Field)
+                      if (_selectedPlanLine != null) ...[
+                        if (_productionType == 'good') ...[
+                          const SizedBox(height: 16),
+                          const Padding(
+                            padding: EdgeInsets.only(left: 4, bottom: 8),
+                            child: _KnittingProductionFadeSlideTransition(
+                              delay: 250,
+                              child: Text(
+                                'ACTIVE SCANNED TRAYS',
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF263238)),
+                              ),
+                            ),
+                          ),
+                          _KnittingProductionFadeSlideTransition(
+                            delay: 280,
+                            child: SizedBox(
+                              height: 320,
+                              child: _buildScannedTraysTable(),
+                            ),
+                          ),
+                        ] else ...[
+                          const SizedBox(height: 16),
+                          _buildQuantityInputFieldSection(),
+                        ],
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
-  
-              // ── Scrollable Section (Table or Input Field) ───────────────────
-              if (_selectedPlanLine != null) ...[
-                if (_productionType == 'good') ...[
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(20, 16, 16, 8),
-                    child: _KnittingProductionFadeSlideTransition(
-                      delay: 250,
-                      child: Text(
-                        'ACTIVE SCANNED TRAYS',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF263238)),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: _buildScannedTraysTable(),
-                    ),
-                  ),
-                ] else ...[
-                  const SizedBox(height: 16),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: _buildQuantityInputFieldSection(),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 16),
-              ] else 
-                const Spacer(),
             ],
           ),
         ),
@@ -1095,31 +1221,6 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
                       : Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'SELECT WORK ORDER',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF546E7A),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            WorkOrderDropdown(
-                              enabled: _scannedTrays.isEmpty && _quantityInputFieldController.text.trim().isEmpty,
-                              planLines: _planLines,
-                              selectedPlanLine: _selectedPlanLine,
-                              onChanged: (newValue) {
-                                setState(() {
-                                  _selectedPlanLine = newValue;
-                                  if (_selectedPlanLine != null) {
-                                    _overrideQuantityController.text =
-                                        _getPlanQuantityPerTray();
-                                  }
-                                  _quantityInputFieldController.clear();
-                                });
-                              },
-                            ),
-                            const SizedBox(height: 12),
                             InkWell(
                               onTap: (_scannedTrays.isEmpty && _quantityInputFieldController.text.trim().isEmpty)
                                   ? () {
@@ -1170,6 +1271,54 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
                                 ],
                               ),
                             ),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'SELECT WORK ORDER',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF546E7A),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            if (_planLines == null || _planLines!.isEmpty)
+                              Container(
+                                height: 48,
+                                alignment: Alignment.centerLeft,
+                                padding: const EdgeInsets.symmetric(horizontal: 14),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: const Color(0xFFCFD8DC),
+                                    width: 1.2,
+                                  ),
+                                ),
+                                child: Text(
+                                  'No data found',
+                                  style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                              )
+                            else
+                              WorkOrderDropdown(
+                                enabled: _scannedTrays.isEmpty && _quantityInputFieldController.text.trim().isEmpty,
+                                planLines: _planLines,
+                                selectedPlanLine: _selectedPlanLine,
+                                onChanged: (newValue) {
+                                  setState(() {
+                                    _selectedPlanLine = newValue;
+                                    if (_selectedPlanLine != null) {
+                                      _overrideQuantityController.text =
+                                          _getPlanQuantityPerTray();
+                                    }
+                                    _quantityInputFieldController.clear();
+                                  });
+                                },
+                              ),
                           ],
                         ),
                 ),
@@ -1210,16 +1359,21 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
       {'label': 'ITEM DESCRIPTION', 'icon': Icons.description_rounded, 'value': info['Item Description']?['value'], 'isFullWidth': true},
     ];
 
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final double cellWidth = (screenWidth - 32 - (3 * 6)) / 4;
+    final double cellHeight = screenWidth >= 600 ? 74.0 : 68.0;
+    final double childAspectRatio = cellWidth / cellHeight;
+
     return Column(
       children: [
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 6,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-            childAspectRatio: 1.5,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 4,
+            crossAxisSpacing: 6,
+            mainAxisSpacing: 6,
+            childAspectRatio: childAspectRatio,
           ),
           itemCount: 12,
           itemBuilder: (context, index) => _buildMetricCard(allItems[index]),
@@ -1234,10 +1388,16 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
     final bool isFullWidth = item['isFullWidth'] ?? false;
     final bool isEditable = item['isEditable'] ?? false;
     final Color? valueColor = item['color'];
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final bool isTablet = screenWidth >= 600;
 
     return Container(
       width: isFullWidth ? double.infinity : null,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: isFullWidth
+          ? const EdgeInsets.symmetric(horizontal: 12, vertical: 10)
+          : (isTablet
+              ? const EdgeInsets.symmetric(horizontal: 10, vertical: 8)
+              : const EdgeInsets.symmetric(horizontal: 6, vertical: 6)),
       decoration: BoxDecoration(
         color: isEditable ? const Color(0xFFFFFDE7) : Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -1254,19 +1414,19 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
             children: [
               Icon(
                 item['icon'],
-                size: 12,
+                size: isTablet ? 12 : 11,
                 color: isEditable ? const Color(0xFFF57F17) : const Color(0xFF1976D2),
               ),
-              const SizedBox(width: 6),
+              SizedBox(width: isTablet ? 6 : 4),
               Expanded(
                 child: Text(
                   item['label'],
                   style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
+                    fontSize: isTablet ? 10 : 8.5,
+                    fontWeight: FontWeight.w700,
                     color: isEditable ? const Color(0xFFE65100) : const Color(0xFF546E7A),
                   ),
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -1276,8 +1436,8 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
           if (isEditable)
             Center(
               child: Container(
-                width: 60,
-                height: 32,
+                width: isTablet ? 60 : 54,
+                height: 28,
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFF9C4),
                   borderRadius: BorderRadius.circular(6),
@@ -1287,10 +1447,10 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
                   controller: _overrideQuantityController,
                   textAlign: TextAlign.center,
                   textAlignVertical: TextAlignVertical.center,
-                  style: const TextStyle(
-                    fontSize: 12,
+                  style: TextStyle(
+                    fontSize: isTablet ? 12 : 10.5,
                     fontWeight: FontWeight.w900,
-                    color: Color(0xFFE65100),
+                    color: const Color(0xFFE65100),
                   ),
                   decoration: const InputDecoration(
                     contentPadding: EdgeInsets.only(top: 4),
@@ -1323,8 +1483,8 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
             Text(
               item['value'] ?? '---',
               style: TextStyle(
-                fontSize: isFullWidth ? 14 : 12,
-                fontWeight: FontWeight.w700,
+                fontSize: isFullWidth ? 14 : (isTablet ? 12 : 10.5),
+                fontWeight: FontWeight.w800,
                 color: valueColor ?? const Color(0xFF263238),
               ),
               maxLines: isFullWidth ? 2 : 1,

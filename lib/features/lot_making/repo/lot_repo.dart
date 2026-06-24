@@ -166,13 +166,21 @@ class LotRepo {
   }
 
   Future<PlexApiResult> fetchLotColors() async {
-    final result = await _api.getList('/api/app/segment-codes', query: {'SegmentTypeId': '629'});
+    final result = await _api.getList('/api/app/segment-codes', query: {
+      'SegmentTypeDescription': 'COLORS',
+      'MaxResultCount': '1000',
+    });
     
     if (!result.success || result.data == null) return result;
 
     try {
       final data = result.data as List;
-      final list = data.map((item) => LotColorModel.fromJson(Map<String, dynamic>.from(item))).toList();
+      final list = data
+          .map((item) => LotColorModel.fromJson(Map<String, dynamic>.from(item)))
+          .where((color) =>
+              color.segmentType?.description?.toUpperCase() == 'COLORS' ||
+              color.segmentType?.code?.toUpperCase() == 'COLORS')
+          .toList();
       return PlexApiResult(true, 200, "Success", list);
     } catch (e) {
       return PlexApiResult(false, 500, e.toString(), null);

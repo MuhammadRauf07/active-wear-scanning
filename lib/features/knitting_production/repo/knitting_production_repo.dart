@@ -172,6 +172,26 @@ class KnittingProductionRepo {
     return await _api.put('/api/app/plan-lines/$planLineId', body: data);
   }
 
+  Future<PlexApiResult> fetchPlanLinesByWorkOrderLineId(int workOrderLineId) async {
+    final result = await _api.getList('/api/app/plan-lines', query: {
+      'WorkOrderLineId': workOrderLineId.toString(),
+      'MaxResultCount': '1000',
+    });
+
+    if (!result.success || result.data == null) return result;
+
+    dev.log("PrintedResultOfPlanLinesByWorkOrderLineId :: ${result.data.toString()}");
+
+    try {
+      final data = result.data as List;
+      final list = data.map((item) => PlanLineResponseModel.fromJson(Map<String, dynamic>.from(item as Map))).toList();
+
+      return PlexApiResult(true, 200, "Success", list);
+    } catch (e) {
+      return PlexApiResult(false, 500, e.toString(), null);
+    }
+  }
+
   Future<PlexApiResult> fetchShifts() async {
     final result = await _api.getList('/api/app/shifts');
     if (!result.success || result.data == null) return result;
