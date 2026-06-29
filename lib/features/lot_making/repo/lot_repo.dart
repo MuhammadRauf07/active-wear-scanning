@@ -222,6 +222,14 @@ class LotRepo {
     return result;
   }
 
+  Future<PlexApiResult> fetchAllWorkOrderLineDetails(int workOrderLineId) async {
+    final query = {
+      'WorkOrderLineId': workOrderLineId.toString(),
+      'MaxResultCount': '1000',
+    };
+    return await _api.getList('/api/app/work-order-line-details', query: query);
+  }
+
   Future<PlexApiResult> fetchItemRoutings(int itemDefId) async {
     final query = {
       'ItemDefId': itemDefId.toString(),

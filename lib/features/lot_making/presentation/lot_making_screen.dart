@@ -19,6 +19,8 @@ import 'package:active_wear_scanning/features/knitting_production/model/scanned_
 import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
 
+import '../../common-models/common_models.dart';
+
 class LotMakingScreen extends StatefulWidget {
   final LotHeaderResponseModel? existingBatch;
   final List<ProductionProgressResponseModel>? preloadedTrays;
@@ -43,6 +45,11 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
   List<LotColorModel> _colors = [];
   LotColorModel? _selectedColor;
   bool _isLoadingColors = false;
+
+  WorkOrderHeader? _selectedWorkOrder;
+  ProductionProgressResponseModel? _selectedTray;
+  final Map<int, Set<String>> _workOrderValidColors = {};
+  bool _isCachingColors = false;
 
   final List<ProductionProgressResponseModel> _scannedTrays = [];
   final List<TextEditingController> _quantityControllers = [];
@@ -91,6 +98,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
       setState(() {
         productionProgressTrays = progresses;
       });
+      _cacheColorsForGbsWorkOrders();
       if (widget.existingBatch != null) {
         await _loadExistingLotTrays(progresses);
       }
@@ -101,6 +109,113 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
         title: 'Fetch Failed',
         message: result.message ?? 'Unknown error fetching production progresses',
       );
+    }
+  }
+
+  List<WorkOrderHeader> getAvailableWorkOrders() {
+    final Set<int> seenIds = {};
+    final List<WorkOrderHeader> wos = [];
+    
+    final gbsTrays = productionProgressTrays.where((t) {
+      final progressId = t.productionProgress.id;
+      return t.productionProgress.locatorId == 3 &&
+             t.productionProgress.gbsFlag == true &&
+             t.workOrderHeader != null &&
+             (progressId == null || !_lotProgressIds.contains(progressId));
+    }).toList();
+
+    for (final tray in gbsTrays) {
+      final id = tray.workOrderHeader.id;
+      if (id != null && !seenIds.contains(id)) {
+        seenIds.add(id);
+        wos.add(tray.workOrderHeader);
+      }
+    }
+    return wos;
+  }
+
+  List<WorkOrderHeader> getFilteredWorkOrders() {
+    final wos = getAvailableWorkOrders();
+    if (_selectedColor == null) return wos;
+    final selectedColorDesc = _selectedColor!.segmentCode?.description?.toUpperCase();
+    if (selectedColorDesc == null) return wos;
+    
+    return wos.where((wo) {
+      final validColors = _workOrderValidColors[wo.id];
+      return validColors != null && validColors.contains(selectedColorDesc);
+    }).toList();
+  }
+
+  List<LotColorModel> getFilteredColors() {
+    if (_selectedWorkOrder == null) return _colors;
+    final validColors = _workOrderValidColors[_selectedWorkOrder!.id];
+    if (validColors == null) return [];
+    
+    return _colors.where((color) {
+      final desc = color.segmentCode?.description?.toUpperCase();
+      return desc != null && validColors.contains(desc);
+    }).toList();
+  }
+
+  List<ProductionProgressResponseModel> getTraysForSelectedWorkOrder() {
+    if (_selectedWorkOrder == null) return [];
+    return productionProgressTrays.where((t) {
+      final progressId = t.productionProgress.id;
+      final isAlreadyScanned = _scannedTrays.any((st) => st.productionProgress.id == progressId);
+      return t.productionProgress.locatorId == 3 &&
+             t.productionProgress.gbsFlag == true &&
+             t.workOrderHeader?.id == _selectedWorkOrder!.id &&
+             (progressId == null || !_lotProgressIds.contains(progressId)) &&
+             !isAlreadyScanned;
+    }).toList();
+  }
+
+  Future<void> _cacheColorsForGbsWorkOrders() async {
+    if (mounted) setState(() => _isCachingColors = true);
+    
+    try {
+      final wos = getAvailableWorkOrders();
+      for (final wo in wos) {
+        final woId = wo.id;
+        if (woId == null || _workOrderValidColors.containsKey(woId)) continue;
+        
+        final trays = productionProgressTrays.where((t) {
+          final progressId = t.productionProgress.id;
+          return t.productionProgress.locatorId == 3 &&
+                 t.productionProgress.gbsFlag == true &&
+                 t.workOrderHeader?.id == woId &&
+                 (progressId == null || !_lotProgressIds.contains(progressId));
+        }).toList();
+
+        final lineIds = trays
+            .map((t) => t.productionProgress.workOrderLineId ?? t.workOrderLine?.id)
+            .whereType<int>()
+            .toSet();
+
+        final Set<String> validColors = {};
+        for (final lineId in lineIds) {
+          final res = await _lotRepo.fetchAllWorkOrderLineDetails(lineId);
+          if (res.success && res.data != null) {
+            final items = res.data as List;
+            for (final item in items) {
+              final detail = (item as Map)['workOrderLineDetail'];
+              if (detail != null) {
+                final colorDesc = detail['colorDescription']?.toString().trim().toUpperCase();
+                if (colorDesc != null && colorDesc.isNotEmpty) {
+                  validColors.add(colorDesc);
+                }
+              }
+            }
+          }
+        }
+        _workOrderValidColors[woId] = validColors;
+      }
+    } catch (e) {
+      debugPrint('Error caching colors: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isCachingColors = false);
+      }
     }
   }
 
@@ -985,6 +1100,10 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
   }
 
   Widget _buildConfigurationPanel() {
+    final availableWOs = getFilteredWorkOrders();
+    final availableColors = getFilteredColors();
+    final availableTrays = getTraysForSelectedWorkOrder();
+
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
@@ -1022,57 +1141,32 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                         letterSpacing: 0.5,
                       ),
                     ),
+                    const Spacer(),
+                    if (_isCachingColors)
+                      const SizedBox(
+                        height: 12,
+                        width: 12,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.5,
+                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1B64A3)),
+                        ),
+                      ),
                   ],
                 ),
               ),
               Padding(
                 padding: const EdgeInsets.all(16),
-                child: Row(
+                child: Column(
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'MACHINE',
-                            style: TextStyle(
-                              fontSize: 8,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF78909C),
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          _LotOverlayDropdown<LotMachineModel>(
-                            hint: "Select machine...",
-                            items: _machines,
-                            selectedValue: _selectedMachine,
-                            itemLabel: (m) => m.resource?.brand ?? 'Unknown',
-                            isReadOnly: _scannedTrays.isNotEmpty,
-                            onChanged: (val) {
-                              HapticFeedbackHelper.buttonClick();
-                              setState(() {
-                                _selectedMachine = val;
-                                _selectedColor = null;
-                              });
-                              if (val != null) _fetchColors();
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: AnimatedOpacity(
-                        duration: const Duration(milliseconds: 300),
-                        opacity: _selectedMachine != null ? 1.0 : 0.0,
-                        child: IgnorePointer(
-                          ignoring: _selectedMachine == null,
+                    Row(
+                      children: [
+                        // Machine Dropdown
+                        Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
-                                'COLOR',
+                                'MACHINE',
                                 style: TextStyle(
                                   fontSize: 8,
                                   fontWeight: FontWeight.w800,
@@ -1081,22 +1175,217 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                                 ),
                               ),
                               const SizedBox(height: 6),
-                              _LotOverlayDropdown<LotColorModel>(
-                                hint: "Select color...",
-                                items: _colors,
-                                selectedValue: _selectedColor,
-                                itemLabel: (c) => c.segmentCode?.description ?? '-',
+                              _LotOverlayDropdown<LotMachineModel>(
+                                hint: "Select machine...",
+                                items: _machines,
+                                selectedValue: _selectedMachine,
+                                itemLabel: (m) => m.resource?.brand ?? 'Unknown',
                                 isReadOnly: _scannedTrays.isNotEmpty,
                                 onChanged: (val) {
                                   HapticFeedbackHelper.buttonClick();
-                                  setState(() => _selectedColor = val);
+                                  setState(() {
+                                    _selectedMachine = val;
+                                    _selectedWorkOrder = null;
+                                    _selectedColor = null;
+                                    _selectedTray = null;
+                                  });
+                                  if (val != null) _fetchColors();
                                 },
                               ),
                             ],
                           ),
                         ),
-                      ),
+                        const SizedBox(width: 12),
+                        // Work Order Dropdown
+                        Expanded(
+                          child: _selectedMachine == null
+                              ? const SizedBox.shrink()
+                              : Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'WORK ORDER',
+                                      style: TextStyle(
+                                        fontSize: 8,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF78909C),
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    _LotOverlayDropdown<WorkOrderHeader>(
+                                      hint: "Select work order...",
+                                      items: availableWOs,
+                                      selectedValue: _selectedWorkOrder,
+                                      itemLabel: (wo) => wo.workOrderCode ?? '-',
+                                      isReadOnly: false, // NOT disabled when trays are scanned
+                                      onChanged: (val) {
+                                        HapticFeedbackHelper.buttonClick();
+                                        setState(() {
+                                          _selectedWorkOrder = val;
+                                          _selectedTray = null;
+                                        });
+                                      },
+                                    ),
+                                  ],
+                                ),
+                        ),
+                      ],
                     ),
+                    if (_selectedWorkOrder != null) ...[
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          // Color Dropdown
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'COLOR',
+                                  style: TextStyle(
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF78909C),
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                _LotOverlayDropdown<LotColorModel>(
+                                  hint: "Select color...",
+                                  items: availableColors,
+                                  selectedValue: _selectedColor,
+                                  itemLabel: (c) => c.segmentCode?.description ?? '-',
+                                  isReadOnly: _scannedTrays.isNotEmpty,
+                                  onChanged: (val) {
+                                    HapticFeedbackHelper.buttonClick();
+                                    setState(() => _selectedColor = val);
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(child: SizedBox.shrink()),
+                        ],
+                      ),
+                      const Divider(height: 24, color: Color(0xFFCFD8DC)),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'AVAILABLE GBS TRAYS (${availableTrays.length})',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFFE67E22),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      if (availableTrays.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'No available trays in GBS for this work order',
+                              style: TextStyle(color: Colors.grey, fontSize: 12, fontStyle: FontStyle.italic),
+                            ),
+                          ),
+                        )
+                      else
+                        Container(
+                          height: 140,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: ListView.separated(
+                            padding: const EdgeInsets.all(8),
+                            itemCount: availableTrays.length,
+                            separatorBuilder: (context, index) => const Divider(height: 8, color: Colors.transparent),
+                            itemBuilder: (context, index) {
+                              final tray = availableTrays[index];
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.grid_view_rounded, size: 16, color: Color(0xFF1B64A3)),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            tray.primaryTrayModel.trayCode ?? '-',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w700,
+                                              color: Color(0xFF263238),
+                                            ),
+                                          ),
+                                          Text(
+                                            "Size: ${tray.item.sizeDescription ?? 'N/A'}  |  Qty: ${tray.productionProgress.primaryQuantity?.toStringAsFixed(0) ?? '0'}",
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w500,
+                                              color: Colors.grey.shade600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF1B64A3),
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                        minimumSize: Size.zero,
+                                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        elevation: 0,
+                                      ),
+                                      onPressed: _selectedColor == null
+                                          ? null
+                                          : () async {
+                                              if (tray.primaryTrayModel.trayCode != null) {
+                                                AppLoader.show(context, message: 'Validating Tray...');
+                                                final error = await _validateTrayForScan(tray.primaryTrayModel.trayCode!);
+                                                AppLoader.hide(context);
+                                                if (error != null) {
+                                                  HapticFeedbackHelper.scanError();
+                                                  AppSnackBar.showError(context, message: error);
+                                                }
+                                              }
+                                            },
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.add_rounded, size: 14),
+                                          SizedBox(width: 4),
+                                          Text(
+                                            'ADD',
+                                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                    ],
                   ],
                 ),
               ),
@@ -1558,6 +1847,7 @@ class _LotOverlayDropdown<T> extends StatefulWidget {
   final List<T> items;
   final T? selectedValue;
   final String Function(T) itemLabel;
+  final String Function(T)? itemLabelInList;
   final ValueChanged<T?> onChanged;
   final bool isReadOnly;
 
@@ -1566,6 +1856,7 @@ class _LotOverlayDropdown<T> extends StatefulWidget {
     required this.items,
     required this.selectedValue,
     required this.itemLabel,
+    this.itemLabelInList,
     required this.onChanged,
     this.isReadOnly = false,
   });
@@ -1701,7 +1992,10 @@ class _LotOverlayDropdownState<T> extends State<_LotOverlayDropdown<T>> with Sin
 
   Widget _buildDropdownMenu() {
     final filteredItems = widget.items.where((item) {
-      final label = widget.itemLabel(item).toLowerCase();
+      final label = (widget.itemLabelInList != null
+              ? widget.itemLabelInList!(item)
+              : widget.itemLabel(item))
+          .toLowerCase();
       final query = _searchQuery.toLowerCase();
       return label.contains(query);
     }).toList();
@@ -1782,7 +2076,17 @@ class _LotOverlayDropdownState<T> extends State<_LotOverlayDropdown<T>> with Sin
                           child: Row(
                             children: [
                               Expanded(
-                                child: Text(widget.itemLabel(item), style: TextStyle(color: isSelected ? const Color(0xFF1B64A3) : const Color(0xFF263238), fontSize: 12, fontWeight: FontWeight.w700)),
+                                child: Text(
+                                  widget.itemLabelInList != null
+                                      ? widget.itemLabelInList!(item)
+                                      : widget.itemLabel(item),
+                                  style: TextStyle(
+                                      color: isSelected
+                                          ? const Color(0xFF1B64A3)
+                                          : const Color(0xFF263238),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700),
+                                ),
                               ),
                               if (isSelected) const Icon(Icons.check_rounded, color: Color(0xFF1B64A3), size: 16),
                             ],
