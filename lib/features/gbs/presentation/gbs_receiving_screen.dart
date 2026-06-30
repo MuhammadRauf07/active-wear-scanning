@@ -277,7 +277,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
         Map<String, dynamic> wipPayload = {
           "subOperation": subOpWip,
           "transactionDate": DateTime.now().toIso8601String(),
-          "transactionType": 1,
+          "transactionType": 6,
           "uom": currentData.workOrderLine.uom ?? 0,
           "operatorDescription": "system",
           "primaryQuantity": currentData.productionProgress.primaryQuantity ?? 0,
@@ -306,7 +306,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
           "concurrencyStamp": currentData.productionProgress.concurrencyStamp,
           "subOperation": subOpProgress,
           "date": DateTime.now().toIso8601String(),
-          "transactionType": 1,
+          "transactionType": 6,
           "operatorDescription": "system",
           "primaryQuantity": currentData.productionProgress.primaryQuantity,
           "primaryUOM": currentData.productionProgress.primaryUOM,
@@ -379,7 +379,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
         Map<String, dynamic> wipPayload = {
           "subOperation": "GBS Receiving",
           "transactionDate": DateTime.now().toIso8601String(),
-          "transactionType": 1,
+          "transactionType": 6,
           "uom": currentTrayData.workOrderLine.uom ?? 0,
           "operatorDescription": "system",
           "primaryQuantity": currentTrayData.productionProgress.primaryQuantity ?? 0,
@@ -408,7 +408,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
           "concurrencyStamp": currentTrayData.productionProgress.concurrencyStamp,
           "subOperation": "GBS Received",
           "date": DateTime.now().toIso8601String(),
-          "transactionType": 1, // Formal Handover
+          "transactionType": 6, // Formal Handover
           "operatorDescription": "system",
           "primaryQuantity": currentTrayData.productionProgress.primaryQuantity,
           "primaryUOM": currentTrayData.productionProgress.primaryUOM,

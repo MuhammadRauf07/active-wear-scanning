@@ -766,7 +766,7 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
           Map<String, dynamic> productionProgressData = {
             "subOperation": "Knitting",
             "date": DateTime.now().toIso8601String(),
-            "transactionType": 2,
+            "transactionType": 6,
             "operatorDescription": "system",
             "primaryQuantity": (double.tryParse(_quantityControllers[i].text) ?? 5.0),
             "primaryUOM": _selectedPlanLine!.planLine.primaryUOM,
@@ -860,7 +860,7 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
           Map<String, dynamic> productionProgressData = {
             "subOperation": "Knitting",
             "date": DateTime.now().toIso8601String(),
-            "transactionType": 2,
+            "transactionType": 6,
             "operatorDescription": "system",
             "primaryQuantity": 1.0,
             "primaryUOM": _selectedPlanLine!.planLine.primaryUOM,

@@ -58,6 +58,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
   List<ProductionProgressResponseModel> productionProgressTrays = [];
 
   final Set<int> _lotProgressIds = {};
+  final Set<int> _currentBatchDatabaseProgressIds = {};
   final Map<int, int> _trayProcessedItemId = {};
 
   Set<String>? _referenceRoutingCodes;
@@ -68,9 +69,14 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
   String _barcodeBuffer = '';
   DateTime? _lastKeyPress;
 
+  late String _lotCode;
+  StateSetter? _dialogSetState;
+
   @override
   void initState() {
     super.initState();
+    _lotCode = widget.existingBatch?.batchHeader.batchHeaderCode ??
+        "LOT-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}";
     _focusNode.requestFocus();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _fetchMachines();
@@ -118,10 +124,11 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
     
     final gbsTrays = productionProgressTrays.where((t) {
       final progressId = t.productionProgress.id;
+      final isCurrentBatchDbTray = progressId != null && _currentBatchDatabaseProgressIds.contains(progressId);
       return t.productionProgress.locatorId == 3 &&
              t.productionProgress.gbsFlag == true &&
              t.workOrderHeader != null &&
-             (progressId == null || !_lotProgressIds.contains(progressId));
+             (progressId == null || !_lotProgressIds.contains(progressId) || isCurrentBatchDbTray);
     }).toList();
 
     for (final tray in gbsTrays) {
@@ -161,12 +168,11 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
     if (_selectedWorkOrder == null) return [];
     return productionProgressTrays.where((t) {
       final progressId = t.productionProgress.id;
-      final isAlreadyScanned = _scannedTrays.any((st) => st.productionProgress.id == progressId);
+      final isCurrentBatchDbTray = progressId != null && _currentBatchDatabaseProgressIds.contains(progressId);
       return t.productionProgress.locatorId == 3 &&
              t.productionProgress.gbsFlag == true &&
              t.workOrderHeader?.id == _selectedWorkOrder!.id &&
-             (progressId == null || !_lotProgressIds.contains(progressId)) &&
-             !isAlreadyScanned;
+             (progressId == null || !_lotProgressIds.contains(progressId) || isCurrentBatchDbTray);
     }).toList();
   }
 
@@ -181,10 +187,11 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
         
         final trays = productionProgressTrays.where((t) {
           final progressId = t.productionProgress.id;
+          final isCurrentBatchDbTray = progressId != null && _currentBatchDatabaseProgressIds.contains(progressId);
           return t.productionProgress.locatorId == 3 &&
                  t.productionProgress.gbsFlag == true &&
                  t.workOrderHeader?.id == woId &&
-                 (progressId == null || !_lotProgressIds.contains(progressId));
+                 (progressId == null || !_lotProgressIds.contains(progressId) || isCurrentBatchDbTray);
         }).toList();
 
         final lineIds = trays
@@ -247,6 +254,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
 
     if (mounted && linkedTrays.isNotEmpty) {
       setState(() {
+        _currentBatchDatabaseProgressIds.addAll(linkedProgressIds);
         _scannedTrays.addAll(linkedTrays);
         for (var tray in linkedTrays) {
           _quantityControllers.add(
@@ -581,7 +589,8 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
     if ((tray.primaryTrayModel?.trayType ?? 0) != 1)
       return 'Invalid tray type.';
     final progressId = tray.productionProgress.id;
-    if (progressId != null && _lotProgressIds.contains(progressId))
+    final isCurrentBatchDbTray = progressId != null && _currentBatchDatabaseProgressIds.contains(progressId);
+    if (progressId != null && _lotProgressIds.contains(progressId) && !isCurrentBatchDbTray)
       return 'Tray already assigned to a lot';
 
     final workOrderLineId =
@@ -671,6 +680,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                 '0');
       _quantityControllers.add(TextEditingController(text: defaultQty));
     });
+    _dialogSetState?.call(() {});
     HapticFeedbackHelper.scanSuccess();
     return null;
   }
@@ -680,8 +690,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
     AppLoader.show(context);
 
     int batchHeaderId;
-    final batchCode = widget.existingBatch?.batchHeader.batchHeaderCode ??
-        "LOT-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}";
+    final batchCode = _lotCode;
 
     if (widget.existingBatch == null) {
       final res = await _lotRepo.createLotHeader({
@@ -752,7 +761,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
       
       // Update with batch and first operation details
       ppPayload['batchHeaderId'] = batchHeaderId;
-      ppPayload['transactionType'] = 2; // Issued/WIP
+      ppPayload['transactionType'] = 6; // Issued/WIP
       if (_referenceMinOperationId != null) {
         ppPayload['operationId'] = _referenceMinOperationId;
       }
@@ -1099,10 +1108,217 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
     );
   }
 
+  void _showAvailableTraysDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            _dialogSetState = setDialogState;
+            final availableTrays = getTraysForSelectedWorkOrder();
+
+            return Dialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: Container(
+                width: MediaQuery.of(context).size.width * 0.85,
+                height: MediaQuery.of(context).size.height * 0.75,
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'AVAILABLE GBS TRAYS (${availableTrays.length})',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFFE67E22),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded),
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const TrayTableHeader(actionColumnWidth: 0, showLotColumn: true),
+                    Expanded(
+                      child: availableTrays.isEmpty
+                          ? const Center(
+                              child: Text(
+                                'No available GBS trays for this work order',
+                                style: TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 13,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            )
+                          : ListView.builder(
+                              itemCount: availableTrays.length,
+                              itemBuilder: (ctx, index) {
+                                final tray = availableTrays[index];
+                                final qty = tray.productionProgress.primaryQuantity ?? 0.0;
+                                final perTube = tray.item.perGarmentTube;
+                                final pcs = qty * perTube;
+                                final weight = qty * (tray.item.pieceWeight ?? 0);
+
+                                const cellStyle = TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF263238),
+                                );
+
+                                const blueCellStyle = TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF1B64A3),
+                                );
+
+                                final isScanned = _scannedTrays.any(
+                                  (st) => st.productionProgress.id == tray.productionProgress.id,
+                                );
+
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: index.isEven ? Colors.white : const Color(0xFFF8FAFC),
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        color: Colors.grey.withValues(alpha: 0.1),
+                                        width: 1,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        flex: 3,
+                                        child: Text(
+                                          tray.primaryTrayModel.trayCode ?? 'N/A',
+                                          textAlign: TextAlign.center,
+                                          style: blueCellStyle,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(
+                                          tray.workOrderHeader.workOrderCode ?? 'N/A',
+                                          textAlign: TextAlign.center,
+                                          style: cellStyle,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(
+                                          tray.item.sizeDescription ?? 'N/A',
+                                          textAlign: TextAlign.center,
+                                          style: cellStyle,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(
+                                          perTube.toStringAsFixed(0),
+                                          textAlign: TextAlign.center,
+                                          style: cellStyle,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(
+                                          qty.toStringAsFixed(0),
+                                          textAlign: TextAlign.center,
+                                          style: cellStyle,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(
+                                          pcs.toStringAsFixed(0),
+                                          textAlign: TextAlign.center,
+                                          style: cellStyle,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(
+                                          '${weight.toStringAsFixed(0)}g',
+                                          textAlign: TextAlign.center,
+                                          style: cellStyle,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 3,
+                                        child: Text(
+                                          isScanned ? _lotCode : '-',
+                                          textAlign: TextAlign.center,
+                                          style: cellStyle.copyWith(
+                                            color: isScanned ? const Color(0xFF2E7D32) : Colors.grey,
+                                            fontWeight: isScanned ? FontWeight.bold : FontWeight.normal,
+                                          ),
+                                        ),
+                                      ),
+                                      /*
+                                      const SizedBox(width: 8),
+                                      SizedBox(
+                                        width: 52,
+                                        child: ElevatedButton(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFF1B64A3),
+                                            foregroundColor: Colors.white,
+                                            padding: EdgeInsets.zero,
+                                            minimumSize: const Size(0, 30),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            elevation: 0,
+                                          ),
+                                          onPressed: () async {
+                                            if (tray.primaryTrayModel.trayCode != null) {
+                                              AppLoader.show(context, message: 'Validating Tray...');
+                                              final error = await _validateTrayForScan(tray.primaryTrayModel.trayCode!);
+                                              AppLoader.hide(context);
+                                              if (error != null) {
+                                                HapticFeedbackHelper.scanError();
+                                                AppSnackBar.showError(context, message: error);
+                                              } else {
+                                                setDialogState(() {});
+                                                setState(() {});
+                                              }
+                                            }
+                                          },
+                                          child: const Text(
+                                            'ADD',
+                                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800),
+                                          ),
+                                        ),
+                                      ),
+                                      */
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    ).then((_) {
+      _dialogSetState = null;
+    });
+  }
+
   Widget _buildConfigurationPanel() {
     final availableWOs = getFilteredWorkOrders();
     final availableColors = getFilteredColors();
-    final availableTrays = getTraysForSelectedWorkOrder();
 
     return Container(
       decoration: BoxDecoration(
@@ -1235,6 +1451,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                     if (_selectedWorkOrder != null) ...[
                       const SizedBox(height: 12),
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           // Color Dropdown
                           Expanded(
@@ -1266,125 +1483,39 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                             ),
                           ),
                           const SizedBox(width: 12),
-                          const Expanded(child: SizedBox.shrink()),
+                          // Show Available Trays Button (Visible only after color is selected)
+                          Expanded(
+                            child: _selectedColor == null
+                                ? const SizedBox.shrink()
+                                : Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const SizedBox(height: 14), // Align with dropdown label height
+                                      SizedBox(
+                                        width: double.infinity,
+                                        height: 44, // Align with dropdown height
+                                        child: ElevatedButton.icon(
+                                          onPressed: _showAvailableTraysDialog,
+                                          icon: const Icon(Icons.layers_outlined, size: 16),
+                                          label: const Text(
+                                            'SHOW AVAILABLE TRAYS',
+                                            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900),
+                                          ),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFFE67E22),
+                                            foregroundColor: Colors.white,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            elevation: 0,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                          ),
                         ],
                       ),
-                      const Divider(height: 24, color: Color(0xFFCFD8DC)),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          'AVAILABLE GBS TRAYS (${availableTrays.length})',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFFE67E22),
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      if (availableTrays.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8),
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              'No available trays in GBS for this work order',
-                              style: TextStyle(color: Colors.grey, fontSize: 12, fontStyle: FontStyle.italic),
-                            ),
-                          ),
-                        )
-                      else
-                        Container(
-                          height: 140,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF8FAFC),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
-                          ),
-                          child: ListView.separated(
-                            padding: const EdgeInsets.all(8),
-                            itemCount: availableTrays.length,
-                            separatorBuilder: (context, index) => const Divider(height: 8, color: Colors.transparent),
-                            itemBuilder: (context, index) {
-                              final tray = availableTrays[index];
-                              return Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.grid_view_rounded, size: 16, color: Color(0xFF1B64A3)),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            tray.primaryTrayModel.trayCode ?? '-',
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w700,
-                                              color: Color(0xFF263238),
-                                            ),
-                                          ),
-                                          Text(
-                                            "Size: ${tray.item.sizeDescription ?? 'N/A'}  |  Qty: ${tray.productionProgress.primaryQuantity?.toStringAsFixed(0) ?? '0'}",
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w500,
-                                              color: Colors.grey.shade600,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    ElevatedButton(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFF1B64A3),
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                        minimumSize: Size.zero,
-                                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        elevation: 0,
-                                      ),
-                                      onPressed: _selectedColor == null
-                                          ? null
-                                          : () async {
-                                              if (tray.primaryTrayModel.trayCode != null) {
-                                                AppLoader.show(context, message: 'Validating Tray...');
-                                                final error = await _validateTrayForScan(tray.primaryTrayModel.trayCode!);
-                                                AppLoader.hide(context);
-                                                if (error != null) {
-                                                  HapticFeedbackHelper.scanError();
-                                                  AppSnackBar.showError(context, message: error);
-                                                }
-                                              }
-                                            },
-                                      child: const Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(Icons.add_rounded, size: 14),
-                                          SizedBox(width: 4),
-                                          Text(
-                                            'ADD',
-                                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                        ),
                     ],
                   ],
                 ),
@@ -1764,18 +1895,20 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                 padding: const EdgeInsets.all(0),
                 child: Table(
                   columnWidths: const {
-                    0: FlexColumnWidth(3), // WO
-                    1: FlexColumnWidth(4), // Item/Size
-                    2: FlexColumnWidth(1.5), // Trays
-                    3: FlexColumnWidth(1.5), // Tubes
-                    4: FlexColumnWidth(2), // Weight
+                    0: FlexColumnWidth(2.5), // WO
+                    1: FlexColumnWidth(1.8), // Size
+                    2: FlexColumnWidth(4), // Item
+                    3: FlexColumnWidth(1.5), // Trays
+                    4: FlexColumnWidth(1.5), // Tubes
+                    5: FlexColumnWidth(1.8), // Weight
                   },
                   children: [
                     TableRow(
                       decoration: const BoxDecoration(color: Color(0xFFF1F5F9)),
                       children: [
                         _buildTableHeaderCell('WO CODE'),
-                        _buildTableHeaderCell('ITEM / SIZE'),
+                        _buildTableHeaderCell('SIZE'),
+                        _buildTableHeaderCell('ITEM'),
                         _buildTableHeaderCell('TRAYS'),
                         _buildTableHeaderCell('TUBES'),
                         _buildTableHeaderCell('WEIGHT'),
@@ -1792,7 +1925,8 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                         children: [
                           _buildTableCell(data['code'].toString(),
                               isBold: true),
-                          _buildTableCell("${data['item']} (${data['size']})"),
+                          _buildTableCell(data['size'].toString()),
+                          _buildTableCell(data['item'].toString()),
                           _buildTableCell(data['trays'].toString()),
                           _buildTableCell(
                               (data['tubes'] as double).toStringAsFixed(0)),
