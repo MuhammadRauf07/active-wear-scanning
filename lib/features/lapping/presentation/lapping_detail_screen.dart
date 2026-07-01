@@ -767,12 +767,61 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
         try {
           final double trayQty = _trayOverrideQuantities[scannedTray.primaryTrayModel.trayCode?.toLowerCase() ?? ''] ?? 0;
           
-          // --- 1. SET UP AND CREATE HANDOVER PRODUCTION PROGRESS (THE ANCHOR RECORD) ---
+          // --- 1. FETCH PREVIOUS WIP TRANSACTION (From the tray's state prior to Handover) ---
+          int? wipId;
+          if (pp.id != null) {
+            final nativeWipRes = await _lotRepo.fetchWipTransactionsByProgressId(pp.id!);
+            if (nativeWipRes.success && nativeWipRes.data != null) {
+              final List rawItems = nativeWipRes.data is Map ? (nativeWipRes.data['items'] ?? []) : nativeWipRes.data;
+              final items = rawItems.cast<Map<String, dynamic>>();
+              final match = items.firstWhere(
+                (e) => (e['wipTransaction']?['progressId'] ?? e['progressId'] ?? e['wipTransaction']?['productionProgressId'] ?? e['productionProgressId'])?.toString() == pp.id.toString(),
+                orElse: () => {},
+              );
+              if (match.isNotEmpty) {
+                wipId = match['wipTransaction']?['id'] as int?;
+              }
+            }
+          }
+
+          // --- 2. CREATE BATCH LINE (First, so we have its ID for the progress record) ---
+          int? blId;
+          final Map<String, dynamic> lotLinePayload = {
+            "planDate": DateTime.now().toIso8601String(),
+            "transactionDate": DateTime.now().toIso8601String(),
+            "primaryQuantity": trayQty,
+            "primaryUOM": pp.primaryUOM ?? 4,
+            "secondaryQuantity": 0, 
+            "secondaryUOM": pp.secondaryUOM ?? 1,
+            "batchLineCode": "BL-${widget.batchHeaderId}-${scannedTray.primaryTrayModel.id}",
+            "batchHeaderId": widget.batchHeaderId,
+            "workOrderHeaderId": scannedTray.workOrderHeader.id,
+            "workOrderLineId": scannedTray.workOrderLine.id,
+            "itemId": scannedTray.item.id,
+            "trayId": scannedTray.primaryTrayModel.id,
+            "locatorId": nextLocatorId,
+            "processItemId": scannedTray.processedItem?.id ?? pp.processedItemId ?? scannedTray.item.id,
+            "active": true,
+            "isReAssigned": true,
+          };
+          if (wipId != null) {
+            lotLinePayload["wipTransactionId"] = wipId;
+          }
+
+          final blRes = await _lotRepo.createLotLine(lotLinePayload);
+          if (!blRes.success || blRes.data == null) {
+            final errMsg = 'Step 2 (createLotLine) failed: ${blRes.message}';
+            debugPrint('❌ $errMsg');
+            handoverErrors[scannedTray.primaryTrayModel.id!] = errMsg;
+            return false;
+          }
+          blId = blRes.data['id'] ?? (blRes.data is Map ? (blRes.data['batchLines']?['id'] ?? blRes.data['id']) : null);
+
+          // --- 3. CREATE HANDOVER PRODUCTION PROGRESS (THE ANCHOR RECORD, now with batchLinesId) ---
           Map<String, dynamic> nextJson = pp.toJson();
           nextJson.remove('id');
           nextJson.remove('progressCode');
           nextJson.remove('concurrencyStamp');
-          nextJson.remove('batchLinesId');
 
           nextJson.addAll({
             "subOperation": "Handover",
@@ -802,16 +851,14 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
             "itemId": scannedTray.item.id,
             "workOrderHeaderId": scannedTray.workOrderHeader.id,
             "workOrderLineId": scannedTray.workOrderLine.id,
+            "batchHeaderId": widget.batchHeaderId,
+            "batchLinesId": blId,
           });
-
-          // Include batchHeaderId in the initial creation so the Handover PP is always
-          // grouped correctly in ProcessingScreen._fetchOpDetails (which groups by batchHeaderId).
-          nextJson['batchHeaderId'] = widget.batchHeaderId;
           nextJson.remove("planHeaderId"); // Only planHeaderId needs purging
 
           final ppRes = await _processingRepo.createProductionProgress(nextJson);
           if (!ppRes.success) {
-            final errMsg = 'Step 1 (createProductionProgress) failed: ${ppRes.message}';
+            final errMsg = 'Step 3 (createProductionProgress) failed: ${ppRes.message}';
             debugPrint('❌ $errMsg');
             handoverErrors[scannedTray.primaryTrayModel.id!] = errMsg;
             return false;
@@ -843,70 +890,38 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
               ).toList();
               if (matches.isNotEmpty) {
                 matches.sort((a, b) => (a.productionProgress.id ?? 0).compareTo(b.productionProgress.id ?? 0));
-                latestHandoverPP = matches.first;
+                latestHandoverPP = matches.last;
                 targetProgressId = latestHandoverPP.productionProgress.id;
               }
             }
           }
 
           if (targetProgressId == null || targetProgressId == 0) {
-            const errMsg = 'Step 1.5: Failed to resolve targetProgressId';
+            const errMsg = 'Step 3.5: Failed to resolve targetProgressId';
             debugPrint('❌ $errMsg');
             handoverErrors[scannedTray.primaryTrayModel.id!] = errMsg;
             return false;
           }
           debugPrint('✅ Resolved targetProgressId: $targetProgressId');
 
-          // --- 2. FETCH PREVIOUS WIP TRANSACTION (From the tray's state prior to Handover) ---
-          int? wipId;
-          if (pp.id != null) {
-            final nativeWipRes = await _lotRepo.fetchWipTransactionsByProgressId(pp.id!);
-            if (nativeWipRes.success && nativeWipRes.data != null) {
-              final List rawItems = nativeWipRes.data is Map ? (nativeWipRes.data['items'] ?? []) : nativeWipRes.data;
-              final items = rawItems.cast<Map<String, dynamic>>();
-              final match = items.firstWhere(
-                (e) => (e['wipTransaction']?['progressId'] ?? e['progressId'] ?? e['wipTransaction']?['productionProgressId'] ?? e['productionProgressId'])?.toString() == pp.id.toString(),
-                orElse: () => {},
-              );
-              if (match.isNotEmpty) {
-                wipId = match['wipTransaction']?['id'] as int?;
-              }
+          // --- 3.7. LINK BATCH LINE BACK TO THE CREATED PROGRESS RECORD ---
+          if (blId != null) {
+            final Map<String, dynamic> blMap = Map<String, dynamic>.from(
+              blRes.data.containsKey('batchLines') ? blRes.data['batchLines'] : blRes.data
+            );
+            blMap['progressId'] = targetProgressId;
+            // Clean up read-only system fields to prevent 500 DB update error
+            blMap.removeWhere((key, value) => ["creatorId", "creationTime", "lastModifierId", "lastModificationTime"].contains(key));
+            
+            final updBlRes = await _lotRepo.updateLotLine(blId, blMap);
+            if (!updBlRes.success) {
+              final errMsg = 'Step 3.7 (updateLotLine progress link) failed: ${updBlRes.message}';
+              debugPrint('❌ $errMsg');
+              handoverErrors[scannedTray.primaryTrayModel.id!] = errMsg;
+              return false;
             }
+            debugPrint('🔗 Linked BatchLine $blId to ProductionProgress $targetProgressId');
           }
-
-          // --- 3. CREATE BATCH LINE (Cross-linked to established WIP logically) ---
-          int? blId;
-          final Map<String, dynamic> lotLinePayload = {
-            "planDate": DateTime.now().toIso8601String(),
-            "transactionDate": DateTime.now().toIso8601String(),
-            "primaryQuantity": trayQty,
-            "primaryUOM": pp.primaryUOM ?? 4,
-            "secondaryQuantity": 0, 
-            "secondaryUOM": pp.secondaryUOM ?? 1,
-            "batchLineCode": "BL-${widget.batchHeaderId}-${scannedTray.primaryTrayModel.id}",
-            "batchHeaderId": widget.batchHeaderId,
-            "progressId": targetProgressId,
-            "workOrderHeaderId": scannedTray.workOrderHeader.id,
-            "workOrderLineId": scannedTray.workOrderLine.id,
-            "itemId": scannedTray.item.id,
-            "trayId": scannedTray.primaryTrayModel.id,
-            "locatorId": nextLocatorId,
-            "processItemId": scannedTray.processedItem?.id ?? pp.processedItemId ?? scannedTray.item.id,
-            "active": true,
-            "isReAssigned": true,
-          };
-          if (wipId != null) {
-            lotLinePayload["wipTransactionId"] = wipId;
-          }
-
-          final blRes = await _lotRepo.createLotLine(lotLinePayload);
-          if (!blRes.success || blRes.data == null) {
-            final errMsg = 'Step 3 (createLotLine) failed: ${blRes.message}';
-            debugPrint('❌ $errMsg');
-            handoverErrors[scannedTray.primaryTrayModel.id!] = errMsg;
-            return false;
-          }
-          blId = blRes.data['id'] ?? blRes.data['batchLine']?['id'] ?? blRes.data;
 
           // --- 4. UPDATE TRAY DETAILS LOGIC (Visual State Link) ---
           final tRes = await _lotRepo.fetchTrayDetailById(scannedTray.primaryTrayModel.id!);
@@ -920,21 +935,52 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
               trayUpd['concurrencyStamp'] = originalStamp;
             }
 
+            // Remove audit, nested fields, and the invalid plural batchLinesId key to prevent server-side PUT mapping issues (500 errors)
+            trayUpd.removeWhere((key, value) => 
+              ["creatorId", "creationTime", "lastModifierId", "lastModificationTime", "batchLinesId"].contains(key) ||
+              value is Map || 
+              value is List
+            );
+
             trayUpd["trayQuantity"] = trayQty.toInt();
             trayUpd["batchHeaderId"] = widget.batchHeaderId;
             trayUpd["isReAssigned"] = true;
             if (widget.machineId != null) {
               trayUpd["resourceId"] = widget.machineId;
             }
-            trayUpd["workOrderHeaderId"] = scannedTray.workOrderHeader.id;
-            trayUpd["workOrderLineId"] = scannedTray.workOrderLine.id;
-            trayUpd["knitItemId"] = scannedTray.processedItem?.id ?? pp.processedItemId ?? scannedTray.item.id;
+            // Do NOT overwrite workOrderHeaderId, workOrderLineId, knitItemId as they are read-only
+            // database relations on the TrayDetail master record.
             trayUpd["locatorId"] = nextLocatorId;
             
             if (blId != null) {
-               trayUpd["batchLinesId"] = blId; 
+              trayUpd["batchLineId"] = blId;
             }
-            final updTrayRes = await _lotRepo.updateTrayDetails(scannedTray.primaryTrayModel.id!, trayUpd);
+
+            var updTrayRes = await _lotRepo.updateTrayDetails(scannedTray.primaryTrayModel.id!, trayUpd);
+            if (!updTrayRes.success) {
+              debugPrint('⚠️ Step 4 full update failed, retrying with minimal payload...');
+              final Map<String, dynamic> minimalTrayUpd = {
+                "id": scannedTray.primaryTrayModel.id,
+                "trayCode": scannedTray.primaryTrayModel.trayCode,
+                "trayQuantity": trayQty.toInt(),
+                "batchHeaderId": widget.batchHeaderId,
+                "locatorId": nextLocatorId,
+                "isReAssigned": true,
+                "workOrderHeaderId": trayUpd["workOrderHeaderId"],
+                "workOrderLineId": trayUpd["workOrderLineId"],
+                "knitItemId": trayUpd["knitItemId"],
+                "concurrencyStamp": trayUpd['concurrencyStamp'] ?? originalStamp ?? fetchedStamp,
+              };
+              if (widget.machineId != null) {
+                minimalTrayUpd["resourceId"] = widget.machineId;
+              }
+              if (blId != null) {
+                minimalTrayUpd["batchLineId"] = blId;
+              }
+              
+              updTrayRes = await _lotRepo.updateTrayDetails(scannedTray.primaryTrayModel.id!, minimalTrayUpd);
+            }
+
             if (!updTrayRes.success) {
               final errMsg = 'Step 4 (updateTrayDetails) failed: ${updTrayRes.message}\n'
                   'Fetched Stamp: $fetchedStamp\n'
@@ -944,50 +990,13 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
               handoverErrors[scannedTray.primaryTrayModel.id!] = errMsg;
               return false;
             }
+            return true;
           } else {
             final errMsg = 'Step 4 (fetchTrayDetailById) failed: ${tRes.message}';
             debugPrint('❌ $errMsg');
             handoverErrors[scannedTray.primaryTrayModel.id!] = errMsg;
             return false;
           }
-
-          // --- 5. FINALIZE PRODUCTION PROGRESS ---
-          if (latestHandoverPP == null) {
-            // Re-fetch to get latest state for final update
-            final refetchRes = await _processingRepo.fetchProductionProgress({
-              'OperationId': (handoverOpId ?? pp.operationId).toString(),
-              'TransactionType': '2',
-            });
-            if (refetchRes.success && refetchRes.data != null) {
-              final list = refetchRes.data as List<ProductionProgressResponseModel>;
-              final matches = list.where((r) => r.productionProgress.id == targetProgressId).toList();
-              if (matches.isNotEmpty) {
-                latestHandoverPP = matches.first;
-              }
-            }
-          }
-
-          if (latestHandoverPP != null) {
-            final finalJson = latestHandoverPP.productionProgress.toJson();
-            finalJson['batchHeaderId'] = widget.batchHeaderId;
-            if (blId != null) finalJson['batchLinesId'] = blId;
-            finalJson.remove('id');
-            finalJson.remove('progressCode');
-            finalJson.remove('creationTime');
-            finalJson.remove('creatorId');
-            finalJson.remove('lastModificationTime');
-            finalJson.remove('lastModifierId');
-            final finalRes = await _processingRepo.updateProductionProgress(targetProgressId, finalJson);
-            if (!finalRes.success) {
-              final errMsg = 'Step 5 (updateProductionProgress) failed: ${finalRes.message}';
-              debugPrint('❌ $errMsg');
-              handoverErrors[scannedTray.primaryTrayModel.id!] = errMsg;
-              return false;
-            }
-            return true;
-          }
-          
-          return true;
         } catch (e) {
           final errMsg = 'Exception: $e';
           debugPrint('❌ Handover error for tray ${scannedTray.primaryTrayModel.id}: $e');

@@ -327,6 +327,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
           "planHeaderId": currentData.productionProgress.planHeaderId,
           "locatorId": targetLocatorId,
           "batchHeaderId": currentData.productionProgress.batchHeaderId,
+          "batchLinesId": currentData.productionProgress.batchLinesId,
           "remarks": currentData.productionProgress.remarks,
         };
 
@@ -431,6 +432,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
           "planHeaderId": currentTrayData.productionProgress.planHeaderId,
           "locatorId": 3, // Move to Batching Floor
           "batchHeaderId": currentTrayData.productionProgress.batchHeaderId,
+          "batchLinesId": currentTrayData.productionProgress.batchLinesId,
         };
 
         if (currentTrayData.productionProgress.id != null) {
