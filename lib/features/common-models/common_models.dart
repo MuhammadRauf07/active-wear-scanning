@@ -162,7 +162,7 @@ class ProductionProgress {
       planHeaderId: int.tryParse(json['planHeaderId']?.toString() ?? ''),
       locatorId: int.tryParse(json['locatorId']?.toString() ?? ''),
       batchHeaderId: int.tryParse(json['batchHeaderId']?.toString() ?? ''),
-      batchLinesId: int.tryParse(json['batchLinesId']?.toString() ?? ''), // ✅ Added
+      batchLinesId: int.tryParse(json['batchLineId']?.toString() ?? json['batchLinesId']?.toString() ?? ''),
       concurrencyStamp: json['concurrencyStamp'],
       lastModificationTime: json['lastModificationTime'] != null ? DateTime.parse(json['lastModificationTime']) : null,
       lastModifierId: json['lastModifierId'],
@@ -205,7 +205,7 @@ class ProductionProgress {
       'planHeaderId': planHeaderId,
       'locatorId': locatorId,
       'batchHeaderId': batchHeaderId,
-      'batchLinesId': batchLinesId, // ✅ Added
+      'batchLineId': batchLinesId,
       'concurrencyStamp': concurrencyStamp,
       'id': id,
       'remarks': remarks,

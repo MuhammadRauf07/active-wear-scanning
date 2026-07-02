@@ -1100,12 +1100,13 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
               'isStarted': false,
               'startDate': null,
               'machineId': null,
-              'batchLinesId': pp.batchLinesId,
+              'batchLineId': pp.batchLinesId,
               'isLastProcess': false,
               'operationId': _reworkTargetOpId,
               'locatorId': rewLoc,
               'date': DateTime.now().toIso8601String(),
             });
+            newJ.remove('batchLinesId');
             final crRes = await _processingRepo.createProductionProgress(newJ);
             if (!crRes.success) throw Exception('Create failed: ${crRes.message}');
           } else if (widget.nextOperationId != null) {
@@ -1133,12 +1134,13 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
               'isStarted': false,
               'startDate': null,
               'machineId': null,
-              'batchLinesId': pp.batchLinesId,
+              'batchLineId': pp.batchLinesId,
               'isLastProcess': false,
               'operationId': widget.nextOperationId,
               'locatorId': nextLocatorId,
               'date': DateTime.now().toIso8601String(),
             });
+            newJ.remove('batchLinesId');
             final crRes = await _processingRepo.createProductionProgress(newJ);
             if (!crRes.success) throw Exception('Create failed: ${crRes.message}');
           } else {

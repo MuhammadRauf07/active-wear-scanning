@@ -327,9 +327,10 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
           "planHeaderId": currentData.productionProgress.planHeaderId,
           "locatorId": targetLocatorId,
           "batchHeaderId": currentData.productionProgress.batchHeaderId,
-          "batchLinesId": currentData.productionProgress.batchLinesId,
+          "batchLineId": currentData.productionProgress.batchLinesId,
           "remarks": currentData.productionProgress.remarks,
         };
+        updateProductionEntry.remove("batchLinesId");
 
         if (currentData.productionProgress.id != null) {
           final res = await _trayScanningRepo.updateProductionProgress(
@@ -432,8 +433,9 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
           "planHeaderId": currentTrayData.productionProgress.planHeaderId,
           "locatorId": 3, // Move to Batching Floor
           "batchHeaderId": currentTrayData.productionProgress.batchHeaderId,
-          "batchLinesId": currentTrayData.productionProgress.batchLinesId,
+          "batchLineId": currentTrayData.productionProgress.batchLinesId,
         };
+        updateProductionEntry.remove("batchLinesId");
 
         if (currentTrayData.productionProgress.id != null) {
           await _trayScanningRepo.updateProductionProgress(

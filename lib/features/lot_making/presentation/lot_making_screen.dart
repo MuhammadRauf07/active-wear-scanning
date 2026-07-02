@@ -414,7 +414,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
               clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
-                  const TrayTableHeader(actionColumnWidth: 44),
+                  const TrayTableHeader(actionColumnWidth: 44, showBatchTubes: true),
                   Expanded(
                     child: ListView.builder(
                       padding: EdgeInsets.zero,
@@ -485,24 +485,10 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                               ),
                               Expanded(
                                 flex: 2,
-                                child: TextField(
-                                  controller: _quantityControllers[index],
+                                child: Text(
+                                  (tray.productionProgress.primaryQuantity ?? 0.0).toStringAsFixed(0),
                                   textAlign: TextAlign.center,
-                                  keyboardType: TextInputType.number,
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF263238),
-                                  ),
-                                  decoration: const InputDecoration(
-                                    contentPadding: EdgeInsets.zero,
-                                    isCollapsed: true,
-                                    border: InputBorder.none,
-                                  ),
-                                  onChanged: (val) {
-                                    setState(() {});
-                                    setSubState(() {});
-                                  },
+                                  style: cellStyle,
                                 ),
                               ),
                               Expanded(
@@ -519,6 +505,36 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                                   '${weight.toStringAsFixed(0)}g',
                                   textAlign: TextAlign.center,
                                   style: cellStyle,
+                                ),
+                              ),
+                              Expanded(
+                                flex: 2,
+                                child: Container(
+                                  height: 30,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: const Color(0xFFCFD8DC), width: 1.2),
+                                  ),
+                                  child: TextField(
+                                    controller: _quantityControllers[index],
+                                    textAlign: TextAlign.center,
+                                    keyboardType: TextInputType.number,
+                                    style: cellStyle.copyWith(fontWeight: FontWeight.w700, color: const Color(0xFF1B64A3)),
+                                    decoration: const InputDecoration(
+                                      contentPadding: EdgeInsets.symmetric(vertical: 6),
+                                      isCollapsed: true,
+                                      border: InputBorder.none,
+                                    ),
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                      TubesInputFormatter((tray.productionProgress.primaryQuantity ?? 0.0).toInt()),
+                                    ],
+                                    onChanged: (val) {
+                                      setState(() {});
+                                      setSubState(() {});
+                                    },
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -687,6 +703,23 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
 
   Future<void> _saveLotChanges() async {
     if (_scannedTrays.isEmpty) return;
+
+    for (int i = 0; i < _quantityControllers.length; i++) {
+      final text = _quantityControllers[i].text.trim();
+      final val = int.tryParse(text);
+      if (val == null || val <= 0) {
+        HapticFeedbackHelper.scanError();
+        AppSnackBar.showError(context, message: 'Please enter a valid tubes value for all trays.');
+        return;
+      }
+      final maxVal = (_scannedTrays[i].productionProgress.primaryQuantity ?? 0.0).toInt();
+      if (val > maxVal) {
+        HapticFeedbackHelper.scanError();
+        AppSnackBar.showError(context, message: 'Tubes count cannot exceed tray capacity ($maxVal).');
+        return;
+      }
+    }
+
     AppLoader.show(context);
 
     int batchHeaderId;
@@ -1616,7 +1649,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                       const SizedBox(height: 10),
                       _buildCapacityProgress(),
                       const SizedBox(height: 10),
-                      const TrayTableHeader(actionColumnWidth: 44),
+                      const TrayTableHeader(actionColumnWidth: 44, showBatchTubes: true),
                       Expanded(
                         child: _scannedTrays.isEmpty
                             ? const EmptyScanState(hasBorder: false)
@@ -1760,17 +1793,10 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
           ),
           Expanded(
             flex: 2,
-            child: TextField(
-              controller: _quantityControllers[index],
+            child: Text(
+              (tray.productionProgress.primaryQuantity ?? 0.0).toStringAsFixed(0),
               textAlign: TextAlign.center,
-              keyboardType: TextInputType.number,
               style: cellStyle,
-              decoration: const InputDecoration(
-                contentPadding: EdgeInsets.zero,
-                isCollapsed: true,
-                border: InputBorder.none,
-              ),
-              onChanged: (val) => setState(() {}),
             ),
           ),
           Expanded(
@@ -1787,6 +1813,33 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
               '${weight.toStringAsFixed(0)}g',
               textAlign: TextAlign.center,
               style: cellStyle,
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Container(
+              height: 30,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFFCFD8DC), width: 1.2),
+              ),
+              child: TextField(
+                controller: _quantityControllers[index],
+                textAlign: TextAlign.center,
+                keyboardType: TextInputType.number,
+                style: cellStyle.copyWith(fontWeight: FontWeight.w700, color: const Color(0xFF1B64A3)),
+                decoration: const InputDecoration(
+                  contentPadding: EdgeInsets.symmetric(vertical: 6),
+                  isCollapsed: true,
+                  border: InputBorder.none,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  TubesInputFormatter((tray.productionProgress.primaryQuantity ?? 0.0).toInt()),
+                ],
+                onChanged: (val) => setState(() {}),
+              ),
             ),
           ),
           const SizedBox(width: 8),
@@ -2233,6 +2286,39 @@ class _LotOverlayDropdownState<T> extends State<_LotOverlayDropdown<T>> with Sin
         ],
       ),
     );
+  }
+}
+
+class TubesInputFormatter extends TextInputFormatter {
+  final int maxTubes;
+
+  TubesInputFormatter(this.maxTubes);
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.isEmpty) {
+      return newValue;
+    }
+
+    final parsed = int.tryParse(newValue.text);
+    if (parsed == null) {
+      return oldValue;
+    }
+
+    // Non-zero constraint: do not allow single 0 or starting with 0
+    if (parsed == 0 || newValue.text.startsWith('0')) {
+      return oldValue;
+    }
+
+    // Max constraint
+    if (parsed > maxTubes) {
+      return oldValue;
+    }
+
+    return newValue;
   }
 }
 

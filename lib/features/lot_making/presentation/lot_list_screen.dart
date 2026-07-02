@@ -591,7 +591,7 @@ class _LotListScreenState extends State<LotListScreen>
         'planHeaderId': progress?['planHeaderId'],
         'locatorId': 6,
         'batchHeaderId': headerId,
-        'batchLinesId': bl['id'],
+        'batchLineId': bl['id'],
         'processedItemId': processedItemId,
       };
 

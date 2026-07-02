@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 class TrayTableHeader extends StatelessWidget {
   final double actionColumnWidth;
   final bool showLotColumn;
+  final bool showBatchTubes;
 
   const TrayTableHeader({
     super.key,
     this.actionColumnWidth = 40.0,
     this.showLotColumn = false,
+    this.showBatchTubes = false,
   });
 
   static const _headerStyle = TextStyle(
@@ -39,6 +41,8 @@ class TrayTableHeader extends StatelessWidget {
           Expanded(flex: 2, child: Text('WEIGHT', textAlign: TextAlign.center, style: _headerStyle)),
           if (showLotColumn)
             Expanded(flex: 3, child: Text('LOT #', textAlign: TextAlign.center, style: _headerStyle)),
+          if (showBatchTubes)
+            Expanded(flex: 2, child: Text('BATCH TUBES', textAlign: TextAlign.center, style: _headerStyle)),
           SizedBox(width: actionColumnWidth),
         ],
       ),
