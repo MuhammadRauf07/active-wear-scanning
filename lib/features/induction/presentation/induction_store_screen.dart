@@ -18,6 +18,8 @@ import 'package:active_wear_scanning/features/induction/presentation/widgets/ind
 import 'package:flutter/material.dart';
 import 'package:plex/plex_di/plex_dependency_injection.dart';
 
+import '../../common-models/common_models.dart';
+
 class InductionStoreScreen extends StatefulWidget {
   const InductionStoreScreen({super.key});
 
@@ -29,6 +31,7 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
   final List<GBSScannedTray> _scannedTrays = [];
   final _inductionRepo = fromPlex<InductionRepo>();
   List<InductionModel> _availableTrays = [];
+  WorkOrderHeader? _selectedWorkOrder;
 
   static const _inputAndButtonHeight = 42.0;
   static final _labelStyle = const TextStyle(
@@ -428,10 +431,238 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
     );
   }
 
+  Widget _buildConfigurationPanel() {
+    final Map<int, WorkOrderHeader> uniqueWOs = {};
+    for (final tray in _availableTrays) {
+      if (tray.workOrderHeader != null && tray.workOrderHeader.id != null) {
+        uniqueWOs[tray.workOrderHeader.id!] = tray.workOrderHeader;
+      }
+    }
+    final List<WorkOrderHeader> availableWOs = uniqueWOs.values.toList();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF8FAFC),
+        border: Border(
+          bottom: BorderSide(color: Color(0xFFCFD8DC), width: 1),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            flex: 3,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'WORK ORDER',
+                  style: TextStyle(
+                    fontSize: 8,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF78909C),
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                _InductionOverlayDropdown<WorkOrderHeader>(
+                  hint: "Select work order...",
+                  items: availableWOs,
+                  selectedValue: _selectedWorkOrder,
+                  itemLabel: (wo) => wo.workOrderCode ?? '-',
+                  onChanged: (val) {
+                    setState(() {
+                      _selectedWorkOrder = val;
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 2,
+            child: SizedBox(
+              height: 40,
+              child: ElevatedButton.icon(
+                onPressed: _selectedWorkOrder == null
+                    ? null
+                    : _showAvailableTraysDialog,
+                icon: const Icon(Icons.layers_outlined, size: 16),
+                label: const Text(
+                  'SHOW TRAYS',
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFE67E22),
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: Colors.grey.shade300,
+                  disabledForegroundColor: Colors.grey.shade500,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  elevation: 0,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAvailableTraysDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final availableTrays = _availableTrays
+                .where((t) => t.workOrderHeader?.id == _selectedWorkOrder?.id)
+                .toList();
+
+            return Dialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: Container(
+                width: MediaQuery.of(context).size.width * 0.85,
+                height: MediaQuery.of(context).size.height * 0.75,
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'AVAILABLE TRAYS (${availableTrays.length})',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFFE67E22),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded),
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const InductionTrayTableHeader(),
+                    Expanded(
+                      child: availableTrays.isEmpty
+                          ? const Center(
+                              child: Text(
+                                'No available trays for this work order',
+                                style: TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 13,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            )
+                          : ListView.builder(
+                              itemCount: availableTrays.length,
+                              itemBuilder: (ctx, index) {
+                                final tray = availableTrays[index];
+                                final qty = tray.productionProgress.primaryQuantity ?? 0.0;
+                                final weight = qty * (tray.item.pieceWeight ?? 0);
+
+                                const cellStyle = TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF1E293B),
+                                );
+
+                                const blueCellStyle = TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF0D47A1),
+                                );
+
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: index.isEven ? Colors.white : const Color(0xFFF8FAFC),
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        color: Colors.grey.withValues(alpha: 0.1),
+                                        width: 1,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(
+                                          tray.primaryTrayModel.trayCode ?? 'N/A',
+                                          style: blueCellStyle,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(
+                                          tray.workOrderHeader.workOrderCode ?? 'N/A',
+                                          style: cellStyle,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 4,
+                                        child: Text(
+                                          tray.item.description ?? 'N/A',
+                                          style: cellStyle,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(
+                                          tray.item.sizeDescription ?? 'N/A',
+                                          textAlign: TextAlign.center,
+                                          style: cellStyle,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(
+                                          qty.toStringAsFixed(0),
+                                          textAlign: TextAlign.center,
+                                          style: cellStyle,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(
+                                          '${weight.toStringAsFixed(1)} g',
+                                          textAlign: TextAlign.center,
+                                          style: cellStyle,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildScannedQueue() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        _buildConfigurationPanel(),
         // ── Toolbar ──────────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.all(16),
@@ -494,4 +725,251 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
   }
 
   // Removed _buildTrayTableHeader and _buildTrayRow as they were extracted.
+}
+
+class _InductionOverlayDropdown<T> extends StatefulWidget {
+  final String hint;
+  final List<T> items;
+  final T? selectedValue;
+  final String Function(T) itemLabel;
+  final ValueChanged<T?> onChanged;
+
+  const _InductionOverlayDropdown({
+    required this.hint,
+    required this.items,
+    required this.selectedValue,
+    required this.itemLabel,
+    required this.onChanged,
+  });
+
+  @override
+  State<_InductionOverlayDropdown<T>> createState() => _InductionOverlayDropdownState<T>();
+}
+
+class _InductionOverlayDropdownState<T> extends State<_InductionOverlayDropdown<T>> with SingleTickerProviderStateMixin {
+  bool _isOpen = false;
+  late AnimationController _controller;
+  late Animation<double> _rotateAnimation;
+
+  final LayerLink _layerLink = LayerLink();
+  OverlayEntry? _overlayEntry;
+
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(duration: const Duration(milliseconds: 250), vsync: this);
+    _rotateAnimation = Tween<double>(begin: 0, end: 0.5).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _overlayEntry?.remove();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _toggleDropdown() {
+    if (_isOpen) {
+      _closeDropdown();
+    } else {
+      _openDropdown();
+    }
+  }
+
+  void _openDropdown() {
+    _overlayEntry = _createOverlayEntry();
+    Overlay.of(context).insert(_overlayEntry!);
+    setState(() {
+      _isOpen = true;
+      _controller.forward();
+    });
+  }
+
+  void _closeDropdown() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+    setState(() {
+      _isOpen = false;
+      _searchQuery = '';
+      _searchController.clear();
+      _controller.reverse();
+    });
+  }
+
+  OverlayEntry _createOverlayEntry() {
+    RenderBox renderBox = context.findRenderObject() as RenderBox;
+    var size = renderBox.size;
+
+    return OverlayEntry(
+      builder: (context) => Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _closeDropdown,
+              child: Container(),
+            ),
+          ),
+          Positioned(
+            width: size.width,
+            child: CompositedTransformFollower(
+              link: _layerLink,
+              showWhenUnlinked: false,
+              offset: Offset(0, size.height + 4),
+              child: Material(
+                elevation: 0,
+                color: Colors.transparent,
+                child: _buildDropdownMenu(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: GestureDetector(
+        onTap: _toggleDropdown,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: _isOpen ? const Color(0xFF1B64A3) : const Color(0xFFCFD8DC),
+              width: 1.2,
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: widget.selectedValue == null
+                    ? Text(widget.hint, style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontWeight: FontWeight.w400))
+                    : Text(widget.itemLabel(widget.selectedValue as T), style: const TextStyle(color: Color(0xFF263238), fontSize: 13, fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+              RotationTransition(
+                turns: _rotateAnimation,
+                child: Icon(Icons.arrow_drop_down_rounded, color: _isOpen ? const Color(0xFF1B64A3) : const Color(0xFF546E7A), size: 24),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDropdownMenu() {
+    final filteredItems = widget.items.where((item) {
+      final label = widget.itemLabel(item).toLowerCase();
+      final query = _searchQuery.toLowerCase();
+      return label.contains(query);
+    }).toList();
+
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 280),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 15, offset: const Offset(0, 8)),
+        ],
+        border: Border.all(color: const Color(0xFFCFD8DC), width: 1),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (val) {
+                setState(() {
+                  _searchQuery = val;
+                });
+                _overlayEntry?.markNeedsBuild();
+              },
+              style: const TextStyle(fontSize: 13, color: Colors.black87),
+              decoration: InputDecoration(
+                hintText: "Search...",
+                hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+                prefixIcon: const Icon(Icons.search, size: 18, color: Colors.grey),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFFCFD8DC)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFFCFD8DC)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFF1B64A3)),
+                ),
+              ),
+            ),
+          ),
+          const Divider(height: 1, color: Color(0xFFCFD8DC)),
+          Flexible(
+            child: filteredItems.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Text(
+                      'No results found',
+                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                  )
+                : ListView.separated(
+                    shrinkWrap: true,
+                    padding: EdgeInsets.zero,
+                    itemCount: filteredItems.length,
+                    separatorBuilder: (context, index) => Divider(height: 1, color: Colors.grey.shade100),
+                    itemBuilder: (context, index) {
+                      final item = filteredItems[index];
+                      final isSelected = item == widget.selectedValue;
+
+                      return InkWell(
+                        onTap: () {
+                          widget.onChanged(item);
+                          _closeDropdown();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          color: isSelected ? const Color(0xFFF1F5F9) : Colors.transparent,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  widget.itemLabel(item),
+                                  style: TextStyle(
+                                      color: isSelected
+                                          ? const Color(0xFF1B64A3)
+                                          : const Color(0xFF263238),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                              if (isSelected) const Icon(Icons.check_rounded, color: Color(0xFF1B64A3), size: 16),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
 }

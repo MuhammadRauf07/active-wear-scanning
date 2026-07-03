@@ -50,6 +50,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
   ProductionProgressResponseModel? _selectedTray;
   final Map<int, Set<String>> _workOrderValidColors = {};
   bool _isCachingColors = false;
+  final Map<String, double> _colorPlanQuantities = {};
 
   final List<ProductionProgressResponseModel> _scannedTrays = [];
   final List<TextEditingController> _quantityControllers = [];
@@ -208,8 +209,10 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
               final detail = (item as Map)['workOrderLineDetail'];
               if (detail != null) {
                 final colorDesc = detail['colorDescription']?.toString().trim().toUpperCase();
+                final planQty = (detail['planQuantity'] as num?)?.toDouble() ?? 0.0;
                 if (colorDesc != null && colorDesc.isNotEmpty) {
                   validColors.add(colorDesc);
+                  _colorPlanQuantities["${lineId}_$colorDesc"] = planQty;
                 }
               }
             }
@@ -601,7 +604,10 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
 
     if (available.isEmpty) return 'Tray not found or not checked out via GBS';
 
-    final tray = available.first;
+    final tray = available.firstWhere(
+      (t) => !_lotProgressIds.contains(t.productionProgress.id),
+      orElse: () => available.first,
+    );
     if ((tray.primaryTrayModel?.trayType ?? 0) != 1)
       return 'Invalid tray type.';
     final progressId = tray.productionProgress.id;
@@ -720,6 +726,98 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
       }
     }
 
+    // Check overproduction by color plan quantity
+    final selectedColorDesc = _selectedColor?.segmentCode?.description?.trim().toUpperCase();
+    if (selectedColorDesc != null) {
+      final Map<int, double> lineCumulativeTubes = {};
+      for (int i = 0; i < _scannedTrays.length; i++) {
+        final tray = _scannedTrays[i];
+        final lineId = tray.productionProgress.workOrderLineId ?? tray.workOrderLine?.id;
+        if (lineId != null) {
+          final qty = double.tryParse(_quantityControllers[i].text) ?? 0.0;
+          lineCumulativeTubes[lineId] = (lineCumulativeTubes[lineId] ?? 0.0) + qty;
+        }
+      }
+
+      bool exceedsColorPlan = false;
+      double exceededSum = 0.0;
+      double exceededPlan = 0.0;
+      for (final lineId in lineCumulativeTubes.keys) {
+        final planQty = _colorPlanQuantities["${lineId}_$selectedColorDesc"] ?? 0.0;
+        final sumTubes = lineCumulativeTubes[lineId] ?? 0.0;
+        if (planQty > 0.0 && sumTubes > planQty) {
+          exceedsColorPlan = true;
+          exceededSum = sumTubes;
+          exceededPlan = planQty;
+          break;
+        }
+      }
+
+      if (exceedsColorPlan) {
+        final proceed = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFFF8FAFC),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Color(0xFFF59E0B)),
+                  SizedBox(width: 8),
+                  Text(
+                    'Color Plan Exceeded',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+                ],
+              ),
+              content: Text(
+                'Cumulative tube count (${exceededSum.toStringAsFixed(0)}) exceeds the plan quantity (${exceededPlan.toStringAsFixed(0)}) for color "$selectedColorDesc". Do you want to proceed?',
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF475569),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: Color(0xFF64748B),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0D47A1),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  ),
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text(
+                    'OK',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ) ?? false;
+
+        if (!proceed) return;
+      }
+    }
+
     AppLoader.show(context);
 
     int batchHeaderId;
@@ -788,32 +886,114 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
           tray.productionProgress.primaryQuantity ??
           0;
 
-      // 1. Advance the Production Progress to the first operation
       final pp = tray.productionProgress;
-      final ppPayload = pp.toJson();
-      
-      // Update with batch and first operation details
-      ppPayload['batchHeaderId'] = batchHeaderId;
-      ppPayload['transactionType'] = 6; // Issued/WIP
-      if (_referenceMinOperationId != null) {
-        ppPayload['operationId'] = _referenceMinOperationId;
-      }
-      
-      // Remove read-only/conflict fields
-      ppPayload.remove('id');
-      ppPayload.remove('progressCode');
-      ppPayload.remove('creationTime');
-      ppPayload.remove('creatorId');
-      ppPayload.remove('lastModificationTime');
-      ppPayload.remove('lastModifierId');
+      final originalQty = pp.primaryQuantity ?? 0.0;
+      final isPartial = qty < originalQty;
 
-      dev.log('🚀 Updating ProductionProgress for tray ${tray.primaryTrayModel.trayCode} to Op: $_referenceMinOperationId');
-      final resPP = await _lotRepo.updateProductionProgress(pp.id!, ppPayload);
-      if (!resPP.success) {
-        dev.log('❌ Failed to update production progress: ${resPP.message}');
+      int resolvedProgressId = 0;
+
+      if (isPartial) {
+        // --- PARTIAL CONSUMPTION ---
+        // 1. Create a NEW ProductionProgress for the consumed qty
+        final newPPPayload = pp.toJson();
+        newPPPayload['primaryQuantity'] = qty.toDouble();
+        final perTube = tray.item.perGarmentTube;
+        if (perTube > 0) {
+          newPPPayload['secondaryQuantity'] = qty * perTube;
+        }
+
+        newPPPayload['batchHeaderId'] = batchHeaderId;
+        newPPPayload['transactionType'] = 6; // Issued/WIP
+        if (_referenceMinOperationId != null) {
+          newPPPayload['operationId'] = _referenceMinOperationId;
+        }
+
+        newPPPayload.remove('id');
+        newPPPayload.remove('progressCode');
+        newPPPayload.remove('creationTime');
+        newPPPayload.remove('creatorId');
+        newPPPayload.remove('lastModificationTime');
+        newPPPayload.remove('lastModifierId');
+
+        dev.log('🚀 Creating new partial ProductionProgress for tray ${tray.primaryTrayModel?.trayCode} with qty: $qty');
+        final resNewPP = await _lotRepo.postProductionProgress(newPPPayload);
+        if (!resNewPP.success) {
+          throw Exception('Failed to create partial production progress: ${resNewPP.message}');
+        }
+
+        // Recovery fallback for database ID
+        if (resNewPP.data is Map) {
+          resolvedProgressId = (resNewPP.data as Map)['id'] ?? 0;
+        }
+        if (resolvedProgressId == 0) {
+          dev.log('⚠️ ProductionProgress ID is 0. Attempting ID recovery...');
+          final allProgRes = await _lotRepo.fetchProductionProgress(query: {
+            'LocatorId': '3',
+            'maxResultCount': '1000',
+          });
+          if (allProgRes.success && allProgRes.data != null) {
+            final List progresses = allProgRes.data as List;
+            final matches = progresses.whereType<ProductionProgressResponseModel>().where((p) =>
+              p.productionProgress.primaryQuantity == qty &&
+              p.productionProgress.primaryTrayId == tray.primaryTrayModel?.id &&
+              p.productionProgress.workOrderLineId == (tray.workOrderLine?.id ?? tray.productionProgress.workOrderLineId)
+            ).toList();
+            if (matches.isNotEmpty) {
+              matches.sort((a, b) => (b.productionProgress.id ?? 0).compareTo(a.productionProgress.id ?? 0));
+              resolvedProgressId = matches.first.productionProgress.id ?? 0;
+            }
+          }
+        }
+
+        if (resolvedProgressId == 0) {
+          throw Exception('Failed to resolve database ID for the new production progress.');
+        }
+        dev.log('✅ Resolved partial ProductionProgress ID: $resolvedProgressId');
+
+        // 2. Decrease the original ProductionProgress capacity in GBS
+        final originalPPPayload = pp.toJson();
+        originalPPPayload['primaryQuantity'] = (originalQty - qty).toDouble();
+        if (perTube > 0) {
+          originalPPPayload['secondaryQuantity'] = (originalQty - qty) * perTube;
+        }
+
+        originalPPPayload.remove('id');
+        originalPPPayload.remove('progressCode');
+        originalPPPayload.remove('creationTime');
+        originalPPPayload.remove('creatorId');
+        originalPPPayload.remove('lastModificationTime');
+        originalPPPayload.remove('lastModifierId');
+
+        dev.log('🚀 Updating original ProductionProgress ${pp.id} capacity to: ${originalQty - qty}');
+        final resUpdateOriginalPP = await _lotRepo.updateProductionProgress(pp.id!, originalPPPayload);
+        if (!resUpdateOriginalPP.success) {
+          dev.log('❌ Failed to update original production progress: ${resUpdateOriginalPP.message}');
+        }
+      } else {
+        // --- FULL CONSUMPTION ---
+        final ppPayload = pp.toJson();
+        ppPayload['batchHeaderId'] = batchHeaderId;
+        ppPayload['transactionType'] = 6; // Issued/WIP
+        if (_referenceMinOperationId != null) {
+          ppPayload['operationId'] = _referenceMinOperationId;
+        }
+
+        ppPayload.remove('id');
+        ppPayload.remove('progressCode');
+        ppPayload.remove('creationTime');
+        ppPayload.remove('creatorId');
+        ppPayload.remove('lastModificationTime');
+        ppPayload.remove('lastModifierId');
+
+        dev.log('🚀 Updating ProductionProgress for tray ${tray.primaryTrayModel?.trayCode} to Op: $_referenceMinOperationId');
+        final resPP = await _lotRepo.updateProductionProgress(pp.id!, ppPayload);
+        if (!resPP.success) {
+          throw Exception(resPP.message ?? 'Failed to update production progress.');
+        }
+        resolvedProgressId = pp.id!;
       }
 
-      // 2. Create the Lot Line
+      // 3. Create the Lot Line
       final linePayload = {
         "planDate": DateTime.now().toIso8601String(),
         "transactionDate": DateTime.now().toIso8601String(),
@@ -821,34 +1001,37 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
         "primaryUOM": tray.productionProgress.primaryUOM ?? 0,
         "secondaryQuantity": tray.productionProgress.secondaryQuantity ?? 0,
         "secondaryUOM": tray.productionProgress.secondaryUOM ?? 0,
-        "batchLineCode": "BL-$batchHeaderId-${tray.primaryTrayModel.id}",
+        "batchLineCode": "BL-$batchHeaderId-${tray.primaryTrayModel?.id}",
         "active": true,
         "isReAssigned": false,
         "batchHeaderId": batchHeaderId,
-        "progressId": tray.productionProgress.id,
+        "progressId": resolvedProgressId,
         "workOrderHeaderId": tray.workOrderHeader.id,
         "workOrderLineId":
             tray.workOrderLine?.id ?? tray.productionProgress.workOrderLineId,
         "itemId": tray.item.id,
-        "trayId": tray.primaryTrayModel.id,
+        "trayId": tray.primaryTrayModel?.id,
         "locatorId": tray.productionProgress.locatorId,
-        "processItemId": _trayProcessedItemId[tray.primaryTrayModel.id],
+        "processItemId": _trayProcessedItemId[tray.primaryTrayModel?.id],
       };
 
       dev.log('🚀 POSTing LotLine: $linePayload');
       final resLine = await _lotRepo.createLotLine(linePayload);
 
-      if (resLine.success && resLine.data != null) {
-        final lineId = (resLine.data as Map)['id'];
-        final trayId = tray.primaryTrayModel.id;
-        if (trayId != null) {
-          final trayData = await _lotRepo.fetchTrayDetailById(trayId);
-          if (trayData.success && trayData.data != null) {
-            final map = Map<String, dynamic>.from(trayData.data as Map);
-            map['batchHeaderId'] = batchHeaderId;
-            map['batchLineId'] = lineId;
-            map['trayQuantity'] = qty.toInt();
-            await _lotRepo.updateTrayDetails(trayId, map);
+      // Only update tray details if fully consumed (not partial)
+      if (!isPartial) {
+        if (resLine.success && resLine.data != null) {
+          final lineId = (resLine.data as Map)['id'];
+          final trayId = tray.primaryTrayModel?.id;
+          if (trayId != null) {
+            final trayData = await _lotRepo.fetchTrayDetailById(trayId);
+            if (trayData.success && trayData.data != null) {
+              final map = Map<String, dynamic>.from(trayData.data as Map);
+              map['batchHeaderId'] = batchHeaderId;
+              map['batchLineId'] = lineId;
+              map['trayQuantity'] = qty.toInt();
+              await _lotRepo.updateTrayDetails(trayId, map);
+            }
           }
         }
       }
