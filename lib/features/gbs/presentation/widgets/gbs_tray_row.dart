@@ -38,7 +38,7 @@ class GBSTrayRow extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            flex: 3,
+            flex: 6,
             child: Text(
               tray.trayCode,
               maxLines: 2,
@@ -48,7 +48,7 @@ class GBSTrayRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            flex: 2,
+            flex: 4,
             child: Text(
               tray.workOrderCode,
               maxLines: 1,
@@ -58,7 +58,7 @@ class GBSTrayRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            flex: 2,
+            flex: 4,
             child: Text(
               tray.sizeDescription.isNotEmpty ? tray.sizeDescription : '-',
               maxLines: 1,
@@ -68,7 +68,7 @@ class GBSTrayRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            flex: 2,
+            flex: 4,
             child: Text(
               tray.perGarmentTube > 0 ? tray.perGarmentTube.toStringAsFixed(0) : '-',
               textAlign: TextAlign.center,
@@ -76,7 +76,7 @@ class GBSTrayRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            flex: 2,
+            flex: 4,
             child: Text(
               tray.primaryQuantity,
               textAlign: TextAlign.center,
@@ -84,7 +84,7 @@ class GBSTrayRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            flex: 2,
+            flex: 4,
             child: Builder(
               builder: (_) {
                 final tubes = double.tryParse(tray.primaryQuantity) ?? 0;
@@ -98,7 +98,7 @@ class GBSTrayRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            flex: 2,
+            flex: 4,
             child: Text(
               '${((double.tryParse(tray.primaryQuantity) ?? 0.0) * tray.pieceWeight).toStringAsFixed(1)} g',
               textAlign: TextAlign.center,

@@ -5,12 +5,14 @@ class TrayTableHeader extends StatelessWidget {
   final double actionColumnWidth;
   final bool showLotColumn;
   final bool showBatchTubes;
+  final bool showDetailedTubes;
 
   const TrayTableHeader({
     super.key,
     this.actionColumnWidth = 40.0,
     this.showLotColumn = false,
     this.showBatchTubes = false,
+    this.showDetailedTubes = false,
   });
 
   static const _headerStyle = TextStyle(
@@ -32,17 +34,23 @@ class TrayTableHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Expanded(flex: 3, child: Text('TRAY CODE', textAlign: TextAlign.center, style: _headerStyle)),
-          Expanded(flex: 2, child: Text('WORK ORDER', textAlign: TextAlign.center, style: _headerStyle)),
-          Expanded(flex: 2, child: Text('SIZE', textAlign: TextAlign.center, style: _headerStyle)),
-          Expanded(flex: 2, child: Text('PCS PER TUBE', textAlign: TextAlign.center, style: _headerStyle)),
-          Expanded(flex: 2, child: Text('TUBES', textAlign: TextAlign.center, style: _headerStyle)),
-          Expanded(flex: 2, child: Text('PCS', textAlign: TextAlign.center, style: _headerStyle)),
-          Expanded(flex: 2, child: Text('WEIGHT', textAlign: TextAlign.center, style: _headerStyle)),
+          Expanded(flex: 6, child: Text('TRAY CODE', textAlign: TextAlign.center, style: _headerStyle)),
+          Expanded(flex: 4, child: Text('WORK ORDER', textAlign: TextAlign.center, style: _headerStyle)),
+          Expanded(flex: 4, child: Text('SIZE', textAlign: TextAlign.center, style: _headerStyle)),
+          Expanded(flex: 4, child: Text('PCS/TUBE', textAlign: TextAlign.center, style: _headerStyle)),
+          if (showDetailedTubes) ...[
+            Expanded(flex: 3, child: Text('ACTUAL', textAlign: TextAlign.center, style: _headerStyle)),
+            Expanded(flex: 3, child: Text('ALREADY', textAlign: TextAlign.center, style: _headerStyle)),
+            Expanded(flex: 3, child: Text('REMAIN', textAlign: TextAlign.center, style: _headerStyle)),
+          ] else ...[
+            Expanded(flex: 4, child: Text('TUBES', textAlign: TextAlign.center, style: _headerStyle)),
+          ],
+          Expanded(flex: 4, child: Text('PCS', textAlign: TextAlign.center, style: _headerStyle)),
+          Expanded(flex: 4, child: Text('WEIGHT', textAlign: TextAlign.center, style: _headerStyle)),
           if (showLotColumn)
-            Expanded(flex: 3, child: Text('LOT #', textAlign: TextAlign.center, style: _headerStyle)),
+            Expanded(flex: 6, child: Text('LOT #', textAlign: TextAlign.center, style: _headerStyle)),
           if (showBatchTubes)
-            Expanded(flex: 2, child: Text('BATCH TUBES', textAlign: TextAlign.center, style: _headerStyle)),
+            Expanded(flex: 4, child: Text('BATCH TUBES', textAlign: TextAlign.center, style: _headerStyle)),
           SizedBox(width: actionColumnWidth),
         ],
       ),

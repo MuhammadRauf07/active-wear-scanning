@@ -47,7 +47,7 @@ class ScannedTrayRow extends StatelessWidget {
         children: [
           // Tray Code (Now Blue)
           Expanded(
-            flex: 3,
+            flex: 6,
             child: Text(
               displayCode,
               textAlign: TextAlign.center,
@@ -59,7 +59,7 @@ class ScannedTrayRow extends StatelessWidget {
           
           // Work Order (Now Black)
           Expanded(
-            flex: 2,
+            flex: 4,
             child: Text(
               selectedPlanLine?.workOrderHeader.workOrderCode ?? "-",
               textAlign: TextAlign.center,
@@ -69,7 +69,7 @@ class ScannedTrayRow extends StatelessWidget {
           
           // Size
           Expanded(
-            flex: 2,
+            flex: 4,
             child: Text(
               tray.sizeDescription.isNotEmpty ? tray.sizeDescription : "-",
               textAlign: TextAlign.center,
@@ -79,7 +79,7 @@ class ScannedTrayRow extends StatelessWidget {
           
           // Pcs Per Tube
           Expanded(
-            flex: 2,
+            flex: 4,
             child: Text(
               tray.perGarmentTube > 0 ? tray.perGarmentTube.toStringAsFixed(0) : '-',
               textAlign: TextAlign.center,
@@ -89,7 +89,7 @@ class ScannedTrayRow extends StatelessWidget {
           
           // Tubes
           Expanded(
-            flex: 2,
+            flex: 4,
             child: Text(
               quantityController.text,
               textAlign: TextAlign.center,
@@ -99,7 +99,7 @@ class ScannedTrayRow extends StatelessWidget {
           
           // Pcs
           Expanded(
-            flex: 2,
+            flex: 4,
             child: Builder(
               builder: (_) {
                 final qty = double.tryParse(quantityController.text) ?? 0;
@@ -115,7 +115,7 @@ class ScannedTrayRow extends StatelessWidget {
           
           // Weight
           Expanded(
-            flex: 2,
+            flex: 4,
             child: Builder(
               builder: (_) {
                 final qty = double.tryParse(quantityController.text) ?? 0;

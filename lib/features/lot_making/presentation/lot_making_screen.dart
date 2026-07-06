@@ -126,9 +126,14 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
     final gbsTrays = productionProgressTrays.where((t) {
       final progressId = t.productionProgress.id;
       final isCurrentBatchDbTray = progressId != null && _currentBatchDatabaseProgressIds.contains(progressId);
+      final hasBatchHeader = t.productionProgress.batchHeaderId != null && t.productionProgress.batchHeaderId != 0;
+      final isCurrentBatchHeader = widget.existingBatch?.batchHeader.id != null && t.productionProgress.batchHeaderId == widget.existingBatch!.batchHeader.id;
+      final isAssignedToOtherLot = hasBatchHeader && !isCurrentBatchHeader;
+
       return t.productionProgress.locatorId == 3 &&
              t.productionProgress.gbsFlag == true &&
              t.workOrderHeader != null &&
+             !isAssignedToOtherLot &&
              (progressId == null || !_lotProgressIds.contains(progressId) || isCurrentBatchDbTray);
     }).toList();
 
@@ -170,11 +175,46 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
     return productionProgressTrays.where((t) {
       final progressId = t.productionProgress.id;
       final isCurrentBatchDbTray = progressId != null && _currentBatchDatabaseProgressIds.contains(progressId);
+      final hasBatchHeader = t.productionProgress.batchHeaderId != null && t.productionProgress.batchHeaderId != 0;
+      final isCurrentBatchHeader = widget.existingBatch?.batchHeader.id != null && t.productionProgress.batchHeaderId == widget.existingBatch!.batchHeader.id;
+      final isAssignedToOtherLot = hasBatchHeader && !isCurrentBatchHeader;
+
       return t.productionProgress.locatorId == 3 &&
              t.productionProgress.gbsFlag == true &&
              t.workOrderHeader?.id == _selectedWorkOrder!.id &&
+             !isAssignedToOtherLot &&
              (progressId == null || !_lotProgressIds.contains(progressId) || isCurrentBatchDbTray);
     }).toList();
+  }
+
+  Map<String, double> _getTrayQuantities(ProductionProgressResponseModel tray) {
+    final code = tray.primaryTrayModel.trayCode;
+    final fallbackQty = tray.productionProgress.primaryQuantity ?? 0.0;
+    if (code == null) {
+      return {'actual': fallbackQty, 'alreadyScanned': 0.0, 'remaining': fallbackQty};
+    }
+    
+    final trayProgresses = productionProgressTrays.where((t) => 
+      (t.primaryTrayModel?.trayCode ?? '').trim().toLowerCase() == code.trim().toLowerCase() &&
+      t.productionProgress.locatorId == 3 &&
+      t.productionProgress.gbsFlag == true
+    ).toList();
+    
+    final actual = trayProgresses.fold<double>(0.0, (sum, t) => sum + (t.productionProgress.primaryQuantity ?? 0.0));
+    
+    final alreadyScanned = trayProgresses.where((t) {
+      final hasBatch = t.productionProgress.batchHeaderId != null && t.productionProgress.batchHeaderId != 0;
+      final isCurrent = widget.existingBatch?.batchHeader.id != null && t.productionProgress.batchHeaderId == widget.existingBatch!.batchHeader.id;
+      return hasBatch && !isCurrent;
+    }).fold<double>(0.0, (sum, t) => sum + (t.productionProgress.primaryQuantity ?? 0.0));
+
+    final remaining = actual - alreadyScanned;
+
+    return {
+      'actual': actual,
+      'alreadyScanned': alreadyScanned,
+      'remaining': remaining,
+    };
   }
 
   Future<void> _cacheColorsForGbsWorkOrders() async {
@@ -417,13 +457,17 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
               clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
-                  const TrayTableHeader(actionColumnWidth: 44, showBatchTubes: true),
+                  const TrayTableHeader(actionColumnWidth: 44, showBatchTubes: true, showDetailedTubes: true),
                   Expanded(
                     child: ListView.builder(
                       padding: EdgeInsets.zero,
                       itemCount: _scannedTrays.length,
                       itemBuilder: (context, index) {
                         final tray = _scannedTrays[index];
+                        final qtys = _getTrayQuantities(tray);
+                        final actualVal = qtys['actual']!;
+                        final alreadyScannedVal = qtys['alreadyScanned']!;
+                        final remainingVal = qtys['remaining']!;
                         final qty = double.tryParse(_quantityControllers[index].text) ?? 0;
                         final perTube = tray.item.perGarmentTube;
                         final pcs = qty * perTube;
@@ -455,7 +499,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                           child: Row(
                             children: [
                               Expanded(
-                                flex: 3,
+                                flex: 6,
                                 child: Text(
                                   tray.primaryTrayModel.trayCode ?? 'N/A',
                                   textAlign: TextAlign.center,
@@ -463,7 +507,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                                 ),
                               ),
                               Expanded(
-                                flex: 2,
+                                flex: 4,
                                 child: Text(
                                   tray.workOrderHeader.workOrderCode ?? 'N/A',
                                   textAlign: TextAlign.center,
@@ -471,7 +515,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                                 ),
                               ),
                               Expanded(
-                                flex: 2,
+                                flex: 4,
                                 child: Text(
                                   tray.item.sizeDescription ?? 'N/A',
                                   textAlign: TextAlign.center,
@@ -479,7 +523,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                                 ),
                               ),
                               Expanded(
-                                flex: 2,
+                                flex: 4,
                                 child: Text(
                                   perTube.toStringAsFixed(0),
                                   textAlign: TextAlign.center,
@@ -487,15 +531,31 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                                 ),
                               ),
                               Expanded(
-                                flex: 2,
+                                flex: 3,
                                 child: Text(
-                                  (tray.productionProgress.primaryQuantity ?? 0.0).toStringAsFixed(0),
+                                  actualVal.toStringAsFixed(0),
                                   textAlign: TextAlign.center,
                                   style: cellStyle,
                                 ),
                               ),
                               Expanded(
-                                flex: 2,
+                                flex: 3,
+                                child: Text(
+                                  alreadyScannedVal.toStringAsFixed(0),
+                                  textAlign: TextAlign.center,
+                                  style: cellStyle.copyWith(color: Colors.orange.shade800),
+                                ),
+                              ),
+                              Expanded(
+                                flex: 3,
+                                child: Text(
+                                  remainingVal.toStringAsFixed(0),
+                                  textAlign: TextAlign.center,
+                                  style: cellStyle.copyWith(color: const Color(0xFF2E7D32)),
+                                ),
+                              ),
+                              Expanded(
+                                flex: 4,
                                 child: Text(
                                   pcs.toStringAsFixed(0),
                                   textAlign: TextAlign.center,
@@ -503,7 +563,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                                 ),
                               ),
                               Expanded(
-                                flex: 2,
+                                flex: 4,
                                 child: Text(
                                   '${weight.toStringAsFixed(0)}g',
                                   textAlign: TextAlign.center,
@@ -511,7 +571,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                                 ),
                               ),
                               Expanded(
-                                flex: 2,
+                                flex: 4,
                                 child: Container(
                                   height: 30,
                                   decoration: BoxDecoration(
@@ -531,7 +591,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                                     ),
                                     inputFormatters: [
                                       FilteringTextInputFormatter.digitsOnly,
-                                      TubesInputFormatter((tray.productionProgress.primaryQuantity ?? 0.0).toInt()),
+                                      TubesInputFormatter(remainingVal.toInt()),
                                     ],
                                     onChanged: (val) {
                                       setState(() {});
@@ -1360,7 +1420,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    const TrayTableHeader(actionColumnWidth: 0, showLotColumn: true),
+                    const TrayTableHeader(actionColumnWidth: 0, showLotColumn: true, showDetailedTubes: true),
                     Expanded(
                       child: availableTrays.isEmpty
                           ? const Center(
@@ -1377,7 +1437,11 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                               itemCount: availableTrays.length,
                               itemBuilder: (ctx, index) {
                                 final tray = availableTrays[index];
-                                final qty = tray.productionProgress.primaryQuantity ?? 0.0;
+                                final qtys = _getTrayQuantities(tray);
+                                final actualVal = qtys['actual']!;
+                                final alreadyScannedVal = qtys['alreadyScanned']!;
+                                final remainingVal = qtys['remaining']!;
+                                final qty = remainingVal;
                                 final perTube = tray.item.perGarmentTube;
                                 final pcs = qty * perTube;
                                 final weight = qty * (tray.item.pieceWeight ?? 0);
@@ -1412,7 +1476,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                                   child: Row(
                                     children: [
                                       Expanded(
-                                        flex: 3,
+                                        flex: 6,
                                         child: Text(
                                           tray.primaryTrayModel.trayCode ?? 'N/A',
                                           textAlign: TextAlign.center,
@@ -1420,7 +1484,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                                         ),
                                       ),
                                       Expanded(
-                                        flex: 2,
+                                        flex: 4,
                                         child: Text(
                                           tray.workOrderHeader.workOrderCode ?? 'N/A',
                                           textAlign: TextAlign.center,
@@ -1428,7 +1492,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                                         ),
                                       ),
                                       Expanded(
-                                        flex: 2,
+                                        flex: 4,
                                         child: Text(
                                           tray.item.sizeDescription ?? 'N/A',
                                           textAlign: TextAlign.center,
@@ -1436,7 +1500,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                                         ),
                                       ),
                                       Expanded(
-                                        flex: 2,
+                                        flex: 4,
                                         child: Text(
                                           perTube.toStringAsFixed(0),
                                           textAlign: TextAlign.center,
@@ -1444,15 +1508,31 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                                         ),
                                       ),
                                       Expanded(
-                                        flex: 2,
+                                        flex: 3,
                                         child: Text(
-                                          qty.toStringAsFixed(0),
+                                          actualVal.toStringAsFixed(0),
                                           textAlign: TextAlign.center,
                                           style: cellStyle,
                                         ),
                                       ),
                                       Expanded(
-                                        flex: 2,
+                                        flex: 3,
+                                        child: Text(
+                                          alreadyScannedVal.toStringAsFixed(0),
+                                          textAlign: TextAlign.center,
+                                          style: cellStyle.copyWith(color: Colors.orange.shade800),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 3,
+                                        child: Text(
+                                          remainingVal.toStringAsFixed(0),
+                                          textAlign: TextAlign.center,
+                                          style: cellStyle.copyWith(color: const Color(0xFF2E7D32)),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 4,
                                         child: Text(
                                           pcs.toStringAsFixed(0),
                                           textAlign: TextAlign.center,
@@ -1460,7 +1540,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                                         ),
                                       ),
                                       Expanded(
-                                        flex: 2,
+                                        flex: 4,
                                         child: Text(
                                           '${weight.toStringAsFixed(0)}g',
                                           textAlign: TextAlign.center,
@@ -1468,7 +1548,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                                         ),
                                       ),
                                       Expanded(
-                                        flex: 3,
+                                        flex: 6,
                                         child: Text(
                                           isScanned ? _lotCode : '-',
                                           textAlign: TextAlign.center,
@@ -1832,7 +1912,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                       const SizedBox(height: 10),
                       _buildCapacityProgress(),
                       const SizedBox(height: 10),
-                      const TrayTableHeader(actionColumnWidth: 44, showBatchTubes: true),
+                      const TrayTableHeader(actionColumnWidth: 44, showBatchTubes: true, showDetailedTubes: true),
                       Expanded(
                         child: _scannedTrays.isEmpty
                             ? const EmptyScanState(hasBorder: false)
@@ -1912,6 +1992,10 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
 
   Widget _buildTrayRow(int index) {
     final tray = _scannedTrays[index];
+    final qtys = _getTrayQuantities(tray);
+    final actualVal = qtys['actual']!;
+    final alreadyScannedVal = qtys['alreadyScanned']!;
+    final remainingVal = qtys['remaining']!;
     final qty = double.tryParse(_quantityControllers[index].text) ?? 0;
     final perTube = tray.item.perGarmentTube;
     final pcs = qty * perTube;
@@ -1943,7 +2027,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
       child: Row(
         children: [
           Expanded(
-            flex: 3,
+            flex: 6,
             child: Text(
               tray.primaryTrayModel.trayCode ?? 'N/A',
               textAlign: TextAlign.center,
@@ -1951,7 +2035,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
             ),
           ),
           Expanded(
-            flex: 2,
+            flex: 4,
             child: Text(
               tray.workOrderHeader.workOrderCode ?? 'N/A',
               textAlign: TextAlign.center,
@@ -1959,7 +2043,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
             ),
           ),
           Expanded(
-            flex: 2,
+            flex: 4,
             child: Text(
               tray.item.sizeDescription ?? 'N/A',
               textAlign: TextAlign.center,
@@ -1967,7 +2051,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
             ),
           ),
           Expanded(
-            flex: 2,
+            flex: 4,
             child: Text(
               perTube.toStringAsFixed(0),
               textAlign: TextAlign.center,
@@ -1975,15 +2059,31 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
             ),
           ),
           Expanded(
-            flex: 2,
+            flex: 3,
             child: Text(
-              (tray.productionProgress.primaryQuantity ?? 0.0).toStringAsFixed(0),
+              actualVal.toStringAsFixed(0),
               textAlign: TextAlign.center,
               style: cellStyle,
             ),
           ),
           Expanded(
-            flex: 2,
+            flex: 3,
+            child: Text(
+              alreadyScannedVal.toStringAsFixed(0),
+              textAlign: TextAlign.center,
+              style: cellStyle.copyWith(color: Colors.orange.shade800),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              remainingVal.toStringAsFixed(0),
+              textAlign: TextAlign.center,
+              style: cellStyle.copyWith(color: const Color(0xFF2E7D32)),
+            ),
+          ),
+          Expanded(
+            flex: 4,
             child: Text(
               pcs.toStringAsFixed(0),
               textAlign: TextAlign.center,
@@ -1991,7 +2091,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
             ),
           ),
           Expanded(
-            flex: 2,
+            flex: 4,
             child: Text(
               '${weight.toStringAsFixed(0)}g',
               textAlign: TextAlign.center,
@@ -1999,7 +2099,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
             ),
           ),
           Expanded(
-            flex: 2,
+            flex: 4,
             child: Container(
               height: 30,
               decoration: BoxDecoration(
@@ -2019,7 +2119,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                 ),
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
-                  TubesInputFormatter((tray.productionProgress.primaryQuantity ?? 0.0).toInt()),
+                  TubesInputFormatter(remainingVal.toInt()),
                 ],
                 onChanged: (val) => setState(() {}),
               ),

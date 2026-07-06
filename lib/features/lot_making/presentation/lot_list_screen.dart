@@ -11,6 +11,8 @@ import 'package:active_wear_scanning/features/knitting_production/model/tray_det
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../gbs/model/production_progress.dart';
+
 class LotListScreen extends StatefulWidget {
   const LotListScreen({super.key});
 
@@ -654,7 +656,7 @@ class _LotListScreenState extends State<LotListScreen>
         }
       }
 
-      // ── Step 2c: Update tray-details to empty it ─────────────────────────────
+      // ── Step 2c: Update tray-details to empty it (only if not attached to other draft lots and has no remaining GBS checkout qty) ──
       final trayId = bl['trayId'] as int?;
       if (trayId != null) {
         final trayRes = await _lotRepo.fetchTrayDetailById(trayId);
@@ -663,25 +665,61 @@ class _LotListScreenState extends State<LotListScreen>
             trayRes.data as Map<String, dynamic>,
           );
 
-          trayMap['shiftId'] = null;
-          trayMap['planLineId'] = null;
-          trayMap['resourceId'] = null;
-          trayMap['workOrderHeaderId'] = null;
-          trayMap['workOrderLineId'] = null;
-          trayMap['knitItemId'] = null;
-          trayMap['batchHeaderId'] = null;
-          trayMap['batchLineId'] = null;
-          trayMap['batchLinesId'] = null; // Adding both just to be safe
-          trayMap['locatorId'] = null;
-          trayMap['trayQuantity'] = "0";
+          // Get the original tray quantity (before splitting)
+          final originalQty = double.tryParse(trayMap['trayQuantity']?.toString() ?? '') ?? 0.0;
 
-          final updateRes = await _lotRepo.updateTrayDetails(trayId, trayMap);
-          if (updateRes.success) {
-            debugPrint('✅ TrayDetails emptied for reusable tray=$trayId');
+          // Fetch all lot lines in the database
+          final allLinesRes = await _lotRepo.fetchLotLines();
+          double sumIssuedQty = 0.0;
+
+          if (allLinesRes.success && allLinesRes.data != null) {
+            final allLines = allLinesRes.data as List;
+            for (final line in allLines) {
+              final dBl = line['batchLines'] as Map<String, dynamic>?;
+              if (dBl == null) continue;
+
+              final lineTrayId = dBl['trayId'] as int?;
+              if (lineTrayId == trayId) {
+                final lineHeaderId = dBl['batchHeaderId'];
+
+                // If it is the current lot being issued, or if it is already issued (locked)
+                final isCurrent = lineHeaderId?.toString() == headerId.toString();
+                final isAlreadyIssued = _lockedLots.any((lot) => lot.batchHeader.id?.toString() == lineHeaderId?.toString());
+
+                if (isCurrent || isAlreadyIssued) {
+                  final qty = double.tryParse(dBl['primaryQuantity']?.toString() ?? '') ?? 0.0;
+                  sumIssuedQty += qty;
+                }
+              }
+            }
+          }
+
+          // If the total issued quantity across all issued lots is less than the original tray quantity,
+          // the tray is not fully issued yet (still has draft or unassigned portions).
+          if (sumIssuedQty < originalQty - 0.01) {
+            debugPrint('⚠️ Tray $trayId is not fully issued yet (Issued: $sumIssuedQty, Original: $originalQty). Skipping reset of TrayDetails.');
           } else {
-            debugPrint(
-              '❌ TrayDetails empty failed for tray=$trayId: ${updateRes.message}',
-            );
+            // Free the tray!
+            trayMap['shiftId'] = null;
+            trayMap['planLineId'] = null;
+            trayMap['resourceId'] = null;
+            trayMap['workOrderHeaderId'] = null;
+            trayMap['workOrderLineId'] = null;
+            trayMap['knitItemId'] = null;
+            trayMap['batchHeaderId'] = null;
+            trayMap['batchLineId'] = null;
+            trayMap['batchLinesId'] = null; // Adding both just to be safe
+            trayMap['locatorId'] = null;
+            trayMap['trayQuantity'] = "0";
+
+            final updateRes = await _lotRepo.updateTrayDetails(trayId, trayMap);
+            if (updateRes.success) {
+              debugPrint('✅ TrayDetails emptied for reusable tray=$trayId');
+            } else {
+              debugPrint(
+                '❌ TrayDetails empty failed for tray=$trayId: ${updateRes.message}',
+              );
+            }
           }
         }
       }
