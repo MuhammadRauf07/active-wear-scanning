@@ -203,4 +203,12 @@ class KnittingProductionRepo {
       return PlexApiResult(false, 500, e.toString(), null);
     }
   }
+
+  Future<PlexApiResult> fetchLotHeaders() async {
+    return await _api.getList('/api/app/batch-headers');
+  }
+
+  Future<PlexApiResult> fetchLotLines() async {
+    return await _api.getList('/api/app/batch-liness?MaxResultCount=1000');
+  }
 }

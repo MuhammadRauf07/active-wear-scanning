@@ -995,7 +995,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
 
             trayUpd["trayQuantity"] = trayQty.toInt();
             trayUpd["batchHeaderId"] = widget.batchHeaderId;
-            trayUpd["isReAssigned"] = true;
+            trayUpd["isReAssigned"] = false;
             if (widget.machineId != null) {
               trayUpd["resourceId"] = widget.machineId;
             }
@@ -1016,7 +1016,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
                 "trayQuantity": trayQty.toInt(),
                 "batchHeaderId": widget.batchHeaderId,
                 "locatorId": nextLocatorId,
-                "isReAssigned": true,
+                "isReAssigned": false,
                 "workOrderHeaderId": trayUpd["workOrderHeaderId"],
                 "workOrderLineId": trayUpd["workOrderLineId"],
                 "knitItemId": trayUpd["knitItemId"],

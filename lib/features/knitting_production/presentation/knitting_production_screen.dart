@@ -43,6 +43,8 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
   List<PlanLineResponseModel> _allRawPlanLines = [];
   List<TrayDetailsModel> availableTraysDetail = [];
   List<ProductionProgressResponseModel> existingProductionProgresses = [];
+  List<Map<String, dynamic>> _allLotHeaders = [];
+  List<Map<String, dynamic>> _allLotLines = [];
   PlanLineResponseModel? _selectedPlanLine;
   List<Shift> _shifts = [];
   final Map<int, List<PlanLineResponseModel>> _allPlanLinesForWorkOrderLines = {};
@@ -252,7 +254,33 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
     final trayDetail = available.first.trayDetails;
     if (trayDetail?.active != true) return 'Tray is not active';
     if ((trayDetail?.trayType ?? 0) != 1) return 'Invalid Tray type.';
-    if (trayDetail?.isReAssigned == true) {
+    // Check if the tray is currently reassigned in any active draft lot line
+    bool isReassignedInDraft = false;
+    for (final line in _allLotLines) {
+      final bl = line['batchLines'] as Map<String, dynamic>? ?? line;
+      if (bl == null) continue;
+
+      final blTrayId = bl['trayId'] as int?;
+      final blIsReassigned = bl['isReAssigned'] as bool? ?? false;
+
+      if (blTrayId == trayDetail?.id && blIsReassigned) {
+        final lineHeaderId = bl['batchHeaderId'];
+        // Check if this headerId belongs to a draft lot header (lockFlag == false)
+        final isDraft = _allLotHeaders.any(
+          (h) {
+            final bh = h['batchHeader'] as Map<String, dynamic>? ?? h;
+            final isLocked = bh['lockFlag'] as bool? ?? false;
+            return bh['id']?.toString() == lineHeaderId?.toString() && !isLocked;
+          },
+        );
+        if (isDraft) {
+          isReassignedInDraft = true;
+          break;
+        }
+      }
+    }
+
+    if (isReassignedInDraft) {
       return 'Tray is already reassigned in Lapping and cannot be bound again.';
     }
 
@@ -445,6 +473,8 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
       final apiResult = await _trayScanningRepo.loadWorkOrderBySerialNumber(scannedCode);
       final trayDetailsModel = await _trayScanningRepo.fetchAvailableTrayDetails();
       final progressResult = await _trayScanningRepo.fetchProductionProgress();
+      final headersResult = await _trayScanningRepo.fetchLotHeaders();
+      final linesResult = await _trayScanningRepo.fetchLotLines();
 
       if (!mounted) return;
 
@@ -484,6 +514,12 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
             existingProductionProgresses = progressResult.data as List<ProductionProgressResponseModel>;
           } else if (!progressResult.success) {
             _showError(progressResult.message);
+          }
+          if (headersResult.success && headersResult.data != null) {
+            _allLotHeaders = List<Map<String, dynamic>>.from(headersResult.data as List);
+          }
+          if (linesResult.success && linesResult.data != null) {
+            _allLotLines = List<Map<String, dynamic>>.from(linesResult.data as List);
           }
           if (trayDetailsModel.data != null) {
             availableTraysDetail = (trayDetailsModel.data as List).map((item) => item as TrayDetailsModel).toList();

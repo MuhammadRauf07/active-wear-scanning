@@ -306,8 +306,16 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
             r.productionProgress.isStarted ?? false);
             final bool isRework = groupRecords.any((r) =>
             r.productionProgress.reworkFlag ?? false);
-            final bool isReassigned = groupRecords.any((r) =>
-            r.primaryTrayModel.isReAssigned ?? false);
+            
+            final blRes = await _lotRepo.fetchLotLines(batchHeaderId: bhId);
+            bool isReassigned = false;
+            if (blRes.success && blRes.data != null) {
+              final linesList = blRes.data as List;
+              isReassigned = linesList.any((l) {
+                final dBl = l['batchLines'] as Map<String, dynamic>? ?? l;
+                return dBl['isReAssigned'] == true;
+              });
+            }
 
             summaries.add(
               BatchSummaryItem(
