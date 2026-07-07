@@ -684,6 +684,4 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
       ),
     );
   }
-
-
 }
