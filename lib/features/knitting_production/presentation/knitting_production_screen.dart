@@ -288,11 +288,7 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
         trayDetail?.locatorId == null ||
         trayDetail?.trayQuantity == 0;
 
-    final alreadyInProduction = existingProductionProgresses.any(
-      (t) => (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase() == code.toLowerCase(),
-    );
-
-    if (alreadyInProduction && !isEmptied) {
+    if (!isEmptied) {
       return 'Tray already scanned (Exists in Production Progress)';
     }
 
@@ -337,11 +333,11 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
   double _getSumPrimaryQuantityForWorkOrder(int workOrderLineId) {
     final globalLines = _allPlanLinesForWorkOrderLines[workOrderLineId];
     if (globalLines != null && globalLines.isNotEmpty) {
-      return globalLines.fold<double>(0.0, (sum, line) => sum + line.planLine.primaryQuantity);
+      return globalLines.fold<double>(0.0, (sum, line) => sum + line.planLine.primaryQuantity + line.planLine.sampleQty + line.planLine.cGradeQty);
     }
     return _allRawPlanLines
         .where((line) => line.planLine.workOrderLineId == workOrderLineId)
-        .fold<double>(0.0, (sum, line) => sum + line.planLine.primaryQuantity);
+        .fold<double>(0.0, (sum, line) => sum + line.planLine.primaryQuantity + line.planLine.sampleQty + line.planLine.cGradeQty);
   }
 
   Map<String, dynamic> _buildPlanLineDetailsMap(PlanLineResponseModel planLine) {
@@ -365,16 +361,19 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
     final sumPrimaryQty = _getSumPrimaryQuantityForWorkOrder(plan.workOrderLineId);
     final remainingWoPlanQty = totalWoPlanQty - sumPrimaryQty;
 
+    final int extraAllowed = (totalWoPlanQty * 0.1).ceil();
+    final double maxAllowed = totalWoPlanQty + extraAllowed;
+
     addField('Plan Date', Icons.calendar_today, 'Plan Date', formatDate(plan.planDate.toString()));
-    addField('Knitting Tube', Icons.precision_manufacturing, 'Knitting Tube', plan.primaryPlanQuantity.toString());
     addField('Tubes Per Tray', Icons.grid_view, 'Tubes Per Tray', plan.quantityPerTray.toString());
-    addField('Garment Pcs', Icons.checkroom, 'Garment Pcs', plan.secondaryPlanQuantity.toString());
     addField('Shift Code', Icons.schedule, 'Shift Code', planLine.shift.code.toString());
     addField('Work Order Code', Icons.assignment, 'Work Order Code', workOrder.workOrderCode);
     addField('Work Order Date', Icons.event, 'Work Order Date', formatDate(workOrder.workOrderDate));
     addField('Item Description', Icons.description, 'Item Description', item.description);
     addField('Total WO Plan QTY', Icons.analytics_rounded, 'Total WO Plan QTY', totalWoPlanQty.toStringAsFixed(0));
     addField('Remaining WO Plan QTY', Icons.hourglass_empty_rounded, 'Remaining WO Plan QTY', remainingWoPlanQty.toStringAsFixed(0));
+    addField('10% Allowed', Icons.add_circle_outline_rounded, '10% Allowed', extraAllowed.toString());
+    addField('Extra Allowed Tubes', Icons.verified_user_rounded, 'Extra Allowed Tubes', maxAllowed.toStringAsFixed(0));
 
     return result;
   }
@@ -548,6 +547,135 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
     AppSnackBar.showError(context, message: message);
   }
 
+  void _showAvailableTraysDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        final availableTrays = availableTraysDetail.where((t) {
+          final trayDetail = t.trayDetails;
+          if (trayDetail == null) return false;
+          if (trayDetail.active != true) return false;
+          if (trayDetail.trayType != 1) return false;
+          
+          final bool isEmptied = trayDetail.locatorId == null || trayDetail.trayQuantity == 0;
+          if (!isEmptied) return false;
+          
+          // Check if reassigned in draft
+          bool isReassigned = false;
+          for (final line in _allLotLines) {
+            final bl = line['batchLines'] as Map<String, dynamic>? ?? line;
+            if (bl == null) continue;
+
+            final blTrayId = bl['trayId'] as int?;
+            final blIsReassigned = bl['isReAssigned'] as bool? ?? false;
+
+            if (blTrayId == trayDetail.id && blIsReassigned) {
+              final lineHeaderId = bl['batchHeaderId'];
+              final isDraft = _allLotHeaders.any(
+                (h) {
+                  final bh = h['batchHeader'] as Map<String, dynamic>? ?? h;
+                  final isLocked = bh['lockFlag'] as bool? ?? false;
+                  return bh['id']?.toString() == lineHeaderId?.toString() && !isLocked;
+                },
+              );
+              if (isDraft) {
+                isReassigned = true;
+                break;
+              }
+            }
+          }
+          if (isReassigned) return false;
+          
+          return true;
+        }).toList();
+
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Container(
+            constraints: const BoxConstraints(maxHeight: 500, maxWidth: 400),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'AVAILABLE TRAYS (${availableTrays.length})',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+                const Divider(),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: availableTrays.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'No available empty trays in system',
+                            style: TextStyle(color: Colors.grey, fontSize: 13),
+                          ),
+                        )
+                      : ListView.separated(
+                          itemCount: availableTrays.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final tray = availableTrays[index].trayDetails;
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.inventory_2_outlined, color: Color(0xFF0D47A1), size: 18),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      'Tray ${tray?.trayCode ?? 'N/A'}',
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF1E293B),
+                                      ),
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFE8F5E9),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: const Text(
+                                      'EMPTY',
+                                      style: TextStyle(
+                                        color: Color(0xFF2E7D32),
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
 
   bool get _isSaveEnabled {
     if (_productionType == 'good') {
@@ -697,10 +825,23 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
         double sumPrimaryQty = 0;
         for (final line in freshGlobalLines) {
           if (line.planLine.workOrderLineId == targetWorkOrderLineId) {
-            sumPrimaryQty += line.planLine.primaryQuantity;
+            sumPrimaryQty += line.planLine.primaryQuantity + line.planLine.sampleQty + line.planLine.cGradeQty;
           }
         }
         final double limit = _selectedPlanLine!.workOrderLine.tubesAfterAdjustment;
+        final int extraAllowed = (limit * 0.1).ceil();
+        final double maxAllowed = limit + extraAllowed;
+
+        if (sumPrimaryQty + totalScannedTubes > maxAllowed) {
+          if (mounted) {
+            HapticFeedbackHelper.scanError();
+            AppSnackBar.showError(
+              context,
+              message: 'Cannot save. Total quantity including this scan (${(sumPrimaryQty + totalScannedTubes).toStringAsFixed(0)}) exceeds the maximum allowed limit with 10% extra allowance ($maxAllowed).',
+            );
+          }
+          return;
+        }
 
         bool proceed = true;
         if (sumPrimaryQty + totalScannedTubes > limit) {
@@ -886,86 +1027,183 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
       final int? x = int.tryParse(qtyText);
       if (x == null || x <= 0) return;
 
-      AppLoader.show(context, message: 'Saving $x entries...');
+      if (mounted) AppLoader.show(context, message: 'Refreshing plan data...');
       try {
-        final List<Map<String, dynamic>> payloads = [];
+        final targetWorkOrderLineId = _selectedPlanLine!.planLine.workOrderLineId;
+        
+        final apiResult = await _trayScanningRepo.loadWorkOrderBySerialNumber(_machineBarcode);
+        if (!apiResult.success || apiResult.data == null) {
+          if (mounted) AppLoader.hide(context);
+          throw Exception('Failed to refresh work order data: ${apiResult.message}');
+        }
+        
+        final freshRawLines = List<PlanLineResponseModel>.from(apiResult.data);
+        final globalRes = await _trayScanningRepo.fetchPlanLinesByWorkOrderLineId(targetWorkOrderLineId);
+        if (!globalRes.success || globalRes.data == null) {
+          if (mounted) AppLoader.hide(context);
+          throw Exception('Failed to refresh global plan lines: ${globalRes.message}');
+        }
+        final freshGlobalLines = List<PlanLineResponseModel>.from(globalRes.data);
+
+        if (mounted) {
+          setState(() {
+            _allRawPlanLines = freshRawLines;
+            _allPlanLinesForWorkOrderLines[targetWorkOrderLineId] = freshGlobalLines;
+            
+            final matchedIndex = freshRawLines.indexWhere((element) => element.planLine.id == _selectedPlanLine!.planLine.id);
+            if (matchedIndex != -1) {
+              _selectedPlanLine = freshRawLines[matchedIndex];
+            } else {
+              final globalMatchedIndex = freshGlobalLines.indexWhere((element) => element.planLine.id == _selectedPlanLine!.planLine.id);
+              if (globalMatchedIndex != -1) {
+                _selectedPlanLine = freshGlobalLines[globalMatchedIndex];
+              }
+            }
+          });
+        }
+        if (mounted) AppLoader.hide(context);
+
+        double sumPrimaryQty = 0;
+        for (final line in freshGlobalLines) {
+          if (line.planLine.workOrderLineId == targetWorkOrderLineId) {
+            sumPrimaryQty += line.planLine.primaryQuantity + line.planLine.sampleQty + line.planLine.cGradeQty;
+          }
+        }
+        final double limit = _selectedPlanLine!.workOrderLine.tubesAfterAdjustment;
+        final int extraAllowed = (limit * 0.1).ceil();
+        final double maxAllowed = limit + extraAllowed;
+
+        if (sumPrimaryQty + x > maxAllowed) {
+          if (mounted) {
+            HapticFeedbackHelper.scanError();
+            AppSnackBar.showError(
+              context,
+              message: 'Cannot save. Total quantity including this entry (${(sumPrimaryQty + x).toStringAsFixed(0)}) exceeds the maximum allowed limit with 10% extra allowance ($maxAllowed).',
+            );
+          }
+          return;
+        }
+
+        bool proceed = true;
+        if (sumPrimaryQty + x > limit) {
+          if (mounted) {
+            proceed = await showDialog<bool>(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) {
+                return AlertDialog(
+                  backgroundColor: const Color(0xFFF8FAFC),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  title: const Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded, color: Color(0xFFF59E0B)),
+                      SizedBox(width: 8),
+                      Text(
+                        'Overproduction Alert',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF1E293B),
+                        ),
+                      ),
+                    ],
+                  ),
+                  content: const Text(
+                    'Plan production has been scanned. More production will be taken as shortfall. Do you want to proceed?',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF475569),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(
+                          color: Color(0xFF64748B),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0D47A1),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      ),
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text(
+                        'OK',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ) ?? false;
+          } else {
+            proceed = false;
+          }
+        }
+
+        if (!proceed) return;
+
+        if (mounted) AppLoader.show(context, message: 'Saving entry...');
+
         final int nature = _productionType == 'sample' ? 1 : 0;
         final int grade = _productionType == 'c_grade' ? 2 : 0;
 
-        for (int i = 0; i < x; i++) {
-          Map<String, dynamic> productionProgressData = {
-            "subOperation": "Knitting",
-            "date": DateTime.now().toIso8601String(),
-            "transactionType": 6,
-            "operatorDescription": "system",
-            "primaryQuantity": 1.0,
-            "primaryUOM": _selectedPlanLine!.planLine.primaryUOM,
-            "secondaryQuantity": _selectedPlanLine!.item.perGarmentTube,
-            "secondaryUOM": _selectedPlanLine!.planLine.secondaryUOM,
-            "wipStatus": 0,
-            "gbsFlag": false,
-            "pbsFlag": false,
-            "productGrade": grade,
-            "productNature": nature,
-            "isLastProcess": false,
-            "isStarted": false,
-            "lotMakingFlag": false,
-            "reworkFlag": false,
-            "operationId": _selectedPlanLine!.operation.id,
-            "workOrderHeaderId": _selectedPlanLine!.workOrderHeader.id,
-            "workOrderLineId": _selectedPlanLine!.workOrderLine.id,
-            "itemId": _selectedPlanLine!.planLine.itemId,
-            "shiftId": _selectedPlanLine!.planLine.shiftId,
-            "machineId": _selectedPlanLine!.planLine.resourceId,
-            "locatorId": 2,
-            "remarks": _remarksInputFieldController.text.trim().isNotEmpty
-                ? _remarksInputFieldController.text.trim()
-                : null,
-          };
+        Map<String, dynamic> productionProgressData = {
+          "subOperation": "Knitting",
+          "date": DateTime.now().toIso8601String(),
+          "transactionType": 6,
+          "operatorDescription": "system",
+          "primaryQuantity": x.toDouble(),
+          "primaryUOM": _selectedPlanLine!.planLine.primaryUOM,
+          "secondaryQuantity": x * _selectedPlanLine!.item.perGarmentTube,
+          "secondaryUOM": _selectedPlanLine!.planLine.secondaryUOM,
+          "wipStatus": 0,
+          "gbsFlag": false,
+          "pbsFlag": false,
+          "productGrade": grade,
+          "productNature": nature,
+          "isLastProcess": false,
+          "isStarted": false,
+          "lotMakingFlag": false,
+          "reworkFlag": false,
+          "operationId": _selectedPlanLine!.operation.id,
+          "workOrderHeaderId": _selectedPlanLine!.workOrderHeader.id,
+          "workOrderLineId": _selectedPlanLine!.workOrderLine.id,
+          "itemId": _selectedPlanLine!.planLine.itemId,
+          "shiftId": _selectedPlanLine!.planLine.shiftId,
+          "machineId": _selectedPlanLine!.planLine.resourceId,
+          "locatorId": 2,
+          "remarks": _remarksInputFieldController.text.trim().isNotEmpty
+              ? _remarksInputFieldController.text.trim()
+              : null,
+        };
 
-          if (_selectedPlanLine!.planLine.planHeaderId != null) {
-            productionProgressData["planHeaderId"] = _selectedPlanLine!.planLine.planHeaderId;
-          }
-
-          payloads.add(productionProgressData);
+        if (_selectedPlanLine!.planLine.planHeaderId != null) {
+          productionProgressData["planHeaderId"] = _selectedPlanLine!.planLine.planHeaderId;
         }
 
-        // Execute API calls in batches of 15 to prevent connection/socket exhaustion
-        final List<PlexApiResult> results = [];
-        const int batchSize = 15;
-        for (int i = 0; i < payloads.length; i += batchSize) {
-          final end = (i + batchSize < payloads.length) ? i + batchSize : payloads.length;
-          final chunk = payloads.sublist(i, end);
+        final res = await _trayScanningRepo.saveProductionProgress(productionProgressData);
 
-          final chunkFutures = chunk
-              .map((p) => _trayScanningRepo.saveProductionProgress(p))
-              .toList();
-          final chunkResults = await Future.wait(chunkFutures);
-          results.addAll(chunkResults);
-        }
-
-        int successCount = 0;
-        final List<String> errors = [];
-        for (final res in results) {
-          if (res.success) {
-            successCount++;
-          } else {
-            errors.add(res.message);
-          }
-        }
-
-        if (successCount == results.length) {
-          // ── Cumulative sample/c-grade quantity update on plan line ────────
-          final int enteredQty = int.tryParse(qtyText) ?? 0;
+        if (res.success) {
           if (_productionType == 'sample') {
-            await _updatePlanLineQuantity(sampleQty: enteredQty.toDouble());
+            await _updatePlanLineQuantity(sampleQty: x.toDouble());
           } else {
-            await _updatePlanLineQuantity(cGradeQty: enteredQty.toDouble());
+            await _updatePlanLineQuantity(cGradeQty: x.toDouble());
           }
 
           if (mounted) {
             HapticFeedbackHelper.scanSuccess();
-            AppSnackBar.showSuccess(context, message: 'Successfully saved $successCount entries.');
+            AppSnackBar.showSuccess(context, message: 'Successfully saved entry.');
             setState(() {
               _quantityInputFieldController.clear();
               _remarksInputFieldController.clear();
@@ -977,7 +1215,7 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
             Navigator.pop(context);
           }
         } else {
-          throw Exception('Saved $successCount/${results.length} entries successfully. Errors: ${errors.join(", ")}');
+          throw Exception(res.message);
         }
       } catch (e) {
         debugPrint('Save Error: $e');
@@ -1317,44 +1555,74 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
                               ),
                             ),
                             const SizedBox(height: 8),
-                            if (_planLines == null || _planLines!.isEmpty)
-                              Container(
-                                height: 48,
-                                alignment: Alignment.centerLeft,
-                                padding: const EdgeInsets.symmetric(horizontal: 14),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey.shade100,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: const Color(0xFFCFD8DC),
-                                    width: 1.2,
-                                  ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: (_planLines == null || _planLines!.isEmpty)
+                                      ? Container(
+                                          height: 48,
+                                          alignment: Alignment.centerLeft,
+                                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey.shade100,
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(
+                                              color: const Color(0xFFCFD8DC),
+                                              width: 1.2,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            'No data found',
+                                            style: TextStyle(
+                                              color: Colors.grey.shade600,
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w400,
+                                            ),
+                                          ),
+                                        )
+                                      : WorkOrderDropdown(
+                                          enabled: _scannedTrays.isEmpty && _quantityInputFieldController.text.trim().isEmpty,
+                                          planLines: _planLines,
+                                          selectedPlanLine: _selectedPlanLine,
+                                          onChanged: (newValue) {
+                                            setState(() {
+                                              _selectedPlanLine = newValue;
+                                              if (_selectedPlanLine != null) {
+                                                _overrideQuantityController.text =
+                                                    _getPlanQuantityPerTray();
+                                              }
+                                              _quantityInputFieldController.clear();
+                                            });
+                                          },
+                                        ),
                                 ),
-                                child: Text(
-                                  'No data found',
-                                  style: TextStyle(
-                                    color: Colors.grey.shade600,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w400,
+                                if (_machineBarcode.isNotEmpty) ...[
+                                  const SizedBox(width: 8),
+                                  SizedBox(
+                                    height: 48,
+                                    child: ElevatedButton.icon(
+                                      onPressed: _showAvailableTraysDialog,
+                                      icon: const Icon(Icons.layers_outlined, size: 16),
+                                      label: const Text(
+                                        'SHOW TRAYS',
+                                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900),
+                                      ),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFFE67E22),
+                                        foregroundColor: Colors.white,
+                                        disabledBackgroundColor: Colors.grey.shade300,
+                                        disabledForegroundColor: Colors.grey.shade500,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        elevation: 0,
+                                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              )
-                            else
-                              WorkOrderDropdown(
-                                enabled: _scannedTrays.isEmpty && _quantityInputFieldController.text.trim().isEmpty,
-                                planLines: _planLines,
-                                selectedPlanLine: _selectedPlanLine,
-                                onChanged: (newValue) {
-                                  setState(() {
-                                    _selectedPlanLine = newValue;
-                                    if (_selectedPlanLine != null) {
-                                      _overrideQuantityController.text =
-                                          _getPlanQuantityPerTray();
-                                    }
-                                    _quantityInputFieldController.clear();
-                                  });
-                                },
-                              ),
+                                ],
+                              ],
+                            ),
                           ],
                         ),
                 ),
@@ -1379,17 +1647,17 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
       {'label': 'WORK ORDER', 'icon': Icons.qr_code_rounded, 'value': info['Work Order Code']?['value']},
       {'label': 'PLAN DATE', 'icon': Icons.calendar_today_rounded, 'value': info['Plan Date']?['value']},
       {'label': 'WORK ORDER DATE', 'icon': Icons.event_note_rounded, 'value': info['Work Order Date']?['value']},
-      {'label': 'GARMENT PCS', 'icon': Icons.checkroom_rounded, 'value': info['Garment Pcs']?['value']},
-      {'label': 'KNITTING TUBE', 'icon': Icons.settings_suggest_rounded, 'value': info['Knitting Tube']?['value']},
+      {'label': '10% ALLOWED', 'icon': Icons.add_circle_outline_rounded, 'value': info['10% Allowed']?['value']},
       {'label': 'TUBES PER TRAY', 'icon': Icons.flag_rounded, 'value': info['Tubes Per Tray']?['value']},
+      {'label': 'SHIFT', 'icon': Icons.timer_rounded, 'value': info['Shift Code']?['value']},
       
       // Row 2: Targets & Performance
-      {'label': 'SHIFT', 'icon': Icons.timer_rounded, 'value': info['Shift Code']?['value']},
       {'label': 'SCANNED TRAYS', 'icon': Icons.layers_rounded, 'value': '${_scannedTrays.length}'},
       {'label': 'SCANNED TUBES', 'icon': Icons.analytics_rounded, 'value': totalUnits.toStringAsFixed(0)},
       {'label': 'TRAY CAPACITY', 'icon': Icons.grid_view_rounded, 'isEditable': true},
       {'label': 'TOTAL WO PLAN QTY', 'icon': Icons.analytics_rounded, 'value': info['Total WO Plan QTY']?['value']},
       {'label': 'REMAINING WO PLAN QTY', 'icon': Icons.hourglass_empty_rounded, 'value': info['Remaining WO Plan QTY']?['value']},
+      {'label': 'EXTRA ALLOWED TUBES', 'icon': Icons.verified_user_rounded, 'value': info['Extra Allowed Tubes']?['value']},
 
       // Row 3: Full Width Details
       {'label': 'ITEM DESCRIPTION', 'icon': Icons.description_rounded, 'value': info['Item Description']?['value'], 'isFullWidth': true},

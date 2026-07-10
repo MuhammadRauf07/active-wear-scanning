@@ -659,46 +659,47 @@ class _LotListScreenState extends State<LotListScreen>
       // ── Step 2c: Update tray-details to empty it (only if not attached to other draft lots and has no remaining GBS checkout qty) ──
       final trayId = bl['trayId'] as int?;
       if (trayId != null) {
-        final trayRes = await _lotRepo.fetchTrayDetailById(trayId);
-        if (trayRes.success && trayRes.data != null) {
-          final trayMap = Map<String, dynamic>.from(
-            trayRes.data as Map<String, dynamic>,
-          );
+        bool hasUnissuedPortion = false;
+        
+        final ppRes = await _lotRepo.fetchProductionProgress(query: {
+          'LocatorId': '3',
+          'PrimaryTrayId': trayId.toString(),
+        });
 
-          // Get the original tray quantity (before splitting)
-          final originalQty = double.tryParse(trayMap['trayQuantity']?.toString() ?? '') ?? 0.0;
-
-          // Fetch all lot lines in the database
-          final allLinesRes = await _lotRepo.fetchLotLines();
-          double sumIssuedQty = 0.0;
-
-          if (allLinesRes.success && allLinesRes.data != null) {
-            final allLines = allLinesRes.data as List;
-            for (final line in allLines) {
-              final dBl = line['batchLines'] as Map<String, dynamic>?;
-              if (dBl == null) continue;
-
-              final lineTrayId = dBl['trayId'] as int?;
-              if (lineTrayId == trayId) {
-                final lineHeaderId = dBl['batchHeaderId'];
-
-                // If it is the current lot being issued, or if it is already issued (locked)
-                final isCurrent = lineHeaderId?.toString() == headerId.toString();
-                final isAlreadyIssued = _lockedLots.any((lot) => lot.batchHeader.id?.toString() == lineHeaderId?.toString());
-
-                if (isCurrent || isAlreadyIssued) {
-                  final qty = double.tryParse(dBl['primaryQuantity']?.toString() ?? '') ?? 0.0;
-                  sumIssuedQty += qty;
-                }
+        if (ppRes.success && ppRes.data != null) {
+          final ppList = ppRes.data as List<ProductionProgressResponseModel>;
+          for (final ppItem in ppList) {
+            final progressBatchHeaderId = ppItem.productionProgress.batchHeaderId;
+            
+            // If it is not associated with any batch, it is unassigned/remaining!
+            if (progressBatchHeaderId == null) {
+              hasUnissuedPortion = true;
+              break;
+            } else {
+              // If it is associated with a batch, check if that batch is still draft (unlocked)
+              // (unless it is the current batch being issued)
+              if (progressBatchHeaderId.toString() == headerId.toString()) {
+                continue;
+              }
+              
+              final isDraft = _unlockedLots.any((lot) => lot.batchHeader.id?.toString() == progressBatchHeaderId.toString());
+              if (isDraft) {
+                hasUnissuedPortion = true;
+                break;
               }
             }
           }
+        }
 
-          // If the total issued quantity across all issued lots is less than the original tray quantity,
-          // the tray is not fully issued yet (still has draft or unassigned portions).
-          if (sumIssuedQty < originalQty - 0.01) {
-            debugPrint('⚠️ Tray $trayId is not fully issued yet (Issued: $sumIssuedQty, Original: $originalQty). Skipping reset of TrayDetails.');
-          } else {
+        if (hasUnissuedPortion) {
+          debugPrint('⚠️ Tray $trayId still has unissued portions (draft or remaining GBS quantity). Skipping reset of TrayDetails.');
+        } else {
+          final trayRes = await _lotRepo.fetchTrayDetailById(trayId);
+          if (trayRes.success && trayRes.data != null) {
+            final trayMap = Map<String, dynamic>.from(
+              trayRes.data as Map<String, dynamic>,
+            );
+
             // Free the tray!
             trayMap['shiftId'] = null;
             trayMap['planLineId'] = null;

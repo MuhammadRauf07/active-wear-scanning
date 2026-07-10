@@ -189,6 +189,10 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
 
     final match = _availableTrays[matchIndex];
 
+    if (_selectedWorkOrder != null && match.workOrderHeader.id != _selectedWorkOrder?.id) {
+      return 'Tray belongs to another Work Order (${match.workOrderHeader.workOrderCode})';
+    }
+
     if ((match.primaryTrayModel.trayType ?? 0) != 1) {
       return 'Invalid tray type.';
     }
@@ -663,63 +667,73 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildConfigurationPanel(),
-        // ── Toolbar ──────────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'INDUCTION QUEUE',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF263238), letterSpacing: 0.5),
-                  ),
-                  Text(
-                    '${_scannedTrays.length} Trays Ready for Store',
-                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF78909C)),
-                  ),
-                ],
-              ),
-              SizedBox(
-                height: 40,
-                child: ElevatedButton.icon(
-                  onPressed: _onScanTray,
-                  icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
-                  label: const Text('SCAN TRAY', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 10)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0D47A1),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
+        if (_selectedWorkOrder != null) ...[
+          // ── Toolbar ──────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'INDUCTION QUEUE',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF263238), letterSpacing: 0.5),
+                    ),
+                    Text(
+                      '${_scannedTrays.length} Trays Ready for Store',
+                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF78909C)),
+                    ),
+                  ],
+                ),
+                SizedBox(
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    onPressed: _onScanTray,
+                    icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
+                    label: const Text('SCAN TRAY', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 10)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0D47A1),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        
-        // ── Fixed Header ─────────────────────────────────────────────
-        const InductionTrayTableHeader(),
-        Expanded(
-          child: _scannedTrays.isEmpty
-              ? const EmptyScanState(hasBorder: false)
-              : ListView.builder(
-                  padding: EdgeInsets.zero,
-                  itemCount: _scannedTrays.length,
-                  itemBuilder: (context, index) {
-                    final reversedIndex = _scannedTrays.length - 1 - index;
-                    return InductionTrayRow(
-                      index: reversedIndex,
-                      tray: _scannedTrays[reversedIndex],
-                      displayIndex: index,
-                      onRemove: () => _onRemoveTray(reversedIndex),
-                    );
-                  },
-                ),
-        ),
+          
+          // ── Fixed Header ─────────────────────────────────────────────
+          const InductionTrayTableHeader(),
+          Expanded(
+            child: _scannedTrays.isEmpty
+                ? const EmptyScanState(hasBorder: false)
+                : ListView.builder(
+                    padding: EdgeInsets.zero,
+                    itemCount: _scannedTrays.length,
+                    itemBuilder: (context, index) {
+                      final reversedIndex = _scannedTrays.length - 1 - index;
+                      return InductionTrayRow(
+                        index: reversedIndex,
+                        tray: _scannedTrays[reversedIndex],
+                        displayIndex: index,
+                        onRemove: () => _onRemoveTray(reversedIndex),
+                      );
+                    },
+                  ),
+          ),
+        ] else
+          const Expanded(
+            child: Center(
+              child: Text(
+                'Please select a work order to start scanning',
+                style: TextStyle(color: Colors.grey, fontSize: 13),
+              ),
+            ),
+          ),
       ],
     );
   }

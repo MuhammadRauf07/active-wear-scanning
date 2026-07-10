@@ -668,6 +668,12 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
       (t) => !_lotProgressIds.contains(t.productionProgress.id),
       orElse: () => available.first,
     );
+
+    if (_selectedWorkOrder == null) return 'Please select a Work Order first';
+    if (tray.workOrderHeader.id != _selectedWorkOrder?.id) {
+      return 'Tray belongs to another Work Order (${tray.workOrderHeader.workOrderCode})';
+    }
+
     if ((tray.primaryTrayModel?.trayType ?? 0) != 1)
       return 'Invalid tray type.';
     final progressId = tray.productionProgress.id;
@@ -1053,13 +1059,27 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
         resolvedProgressId = pp.id!;
       }
 
+      final perTube = tray.item.perGarmentTube;
+      double finalSecondaryQty = 0.0;
+      if (isPartial) {
+        if (perTube > 0) {
+          finalSecondaryQty = qty * perTube;
+        } else {
+          final originalPPQty = tray.productionProgress.primaryQuantity ?? 1.0;
+          final originalSecQty = tray.productionProgress.secondaryQuantity ?? 0.0;
+          finalSecondaryQty = originalPPQty > 0 ? (qty * originalSecQty / originalPPQty) : 0.0;
+        }
+      } else {
+        finalSecondaryQty = (tray.productionProgress.secondaryQuantity ?? 0).toDouble();
+      }
+
       // 3. Create the Lot Line
       final linePayload = {
         "planDate": DateTime.now().toIso8601String(),
         "transactionDate": DateTime.now().toIso8601String(),
         "primaryQuantity": qty.toDouble(),
         "primaryUOM": tray.productionProgress.primaryUOM ?? 0,
-        "secondaryQuantity": tray.productionProgress.secondaryQuantity ?? 0,
+        "secondaryQuantity": finalSecondaryQty,
         "secondaryUOM": tray.productionProgress.secondaryUOM ?? 0,
         "batchLineCode": "BL-$batchHeaderId-${tray.primaryTrayModel?.id}",
         "active": true,
@@ -1078,8 +1098,11 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
       dev.log('🚀 POSTing LotLine: $linePayload');
       final resLine = await _lotRepo.createLotLine(linePayload);
 
-      // Only update tray details if fully consumed (not partial)
-      if (!isPartial) {
+      // Only update tray details if physically fully consumed (not partial of the physical tray capacity)
+      final double trayCapacity = (tray.primaryTrayModel?.trayQuantity ?? 0).toDouble();
+      final bool isPhysicallyFull = qty >= trayCapacity - 0.01;
+
+      if (isPhysicallyFull) {
         if (resLine.success && resLine.data != null) {
           final lineId = (resLine.data as Map)['id'];
           final trayId = tray.primaryTrayModel?.id;
@@ -2158,6 +2181,8 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
   Widget _buildWOSummary() {
     if (_scannedTrays.isEmpty) return const SizedBox.shrink();
 
+    final selectedColorDesc = _selectedColor?.segmentCode?.description?.trim().toUpperCase();
+
     // Grouping logic (by WO + Item + Size to ensure accuracy)
     final Map<String, Map<String, dynamic>> woGroups = {};
     for (int i = 0; i < _scannedTrays.length; i++) {
@@ -2166,6 +2191,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
       final code = tray.workOrderHeader.workOrderCode ?? 'Unknown WO';
       final itemDesc = tray.item.description ?? 'N/A';
       final sizeDesc = tray.item.sizeDescription ?? 'N/A';
+      final lineId = tray.productionProgress.workOrderLineId ?? tray.workOrderLine?.id;
       
       // Composite key for granular grouping
       final groupKey = "${code}_${itemDesc}_${sizeDesc}";
@@ -2173,6 +2199,11 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
       final perTube = tray.item.perGarmentTube;
       final pcs = qty * perTube;
       final weight = qty * (tray.item.pieceWeight ?? 0);
+
+      double planQty = 0.0;
+      if (lineId != null && selectedColorDesc != null) {
+        planQty = _colorPlanQuantities["${lineId}_$selectedColorDesc"] ?? 0.0;
+      }
 
       if (!woGroups.containsKey(groupKey)) {
         woGroups[groupKey] = {
@@ -2182,6 +2213,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
           'trays': 0,
           'tubes': 0.0,
           'weight': 0.0,
+          'planQty': planQty,
         };
       }
       woGroups[groupKey]!['trays'] = (woGroups[groupKey]!['trays'] as int) + 1;
@@ -2235,7 +2267,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                     1: FlexColumnWidth(1.8), // Size
                     2: FlexColumnWidth(4), // Item
                     3: FlexColumnWidth(1.5), // Trays
-                    4: FlexColumnWidth(1.5), // Tubes
+                    4: FlexColumnWidth(2.2), // Tubes / Plan Limit
                     5: FlexColumnWidth(1.8), // Weight
                   },
                   children: [
@@ -2246,11 +2278,13 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                         _buildTableHeaderCell('SIZE'),
                         _buildTableHeaderCell('ITEM'),
                         _buildTableHeaderCell('TRAYS'),
-                        _buildTableHeaderCell('TUBES'),
+                        _buildTableHeaderCell('TUBES / PLAN'),
                         _buildTableHeaderCell('WEIGHT'),
                       ],
                     ),
                     ...woGroups.values.map((data) {
+                      final planVal = data['planQty'] as double;
+                      final planStr = planVal > 0.0 ? planVal.toStringAsFixed(0) : '-';
                       return TableRow(
                         decoration: const BoxDecoration(
                           border: Border(
@@ -2265,7 +2299,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                           _buildTableCell(data['item'].toString()),
                           _buildTableCell(data['trays'].toString()),
                           _buildTableCell(
-                              (data['tubes'] as double).toStringAsFixed(0)),
+                              "${(data['tubes'] as double).toStringAsFixed(0)} / $planStr"),
                           _buildTableCell(
                               "${(data['weight'] as double).toStringAsFixed(0)}g"),
                         ],
