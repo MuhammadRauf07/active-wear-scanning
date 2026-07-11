@@ -868,7 +868,7 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
                     ],
                   ),
                   content: const Text(
-                    'Plan production has been scanned. More production will be taken as shortfall. Do you want to proceed?',
+                    'Plan production has been scanned. More production will be taken as Excess. Do you want to proceed?',
                     style: TextStyle(
                       fontSize: 13,
                       color: Color(0xFF475569),
@@ -1643,23 +1643,25 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
     }
 
     final List<Map<String, dynamic>> allItems = [
-      // Row 1: Primary WO & Date Info
+      // Row 1: Work Order, Work Order Date, Plan Date, Shift
       {'label': 'WORK ORDER', 'icon': Icons.qr_code_rounded, 'value': info['Work Order Code']?['value']},
-      {'label': 'PLAN DATE', 'icon': Icons.calendar_today_rounded, 'value': info['Plan Date']?['value']},
       {'label': 'WORK ORDER DATE', 'icon': Icons.event_note_rounded, 'value': info['Work Order Date']?['value']},
-      {'label': '10% ALLOWED', 'icon': Icons.add_circle_outline_rounded, 'value': info['10% Allowed']?['value']},
-      {'label': 'TUBES PER TRAY', 'icon': Icons.flag_rounded, 'value': info['Tubes Per Tray']?['value']},
+      {'label': 'PLAN DATE', 'icon': Icons.calendar_today_rounded, 'value': info['Plan Date']?['value']},
       {'label': 'SHIFT', 'icon': Icons.timer_rounded, 'value': info['Shift Code']?['value']},
       
-      // Row 2: Targets & Performance
+      // Row 2: Total WO Plan QTY, Tolerance, Qty with Tolerance, Remaining WO Plan QTY
+      {'label': 'TOTAL WO PLAN QTY', 'icon': Icons.analytics_rounded, 'value': info['Total WO Plan QTY']?['value']},
+      {'label': 'TOLERANCE', 'icon': Icons.add_circle_outline_rounded, 'value': info['10% Allowed']?['value']},
+      {'label': 'QTY WITH TOLERANCE', 'icon': Icons.verified_user_rounded, 'value': info['Extra Allowed Tubes']?['value']},
+      {'label': 'REMAINING WO PLAN QTY', 'icon': Icons.hourglass_empty_rounded, 'value': info['Remaining WO Plan QTY']?['value']},
+
+      // Row 3: Tubes per tray, scanned trays, scanned tubes, tray capacity
+      {'label': 'TUBES PER TRAY', 'icon': Icons.flag_rounded, 'value': info['Tubes Per Tray']?['value']},
       {'label': 'SCANNED TRAYS', 'icon': Icons.layers_rounded, 'value': '${_scannedTrays.length}'},
       {'label': 'SCANNED TUBES', 'icon': Icons.analytics_rounded, 'value': totalUnits.toStringAsFixed(0)},
       {'label': 'TRAY CAPACITY', 'icon': Icons.grid_view_rounded, 'isEditable': true},
-      {'label': 'TOTAL WO PLAN QTY', 'icon': Icons.analytics_rounded, 'value': info['Total WO Plan QTY']?['value']},
-      {'label': 'REMAINING WO PLAN QTY', 'icon': Icons.hourglass_empty_rounded, 'value': info['Remaining WO Plan QTY']?['value']},
-      {'label': 'EXTRA ALLOWED TUBES', 'icon': Icons.verified_user_rounded, 'value': info['Extra Allowed Tubes']?['value']},
 
-      // Row 3: Full Width Details
+      // Row 4: Item description 
       {'label': 'ITEM DESCRIPTION', 'icon': Icons.description_rounded, 'value': info['Item Description']?['value'], 'isFullWidth': true},
     ];
 

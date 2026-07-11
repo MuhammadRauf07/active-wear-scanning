@@ -187,6 +187,20 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
     }).toList();
   }
 
+  List<ProductionProgressResponseModel> getTraysForSelectedWorkOrderAndColor() {
+    final trays = getTraysForSelectedWorkOrder();
+    if (_selectedColor == null) return [];
+    final selectedColorDesc = _selectedColor!.segmentCode?.description?.toUpperCase();
+    if (selectedColorDesc == null) return [];
+
+    return trays.where((t) {
+      final lineId = t.productionProgress.workOrderLineId ?? t.workOrderLine?.id;
+      if (lineId == null) return false;
+      final planQty = _colorPlanQuantities["${lineId}_$selectedColorDesc"] ?? 0.0;
+      return planQty > 0.0;
+    }).toList();
+  }
+
   Map<String, double> _getTrayQuantities(ProductionProgressResponseModel tray) {
     final code = tray.primaryTrayModel.trayCode;
     final fallbackQty = tray.productionProgress.primaryQuantity ?? 0.0;
@@ -758,6 +772,26 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
       }
     }
 
+    final planQty = (detail['planQuantity'] as num?)?.toDouble() ?? 0.0;
+    if (planQty > 0.0) {
+      final newQty = double.tryParse(_overrideQuantityController.text) ??
+          tray.productionProgress.primaryQuantity ??
+          0.0;
+      double currentCumulative = 0.0;
+      for (int i = 0; i < _scannedTrays.length; i++) {
+        final t = _scannedTrays[i];
+        final lineId = t.productionProgress.workOrderLineId ?? t.workOrderLine?.id;
+        if (lineId == workOrderLineId) {
+          currentCumulative += double.tryParse(_quantityControllers[i].text) ?? 0.0;
+        }
+      }
+      final int extraAllowed = (planQty * 0.1).ceil();
+      final double maxAllowed = planQty + extraAllowed;
+      if (currentCumulative + newQty > maxAllowed) {
+        return 'Cannot scan tray. Scanned quantity (${(currentCumulative + newQty).toStringAsFixed(0)}) exceeds the maximum plan limit including 10% extra allowance (${maxAllowed.toStringAsFixed(0)}) for color "$colorDescription".';
+      }
+    }
+
     setState(() {
       if (tray.primaryTrayModel?.id != null)
         _trayProcessedItemId[tray.primaryTrayModel!.id!] = processedItemId;
@@ -803,6 +837,33 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
           final qty = double.tryParse(_quantityControllers[i].text) ?? 0.0;
           lineCumulativeTubes[lineId] = (lineCumulativeTubes[lineId] ?? 0.0) + qty;
         }
+      }
+
+      double exceededMax = 0.0;
+      double exceededMaxPlan = 0.0;
+      bool exceedsMaxLimit = false;
+
+      for (final lineId in lineCumulativeTubes.keys) {
+        final planQty = _colorPlanQuantities["${lineId}_$selectedColorDesc"] ?? 0.0;
+        final sumTubes = lineCumulativeTubes[lineId] ?? 0.0;
+        final int extraAllowed = (planQty * 0.1).ceil();
+        final double maxAllowed = planQty + extraAllowed;
+
+        if (planQty > 0.0 && sumTubes > maxAllowed) {
+          exceedsMaxLimit = true;
+          exceededMax = sumTubes;
+          exceededMaxPlan = maxAllowed;
+          break;
+        }
+      }
+
+      if (exceedsMaxLimit) {
+        HapticFeedbackHelper.scanError();
+        AppSnackBar.showError(
+          context,
+          message: 'Cannot save. Cumulative tube count (${exceededMax.toStringAsFixed(0)}) exceeds the maximum allowed limit with 10% extra allowance (${exceededMaxPlan.toStringAsFixed(0)}) for color "$selectedColorDesc".',
+        );
+        return;
       }
 
       bool exceedsColorPlan = false;
@@ -2179,33 +2240,29 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
   }
 
   Widget _buildWOSummary() {
-    if (_scannedTrays.isEmpty) return const SizedBox.shrink();
+    if (_selectedColor == null || _selectedWorkOrder == null) {
+      return const SizedBox.shrink();
+    }
 
     final selectedColorDesc = _selectedColor?.segmentCode?.description?.trim().toUpperCase();
+    if (selectedColorDesc == null) return const SizedBox.shrink();
 
-    // Grouping logic (by WO + Item + Size to ensure accuracy)
+    final allEligibleTrays = getTraysForSelectedWorkOrderAndColor();
     final Map<String, Map<String, dynamic>> woGroups = {};
-    for (int i = 0; i < _scannedTrays.length; i++) {
-      final tray = _scannedTrays[i];
-      final qty = double.tryParse(_quantityControllers[i].text) ?? 0;
+
+    // 1. Initialize all groups from all eligible trays for this work order & color
+    for (final tray in allEligibleTrays) {
       final code = tray.workOrderHeader.workOrderCode ?? 'Unknown WO';
       final itemDesc = tray.item.description ?? 'N/A';
       final sizeDesc = tray.item.sizeDescription ?? 'N/A';
       final lineId = tray.productionProgress.workOrderLineId ?? tray.workOrderLine?.id;
-      
-      // Composite key for granular grouping
       final groupKey = "${code}_${itemDesc}_${sizeDesc}";
 
-      final perTube = tray.item.perGarmentTube;
-      final pcs = qty * perTube;
-      final weight = qty * (tray.item.pieceWeight ?? 0);
-
-      double planQty = 0.0;
-      if (lineId != null && selectedColorDesc != null) {
-        planQty = _colorPlanQuantities["${lineId}_$selectedColorDesc"] ?? 0.0;
-      }
-
       if (!woGroups.containsKey(groupKey)) {
+        double planQty = 0.0;
+        if (lineId != null) {
+          planQty = _colorPlanQuantities["${lineId}_$selectedColorDesc"] ?? 0.0;
+        }
         woGroups[groupKey] = {
           'code': code,
           'item': itemDesc,
@@ -2216,10 +2273,44 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
           'planQty': planQty,
         };
       }
+    }
+
+    // 2. Accumulate scanned counts
+    for (int i = 0; i < _scannedTrays.length; i++) {
+      final tray = _scannedTrays[i];
+      final qty = double.tryParse(_quantityControllers[i].text) ?? 0;
+      final code = tray.workOrderHeader.workOrderCode ?? 'Unknown WO';
+      final itemDesc = tray.item.description ?? 'N/A';
+      final sizeDesc = tray.item.sizeDescription ?? 'N/A';
+      final lineId = tray.productionProgress.workOrderLineId ?? tray.workOrderLine?.id;
+      final groupKey = "${code}_${itemDesc}_${sizeDesc}";
+
+      final perTube = tray.item.perGarmentTube;
+      final pcs = qty * perTube;
+      final weight = qty * (tray.item.pieceWeight ?? 0);
+
+      if (!woGroups.containsKey(groupKey)) {
+        double planQty = 0.0;
+        if (lineId != null) {
+          planQty = _colorPlanQuantities["${lineId}_$selectedColorDesc"] ?? 0.0;
+        }
+        woGroups[groupKey] = {
+          'code': code,
+          'item': itemDesc,
+          'size': sizeDesc,
+          'trays': 0,
+          'tubes': 0.0,
+          'weight': 0.0,
+          'planQty': planQty,
+        };
+      }
+
       woGroups[groupKey]!['trays'] = (woGroups[groupKey]!['trays'] as int) + 1;
       woGroups[groupKey]!['tubes'] = (woGroups[groupKey]!['tubes'] as double) + pcs;
       woGroups[groupKey]!['weight'] = (woGroups[groupKey]!['weight'] as double) + weight;
     }
+
+    if (woGroups.isEmpty) return const SizedBox.shrink();
 
     return Container(
       margin: EdgeInsets.zero,
@@ -2265,9 +2356,9 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                   columnWidths: const {
                     0: FlexColumnWidth(2.5), // WO
                     1: FlexColumnWidth(1.8), // Size
-                    2: FlexColumnWidth(4), // Item
+                    2: FlexColumnWidth(3.8), // Item
                     3: FlexColumnWidth(1.5), // Trays
-                    4: FlexColumnWidth(2.2), // Tubes / Plan Limit
+                    4: FlexColumnWidth(2.6), // Tubes / Plan Limit (Max Allowed)
                     5: FlexColumnWidth(1.8), // Weight
                   },
                   children: [
@@ -2285,6 +2376,9 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                     ...woGroups.values.map((data) {
                       final planVal = data['planQty'] as double;
                       final planStr = planVal > 0.0 ? planVal.toStringAsFixed(0) : '-';
+                      final int extraAllowed = (planVal * 0.1).ceil();
+                      final double maxAllowed = planVal + extraAllowed;
+                      final maxStr = planVal > 0.0 ? " (Max ${maxAllowed.toStringAsFixed(0)})" : "";
                       return TableRow(
                         decoration: const BoxDecoration(
                           border: Border(
@@ -2299,7 +2393,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                           _buildTableCell(data['item'].toString()),
                           _buildTableCell(data['trays'].toString()),
                           _buildTableCell(
-                              "${(data['tubes'] as double).toStringAsFixed(0)} / $planStr"),
+                              "${(data['tubes'] as double).toStringAsFixed(0)} / $planStr$maxStr"),
                           _buildTableCell(
                               "${(data['weight'] as double).toStringAsFixed(0)}g"),
                         ],

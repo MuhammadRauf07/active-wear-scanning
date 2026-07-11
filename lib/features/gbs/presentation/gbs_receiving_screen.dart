@@ -253,7 +253,7 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
     return filtered.every((t) => _selectedProgressIds.contains(t.productionProgress.id));
   }
 
-  List<ProductionProgressResponseModel> get _filteredTrays {
+  List<ProductionProgressResponseModel> getUnfilteredTraysForReceiving() {
     if (_receivingType == 'sample') {
       return availableTrayForGbs.where((t) => t.productionProgress.productNature == 1).toList();
     } else if (_receivingType == 'c_grade') {
@@ -261,6 +261,14 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
     } else {
       return availableTrayForGbs.where((t) => t.productionProgress.productNature != 1 && t.productionProgress.productGrade != 2).toList();
     }
+  }
+
+  List<ProductionProgressResponseModel> get _filteredTrays {
+    final baseList = getUnfilteredTraysForReceiving();
+    if (_selectedWorkOrder != null) {
+      return baseList.where((t) => t.workOrderHeader.id == _selectedWorkOrder!.id).toList();
+    }
+    return baseList;
   }
 
   Future<void> saveSampleOrCGradeProgress() async {
@@ -579,7 +587,8 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
 
   Widget _buildConfigurationPanel() {
     final Map<int, WorkOrderHeader> uniqueWOs = {};
-    for (final tray in _filteredTrays) {
+    final unfiltered = getUnfilteredTraysForReceiving();
+    for (final tray in unfiltered) {
       if (tray.workOrderHeader != null && tray.workOrderHeader.id != null) {
         uniqueWOs[tray.workOrderHeader.id!] = tray.workOrderHeader;
       }
@@ -621,39 +630,42 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
                   onChanged: (val) {
                     setState(() {
                       _selectedWorkOrder = val;
+                      _selectedProgressIds.clear();
                     });
                   },
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            flex: 2,
-            child: SizedBox(
-              height: 40,
-              child: ElevatedButton.icon(
-                onPressed: _selectedWorkOrder == null
-                    ? null
-                    : _showAvailableTraysDialog,
-                icon: const Icon(Icons.layers_outlined, size: 16),
-                label: const Text(
-                  'SHOW TRAYS',
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE67E22),
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: Colors.grey.shade300,
-                  disabledForegroundColor: Colors.grey.shade500,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+          if (_receivingType == 'gbs') ...[
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: SizedBox(
+                height: 40,
+                child: ElevatedButton.icon(
+                  onPressed: _selectedWorkOrder == null
+                      ? null
+                      : _showAvailableTraysDialog,
+                  icon: const Icon(Icons.layers_outlined, size: 16),
+                  label: const Text(
+                    'SHOW TRAYS',
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900),
                   ),
-                  elevation: 0,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE67E22),
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: Colors.grey.shade300,
+                    disabledForegroundColor: Colors.grey.shade500,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 0,
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -1095,58 +1107,69 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _receivingType == 'sample' ? 'SAMPLE PENDING ENTRIES' : 'C GRADE PENDING ENTRIES',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF263238), letterSpacing: 0.5),
-                    ),
-                    Text(
-                      '${filtered.length} Pending, ${_selectedProgressIds.length} Selected',
-                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF78909C)),
-                    ),
-                  ],
-                ),
-                SizedBox(
-                  height: 38,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      HapticFeedbackHelper.buttonClick();
-                      _fetchLatestTraysSilently();
-                    },
-                    icon: const Icon(Icons.refresh_rounded, size: 18),
-                    label: const Text('REFRESH', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 10)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0D47A1),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          _buildConfigurationPanel(),
+          if (_selectedWorkOrder != null) ...[
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _receivingType == 'sample' ? 'SAMPLE PENDING ENTRIES' : 'C GRADE PENDING ENTRIES',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF263238), letterSpacing: 0.5),
+                      ),
+                      Text(
+                        '${filtered.length} Pending, ${_selectedProgressIds.length} Selected',
+                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF78909C)),
+                      ),
+                    ],
+                  ),
+                  SizedBox(
+                    height: 38,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        HapticFeedbackHelper.buttonClick();
+                        _fetchLatestTraysSilently();
+                      },
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      label: const Text('REFRESH', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 10)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0D47A1),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          
-          _buildSampleCGradeTableHeader(),
+            
+            _buildSampleCGradeTableHeader(),
 
-          Expanded(
-            child: filtered.isEmpty
-                ? const EmptyScanState(hasBorder: false)
-                : ListView.builder(
-                    padding: EdgeInsets.zero,
-                    itemCount: filtered.length,
-                    itemBuilder: (context, index) {
-                      return _buildSampleCGradeRow(filtered[index], index);
-                    },
-                  ),
-          ),
+            Expanded(
+              child: filtered.isEmpty
+                  ? const EmptyScanState(hasBorder: false)
+                  : ListView.builder(
+                      padding: EdgeInsets.zero,
+                      itemCount: filtered.length,
+                      itemBuilder: (context, index) {
+                        return _buildSampleCGradeRow(filtered[index], index);
+                      },
+                    ),
+            ),
+          ] else
+            const Expanded(
+              child: Center(
+                child: Text(
+                  'Please select a work order to view pending entries',
+                  style: TextStyle(color: Colors.grey, fontSize: 13),
+                ),
+              ),
+            ),
         ],
       ),
     );
