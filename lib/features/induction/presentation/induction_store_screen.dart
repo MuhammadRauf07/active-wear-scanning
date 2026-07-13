@@ -12,6 +12,7 @@ import 'package:active_wear_scanning/core/widgets/scanner_always_open.dart';
 import 'package:active_wear_scanning/features/gbs/model/gbs_scanned_tray.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:active_wear_scanning/features/induction/model/induction_model.dart';
+import 'package:active_wear_scanning/features/lot_making/model/lot_header_model.dart';
 import 'package:active_wear_scanning/features/induction/repo/induction_repo.dart';
 import 'package:active_wear_scanning/features/induction/presentation/widgets/induction_tray_row.dart';
 import 'package:active_wear_scanning/features/induction/presentation/widgets/induction_tray_table_header.dart';
@@ -31,7 +32,7 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
   final List<GBSScannedTray> _scannedTrays = [];
   final _inductionRepo = fromPlex<InductionRepo>();
   List<InductionModel> _availableTrays = [];
-  WorkOrderHeader? _selectedWorkOrder;
+  LotHeaderModel? _selectedBatch;
 
   static const _inputAndButtonHeight = 42.0;
   static final _labelStyle = const TextStyle(
@@ -189,8 +190,9 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
 
     final match = _availableTrays[matchIndex];
 
-    if (_selectedWorkOrder != null && match.workOrderHeader.id != _selectedWorkOrder?.id) {
-      return 'Tray belongs to another Work Order (${match.workOrderHeader.workOrderCode})';
+    if (_selectedBatch != null && match.batchHeader?.id != _selectedBatch?.id) {
+      final code = match.batchHeader?.batchHeaderCode ?? 'Unknown Batch';
+      return 'Tray belongs to another Batch/Lot ($code)';
     }
 
     if ((match.primaryTrayModel.trayType ?? 0) != 1) {
@@ -436,13 +438,13 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
   }
 
   Widget _buildConfigurationPanel() {
-    final Map<int, WorkOrderHeader> uniqueWOs = {};
+    final Map<int, LotHeaderModel> uniqueBatches = {};
     for (final tray in _availableTrays) {
-      if (tray.workOrderHeader != null && tray.workOrderHeader.id != null) {
-        uniqueWOs[tray.workOrderHeader.id!] = tray.workOrderHeader;
+      if (tray.batchHeader != null && tray.batchHeader!.id != null) {
+        uniqueBatches[tray.batchHeader!.id!] = tray.batchHeader!;
       }
     }
-    final List<WorkOrderHeader> availableWOs = uniqueWOs.values.toList();
+    final List<LotHeaderModel> availableBatches = uniqueBatches.values.toList();
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -462,7 +464,7 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text(
-                  'WORK ORDER',
+                  'BATCH/LOT NUMBER',
                   style: TextStyle(
                     fontSize: 8,
                     fontWeight: FontWeight.w800,
@@ -471,14 +473,14 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                _InductionOverlayDropdown<WorkOrderHeader>(
-                  hint: "Select work order...",
-                  items: availableWOs,
-                  selectedValue: _selectedWorkOrder,
-                  itemLabel: (wo) => wo.workOrderCode ?? '-',
+                _InductionOverlayDropdown<LotHeaderModel>(
+                  hint: "Select batch/lot number...",
+                  items: availableBatches,
+                  selectedValue: _selectedBatch,
+                  itemLabel: (batch) => batch.batchHeaderCode ?? '-',
                   onChanged: (val) {
                     setState(() {
-                      _selectedWorkOrder = val;
+                      _selectedBatch = val;
                     });
                   },
                 ),
@@ -491,7 +493,7 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
             child: SizedBox(
               height: 40,
               child: ElevatedButton.icon(
-                onPressed: _selectedWorkOrder == null
+                onPressed: _selectedBatch == null
                     ? null
                     : _showAvailableTraysDialog,
                 icon: const Icon(Icons.layers_outlined, size: 16),
@@ -524,7 +526,7 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             final availableTrays = _availableTrays
-                .where((t) => t.workOrderHeader?.id == _selectedWorkOrder?.id)
+                .where((t) => t.batchHeader?.id == _selectedBatch?.id)
                 .toList();
 
             return Dialog(
@@ -559,7 +561,7 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
                       child: availableTrays.isEmpty
                           ? const Center(
                               child: Text(
-                                'No available trays for this work order',
+                                'No available trays for this batch/lot',
                                 style: TextStyle(
                                   color: Colors.grey,
                                   fontSize: 13,
@@ -667,7 +669,7 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildConfigurationPanel(),
-        if (_selectedWorkOrder != null) ...[
+        if (_selectedBatch != null) ...[
           // ── Toolbar ──────────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.all(16),
@@ -729,7 +731,7 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
           const Expanded(
             child: Center(
               child: Text(
-                'Please select a work order to start scanning',
+                'Please select a batch/lot number to start scanning',
                 style: TextStyle(color: Colors.grey, fontSize: 13),
               ),
             ),

@@ -386,6 +386,7 @@ class _LotListScreenState extends State<LotListScreen>
 
     if (confirm != true) return;
 
+    AppLoader.show(context, message: 'Issuing Lot...');
     setState(() => _isLoading = true);
     final bh = header.batchHeader;
 
@@ -403,6 +404,7 @@ class _LotListScreenState extends State<LotListScreen>
     });
 
     if (!lockRes.success) {
+      AppLoader.hide(context);
       setState(() => _isLoading = false);
       AppSnackBar.showError(context, title: 'Issue Failed', message: lockRes.message ?? '');
       return;
@@ -594,6 +596,7 @@ class _LotListScreenState extends State<LotListScreen>
         'locatorId': 6,
         'batchHeaderId': headerId,
         'batchLineId': bl['id'],
+        'batchLinesId': bl['id'],
         'processedItemId': processedItemId,
       };
 
@@ -726,6 +729,7 @@ class _LotListScreenState extends State<LotListScreen>
       }
     }
 
+    AppLoader.hide(context);
     setState(() => _isLoading = false);
     _fetchAndGroupLots();
     AppSnackBar.showSuccess(context, message: 'Lot issued successfully');

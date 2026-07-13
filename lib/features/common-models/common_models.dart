@@ -206,6 +206,7 @@ class ProductionProgress {
       'locatorId': locatorId,
       'batchHeaderId': batchHeaderId,
       'batchLineId': batchLinesId,
+      'batchLinesId': batchLinesId,
       'concurrencyStamp': concurrencyStamp,
       'id': id,
       'remarks': remarks,

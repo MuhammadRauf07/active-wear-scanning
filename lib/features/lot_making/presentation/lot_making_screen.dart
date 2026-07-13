@@ -201,6 +201,21 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
     }).toList();
   }
 
+  double _getAlreadyAssignedTubesForWorkOrderLine(int workOrderLineId) {
+    double sum = 0.0;
+    final currentBatchId = widget.existingBatch?.batchHeader.id;
+    for (final t in productionProgressTrays) {
+      final lineId = t.productionProgress.workOrderLineId ?? t.workOrderLine?.id;
+      if (lineId == workOrderLineId) {
+        final bhId = t.productionProgress.batchHeaderId;
+        if (bhId != null && bhId != 0 && bhId != currentBatchId) {
+          sum += (t.productionProgress.primaryQuantity ?? 0.0);
+        }
+      }
+    }
+    return sum;
+  }
+
   Map<String, double> _getTrayQuantities(ProductionProgressResponseModel tray) {
     final code = tray.primaryTrayModel.trayCode;
     final fallbackQty = tray.productionProgress.primaryQuantity ?? 0.0;
@@ -785,10 +800,13 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
           currentCumulative += double.tryParse(_quantityControllers[i].text) ?? 0.0;
         }
       }
+      final alreadyAssigned = _getAlreadyAssignedTubesForWorkOrderLine(workOrderLineId);
+      final totalScanned = currentCumulative + newQty + alreadyAssigned;
+
       final int extraAllowed = (planQty * 0.1).ceil();
       final double maxAllowed = planQty + extraAllowed;
-      if (currentCumulative + newQty > maxAllowed) {
-        return 'Cannot scan tray. Scanned quantity (${(currentCumulative + newQty).toStringAsFixed(0)}) exceeds the maximum plan limit including 10% extra allowance (${maxAllowed.toStringAsFixed(0)}) for color "$colorDescription".';
+      if (totalScanned > maxAllowed) {
+        return 'Cannot scan tray. Scanned quantity (${totalScanned.toStringAsFixed(0)}) exceeds the maximum plan limit including 10% extra allowance (${maxAllowed.toStringAsFixed(0)}) for color "$colorDescription" (Already assigned in other batches: ${alreadyAssigned.toStringAsFixed(0)}).';
       }
     }
 
@@ -846,12 +864,15 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
       for (final lineId in lineCumulativeTubes.keys) {
         final planQty = _colorPlanQuantities["${lineId}_$selectedColorDesc"] ?? 0.0;
         final sumTubes = lineCumulativeTubes[lineId] ?? 0.0;
+        final alreadyAssigned = _getAlreadyAssignedTubesForWorkOrderLine(lineId);
+        final totalScanned = sumTubes + alreadyAssigned;
+
         final int extraAllowed = (planQty * 0.1).ceil();
         final double maxAllowed = planQty + extraAllowed;
 
-        if (planQty > 0.0 && sumTubes > maxAllowed) {
+        if (planQty > 0.0 && totalScanned > maxAllowed) {
           exceedsMaxLimit = true;
-          exceededMax = sumTubes;
+          exceededMax = totalScanned;
           exceededMaxPlan = maxAllowed;
           break;
         }
@@ -872,9 +893,12 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
       for (final lineId in lineCumulativeTubes.keys) {
         final planQty = _colorPlanQuantities["${lineId}_$selectedColorDesc"] ?? 0.0;
         final sumTubes = lineCumulativeTubes[lineId] ?? 0.0;
-        if (planQty > 0.0 && sumTubes > planQty) {
+        final alreadyAssigned = _getAlreadyAssignedTubesForWorkOrderLine(lineId);
+        final totalScanned = sumTubes + alreadyAssigned;
+
+        if (planQty > 0.0 && totalScanned > planQty) {
           exceedsColorPlan = true;
-          exceededSum = sumTubes;
+          exceededSum = totalScanned;
           exceededPlan = planQty;
           break;
         }
@@ -1159,20 +1183,50 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
       dev.log('🚀 POSTing LotLine: $linePayload');
       final resLine = await _lotRepo.createLotLine(linePayload);
 
-      // Only update tray details if physically fully consumed (not partial of the physical tray capacity)
-      final double trayCapacity = (tray.primaryTrayModel?.trayQuantity ?? 0).toDouble();
-      final bool isPhysicallyFull = qty >= trayCapacity - 0.01;
+      if (resLine.success && resLine.data != null) {
+        final lineId = (resLine.data as Map)['id'];
+        final int batchLineDbId = int.tryParse(lineId.toString()) ?? 0;
 
-      if (isPhysicallyFull) {
-        if (resLine.success && resLine.data != null) {
-          final lineId = (resLine.data as Map)['id'];
+        if (batchLineDbId > 0 && resolvedProgressId > 0) {
+          final ppFetchRes = await _lotRepo.fetchProductionProgressById(resolvedProgressId);
+          if (ppFetchRes.success && ppFetchRes.data != null) {
+            final responseModel = ProductionProgressResponseModel.fromJson(
+              Map<String, dynamic>.from(ppFetchRes.data as Map),
+            );
+            final ppMap = responseModel.productionProgress.toJson();
+            ppMap['batchLineId'] = batchLineDbId;
+            ppMap.remove('batchLinesId');
+            
+            // Clean read-only/audit fields
+            ppMap.remove('id');
+            ppMap.remove('progressCode');
+            ppMap.remove('concurrencyStamp');
+            ppMap.remove('creationTime');
+            ppMap.remove('creatorId');
+            ppMap.remove('lastModificationTime');
+            ppMap.remove('lastModifierId');
+
+            final resPpLink = await _lotRepo.updateProductionProgress(resolvedProgressId, ppMap);
+            if (resPpLink.success) {
+              dev.log('🔗 Linked ProductionProgress $resolvedProgressId to BatchLine $batchLineDbId');
+            } else {
+              dev.log('❌ Failed linking ProductionProgress $resolvedProgressId to BatchLine: ${resPpLink.message}');
+            }
+          }
+        }
+
+        // Only update tray details if physically fully consumed (not partial of the physical tray capacity)
+        final double trayCapacity = (tray.primaryTrayModel?.trayQuantity ?? 0).toDouble();
+        final bool isPhysicallyFull = qty >= trayCapacity - 0.01;
+
+        if (isPhysicallyFull) {
           final trayId = tray.primaryTrayModel?.id;
           if (trayId != null) {
             final trayData = await _lotRepo.fetchTrayDetailById(trayId);
             if (trayData.success && trayData.data != null) {
               final map = Map<String, dynamic>.from(trayData.data as Map);
               map['batchHeaderId'] = batchHeaderId;
-              map['batchLineId'] = lineId;
+              map['batchLineId'] = batchLineDbId;
               map['trayQuantity'] = qty.toInt();
               await _lotRepo.updateTrayDetails(trayId, map);
             }
@@ -2271,6 +2325,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
           'tubes': 0.0,
           'weight': 0.0,
           'planQty': planQty,
+          'lineId': lineId,
         };
       }
     }
@@ -2285,8 +2340,6 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
       final lineId = tray.productionProgress.workOrderLineId ?? tray.workOrderLine?.id;
       final groupKey = "${code}_${itemDesc}_${sizeDesc}";
 
-      final perTube = tray.item.perGarmentTube;
-      final pcs = qty * perTube;
       final weight = qty * (tray.item.pieceWeight ?? 0);
 
       if (!woGroups.containsKey(groupKey)) {
@@ -2302,11 +2355,12 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
           'tubes': 0.0,
           'weight': 0.0,
           'planQty': planQty,
+          'lineId': lineId,
         };
       }
 
       woGroups[groupKey]!['trays'] = (woGroups[groupKey]!['trays'] as int) + 1;
-      woGroups[groupKey]!['tubes'] = (woGroups[groupKey]!['tubes'] as double) + pcs;
+      woGroups[groupKey]!['tubes'] = (woGroups[groupKey]!['tubes'] as double) + qty;
       woGroups[groupKey]!['weight'] = (woGroups[groupKey]!['weight'] as double) + weight;
     }
 
@@ -2379,6 +2433,16 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                       final int extraAllowed = (planVal * 0.1).ceil();
                       final double maxAllowed = planVal + extraAllowed;
                       final maxStr = planVal > 0.0 ? " (Max ${maxAllowed.toStringAsFixed(0)})" : "";
+
+                      final lineId = data['lineId'] as int?;
+                      final double assigned = lineId != null ? _getAlreadyAssignedTubesForWorkOrderLine(lineId) : 0.0;
+                      final currentTubes = data['tubes'] as double;
+                      final totalTubes = currentTubes + assigned;
+
+                      final displayTubes = assigned > 0.0
+                          ? "${currentTubes.toStringAsFixed(0)} (Total: ${totalTubes.toStringAsFixed(0)})"
+                          : currentTubes.toStringAsFixed(0);
+
                       return TableRow(
                         decoration: const BoxDecoration(
                           border: Border(
@@ -2393,7 +2457,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                           _buildTableCell(data['item'].toString()),
                           _buildTableCell(data['trays'].toString()),
                           _buildTableCell(
-                              "${(data['tubes'] as double).toStringAsFixed(0)} / $planStr$maxStr"),
+                              "$displayTubes / $planStr$maxStr"),
                           _buildTableCell(
                               "${(data['weight'] as double).toStringAsFixed(0)}g"),
                         ],
