@@ -584,6 +584,8 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
 
   void _openScanner() async {
     HapticFeedbackHelper.buttonClick();
+    _focusNode.unfocus();
+    FocusScope.of(context).unfocus();
     await Future.delayed(const Duration(milliseconds: 300));
     if (!mounted) return;
     await ScannerAlwaysOpen.show(
@@ -1238,7 +1240,7 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
             final finalJson = latestHandoverPP.productionProgress.toJson();
             finalJson['batchHeaderId'] = widget.batchHeaderId;
             finalJson['batchLineId'] = blId;
-            finalJson.remove('batchLinesId');
+            finalJson['batchLinesId'] = blId;
             finalJson.remove('id');
             finalJson.remove('progressCode');
             finalJson.remove('creationTime');
@@ -1253,6 +1255,29 @@ class _LappingDetailScreenState extends State<LappingDetailScreen> {
               return false;
             }
             debugPrint('🔗 Linked ProductionProgress $targetProgressId to BatchLine $blId');
+
+            // Also link the WIP Transaction created for this Handover PP step to the batchLine
+            final newWipRes = await _lotRepo.fetchWipTransactionsByProgressId(targetProgressId);
+            if (newWipRes.success && newWipRes.data != null) {
+              final List rawItems = newWipRes.data is Map ? (newWipRes.data['items'] ?? []) : newWipRes.data;
+              final items = rawItems.cast<Map<String, dynamic>>();
+              final match = items.firstWhere(
+                (e) => (e['wipTransaction']?['progressId'] ?? e['progressId'] ?? e['wipTransaction']?['productionProgressId'] ?? e['productionProgressId'])?.toString() == targetProgressId.toString(),
+                orElse: () => {},
+              );
+              if (match.isNotEmpty) {
+                final newWipId = match['wipTransaction']?['id'] as int?;
+                if (newWipId != null) {
+                  final wipPayload = Map<String, dynamic>.from(match['wipTransaction'] ?? match);
+                  wipPayload['batchLinesId'] = blId;
+                  wipPayload['batchLineId'] = blId;
+                  wipPayload.remove('id');
+                  wipPayload.remove('concurrencyStamp');
+                  await _lotRepo.updateWipTransaction(newWipId, wipPayload);
+                  debugPrint('🔗 Linked WIPTransaction $newWipId to BatchLine $blId');
+                }
+              }
+            }
           }
 
           // --- 4. UPDATE TRAY DETAILS LOGIC (Visual State Link) ---

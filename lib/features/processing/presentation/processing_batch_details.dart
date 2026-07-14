@@ -1101,14 +1101,46 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
               'startDate': null,
               'machineId': null,
               'batchLineId': pp.batchLinesId,
+              'batchLinesId': pp.batchLinesId,
               'isLastProcess': false,
               'operationId': _reworkTargetOpId,
               'locatorId': rewLoc,
               'date': DateTime.now().toIso8601String(),
             });
-            newJ.remove('batchLinesId');
             final crRes = await _processingRepo.createProductionProgress(newJ);
             if (!crRes.success) throw Exception('Create failed: ${crRes.message}');
+
+            int? targetProgressId;
+            final ppData = crRes.data;
+            if (ppData is Map) {
+              final rawId = int.tryParse(ppData['id']?.toString() ?? '');
+              if (rawId != null && rawId > 0) targetProgressId = rawId;
+            } else if (ppData is int && ppData > 0) {
+              targetProgressId = ppData;
+            }
+
+            if (targetProgressId != null && targetProgressId > 0 && pp.batchLinesId != null) {
+              final newWipRes = await _lotRepo.fetchWipTransactionsByProgressId(targetProgressId);
+              if (newWipRes.success && newWipRes.data != null) {
+                final List rawItems = newWipRes.data is Map ? (newWipRes.data['items'] ?? []) : newWipRes.data;
+                final items = rawItems.cast<Map<String, dynamic>>();
+                final match = items.firstWhere(
+                  (e) => (e['wipTransaction']?['progressId'] ?? e['progressId'] ?? e['wipTransaction']?['productionProgressId'] ?? e['productionProgressId'])?.toString() == targetProgressId.toString(),
+                  orElse: () => {},
+                );
+                if (match.isNotEmpty) {
+                  final newWipId = match['wipTransaction']?['id'] as int?;
+                  if (newWipId != null) {
+                    final wipPayload = Map<String, dynamic>.from(match['wipTransaction'] ?? match);
+                    wipPayload['batchLinesId'] = pp.batchLinesId;
+                    wipPayload['batchLineId'] = pp.batchLinesId;
+                    wipPayload.remove('id');
+                    wipPayload.remove('concurrencyStamp');
+                    await _lotRepo.updateWipTransaction(newWipId, wipPayload);
+                  }
+                }
+              }
+            }
           } else if (widget.nextOperationId != null) {
             json['transactionType'] = 3;
             json['wipStatus'] = 1;
@@ -1135,14 +1167,46 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
               'startDate': null,
               'machineId': null,
               'batchLineId': pp.batchLinesId,
+              'batchLinesId': pp.batchLinesId,
               'isLastProcess': false,
               'operationId': widget.nextOperationId,
               'locatorId': nextLocatorId,
               'date': DateTime.now().toIso8601String(),
             });
-            newJ.remove('batchLinesId');
             final crRes = await _processingRepo.createProductionProgress(newJ);
             if (!crRes.success) throw Exception('Create failed: ${crRes.message}');
+
+            int? targetProgressId;
+            final ppData = crRes.data;
+            if (ppData is Map) {
+              final rawId = int.tryParse(ppData['id']?.toString() ?? '');
+              if (rawId != null && rawId > 0) targetProgressId = rawId;
+            } else if (ppData is int && ppData > 0) {
+              targetProgressId = ppData;
+            }
+
+            if (targetProgressId != null && targetProgressId > 0 && pp.batchLinesId != null) {
+              final newWipRes = await _lotRepo.fetchWipTransactionsByProgressId(targetProgressId);
+              if (newWipRes.success && newWipRes.data != null) {
+                final List rawItems = newWipRes.data is Map ? (newWipRes.data['items'] ?? []) : newWipRes.data;
+                final items = rawItems.cast<Map<String, dynamic>>();
+                final match = items.firstWhere(
+                  (e) => (e['wipTransaction']?['progressId'] ?? e['progressId'] ?? e['wipTransaction']?['productionProgressId'] ?? e['productionProgressId'])?.toString() == targetProgressId.toString(),
+                  orElse: () => {},
+                );
+                if (match.isNotEmpty) {
+                  final newWipId = match['wipTransaction']?['id'] as int?;
+                  if (newWipId != null) {
+                    final wipPayload = Map<String, dynamic>.from(match['wipTransaction'] ?? match);
+                    wipPayload['batchLinesId'] = pp.batchLinesId;
+                    wipPayload['batchLineId'] = pp.batchLinesId;
+                    wipPayload.remove('id');
+                    wipPayload.remove('concurrencyStamp');
+                    await _lotRepo.updateWipTransaction(newWipId, wipPayload);
+                  }
+                }
+              }
+            }
           } else {
             json['transactionType'] = 3;
             json['wipStatus'] = 1;

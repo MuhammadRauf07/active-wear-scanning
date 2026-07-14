@@ -416,8 +416,35 @@ class _LotListScreenState extends State<LotListScreen>
     final firstItemId =
         (firstLine?['batchLines'] as Map<String, dynamic>?)?['itemId'] as int?;
 
-    if (firstItemId != null) {
-      final routingRes = await _lotRepo.fetchItemRoutings(firstItemId);
+    int? firstProcessedItemId;
+    if (firstLine != null) {
+      final bl = firstLine['batchLines'] as Map<String, dynamic>?;
+      final workOrderLineId = bl?['workOrderLineId'] as int?;
+      final colorDescription = bh.colorDescription;
+      if (workOrderLineId != null && colorDescription != null) {
+        final woRes = await _lotRepo.fetchWorkOrderLineDetails(
+          workOrderLineId,
+          colorDescription,
+        );
+        if (woRes.success && woRes.data != null) {
+          final woItems = woRes.data as List;
+          if (woItems.isNotEmpty) {
+            final firstItem = woItems.first as Map;
+            final raw = firstItem['processIItemd'];
+            if (raw is Map) {
+              firstProcessedItemId = raw['id'] as int?;
+            } else if (raw is int) {
+              firstProcessedItemId = raw;
+            }
+          }
+        }
+      }
+    }
+
+    final int? routingItemId = firstProcessedItemId ?? firstItemId;
+
+    if (routingItemId != null) {
+      final routingRes = await _lotRepo.fetchItemRoutings(routingItemId);
       if (routingRes.success && routingRes.data != null) {
         final routingItems = routingRes.data as List;
         for (final r in routingItems) {
@@ -454,24 +481,6 @@ class _LotListScreenState extends State<LotListScreen>
 
       if (bl == null) continue;
 
-      // ── Compute min operationId from item routings ────────────────────────
-      int? minOpId;
-      final itemId = bl['itemId'] as int?;
-      if (itemId != null) {
-        final routingRes = await _lotRepo.fetchItemRoutings(itemId);
-        if (routingRes.success && routingRes.data != null) {
-          final routingItems = routingRes.data as List;
-          final opIds = routingItems
-              .map((r) => (r as Map)['itemRouting']?['operationId'])
-              .whereType<int>()
-              .toList();
-          if (opIds.isNotEmpty) {
-            minOpId = opIds.reduce((a, b) => a < b ? a : b);
-          }
-        }
-        debugPrint('🔑 Lock: item=$itemId minOpId=$minOpId');
-      }
-
       // ── Fetch processedItemId from work-order-line-details ────────────────
       int? processedItemId;
       final workOrderLineId = bl['workOrderLineId'] as int?;
@@ -496,6 +505,31 @@ class _LotListScreenState extends State<LotListScreen>
         debugPrint(
           '📦 Lock: workOrderLineId=$workOrderLineId processedItemId=$processedItemId',
         );
+      }
+
+      // ── Compute min operationId from item routings based on sequence ──────
+      int? minOpId;
+      final int? targetItemId = processedItemId ?? bl['itemId'] as int?;
+      if (targetItemId != null) {
+        final routingRes = await _lotRepo.fetchItemRoutings(targetItemId);
+        if (routingRes.success && routingRes.data != null) {
+          final routingItems = routingRes.data as List;
+          int? minSeq;
+          int? resolvedOpId;
+          for (final r in routingItems) {
+            final rMap = r as Map;
+            final seq = rMap['itemRouting']?['seq'] as int?;
+            final opId = rMap['itemRouting']?['operationId'] as int?;
+            if (seq != null && opId != null) {
+              if (minSeq == null || seq < minSeq) {
+                minSeq = seq;
+                resolvedOpId = opId;
+              }
+            }
+          }
+          minOpId = resolvedOpId;
+        }
+        debugPrint('🔑 Lock: item=$targetItemId minOpId=$minOpId');
       }
 
       final primaryQty = (bl['primaryQuantity'] as num?)?.toDouble() ?? 0;

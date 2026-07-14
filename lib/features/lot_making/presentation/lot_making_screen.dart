@@ -753,10 +753,20 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
     if (_referenceRoutingCodes == null) {
       _referenceRoutingCodes = routingCodes;
       _referenceRoutingCount = routingCount;
-      _referenceMinOperationId = routingCodes
-          .map((s) => int.tryParse(s) ?? 0)
-          .where((v) => v > 0)
-          .fold<int?>(null, (min, v) => min == null || v < min ? v : min);
+      int? minSeq;
+      int? resolvedOpId;
+      for (final r in routingItems) {
+        final rMap = r as Map;
+        final seq = rMap['itemRouting']?['seq'] as int?;
+        final opId = rMap['itemRouting']?['operationId'] as int?;
+        if (seq != null && opId != null) {
+          if (minSeq == null || seq < minSeq) {
+            minSeq = seq;
+            resolvedOpId = opId;
+          }
+        }
+      }
+      _referenceMinOperationId = resolvedOpId;
     } else if (routingCount != _referenceRoutingCount ||
         !routingCodes.containsAll(_referenceRoutingCodes!) ||
         !_referenceRoutingCodes!.containsAll(routingCodes)) {

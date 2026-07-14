@@ -49,6 +49,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
   final _batchBarcodeController = TextEditingController();
 
   List<Operation> _operations = [];
+  List<Operation> _allOperations = [];
   Map<int, int> _opBatchCounts = {};
   Map<int, List<BatchSummaryItem>> _opBatchDetails = {};
   Map<int, bool> _loadingDetails = {};
@@ -65,6 +66,13 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _fetchOperations();
     });
+  }
+
+  @override
+  void dispose() {
+    _disposedBatches.clear();
+    _optimisticCache.clear();
+    super.dispose();
   }
 
   Future<void> _fetchOperations() async {
@@ -87,6 +95,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
         final List<Operation> allOps = List<Operation>.from(res.data);
         if (mounted) {
           setState(() {
+            _allOperations = allOps;
             _operations =
             allOps.where((op) {
               final isProcessing = op.processNature == 1;
@@ -317,6 +326,73 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
               });
             }
 
+            int? nextOpId;
+            String? nextOpName;
+
+            if (blRes.success && blRes.data != null) {
+              final linesList = blRes.data as List;
+              if (linesList.isNotEmpty) {
+                final firstLine = linesList.first;
+                final bl = firstLine['batchLines'] as Map<String, dynamic>? ?? firstLine;
+                final itemId = bl['itemId'] as int?;
+                final workOrderLineId = bl['workOrderLineId'] as int?;
+                final colorDescription = bhFull.batchHeader.colorDescription;
+
+                int? firstProcessedItemId;
+                if (workOrderLineId != null && colorDescription != null) {
+                  final woRes = await _lotRepo.fetchWorkOrderLineDetails(
+                    workOrderLineId,
+                    colorDescription,
+                  );
+                  if (woRes.success && woRes.data != null) {
+                    final woItems = woRes.data as List;
+                    if (woItems.isNotEmpty) {
+                      final firstItem = woItems.first as Map;
+                      final raw = firstItem['processIItemd'];
+                      if (raw is Map) {
+                        firstProcessedItemId = raw['id'] as int?;
+                      } else if (raw is int) {
+                        firstProcessedItemId = raw;
+                      }
+                    }
+                  }
+                }
+                final int? routingItemId = firstProcessedItemId ?? itemId;
+
+                if (routingItemId != null) {
+                  final routingRes = await _lotRepo.fetchItemRoutings(routingItemId);
+                  if (routingRes.success && routingRes.data != null) {
+                    final routingItems = routingRes.data as List;
+                    final List<Map<String, dynamic>> parsedRoutings = [];
+                    for (final r in routingItems) {
+                      final rMap = r as Map;
+                      final itemRouting = rMap['itemRouting'] as Map?;
+                      if (itemRouting != null) {
+                        final opId = itemRouting['operationId'] as int?;
+                        final seq = itemRouting['seq'] as int?;
+                        if (opId != null && seq != null) {
+                          parsedRoutings.add({
+                            'operationId': opId,
+                            'seq': seq,
+                          });
+                        }
+                      }
+                    }
+                    parsedRoutings.sort((a, b) => (a['seq'] as int).compareTo(b['seq'] as int));
+
+                    final currentIdx = parsedRoutings.indexWhere((r) => r['operationId'] == operationId);
+                    if (currentIdx != -1 && currentIdx < parsedRoutings.length - 1) {
+                      nextOpId = parsedRoutings[currentIdx + 1]['operationId'] as int?;
+                      if (nextOpId != null) {
+                        final targetOpIdx = _allOperations.indexWhere((o) => o.id == nextOpId);
+                        nextOpName = targetOpIdx != -1 ? _allOperations[targetOpIdx].name : 'N/A';
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
             summaries.add(
               BatchSummaryItem(
                 batchHeaderId: bhId,
@@ -333,6 +409,8 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                 isStarted: isStarted,
                 reworkFlag: isRework,
                 isReassigned: isReassigned,
+                nextOperationId: nextOpId,
+                nextOperationName: nextOpName,
               ),
             );
           }
@@ -439,12 +517,12 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                             GestureDetector(
                               onTap: () {
                                 setState(() {
-                                  if (isSelected) {
-                                    _selectedOperation = null;
-                                  } else {
-                                    _selectedOperation = op;
-                                    _fetchOpDetails(op.id);
-                                  }
+                                   if (isSelected) {
+                                     _selectedOperation = null;
+                                   } else {
+                                     _selectedOperation = op;
+                                     _fetchOpDetails(op.id, force: true);
+                                   }
                                 });
                               },
                               child: Container(
@@ -537,19 +615,12 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                                   isLoading: _loadingDetails[op.id] == true,
                                   summaries: _opBatchDetails[op.id],
                                   onDetailsPressed: (s) async {
-                                    final currentIndex = _operations
-                                        .indexWhere((o) =>
-                                    o.id == _selectedOperation?.id);
-                                    String nextOpName = 'N/A';
-                                    int? nextOpId;
-                                    if (currentIndex != -1 &&
-                                        currentIndex < _operations.length - 1) {
-                                      nextOpName =
-                                          _operations[currentIndex + 1].name;
-                                      nextOpId =
-                                          _operations[currentIndex + 1].id;
-                                    }
-                                    final activeOpId = _selectedOperation?.id;
+                                     final currentIndex = _operations
+                                         .indexWhere((o) =>
+                                     o.id == _selectedOperation?.id);
+                                     final nextOpName = s.nextOperationName ?? 'N/A';
+                                     final nextOpId = s.nextOperationId;
+                                     final activeOpId = _selectedOperation?.id;
                                     final result = await Navigator.push(
                                       context,
                                       MaterialPageRoute(
@@ -574,25 +645,34 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                                       ),
                                     );
 
-                                    if (mounted && activeOpId != null) {
-                                      _fetchOpDetails(activeOpId, force: true);
-                                      _fetchBatchCount(activeOpId);
-                                    }
+                                     if (result != null && result is Map &&
+                                         result['submitted'] == true) {
+                                       final List<int> targetOps = [];
+                                       if (result['targetOps'] is List) {
+                                         for (final item in result['targetOps']) {
+                                           if (item is num) {
+                                             targetOps.add(item.toInt());
+                                           }
+                                         }
+                                       }
 
-                                    if (result != null && result is Map &&
-                                        result['submitted'] == true) {
-                                      final List<int> targetOps = [];
-                                      if (result['targetOps'] is List) {
-                                        for (final item in result['targetOps']) {
-                                          if (item is num) {
-                                            targetOps.add(item.toInt());
-                                          }
-                                        }
-                                      }
-                                      final isRework = result['isRework'] ==
-                                          true;
-                                      final isReassigned = result['isReassigned'] ==
-                                          true;
+                                       if (mounted && activeOpId != null) {
+                                         _fetchOpDetails(activeOpId, force: true);
+                                         _fetchBatchCount(activeOpId);
+                                         for (final tOpId in targetOps) {
+                                           _fetchBatchCount(tOpId);
+                                           if (_selectedOperation?.id == tOpId) {
+                                             _fetchOpDetails(tOpId, force: true);
+                                           } else {
+                                             _opBatchDetails.remove(tOpId);
+                                           }
+                                         }
+                                       }
+
+                                       final isRework = result['isRework'] ==
+                                           true;
+                                       final isReassigned = result['isReassigned'] ==
+                                           true;
 
                                       setState(() {
                                         final dispList = _disposedBatches
@@ -666,9 +746,14 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
 
                                         // Collapse the currently expanded process card
                                         _selectedOperation = null;
-                                      });
-                                    }
-                                  },
+                                       });
+                                     } else {
+                                       if (mounted && activeOpId != null) {
+                                         _fetchOpDetails(activeOpId, force: true);
+                                         _fetchBatchCount(activeOpId);
+                                       }
+                                     }
+                                   },
                                 ),
                               ),
                           ],

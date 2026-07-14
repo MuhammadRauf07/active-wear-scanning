@@ -243,6 +243,10 @@ class LotRepo {
     return result;
   }
 
+  Future<PlexApiResult> updateWipTransaction(int id, Map<String, dynamic> data) async {
+    return await _api.put('/api/app/w-iPTransactions/$id', body: data);
+  }
+
   Future<PlexApiResult> fetchLocators({int? operationId}) async {
     final query = operationId != null ? {'OperationId': operationId.toString()} : <String, dynamic>{};
     final result = await _api.getList('/api/app/locators', query: query);
