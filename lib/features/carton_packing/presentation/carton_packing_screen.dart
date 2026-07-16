@@ -136,32 +136,56 @@ class _CartonPackingScreenState extends State<CartonPackingScreen> {
                         return CartonPackingRow(
                           index: reversedIndex,
                           item: model,
-                          onRemove: () {
-                            setState(() {
-                              _scannedCartons.removeAt(reversedIndex);
+                          onRemove: () async {
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Confirm Delete'),
+                                content: const Text('Are you sure you want to delete this carton?'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context, false),
+                                    child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                                  ),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFEF4444),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    onPressed: () => Navigator.pop(context, true),
+                                    child: const Text('Delete'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (confirm == true) {
+                              setState(() {
+                                _scannedCartons.removeAt(reversedIndex);
 
-                              // Reset constraint if no cartons are left in checklist
-                              if (_scannedCartons.isEmpty) {
-                                _activeSaleOrderId = null;
-                                _activeSaleOrder = null;
-                                _activeCustomerName = null;
-                                _activeCartonGroups.clear();
-                                _groupLinesCache.clear();
-                                _expandedGroupId = null;
-                              } else {
-                                // Clean up groups if no scanned cartons left for that group
-                                final headerId = model.packingInstructionHeader.id;
-                                final remains = _scannedCartons.any((c) => c.packingInstructionHeader.id == headerId);
-                                if (!remains) {
-                                  _activeCartonGroups.removeWhere((g) => g.id == headerId);
-                                  _groupLinesCache.remove(headerId);
-                                  if (_expandedGroupId == headerId) {
-                                    _expandedGroupId = null;
+                                // Reset constraint if no cartons are left in checklist
+                                if (_scannedCartons.isEmpty) {
+                                  _activeSaleOrderId = null;
+                                  _activeSaleOrder = null;
+                                  _activeCustomerName = null;
+                                  _activeCartonGroups.clear();
+                                  _groupLinesCache.clear();
+                                  _expandedGroupId = null;
+                                } else {
+                                  // Clean up groups if no scanned cartons left for that group
+                                  final headerId = model.packingInstructionHeader.id;
+                                  final remains = _scannedCartons.any((c) => c.packingInstructionHeader.id == headerId);
+                                  if (!remains) {
+                                    _activeCartonGroups.removeWhere((g) => g.id == headerId);
+                                    _groupLinesCache.remove(headerId);
+                                    if (_expandedGroupId == headerId) {
+                                      _expandedGroupId = null;
+                                    }
                                   }
                                 }
-                              }
-                            });
-                            setSubState(() {});
+                              });
+                              setSubState(() {});
+                            }
                           },
                         );
                       },
@@ -610,31 +634,55 @@ class _CartonPackingScreenState extends State<CartonPackingScreen> {
                   return CartonPackingRow(
                     index: reversedIndex,
                     item: model,
-                    onRemove: () {
-                      setState(() {
-                        _scannedCartons.removeAt(reversedIndex);
+                    onRemove: () async {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Confirm Delete'),
+                          content: const Text('Are you sure you want to delete this carton?'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, false),
+                              child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                            ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFEF4444),
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              onPressed: () => Navigator.pop(context, true),
+                              child: const Text('Delete'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirm == true) {
+                        setState(() {
+                          _scannedCartons.removeAt(reversedIndex);
 
-                        // Reset constraint if no cartons are left in checklist
-                        if (_scannedCartons.isEmpty) {
-                          _activeSaleOrderId = null;
-                          _activeSaleOrder = null;
-                          _activeCustomerName = null;
-                          _activeCartonGroups.clear();
-                          _groupLinesCache.clear();
-                          _expandedGroupId = null;
-                        } else {
-                          // Clean up groups if no scanned cartons left for that group
-                          final headerId = model.packingInstructionHeader.id;
-                          final remains = _scannedCartons.any((c) => c.packingInstructionHeader.id == headerId);
-                          if (!remains) {
-                            _activeCartonGroups.removeWhere((g) => g.id == headerId);
-                            _groupLinesCache.remove(headerId);
-                            if (_expandedGroupId == headerId) {
-                              _expandedGroupId = null;
+                          // Reset constraint if no cartons are left in checklist
+                          if (_scannedCartons.isEmpty) {
+                            _activeSaleOrderId = null;
+                            _activeSaleOrder = null;
+                            _activeCustomerName = null;
+                            _activeCartonGroups.clear();
+                            _groupLinesCache.clear();
+                            _expandedGroupId = null;
+                          } else {
+                            // Clean up groups if no scanned cartons left for that group
+                            final headerId = model.packingInstructionHeader.id;
+                            final remains = _scannedCartons.any((c) => c.packingInstructionHeader.id == headerId);
+                            if (!remains) {
+                              _activeCartonGroups.removeWhere((g) => g.id == headerId);
+                              _groupLinesCache.remove(headerId);
+                              if (_expandedGroupId == headerId) {
+                                _expandedGroupId = null;
+                              }
                             }
                           }
-                        }
-                      });
+                        });
+                      }
                     },
                   );
                 },

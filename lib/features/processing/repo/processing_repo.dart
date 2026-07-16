@@ -59,6 +59,10 @@ class ProcessingRepo {
     return await _api.post('/api/app/production-progresses', body: data);
   }
 
+  Future<PlexApiResult> deleteProductionProgress(int id) async {
+    return await _api.delete('/api/app/production-progresses/$id');
+  }
+
   Future<PlexApiResult> fetchLocators({int? operationId}) async {
     final query = operationId != null ? {'OperationId': operationId.toString()} : <String, dynamic>{};
     return await _api.getList('/api/app/locators', query: query);

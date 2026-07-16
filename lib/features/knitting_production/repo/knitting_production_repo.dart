@@ -77,16 +77,44 @@ class KnittingProductionRepo {
   }
 
   Future<PlexApiResult> fetchAvailableTrayDetails() async {
-    final result = await _api.getList('/api/app/tray-details?MaxResultCount=1000');
-    if (!result.success || result.data == null) return result;
+    List<dynamic> allItems = [];
+    int skipCount = 0;
+    int maxResultCount = 1000;
+    bool hasMore = true;
+
+    while (hasMore) {
+      final result = await _api.getList('/api/app/tray-details', query: {
+        'MaxResultCount': maxResultCount.toString(),
+        'SkipCount': skipCount.toString(),
+      });
+
+      if (!result.success || result.data == null) {
+        break;
+      }
+
+      final List items = result.data is List ? result.data : [];
+      allItems.addAll(items);
+
+      if (items.length < maxResultCount) {
+        hasMore = false;
+      } else {
+        skipCount += maxResultCount;
+      }
+
+      if (skipCount >= 10000) {
+        break;
+      }
+    }
+
+    if (allItems.isEmpty) {
+      return PlexApiResult(false, 500, "No tray details found", null);
+    }
 
     try {
-      final data = result.data as List;
       final list = <TrayDetailsModel>[];
-      for (var i = 0; i < data.length; i++) {
-        
+      for (var i = 0; i < allItems.length; i++) {
         try {
-          final item = Map<String, dynamic>.from(data[i] as Map);
+          final item = Map<String, dynamic>.from(allItems[i] as Map);
           list.add(TrayDetailsModel.fromJson(item));
         } catch (e) {
           return PlexApiResult(false, 500, 'Parse error at index $i: $e', null);

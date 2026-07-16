@@ -373,11 +373,10 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
     }
 
     final totalWoPlanQty = planLine.workOrderLine.tubesAfterAdjustment;
-    final sumPrimaryQty = _getSumPrimaryQuantityForWorkOrder(plan.workOrderLineId);
-    final remainingWoPlanQty = totalWoPlanQty - sumPrimaryQty;
-
     final int extraAllowed = (totalWoPlanQty * 0.1).ceil();
     final double maxAllowed = totalWoPlanQty + extraAllowed;
+    final sumPrimaryQty = _getSumPrimaryQuantityForWorkOrder(plan.workOrderLineId);
+    final remainingWoPlanQty = maxAllowed - sumPrimaryQty;
 
     addField('Plan Date', Icons.calendar_today, 'Plan Date', formatDate(plan.planDate.toString()));
     addField('Tubes Per Tray', Icons.grid_view, 'Tubes Per Tray', plan.quantityPerTray.toString());
@@ -438,13 +437,37 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
                           tray: _scannedTrays[index],
                           quantityController: _quantityControllers[index],
                           selectedPlanLine: _selectedPlanLine,
-                          onDelete: () {
-                            setState(() {
-                              _quantityControllers[index].dispose();
-                              _quantityControllers.removeAt(index);
-                              _scannedTrays.removeAt(index);
-                            });
-                            setSubState(() {});
+                          onDelete: () async {
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Confirm Delete'),
+                                content: const Text('Are you sure you want to delete this tray?'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context, false),
+                                    child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                                  ),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFEF4444),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    onPressed: () => Navigator.pop(context, true),
+                                    child: const Text('Delete'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (confirm == true) {
+                              setState(() {
+                                _quantityControllers[index].dispose();
+                                _quantityControllers.removeAt(index);
+                                _scannedTrays.removeAt(index);
+                              });
+                              setSubState(() {});
+                            }
                           },
                         );
                       },
@@ -572,7 +595,7 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
           if (trayDetail.active != true) return false;
           if (trayDetail.trayType != 1) return false;
           
-          final bool isEmptied = trayDetail.locatorId == null || trayDetail.trayQuantity == 0;
+          final bool isEmptied = trayDetail.locatorId == null || trayDetail.trayQuantity == 0 || trayDetail.trayQuantity == null;
           if (!isEmptied) return false;
           
           // Check if reassigned in draft
@@ -1406,12 +1429,36 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
                         tray: _scannedTrays[index],
                         quantityController: _quantityControllers[index],
                         selectedPlanLine: _selectedPlanLine,
-                        onDelete: () {
-                          setState(() {
-                            _quantityControllers[index].dispose();
-                            _quantityControllers.removeAt(index);
-                            _scannedTrays.removeAt(index);
-                          });
+                        onDelete: () async {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('Confirm Delete'),
+                              content: const Text('Are you sure you want to delete this tray?'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, false),
+                                  child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                                ),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFFEF4444),
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: const Text('Delete'),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (confirm == true) {
+                            setState(() {
+                              _quantityControllers[index].dispose();
+                              _quantityControllers.removeAt(index);
+                              _scannedTrays.removeAt(index);
+                            });
+                          }
                         },
                       );
                     },

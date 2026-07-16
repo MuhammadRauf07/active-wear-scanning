@@ -125,7 +125,11 @@ class _LotListScreenState extends State<LotListScreen>
         if (batchId != null && trayDetailId != null) {
           _trolleyDetailIdByLot[batchId] = trayDetailId;
           final trayCode = trayIdToCode[trayDetailId];
-          if (trayCode != null) _trolleyCodeByLot[batchId] = trayCode;
+          if (trayCode != null) {
+            _trolleyCodeByLot[batchId] = trayCode;
+          } else {
+            _fetchTrolleyCodeDynamically(batchId, trayDetailId);
+          }
         }
       }
 
@@ -1128,6 +1132,26 @@ class _LotListScreenState extends State<LotListScreen>
         ),
       ),
     );
+  }
+
+  Future<void> _fetchTrolleyCodeDynamically(int batchId, int trayDetailId) async {
+    try {
+      final res = await _lotRepo.fetchTrayDetailById(trayDetailId);
+      if (res.success && res.data != null) {
+        final Map<String, dynamic> rawMap = res.data as Map<String, dynamic>;
+        final tdMap = (rawMap['trayDetail'] is Map)
+            ? Map<String, dynamic>.from(rawMap['trayDetail'] as Map)
+            : rawMap;
+        final code = tdMap['trayCode']?.toString();
+        if (code != null && mounted) {
+          setState(() {
+            _trolleyCodeByLot[batchId] = code;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching trolley dynamically: $e');
+    }
   }
 
   Widget _buildSmallIconButton(IconData icon, Color color, VoidCallback onTap) {

@@ -142,11 +142,35 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
                         return GBSTrayRow(
                           index: reversedIndex,
                           tray: _scannedTrays[reversedIndex],
-                          onRemove: () {
-                            setState(() {
-                              _scannedTrays.removeAt(reversedIndex);
-                            });
-                            setSubState(() {});
+                          onRemove: () async {
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Confirm Delete'),
+                                content: const Text('Are you sure you want to delete this tray?'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context, false),
+                                    child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                                  ),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFEF4444),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    onPressed: () => Navigator.pop(context, true),
+                                    child: const Text('Delete'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (confirm == true) {
+                              setState(() {
+                                _scannedTrays.removeAt(reversedIndex);
+                              });
+                              setSubState(() {});
+                            }
                           },
                         );
                       },
@@ -491,8 +515,32 @@ class _GBSReceivingScreenState extends State<GBSReceivingScreen> {
     }
   }
 
-  void _onRemoveTray(int index) {
-    setState(() => _scannedTrays.removeAt(index));
+  void _onRemoveTray(int index) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm Delete'),
+        content: const Text('Are you sure you want to delete this tray?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      setState(() => _scannedTrays.removeAt(index));
+    }
   }
 
   void _showError(String message) {

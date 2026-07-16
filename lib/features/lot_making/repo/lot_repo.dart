@@ -73,8 +73,36 @@ class LotRepo {
   }
 
   Future<PlexApiResult> fetchTrayDetails() async {
-    final result = await _api.getList('/api/app/tray-details');
-    return result;
+    List<dynamic> allItems = [];
+    int skipCount = 0;
+    int maxResultCount = 1000;
+    bool hasMore = true;
+
+    while (hasMore) {
+      final result = await _api.getList('/api/app/tray-details', query: {
+        'MaxResultCount': maxResultCount.toString(),
+        'SkipCount': skipCount.toString(),
+      });
+
+      if (!result.success || result.data == null) {
+        break;
+      }
+
+      final List items = result.data is List ? result.data : [];
+      allItems.addAll(items);
+
+      if (items.length < maxResultCount) {
+        hasMore = false;
+      } else {
+        skipCount += maxResultCount;
+      }
+
+      if (skipCount >= 10000) {
+        break;
+      }
+    }
+
+    return PlexApiResult(true, 200, "Success", allItems);
   }
 
   Future<PlexApiResult> fetchTrayDetailById(int trayId) async {
@@ -245,6 +273,10 @@ class LotRepo {
 
   Future<PlexApiResult> updateWipTransaction(int id, Map<String, dynamic> data) async {
     return await _api.put('/api/app/w-iPTransactions/$id', body: data);
+  }
+
+  Future<PlexApiResult> deleteWipTransaction(int id) async {
+    return await _api.delete('/api/app/w-iPTransactions/$id');
   }
 
   Future<PlexApiResult> fetchLocators({int? operationId}) async {

@@ -16,6 +16,7 @@ class ProcessingTrayTable extends StatefulWidget {
   final bool isEditable;
   final String operationName;
   final Future<void> Function(int progressId, double newQty)? onQuantitySubmit;
+  final Future<void> Function(int progressId)? onDeleteWastage;
   final Set<int> trayIdsWithWastage;
 
   const ProcessingTrayTable({
@@ -28,6 +29,7 @@ class ProcessingTrayTable extends StatefulWidget {
     this.isEditable = false,
     required this.operationName,
     this.onQuantitySubmit,
+    this.onDeleteWastage,
     this.trayIdsWithWastage = const {},
   });
 
@@ -250,7 +252,7 @@ class _ProcessingTrayTableState extends State<ProcessingTrayTable> {
                                             id,
                                             t.primaryTrayModel.trayCode ?? '-',
                                             tubes,
-                                            initialQty,
+                                            t.productionProgress.requiredQty ?? initialQty,
                                           ),
                                         ),
                                 )
@@ -302,6 +304,20 @@ class _ProcessingTrayTableState extends State<ProcessingTrayTable> {
             }
           }
         },
+        onDelete: () async {
+          setState(() {
+            _loadingRows[progressId] = true;
+          });
+          try {
+            await widget.onDeleteWastage?.call(progressId);
+          } finally {
+            if (mounted) {
+              setState(() {
+                _loadingRows[progressId] = false;
+              });
+            }
+          }
+        },
       ),
     );
   }
@@ -313,6 +329,7 @@ class _EditTrayQuantityDialog extends StatefulWidget {
   final double currentQty;
   final double requiredQty;
   final Future<void> Function(double finalQty) onSave;
+  final Future<void> Function()? onDelete;
 
   const _EditTrayQuantityDialog({
     required this.trayCode,
@@ -320,6 +337,7 @@ class _EditTrayQuantityDialog extends StatefulWidget {
     required this.currentQty,
     required this.requiredQty,
     required this.onSave,
+    this.onDelete,
   });
 
   @override
@@ -559,53 +577,91 @@ class _EditTrayQuantityDialogState extends State<_EditTrayQuantityDialog> {
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: _isSaving ? null : () => Navigator.pop(context),
-          child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
-        ),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF1B64A3),
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          ),
-          onPressed: isValid && !_isSaving
-              ? () async {
-                  setState(() {
-                    _isSaving = true;
-                  });
-                  try {
-                    await widget.onSave(parsedQty);
-                    if (mounted) Navigator.pop(context);
-                  } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Error: $e'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  } finally {
-                    if (mounted) {
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            if (widget.currentQty < widget.requiredQty && widget.onDelete != null) ...[
+              TextButton(
+                onPressed: _isSaving
+                    ? null
+                    : () async {
+                        setState(() {
+                          _isSaving = true;
+                        });
+                        try {
+                          await widget.onDelete!();
+                          if (mounted) Navigator.pop(context);
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Error: $e'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        } finally {
+                          if (mounted) {
+                            setState(() {
+                              _isSaving = false;
+                            });
+                          }
+                        }
+                      },
+                child: const Text('Delete Waste', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+              ),
+              const Spacer(),
+            ],
+            TextButton(
+              onPressed: _isSaving ? null : () => Navigator.pop(context),
+              child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1B64A3),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              ),
+              onPressed: isValid && !_isSaving
+                  ? () async {
                       setState(() {
-                        _isSaving = false;
+                        _isSaving = true;
                       });
+                      try {
+                        await widget.onSave(parsedQty);
+                        if (mounted) Navigator.pop(context);
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Error: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      } finally {
+                        if (mounted) {
+                          setState(() {
+                            _isSaving = false;
+                          });
+                        }
+                      }
                     }
-                  }
-                }
-              : null,
-          child: _isSaving
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-              : const Text('Submit'),
+                  : null,
+              child: _isSaving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Submit'),
+            ),
+          ],
         ),
       ],
     );

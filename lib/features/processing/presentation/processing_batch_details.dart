@@ -79,6 +79,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
   DateTime? _issueTime;   // creationTime of the production progress records
   DateTime? _startTime;   // startDate from productionProgress (set on Start)
   Set<int> _trayIdsWithWastage = {};
+  Map<int, ProductionProgressResponseModel> _wastageByOriginalId = {};
 
   // ── Trolley Management ───────────────────────────────────────────────
   String? _trolleyCode;
@@ -184,11 +185,22 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
         if (mounted) {
           final list = res.data as List<ProductionProgressResponseModel>;
           
-          final wastageIds = list
-              .where((t) => (t.productionProgress.waste ?? 0) > 0)
+           final wastageIds = list
+              .where((t) => t.productionProgress.locatorId == 18 || (t.productionProgress.waste ?? 0) > 0)
               .map((t) => t.productionProgress.primaryTrayId)
               .whereType<int>()
               .toSet();
+
+          final Map<int, ProductionProgressResponseModel> wastageByOriginalId = {};
+          for (final t in list) {
+            final subOp = t.productionProgress.subOperation;
+            if (subOp != null) {
+              final origId = int.tryParse(subOp);
+              if (origId != null && t.productionProgress.locatorId == 18) {
+                wastageByOriginalId[origId] = t;
+              }
+            }
+          }
 
           // ── De-duplicate by Tray Code ──────────────────────────────────────
           // If multiple records exist for the same tray in this op/batch,
@@ -197,7 +209,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
           for (final tray in list) {
             if (tray.productionProgress.transactionType != 2) continue; // Local filter
             if (tray.productionProgress.operationId != widget.currentOperationId) continue; // Local filter
-            if ((tray.productionProgress.waste ?? 0) > 0) continue; // Exclude wastage records from representing main tray rows
+            if (tray.productionProgress.locatorId == 18) continue; // Exclude wastage records from representing main tray rows
 
             final code = tray.primaryTrayModel.trayCode ?? 'UNKNOWN';
             if (!uniqueTrays.containsKey(code) || (tray.productionProgress.id ?? 0) > (uniqueTrays[code]!.productionProgress.id ?? 0)) {
@@ -254,6 +266,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
           setState(() {
             _trays = enrichedList;
             _trayIdsWithWastage = wastageIds;
+            _wastageByOriginalId = wastageByOriginalId;
             _isLoadingTrays = false;
             // Derive start-tracking state from first tray
             if (enrichedList.isNotEmpty) {
@@ -707,12 +720,20 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                   if (tIdx == -1) return;
                   final tray = _trays[tIdx];
 
-                  final double requiredQty = tray.productionProgress.primaryQuantity ?? 0.0;
+                  // Use requiredQty if already populated (indicates existing wastage), otherwise fallback to primaryQuantity
+                  final double requiredQty = tray.productionProgress.requiredQty?.toDouble() ?? tray.productionProgress.primaryQuantity ?? 0.0;
                   final double wastageQty = requiredQty - newQty;
 
-                  // 1. Update the existing tray progress quantity to (actual - wastage)
+                  // 1. Update the existing tray progress: new primaryQuantity, requiredQty, and waste
                   final json = tray.productionProgress.toJson();
                   json['primaryQuantity'] = newQty;
+                  if (wastageQty > 0) {
+                    json['requiredQty'] = requiredQty.toInt();
+                    json['waste'] = wastageQty.toInt();
+                  } else {
+                    json['requiredQty'] = null;
+                    json['waste'] = null;
+                  }
                   
                   json.remove('id');
                   json.remove('progressCode');
@@ -726,30 +747,85 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                     throw Exception(res.message ?? 'Update failed.');
                   }
 
-                  // 2. If there is wastage, post a NEW entry in production progress with waste and requiredQty
+                  // Sync the original line's quantity to its corresponding WIPTransaction
+                  try {
+                    final wipRes = await _lotRepo.fetchWipTransactionsByProgressId(progressId);
+                    if (wipRes.success && wipRes.data != null) {
+                      final List rawItems = wipRes.data is Map ? (wipRes.data['items'] ?? []) : wipRes.data;
+                      final items = rawItems.cast<Map<String, dynamic>>();
+                      final match = items.firstWhere(
+                        (e) => (e['wipTransaction']?['progressId'] ?? e['progressId'] ?? e['wipTransaction']?['productionProgressId'] ?? e['productionProgressId'])?.toString() == progressId.toString(),
+                        orElse: () => <String, dynamic>{},
+                      );
+                      if (match.isNotEmpty) {
+                        final wipId = match['wipTransaction']?['id'] as int?;
+                        if (wipId != null) {
+                          final wipPayload = Map<String, dynamic>.from(match['wipTransaction'] ?? match);
+                          wipPayload['primaryQuantity'] = newQty;
+                          wipPayload.remove('id');
+                          wipPayload.remove('concurrencyStamp');
+                          await _lotRepo.updateWipTransaction(wipId, wipPayload);
+                        }
+                      }
+                    }
+                  } catch (e) {
+                    debugPrint('Error syncing original WIP quantity: $e');
+                  }
+
+                  // 2. Manage the wastage record (No WIP transactions are updated/created/deleted for wastage records)
                   if (wastageQty > 0) {
-                    final newJson = tray.productionProgress.toJson();
-                    newJson.remove('id');
-                    newJson.remove('progressCode');
-                    newJson.remove('concurrencyStamp');
-                    newJson.remove('creationTime');
-                    newJson.remove('creatorId');
-                    newJson.remove('lastModificationTime');
-                    newJson.remove('lastModifierId');
+                    final wastageRecord = _wastageByOriginalId[progressId];
+                    if (wastageRecord != null && wastageRecord.productionProgress.id != null) {
+                      // UPDATE existing wastage record
+                      final wJson = wastageRecord.productionProgress.toJson();
+                      wJson['primaryQuantity'] = wastageQty;
+                      wJson['waste'] = 0; // waste is 0 in waste entry
+                      wJson['requiredQty'] = requiredQty.toInt();
+                      wJson['locatorId'] = 18;
 
-                    newJson['primaryQuantity'] = wastageQty;
-                    newJson['waste'] = wastageQty.toInt();
-                    newJson['requiredQty'] = requiredQty.toInt();
-                    newJson['transactionType'] = tray.productionProgress.transactionType ?? 2; // Keep original transaction type (e.g. 2 for processing)
-                    newJson['subOperation'] = progressId.toString(); // Store original line ID in subOperation parameter
-                    newJson['isStarted'] = false;
-                    newJson['startDate'] = null;
-                    newJson['date'] = DateTime.now().toIso8601String();
+                      wJson.remove('id');
+                      wJson.remove('progressCode');
+                      wJson.remove('creationTime');
+                      wJson.remove('creatorId');
+                      wJson.remove('lastModificationTime');
+                      wJson.remove('lastModifierId');
 
-                    final postRes = await _processingRepo.createProductionProgress(newJson);
-                    if (!postRes.success) {
-                      debugPrint('❌ createProductionProgress failed: ${postRes.message} | Code: ${postRes.code}');
-                      throw Exception(postRes.message ?? 'Failed to create wastage record.');
+                      final postRes = await _processingRepo.updateProductionProgress(wastageRecord.productionProgress.id!, wJson);
+                      if (!postRes.success) {
+                        throw Exception(postRes.message ?? 'Failed to update wastage record.');
+                      }
+                    } else {
+                      // CREATE new wastage record
+                      final newJson = tray.productionProgress.toJson();
+                      newJson.remove('id');
+                      newJson.remove('progressCode');
+                      newJson.remove('concurrencyStamp');
+                      newJson.remove('creationTime');
+                      newJson.remove('creatorId');
+                      newJson.remove('lastModificationTime');
+                      newJson.remove('lastModifierId');
+
+                      newJson['primaryQuantity'] = wastageQty;
+                      newJson['waste'] = 0; // waste is 0 in waste entry
+                      newJson['requiredQty'] = requiredQty.toInt();
+                      newJson['locatorId'] = 18;
+                      newJson['transactionType'] = tray.productionProgress.transactionType ?? 2;
+                      newJson['subOperation'] = progressId.toString();
+                      newJson['isStarted'] = false;
+                      newJson['startDate'] = null;
+                      newJson['date'] = DateTime.now().toIso8601String();
+
+                      final postRes = await _processingRepo.createProductionProgress(newJson);
+                      if (!postRes.success) {
+                        throw Exception(postRes.message ?? 'Failed to create wastage record.');
+                      }
+                    }
+                  } else {
+                    // newQty == requiredQty (wastage reduced to 0), delete the wastage record if exists
+                    final wastageRecord = _wastageByOriginalId[progressId];
+                    if (wastageRecord != null && wastageRecord.productionProgress.id != null) {
+                      final wId = wastageRecord.productionProgress.id!;
+                      await _processingRepo.deleteProductionProgress(wId);
                     }
                   }
 
@@ -760,6 +836,76 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                   await _fetchTraysIfNeeded();
                 } catch (e) {
                   AppSnackBar.showError(context, message: 'Failed to update quantity: $e');
+                }
+              },
+              onDeleteWastage: (progressId) async {
+                try {
+                  final tIdx = _trays.indexWhere((t) => t.productionProgress.id == progressId);
+                  if (tIdx == -1) return;
+                  final tray = _trays[tIdx];
+
+                  final double requiredQty = tray.productionProgress.requiredQty?.toDouble() ?? tray.productionProgress.primaryQuantity ?? 0.0;
+
+                  // 1. Delete wastage entry (Bypassing any WIP transaction updates for the wastage entry)
+                  final wastageRecord = _wastageByOriginalId[progressId];
+                  if (wastageRecord != null && wastageRecord.productionProgress.id != null) {
+                    final wId = wastageRecord.productionProgress.id!;
+                    final delRes = await _processingRepo.deleteProductionProgress(wId);
+                    if (!delRes.success) {
+                      throw Exception(delRes.message ?? 'Failed to delete wastage record.');
+                    }
+                  }
+
+                  // 2. Restore primary quantity on original progress entry and clear waste/requiredQty fields
+                  final json = tray.productionProgress.toJson();
+                  json['primaryQuantity'] = requiredQty;
+                  json['requiredQty'] = null;
+                  json['waste'] = null;
+
+                  json.remove('id');
+                  json.remove('progressCode');
+                  json.remove('creationTime');
+                  json.remove('creatorId');
+                  json.remove('lastModificationTime');
+                  json.remove('lastModifierId');
+
+                  final res = await _processingRepo.updateProductionProgress(progressId, json);
+                  if (!res.success) {
+                    throw Exception(res.message ?? 'Failed to restore tray quantity.');
+                  }
+
+                  // Sync restored original quantity to its corresponding WIPTransaction
+                  try {
+                    final wipRes = await _lotRepo.fetchWipTransactionsByProgressId(progressId);
+                    if (wipRes.success && wipRes.data != null) {
+                      final List rawItems = wipRes.data is Map ? (wipRes.data['items'] ?? []) : wipRes.data;
+                      final items = rawItems.cast<Map<String, dynamic>>();
+                      final match = items.firstWhere(
+                        (e) => (e['wipTransaction']?['progressId'] ?? e['progressId'] ?? e['wipTransaction']?['productionProgressId'] ?? e['productionProgressId'])?.toString() == progressId.toString(),
+                        orElse: () => <String, dynamic>{},
+                      );
+                      if (match.isNotEmpty) {
+                        final wipId = match['wipTransaction']?['id'] as int?;
+                        if (wipId != null) {
+                          final wipPayload = Map<String, dynamic>.from(match['wipTransaction'] ?? match);
+                          wipPayload['primaryQuantity'] = requiredQty;
+                          wipPayload.remove('id');
+                          wipPayload.remove('concurrencyStamp');
+                          await _lotRepo.updateWipTransaction(wipId, wipPayload);
+                        }
+                      }
+                    }
+                  } catch (e) {
+                    debugPrint('Error syncing restored original WIP quantity: $e');
+                  }
+
+                  AppSnackBar.showSuccess(context, message: 'Wastage deleted successfully.');
+                  setState(() {
+                    _trays.clear();
+                  });
+                  await _fetchTraysIfNeeded();
+                } catch (e) {
+                  AppSnackBar.showError(context, message: 'Failed to delete wastage: $e');
                 }
               },
               onReworkToggle: (progressId, selected) {

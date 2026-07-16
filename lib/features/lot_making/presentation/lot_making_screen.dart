@@ -273,6 +273,7 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
         for (final lineId in lineIds) {
           final res = await _lotRepo.fetchAllWorkOrderLineDetails(lineId);
           if (res.success && res.data != null) {
+            _colorPlanQuantities.removeWhere((key, _) => key.startsWith("${lineId}_"));
             final items = res.data as List;
             for (final item in items) {
               final detail = (item as Map)['workOrderLineDetail'];
@@ -281,7 +282,8 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                 final planQty = (detail['planQuantity'] as num?)?.toDouble() ?? 0.0;
                 if (colorDesc != null && colorDesc.isNotEmpty) {
                   validColors.add(colorDesc);
-                  _colorPlanQuantities["${lineId}_$colorDesc"] = planQty;
+                  final key = "${lineId}_$colorDesc";
+                  _colorPlanQuantities[key] = (_colorPlanQuantities[key] ?? 0.0) + planQty;
                 }
               }
             }
@@ -633,12 +635,36 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
                               Material(
                                 color: Colors.transparent,
                                 child: InkWell(
-                                  onTap: () {
-                                    setState(() {
-                                      _scannedTrays.removeAt(index);
-                                      _quantityControllers.removeAt(index);
-                                    });
-                                    setSubState(() {});
+                                  onTap: () async {
+                                    final confirm = await showDialog<bool>(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        title: const Text('Confirm Delete'),
+                                        content: const Text('Are you sure you want to delete this tray?'),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(context, false),
+                                            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                                          ),
+                                          ElevatedButton(
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: const Color(0xFFEF4444),
+                                              foregroundColor: Colors.white,
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                            ),
+                                            onPressed: () => Navigator.pop(context, true),
+                                            child: const Text('Delete'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                    if (confirm == true) {
+                                      setState(() {
+                                        _scannedTrays.removeAt(index);
+                                        _quantityControllers.removeAt(index);
+                                      });
+                                      setSubState(() {});
+                                    }
                                   },
                                   borderRadius: BorderRadius.circular(8),
                                   child: Container(
@@ -797,7 +823,15 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
       }
     }
 
-    final planQty = (detail['planQuantity'] as num?)?.toDouble() ?? 0.0;
+    double planQty = 0.0;
+    for (final item in items) {
+      if (item is Map) {
+        final det = item['workOrderLineDetail'];
+        if (det is Map) {
+          planQty += (det['planQuantity'] as num?)?.toDouble() ?? 0.0;
+        }
+      }
+    }
     if (planQty > 0.0) {
       final newQty = double.tryParse(_overrideQuantityController.text) ??
           tray.productionProgress.primaryQuantity ??
@@ -2277,11 +2311,35 @@ class _LotMakingScreenState extends State<LotMakingScreen> {
           Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: () {
-                setState(() {
-                  _scannedTrays.removeAt(index);
-                  _quantityControllers.removeAt(index);
-                });
+              onTap: () async {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Confirm Delete'),
+                    content: const Text('Are you sure you want to delete this tray?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFEF4444),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('Delete'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm == true) {
+                  setState(() {
+                    _scannedTrays.removeAt(index);
+                    _quantityControllers.removeAt(index);
+                  });
+                }
               },
               borderRadius: BorderRadius.circular(8),
               child: Container(
