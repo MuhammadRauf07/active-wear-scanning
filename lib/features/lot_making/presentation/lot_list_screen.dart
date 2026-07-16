@@ -196,9 +196,20 @@ class _LotListScreenState extends State<LotListScreen>
     }
 
     final allTrays = result.data as List<TrayDetailsModel>;
-    final matched = allTrays.where((t) {
+    var matched = allTrays.where((t) {
       return (t.trayDetails?.trayCode ?? '').trim().toLowerCase() == cleanCode;
     }).toList();
+
+    if (matched.isEmpty) {
+      try {
+        final res = await _trayRepo.fetchTrayDetailByCode(code);
+        if (res.success && res.data != null) {
+          matched = [res.data as TrayDetailsModel];
+        }
+      } catch (e) {
+        debugPrint('Error fetching trolley dynamically: $e');
+      }
+    }
 
     if (matched.isEmpty) return 'Trolley not found';
 

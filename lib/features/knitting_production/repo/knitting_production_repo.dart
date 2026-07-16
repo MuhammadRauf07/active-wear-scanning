@@ -99,6 +99,25 @@ class KnittingProductionRepo {
     }
   }
 
+  Future<PlexApiResult> fetchTrayDetailByCode(String trayCode) async {
+    final result = await _api.getList(
+      '/api/app/tray-details',
+      query: {'TrayCode': trayCode},
+    );
+    if (!result.success || result.data == null) return result;
+    try {
+      final List data = result.data is Map ? (result.data['items'] ?? []) : result.data;
+      if (data.isNotEmpty) {
+        final item = Map<String, dynamic>.from(data.first as Map);
+        return PlexApiResult(true, 200, "Success", TrayDetailsModel.fromJson(item));
+      } else {
+        return PlexApiResult(false, 404, "Tray not found", null);
+      }
+    } catch (e) {
+      return PlexApiResult(false, 500, e.toString(), null);
+    }
+  }
+
   /// Fetch a single tray by its ID to get the latest concurrencyStamp
   Future<PlexApiResult> fetchTrayById(int trayId) async {
     final result = await _api.getObject('/api/app/tray-details/$trayId');

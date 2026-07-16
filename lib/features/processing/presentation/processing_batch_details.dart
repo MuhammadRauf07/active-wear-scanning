@@ -78,6 +78,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
   bool _isBatchStarted = false;
   DateTime? _issueTime;   // creationTime of the production progress records
   DateTime? _startTime;   // startDate from productionProgress (set on Start)
+  Set<int> _trayIdsWithWastage = {};
 
   // ── Trolley Management ───────────────────────────────────────────────
   String? _trolleyCode;
@@ -183,6 +184,12 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
         if (mounted) {
           final list = res.data as List<ProductionProgressResponseModel>;
           
+          final wastageIds = list
+              .where((t) => (t.productionProgress.waste ?? 0) > 0)
+              .map((t) => t.productionProgress.primaryTrayId)
+              .whereType<int>()
+              .toSet();
+
           // ── De-duplicate by Tray Code ──────────────────────────────────────
           // If multiple records exist for the same tray in this op/batch,
           // keep only the one with the highest ID (most recent).
@@ -190,6 +197,8 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
           for (final tray in list) {
             if (tray.productionProgress.transactionType != 2) continue; // Local filter
             if (tray.productionProgress.operationId != widget.currentOperationId) continue; // Local filter
+            if ((tray.productionProgress.waste ?? 0) > 0) continue; // Exclude wastage records from representing main tray rows
+
             final code = tray.primaryTrayModel.trayCode ?? 'UNKNOWN';
             if (!uniqueTrays.containsKey(code) || (tray.productionProgress.id ?? 0) > (uniqueTrays[code]!.productionProgress.id ?? 0)) {
               uniqueTrays[code] = tray;
@@ -244,6 +253,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
 
           setState(() {
             _trays = enrichedList;
+            _trayIdsWithWastage = wastageIds;
             _isLoadingTrays = false;
             // Derive start-tracking state from first tray
             if (enrichedList.isNotEmpty) {
@@ -688,7 +698,8 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
               trays: _trays,
               isReworkMode: _isReworkMode,
               selectedReworkTrayIds: _selectedReworkTrayIds,
-              isEditable: widget.operationName.toLowerCase().contains('heat set') || widget.operationName.toLowerCase().contains('qa'),
+              trayIdsWithWastage: _trayIdsWithWastage,
+              isEditable: (widget.operationName.toLowerCase().contains('heat set') || widget.operationName.toLowerCase().contains('qa')) && _isBatchStarted,
               operationName: widget.operationName,
               onQuantitySubmit: (progressId, newQty) async {
                 try {
@@ -730,6 +741,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                     newJson['waste'] = wastageQty.toInt();
                     newJson['requiredQty'] = requiredQty.toInt();
                     newJson['transactionType'] = tray.productionProgress.transactionType ?? 2; // Keep original transaction type (e.g. 2 for processing)
+                    newJson['subOperation'] = progressId.toString(); // Store original line ID in subOperation parameter
                     newJson['isStarted'] = false;
                     newJson['startDate'] = null;
                     newJson['date'] = DateTime.now().toIso8601String();

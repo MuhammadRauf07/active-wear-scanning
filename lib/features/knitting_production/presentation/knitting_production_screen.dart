@@ -243,11 +243,26 @@ class _KnittingProductionScreenState extends State<KnittingProductionScreen> {
     final alreadyScanned = _scannedTrays.any((t) => t.trayCode.trim() == code);
     if (alreadyScanned) return 'Already assigned';
 
-    final available = availableTraysDetail.where((t) {
+    var available = availableTraysDetail.where((t) {
       final trayCodeFromApi = (t.trayDetails?.trayCode ?? '').trim().toLowerCase();
       final scannedCodeClean = code.toLowerCase();
       return trayCodeFromApi == scannedCodeClean;
     }).toList();
+
+    if (available.isEmpty) {
+      try {
+        final res = await _trayScanningRepo.fetchTrayDetailByCode(code);
+        if (res.success && res.data != null) {
+          final fetchedTray = res.data as TrayDetailsModel;
+          available = [fetchedTray];
+          setState(() {
+            availableTraysDetail.add(fetchedTray);
+          });
+        }
+      } catch (e) {
+        debugPrint('Error fetching tray dynamically: $e');
+      }
+    }
 
     if (available.isEmpty) return 'Tray not available';
 

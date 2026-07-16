@@ -16,6 +16,7 @@ class ProcessingTrayTable extends StatefulWidget {
   final bool isEditable;
   final String operationName;
   final Future<void> Function(int progressId, double newQty)? onQuantitySubmit;
+  final Set<int> trayIdsWithWastage;
 
   const ProcessingTrayTable({
     super.key,
@@ -27,6 +28,7 @@ class ProcessingTrayTable extends StatefulWidget {
     this.isEditable = false,
     required this.operationName,
     this.onQuantitySubmit,
+    this.trayIdsWithWastage = const {},
   });
 
   @override
@@ -147,9 +149,7 @@ class _ProcessingTrayTableState extends State<ProcessingTrayTable> {
                 final isSaving = id != null && _loadingRows[id] == true;
 
                 final bool hasWastage = (id != null && initialQty > 0 && tubes < initialQty) ||
-                    widget.trays.any((item) =>
-                        item.productionProgress.primaryTrayId == t.productionProgress.primaryTrayId &&
-                        (item.productionProgress.waste ?? 0) > 0);
+                    widget.trayIdsWithWastage.contains(t.productionProgress.primaryTrayId);
 
                 return Container(
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
