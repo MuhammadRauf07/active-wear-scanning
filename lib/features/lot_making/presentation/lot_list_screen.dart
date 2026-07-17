@@ -93,18 +93,8 @@ class _LotListScreenState extends State<LotListScreen>
 
     final headerResult = await _lotRepo.fetchLotHeaders();
     final batchLinesResult = await _lotRepo.fetchLotLines();
-    final trayDetailsResult = await _trayRepo.fetchAvailableTrayDetails();
-
-    // Build trayDetailId → trayCode lookup map (reused for trolleys + sub-table)
-    final Map<int, String> trayIdToCode = {};
-    if (trayDetailsResult.success && trayDetailsResult.data != null) {
-      for (final t in trayDetailsResult.data as List<TrayDetailsModel>) {
-        final id = t.trayDetails?.id;
-        final code = t.trayDetails?.trayCode;
-        if (id != null && code != null) trayIdToCode[id] = code;
-      }
-    }
-    _primaryTrayIdToCode = trayIdToCode;
+    // Startup pre-fetching of all tray details has been removed to load list instantly.
+    _primaryTrayIdToCode = {};
 
     if (mounted && headerResult.success) {
       final headerData = headerResult.data as List<Map<String, dynamic>>? ?? [];
@@ -124,7 +114,7 @@ class _LotListScreenState extends State<LotListScreen>
         final trayDetailId = lot.batchHeader.trayDetailId;
         if (batchId != null && trayDetailId != null) {
           _trolleyDetailIdByLot[batchId] = trayDetailId;
-          final trayCode = trayIdToCode[trayDetailId];
+          final trayCode = _primaryTrayIdToCode[trayDetailId];
           if (trayCode != null) {
             _trolleyCodeByLot[batchId] = trayCode;
           } else {
@@ -194,25 +184,14 @@ class _LotListScreenState extends State<LotListScreen>
     final cleanCode = code.trim().toLowerCase();
     if (cleanCode.isEmpty) return 'Invalid trolley code';
 
-    final result = await _trayRepo.fetchAvailableTrayDetails();
-    if (!result.success || result.data == null) {
-      return 'Failed to fetch tray details';
-    }
-
-    final allTrays = result.data as List<TrayDetailsModel>;
-    var matched = allTrays.where((t) {
-      return (t.trayDetails?.trayCode ?? '').trim().toLowerCase() == cleanCode;
-    }).toList();
-
-    if (matched.isEmpty) {
-      try {
-        final res = await _trayRepo.fetchTrayDetailByCode(code);
-        if (res.success && res.data != null) {
-          matched = [res.data as TrayDetailsModel];
-        }
-      } catch (e) {
-        debugPrint('Error fetching trolley dynamically: $e');
+    List<TrayDetailsModel> matched = [];
+    try {
+      final res = await _trayRepo.fetchTrayDetailByCode(code);
+      if (res.success && res.data != null) {
+        matched = [res.data as TrayDetailsModel];
       }
+    } catch (e) {
+      debugPrint('Error fetching trolley dynamically: $e');
     }
 
     if (matched.isEmpty) return 'Trolley not found';
@@ -247,6 +226,7 @@ class _LotListScreenState extends State<LotListScreen>
   }
 
   Future<void> _scanTrolleyForLot(int lotHeaderId) async {
+    _keyboardFocusNode.unfocus();
     await ScannerAlwaysOpen.show(
       context,
       title: 'Scan Trolley',
@@ -261,6 +241,7 @@ class _LotListScreenState extends State<LotListScreen>
         return errorMsg;
       },
     );
+    if (mounted) _keyboardFocusNode.requestFocus();
   }
 
   Future<void> _handleExternalBluetoothScan(String code) async {

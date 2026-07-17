@@ -144,7 +144,7 @@ class _ProcessingTrayTableState extends State<ProcessingTrayTable> {
                 final id = t.productionProgress.id;
                 final isSel = widget.selectedReworkTrayIds.contains(id);
                 final tubes = t.productionProgress.primaryQuantity ?? 0;
-                final pgt = t.item.perGarmentTube ?? 0;
+                final pgt = t.item.perGarmentTube;
                 final garmentPcs = pgt > 0 ? tubes * pgt : 0;
 
                 final initialQty = id != null ? (_initialQuantities[id] ?? 0) : 0.0;
@@ -176,7 +176,7 @@ class _ProcessingTrayTableState extends State<ProcessingTrayTable> {
                       Expanded(
                         flex: 4,
                         child: Text(
-                          t.item.description ?? '-',
+                          t.item.description,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 10),

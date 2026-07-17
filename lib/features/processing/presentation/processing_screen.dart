@@ -80,15 +80,8 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
       if (mounted) setState(() => _isLoadingOperations = true);
       AppLoader.show(context, message: 'Loading Operations...');
 
-      // Build tray lookup map once
-      final trayRes = await _trayRepo.fetchAvailableTrayDetails();
-      if (trayRes.success && trayRes.data != null) {
-        for (final t in trayRes.data as List<TrayDetailsModel>) {
-          final id = t.trayDetails?.id;
-          final code = t.trayDetails?.trayCode;
-          if (id != null && code != null) _trayIdToCode[id] = code;
-        }
-      }
+      // Removed blocking global fetchAvailableTrayDetails setup to load screen instantly.
+      // Trolley details will be resolved dynamically on-demand.
 
       final res = await _processingRepo.fetchProcessingOperations();
       if (res.success && res.data != null) {
@@ -213,7 +206,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
       pending.removeWhere((x) =>
       now
           .difference(x.timestamp)
-          .inSeconds > 25);
+          .inSeconds > 120);
       for (final opt in pending) {
         if (!_isBatchDisposed(operationId, opt.batchHeaderId)) {
           uniqueBatches.add(opt.batchHeaderId);
@@ -229,12 +222,14 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
   }
 
   Future<void> _fetchOpDetails(int operationId, {bool force = false}) async {
-    if (!force && _opBatchDetails.containsKey(operationId)) return;
+    final hasCache = _opBatchDetails.containsKey(operationId);
+    if (!force && hasCache) return;
 
     try {
       setState(() {
-        _loadingDetails[operationId] = true;
-        if (force) _opBatchDetails.remove(operationId);
+        if (!hasCache) {
+          _loadingDetails[operationId] = true;
+        }
       });
 
       final res = await _processingRepo.fetchProductionProgress({
@@ -393,6 +388,25 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
               }
             }
 
+            String? trolleyCode;
+            final trayDetailId = bhFull.batchHeader.trayDetailId;
+            if (trayDetailId != null) {
+              if (_trayIdToCode.containsKey(trayDetailId)) {
+                trolleyCode = _trayIdToCode[trayDetailId];
+              } else {
+                final tRes = await _lotRepo.fetchTrayDetailById(trayDetailId);
+                if (tRes.success && tRes.data != null) {
+                  final tJson = tRes.data as Map;
+                  final tdJson = tJson['trayDetails'] ?? tJson['trayDetail'] ?? tJson;
+                  final tCode = tdJson['trayCode']?.toString();
+                  if (tCode != null) {
+                    _trayIdToCode[trayDetailId] = tCode;
+                    trolleyCode = tCode;
+                  }
+                }
+              }
+            }
+
             summaries.add(
               BatchSummaryItem(
                 batchHeaderId: bhId,
@@ -403,9 +417,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                 trayCount: groupRecords.length,
                 totalTubes: totalTubes,
                 totalWeight: totalWeight,
-                trolleyCode: bhFull.batchHeader.trayDetailId != null
-                    ? _trayIdToCode[bhFull.batchHeader.trayDetailId]
-                    : null,
+                trolleyCode: trolleyCode,
                 isStarted: isStarted,
                 reworkFlag: isRework,
                 isReassigned: isReassigned,
@@ -422,7 +434,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
         pending.removeWhere((x) =>
         now
             .difference(x.timestamp)
-            .inSeconds > 25);
+            .inSeconds > 120);
         for (final opt in pending) {
           if (!summaries.any((b) => b.batchHeaderId == opt.batchHeaderId) &&
               !_isBatchDisposed(operationId, opt.batchHeaderId)) {

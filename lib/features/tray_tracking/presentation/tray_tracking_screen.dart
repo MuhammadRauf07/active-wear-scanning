@@ -1,34 +1,34 @@
 import 'package:flutter/services.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/barcode_scanner_dialog.dart';
-import 'package:active_wear_scanning/features/tray_tracking/model/tray_tracking_model.dart';
-import 'package:active_wear_scanning/features/tray_tracking/repo/tray_tracking_repo.dart';
-import 'package:active_wear_scanning/features/common-models/common_models.dart';
 import 'package:active_wear_scanning/core/utils/barcode_buffer_parser.dart';
 import 'package:active_wear_scanning/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:active_wear_scanning/features/tray_tracking/controller/tray_tracking_controller.dart';
+import 'package:active_wear_scanning/features/tray_tracking/model/tray_tracking_state.dart';
 
-class TrayTrackingScreen extends StatefulWidget {
+class TrayTrackingScreen extends StatelessWidget {
   const TrayTrackingScreen({super.key});
 
   @override
-  State<TrayTrackingScreen> createState() => _TrayTrackingScreenState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider<TrayTrackingController>(
+      create: (_) => TrayTrackingController(),
+      child: const _TrayTrackingScreenView(),
+    );
+  }
 }
 
-class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTickerProviderStateMixin {
-  final _trayTrackingRepo = TrayTrackingRepo();
-  final _trayCodeController = TextEditingController();
-  bool _isLoading = false;
-  TrayDetail? _trayDetail;
-  String? _batchCode;
-  String? _color;
-  String? _locatorName;
-  String? _machineName;
-  String? _itemDescription;
-  String? _workOrderDescription;
-  String? _errorMessage;
+class _TrayTrackingScreenView extends StatefulWidget {
+  const _TrayTrackingScreenView();
 
-  // Centralized Bluetooth Scanner Support
+  @override
+  State<_TrayTrackingScreenView> createState() => _TrayTrackingScreenViewState();
+}
+
+class _TrayTrackingScreenViewState extends State<_TrayTrackingScreenView> with SingleTickerProviderStateMixin {
+  final _trayCodeController = TextEditingController();
   final _barcodeParser = BarcodeBufferParser();
   late AnimationController _pulseController;
 
@@ -56,55 +56,18 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
     });
   }
 
-  Future<String?> _onTrayScanned(String code) async {
+  Future<void> _onTrayScanned(String code) async {
     final cleanCode = code.trim();
-    if (cleanCode.isEmpty) return "Please enter tray code";
-    
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-      _trayCodeController.text = cleanCode;
-    });
+    if (cleanCode.isEmpty) return;
 
-    final res = await _trayTrackingRepo.fetchTrayDetailByCode(cleanCode);
-    
-    setState(() => _isLoading = false);
+    final controller = context.read<TrayTrackingController>();
+    _trayCodeController.text = cleanCode;
 
-    if (res.success && res.data != null) {
-      setState(() {
-        final data = res.data is Map ? res.data as Map : {};
-        final trayMap = data['trayDetail'] ?? data;
-        _trayDetail = TrayTrackingDetailModel.fromJson(Map<String, dynamic>.from(trayMap));
-        
-        final batchMap = data['batchHeader'];
-        if (batchMap is Map) {
-          _batchCode = batchMap['batchHeaderCode'];
-          _color = batchMap['colorDescription'];
-        } else {
-          _batchCode = null;
-          _color = null;
-        }
-
-        _locatorName = data['locator']?['description'];
-        _machineName = data['resource']?['resourceCode'] ?? data['resource']?['brand'] ?? data['resource']?['description'];
-        _itemDescription = data['knitItem']?['description'] ?? trayMap['description'];
-        _workOrderDescription = data['workOrderHeader']?['description'];
-      });
+    final error = await controller.onTrayScanned(cleanCode);
+    if (error == null) {
       HapticFeedbackHelper.scanSuccess();
-      return null;
     } else {
-      setState(() {
-        _trayDetail = null;
-        _batchCode = null;
-        _color = null;
-        _locatorName = null;
-        _machineName = null;
-        _itemDescription = null;
-        _workOrderDescription = null;
-        _errorMessage = res.message;
-      });
       HapticFeedbackHelper.scanError();
-      return res.message;
     }
   }
 
@@ -121,8 +84,11 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
 
   @override
   Widget build(BuildContext context) {
+    final controller = context.watch<TrayTrackingController>();
+    final state = controller.state;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9), // Slate 100 Background
+      backgroundColor: const Color(0xFFF1F5F9),
       body: SafeArea(
         child: Column(
           children: [
@@ -134,7 +100,7 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
               horizontalPadding: 16,
             ),
             Expanded(
-              child: _isLoading 
+              child: state.isLoading 
                 ? const Center(child: _TacticalLoader())
                 : Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -144,27 +110,27 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
                         _buildScanningConsole(),
                         const SizedBox(height: 12),
                         Expanded(
-                          child: _trayDetail != null
+                          child: state.trayDetail != null
                               ? Column(
                                   crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
                                     Expanded(
                                       flex: 4,
-                                      child: _buildTrackingDetailsHUD(),
+                                      child: _buildTrackingDetailsHUD(state),
                                     ),
                                     const SizedBox(height: 12),
                                     Expanded(
                                       flex: 6,
-                                      child: _buildTrackingPathPipeline(),
+                                      child: _buildTrackingPathPipeline(state),
                                     ),
                                   ],
                                 )
-                              : _errorMessage != null
+                              : state.errorMessage != null
                                   ? Center(
                                       child: _buildEmptyState(
                                         icon: Icons.error_outline_rounded,
                                         title: 'TRAY NOT FOUND',
-                                        message: _errorMessage!,
+                                        message: state.errorMessage!,
                                         color: const Color(0xFFEF4444),
                                       ),
                                     )
@@ -187,13 +153,7 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFF0D47A1).withValues(alpha: 0.12), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0D47A1).withValues(alpha: 0.03),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: const Color(0xFF0D47A1).withValues(alpha: 0.03), blurRadius: 12, offset: const Offset(0, 4))],
       ),
       child: Row(
         children: [
@@ -241,20 +201,14 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
     );
   }
 
-  Widget _buildTrackingDetailsHUD() {
+  Widget _buildTrackingDetailsHUD(TrayTrackingState state) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFF0D47A1).withValues(alpha: 0.12), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0D47A1).withValues(alpha: 0.03),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: const Color(0xFF0D47A1).withValues(alpha: 0.03), blurRadius: 12, offset: const Offset(0, 4))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -273,13 +227,7 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
                         end: Alignment.bottomRight,
                       ),
                       borderRadius: BorderRadius.circular(30),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF0D47A1).withValues(alpha: 0.3),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
+                      boxShadow: [BoxShadow(color: const Color(0xFF0D47A1).withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 4))],
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -288,12 +236,7 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
                         const SizedBox(width: 8),
                         Text(
                           _trayCodeController.text.toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 2,
-                          ),
+                          style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 2),
                         ),
                       ],
                     ),
@@ -303,16 +246,16 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
             ),
           ),
           const SizedBox(height: 12),
-          _buildProminentLocator(_locatorName ?? 'FLOOR'),
+          _buildProminentLocator(state.locatorName ?? 'FLOOR'),
           const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
-                child: _buildCompactMetric('QUANTITY', '${_trayDetail?.trayQuantity?.toInt() ?? 0} PCS', Icons.inventory_2_rounded, const Color(0xFF3B82F6), false),
+                child: _buildCompactMetric('QUANTITY', '${state.trayDetail?.trayQuantity?.toInt() ?? 0} PCS', Icons.inventory_2_rounded, const Color(0xFF3B82F6), false),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: _buildCompactMetric('TYPE', _trayDetail?.isReAssigned == true ? 'REASSIGN' : 'PRIMARY', Icons.account_tree_rounded, const Color(0xFF8B5CF6), false),
+                child: _buildCompactMetric('TYPE', state.trayDetail?.isReAssigned == true ? 'REASSIGN' : 'PRIMARY', Icons.account_tree_rounded, const Color(0xFF8B5CF6), false),
               ),
             ],
           ),
@@ -340,13 +283,7 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
             decoration: BoxDecoration(
               color: baseColor,
               shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: baseColor.withValues(alpha: 0.3),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+              boxShadow: [BoxShadow(color: baseColor.withValues(alpha: 0.3), blurRadius: 6, offset: const Offset(0, 2))],
             ),
             child: const Icon(Icons.location_on_rounded, size: 18, color: Colors.white),
           ),
@@ -356,23 +293,11 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text(
-                  'CURRENT LOCATOR',
-                  style: TextStyle(
-                    fontSize: 8,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFFD97706),
-                    letterSpacing: 1.0,
-                  ),
-                ),
+                const Text('CURRENT LOCATOR', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Color(0xFFD97706), letterSpacing: 1.0)),
                 const SizedBox(height: 2),
                 Text(
                   locator.toUpperCase(),
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF92400E),
-                  ),
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF92400E)),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -412,12 +337,7 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
               Flexible(
                 child: Text(
                   label,
-                  style: TextStyle(
-                    fontSize: 8,
-                    fontWeight: FontWeight.w900,
-                    color: baseColor.withValues(alpha: 0.8),
-                    letterSpacing: 0.5,
-                  ),
+                  style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: baseColor.withValues(alpha: 0.8), letterSpacing: 0.5),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -426,11 +346,7 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
           const SizedBox(height: 6),
           Text(
             value.toUpperCase(),
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w900,
-              color: baseColor,
-            ),
+            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: baseColor),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
@@ -440,28 +356,22 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
     );
   }
 
-  Widget _buildTrackingPathPipeline() {
+  Widget _buildTrackingPathPipeline(TrayTrackingState state) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFF0D47A1).withValues(alpha: 0.12), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0D47A1).withValues(alpha: 0.03),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: const Color(0xFF0D47A1).withValues(alpha: 0.03), blurRadius: 12, offset: const Offset(0, 4))],
       ),
       child: Column(
         children: [
-          Expanded(child: _buildPipelineStep(Icons.description_rounded, 'ITEM DESCRIPTION', _itemDescription ?? '-', const Color(0xFF3B82F6), true, false)),
-          Expanded(child: _buildPipelineStep(Icons.assignment_rounded, 'WORK ORDER', _workOrderDescription ?? 'NOT ASSIGNED', const Color(0xFF6366F1), false, false)),
-          Expanded(child: _buildPipelineStep(Icons.qr_code_rounded, 'BATCH#', _batchCode ?? "PENDING", const Color(0xFF8B5CF6), false, false)),
-          Expanded(child: _buildPipelineStep(Icons.palette_rounded, 'COLOR', _color ?? "PENDING", const Color(0xFFEC4899), false, false)),
-          Expanded(child: _buildPipelineStep(Icons.precision_manufacturing_rounded, 'MACHINE', _machineName ?? 'IDLE', const Color(0xFF06B6D4), false, true)),
+          Expanded(child: _buildPipelineStep(Icons.description_rounded, 'ITEM DESCRIPTION', state.itemDescription ?? '-', const Color(0xFF3B82F6), true, false)),
+          Expanded(child: _buildPipelineStep(Icons.assignment_rounded, 'WORK ORDER', state.workOrderDescription ?? 'NOT ASSIGNED', const Color(0xFF6366F1), false, false)),
+          Expanded(child: _buildPipelineStep(Icons.qr_code_rounded, 'BATCH#', state.batchCode ?? "PENDING", const Color(0xFF8B5CF6), false, false)),
+          Expanded(child: _buildPipelineStep(Icons.palette_rounded, 'COLOR', state.color ?? "PENDING", const Color(0xFFEC4899), false, false)),
+          Expanded(child: _buildPipelineStep(Icons.precision_manufacturing_rounded, 'MACHINE', state.machineName ?? 'IDLE', const Color(0xFF06B6D4), false, true)),
         ],
       ),
     );
@@ -474,7 +384,6 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Left connector visual
         SizedBox(
           width: 32,
           child: Stack(
@@ -502,13 +411,7 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
                 decoration: BoxDecoration(
                   color: color,
                   shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: color.withValues(alpha: 0.25),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+                  boxShadow: [BoxShadow(color: color.withValues(alpha: 0.25), blurRadius: 6, offset: const Offset(0, 2))],
                 ),
                 child: Icon(icon, size: 14, color: Colors.white),
               ),
@@ -529,23 +432,11 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 8,
-                    fontWeight: FontWeight.w900,
-                    color: color,
-                    letterSpacing: 1.0,
-                  ),
-                ),
+                Text(label, style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: color, letterSpacing: 1.0)),
                 const SizedBox(height: 2),
                 Text(
                   value.toUpperCase(),
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF1E293B),
-                  ),
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF1E293B)),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -564,13 +455,7 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: const Color(0xFF0D47A1).withValues(alpha: 0.12), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0D47A1).withValues(alpha: 0.03),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: const Color(0xFF0D47A1).withValues(alpha: 0.03), blurRadius: 16, offset: const Offset(0, 6))],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -603,23 +488,13 @@ class _TrayTrackingScreenState extends State<TrayTrackingScreen> with SingleTick
           const SizedBox(height: 20),
           Text(
             title,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w900,
-              color: color,
-              letterSpacing: 2,
-            ),
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: color, letterSpacing: 2),
           ),
           const SizedBox(height: 8),
           Text(
             message,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF64748B),
-              height: 1.5,
-            ),
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF64748B), height: 1.5),
           ),
         ],
       ),
@@ -648,4 +523,3 @@ class _TacticalLoader extends StatelessWidget {
     );
   }
 }
-

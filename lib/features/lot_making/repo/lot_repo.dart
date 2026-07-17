@@ -73,34 +73,18 @@ class LotRepo {
   }
 
   Future<PlexApiResult> fetchTrayDetails() async {
-    List<dynamic> allItems = [];
-    int skipCount = 0;
-    int maxResultCount = 1000;
-    bool hasMore = true;
+    final result = await _api.getList('/api/app/tray-details', query: {
+      'MaxResultCount': '1000',
+      'SkipCount': '0',
+    });
 
-    while (hasMore) {
-      final result = await _api.getList('/api/app/tray-details', query: {
-        'MaxResultCount': maxResultCount.toString(),
-        'SkipCount': skipCount.toString(),
-      });
-
-      if (!result.success || result.data == null) {
-        break;
-      }
-
-      final List items = result.data is List ? result.data : [];
-      allItems.addAll(items);
-
-      if (items.length < maxResultCount) {
-        hasMore = false;
-      } else {
-        skipCount += maxResultCount;
-      }
-
-      if (skipCount >= 10000) {
-        break;
-      }
+    if (!result.success || result.data == null) {
+      return result;
     }
+
+    final List allItems = result.data is Map
+        ? (result.data['items'] ?? [])
+        : (result.data is List ? result.data : []);
 
     return PlexApiResult(true, 200, "Success", allItems);
   }

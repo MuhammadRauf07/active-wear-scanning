@@ -10,11 +10,6 @@ class WIPTableHeader extends StatelessWidget {
     required this.isProcessing,
   });
 
-  static final _tableHeaderStyle = TextStyle(
-    fontSize: 11,
-    fontWeight: FontWeight.bold,
-    color: Colors.grey.shade700,
-  );
 
   @override
   Widget build(BuildContext context) {

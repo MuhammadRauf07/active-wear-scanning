@@ -1,53 +1,42 @@
 import 'package:flutter/services.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:active_wear_scanning/core/theme/app_theme.dart';
 import 'package:active_wear_scanning/core/utils/barcode_buffer_parser.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
-import 'package:active_wear_scanning/core/widgets/content_card.dart';
-import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
 import 'package:active_wear_scanning/core/widgets/empty_scan_state.dart';
-import 'package:active_wear_scanning/core/widgets/section_header.dart';
 import 'package:active_wear_scanning/core/widgets/scanner_always_open.dart';
-import 'package:active_wear_scanning/features/gbs/model/gbs_scanned_tray.dart';
-import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
-import 'package:active_wear_scanning/features/induction/model/induction_model.dart';
 import 'package:active_wear_scanning/features/lot_making/model/lot_header_model.dart';
-import 'package:active_wear_scanning/features/induction/repo/induction_repo.dart';
 import 'package:active_wear_scanning/features/induction/presentation/widgets/induction_tray_row.dart';
 import 'package:active_wear_scanning/features/induction/presentation/widgets/induction_tray_table_header.dart';
-import 'package:flutter/material.dart';
-import 'package:plex/plex_di/plex_dependency_injection.dart';
+import 'package:active_wear_scanning/features/induction/controller/induction_controller.dart';
+import 'package:active_wear_scanning/features/induction/model/induction_state.dart';
 
-import '../../common-models/common_models.dart';
-
-class InductionStoreScreen extends StatefulWidget {
+class InductionStoreScreen extends StatelessWidget {
   const InductionStoreScreen({super.key});
 
   @override
-  State<InductionStoreScreen> createState() => _InductionStoreScreenState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider<InductionController>(
+      create: (_) => InductionController(),
+      child: const _InductionStoreScreenView(),
+    );
+  }
 }
 
-class _InductionStoreScreenState extends State<InductionStoreScreen> {
-  final List<GBSScannedTray> _scannedTrays = [];
-  final _inductionRepo = fromPlex<InductionRepo>();
-  List<InductionModel> _availableTrays = [];
-  LotHeaderModel? _selectedBatch;
 
-  static const _inputAndButtonHeight = 42.0;
-  static final _labelStyle = const TextStyle(
-    fontSize: 14,
-    fontWeight: FontWeight.w500,
-    color: Colors.black87,
-  );
-  static final _tableHeaderStyle = TextStyle(
-    fontSize: 12,
-    fontWeight: FontWeight.w600,
-    color: Colors.grey.shade700,
-  );
+class _InductionStoreScreenView extends StatefulWidget {
+  const _InductionStoreScreenView();
 
-  // Centralized Bluetooth Scanner Support
+  @override
+  State<_InductionStoreScreenView> createState() => _InductionStoreScreenViewState();
+}
+
+class _InductionStoreScreenViewState extends State<_InductionStoreScreenView> {
   final _barcodeParser = BarcodeBufferParser();
+  bool _isScannerOpen = false;
 
   @override
   void initState() {
@@ -55,7 +44,7 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
     HardwareKeyboard.instance.addHandler(_onHardwareKey);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        _onInitialDataFetch();
+        _fetchInitialData();
       }
     });
   }
@@ -67,296 +56,135 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
   }
 
   bool _onHardwareKey(KeyEvent event) {
+    if (_isScannerOpen) return false;
     return _barcodeParser.handleKey(event, _processBluetoothScan);
   }
 
-  Future<void> _processBluetoothScan(String scannedCode) async {
-    final code = scannedCode.trim();
-    if (code.isEmpty) return;
+  Future<void> _fetchInitialData() async {
+    final controller = context.read<InductionController>();
+    AppLoader.show(context);
+    await controller.fetchAvailableTrays();
+    if (mounted) {
+      AppLoader.hide(context);
+    }
+  }
 
-    final error = await _validateTrayForInduction(code);
+  Future<void> _processBluetoothScan(String scannedCode) async {
+    final controller = context.read<InductionController>();
+    final error = await controller.validateTrayForInduction(scannedCode);
     if (error != null && mounted) {
       HapticFeedbackHelper.scanError();
       AppSnackBar.showError(context, message: error);
     } else {
-      setState(() {});
+      HapticFeedbackHelper.scanSuccess();
     }
   }
 
-  Future<void> _onInitialDataFetch() async {
+  Future<void> _onScanTray(InductionController controller, InductionState state) async {
     AppLoader.show(context);
-    await _fetchAvailableTrays();
-    AppLoader.hide(context);
-  }
-
-  Future<void> _fetchAvailableTrays() async {
-    final res = await _inductionRepo.getProductionProgress();
-    if (mounted && res.success && res.data != null) {
-      setState(() {
-        final allTrays = res.data as List<InductionModel>;
-        _availableTrays = allTrays.where((t) => t.productionProgress.locatorId != 11).toList();
-      });
-      debugPrint(
-        "🔍 Induction: Found ${_availableTrays.length} matching trays.",
-      );
-    }
-  }
-
-  Future<void> _onScanTray() async {
-    await _fetchAvailableTrays();
+    await controller.fetchAvailableTrays();
     if (!mounted) return;
+    AppLoader.hide(context);
 
+    setState(() => _isScannerOpen = true);
     await ScannerAlwaysOpen.show(
       context,
       title: 'Induction Store Scan',
       onResult: (scannedCode) {
-        return _validateTrayForInduction(scannedCode);
+        return controller.validateTrayForInduction(scannedCode);
       },
       scannedItemsBuilder: (context) {
-        return StatefulBuilder(
-          builder: (context, setSubState) {
-            if (_scannedTrays.isEmpty) {
-              return const Center(
-                child: Text(
-                  'No trays scanned yet',
-                  style: TextStyle(color: Color(0xFF90A4AE), fontSize: 13),
+        return ChangeNotifierProvider<InductionController>.value(
+          value: controller,
+          child: Consumer<InductionController>(
+            builder: (context, latestController, __) {
+              final latestState = latestController.state;
+              if (latestState.scannedTrays.isEmpty) {
+                return const Center(
+                  child: Text(
+                    'No trays scanned yet',
+                    style: TextStyle(color: Color(0xFF90A4AE), fontSize: 13),
+                  ),
+                );
+              }
+              return Container(
+                margin: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFFB0BEC5),
+                    width: 1.5,
+                    strokeAlign: BorderSide.strokeAlignOutside,
+                  ),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  children: [
+                    const InductionTrayTableHeader(),
+                    Expanded(
+                      child: ListView.builder(
+                        padding: EdgeInsets.zero,
+                        itemCount: latestState.scannedTrays.length,
+                        itemBuilder: (context, index) {
+                          return InductionTrayRow(
+                            index: index,
+                            tray: latestState.scannedTrays[index],
+                            displayIndex: index,
+                            onRemove: () {
+                              latestController.removeScannedTray(index);
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               );
-            }
-            return Container(
-              margin: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: const Color(0xFFB0BEC5),
-                  width: 1.5,
-                  strokeAlign: BorderSide.strokeAlignOutside,
-                ),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                children: [
-                  const InductionTrayTableHeader(),
-                  Expanded(
-                    child: ListView.builder(
-                      padding: EdgeInsets.zero,
-                      itemCount: _scannedTrays.length,
-                      itemBuilder: (context, index) {
-                        return InductionTrayRow(
-                          index: index,
-                          tray: _scannedTrays[index],
-                          displayIndex: index,
-                          onRemove: () {
-                            setState(() {
-                              _scannedTrays.removeAt(index);
-                            });
-                            setSubState(() {});
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
+            },
+          ),
         );
       },
     );
-    setState(() {});
+    if (mounted) {
+      setState(() => _isScannerOpen = false);
+    }
   }
 
-  Future<String?> _validateTrayForInduction(String scannedCode) async {
-    final code = scannedCode.trim().toLowerCase();
-    if (code.isEmpty) return 'Invalid tray code';
-
-    final alreadyScanned = _scannedTrays.any(
-      (t) => t.trayCode.trim().toLowerCase() == code,
-    );
-    if (alreadyScanned) return 'Already scanned';
-
-    final matchIndex = _availableTrays.indexWhere((t) {
-      final tCode = (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase();
-      final pCode = (t.productionProgress.progressCode ?? '')
-          .trim()
-          .toLowerCase();
-      return tCode == code || pCode == code;
-    });
-
-    if (matchIndex == -1) {
-      return 'Tray not eligible for Induction';
-    }
-
-    final match = _availableTrays[matchIndex];
-
-    if (_selectedBatch != null && match.batchHeader?.id != _selectedBatch?.id) {
-      final code = match.batchHeader?.batchHeaderCode ?? 'Unknown Batch';
-      return 'Tray belongs to another Batch/Lot ($code)';
-    }
-
-    if ((match.primaryTrayModel.trayType ?? 0) != 1) {
-      return 'Invalid tray type.';
-    }
-
-    int targetItemId = match.productionProgress.processedItemId ?? match.item.id;
-    String colorDesc = match.item.colorDescription ?? '';
-    String sizeDesc = match.item.sizeDescription ?? '';
-
-    if (targetItemId > 0) {
-      AppLoader.show(context, message: "Fetching item details...");
-      final itemRes = await _inductionRepo.fetchItemDef(targetItemId);
-      AppLoader.hide(context);
-      
-      if (itemRes.success && itemRes.data != null) {
-        final itemData = itemRes.data is Map ? itemRes.data as Map<String, dynamic> : {};
-        if (itemData['colorDescription'] != null) colorDesc = itemData['colorDescription'];
-        if (itemData['sizeDescription'] != null) sizeDesc = itemData['sizeDescription'];
-      }
-    }
-
-    setState(() {
-      _scannedTrays.add(
-        GBSScannedTray(
-          trayCode: match.primaryTrayModel.trayCode ?? '-',
-          workOrderCode: match.workOrderHeader.workOrderCode ?? '-', // ✅ Added
-          itemDescription: match.item.description ?? '-',
-          sizeDescription: sizeDesc,
-          colorDescription: colorDesc,
-          primaryQuantity: (match.productionProgress.primaryQuantity ?? 0).toStringAsFixed(0),
-          pieceWeight: match.item.pieceWeight ?? 0.0,
-          trayUpdateId: match.primaryTrayModel.id,
-          trayConcurrencyStamp: match.primaryTrayModel.concurrencyStamp,
-        ),
-      );
-    });
-    HapticFeedbackHelper.scanSuccess();
-    return null;
-  }
-
-  void _onRemoveTray(int index) {
-    setState(() => _scannedTrays.removeAt(index));
-  }
-
-  Future<void> _onSave() async {
-    if (_scannedTrays.isEmpty) return;
-
+  Future<void> _onSave(InductionController controller) async {
     AppLoader.show(context, message: 'Saving Induction Data...');
-    bool isAllSuccess = true;
-
     try {
-      for (var scannedTray in _scannedTrays) {
-        // Correct lookup pattern as per GBS module
-        final currentTrayMatch = _availableTrays
-            .where((t) => t.primaryTrayModel.id == scannedTray.trayUpdateId)
-            .firstOrNull;
-
-        if (currentTrayMatch == null) continue;
-
-        final currentTrayData = currentTrayMatch;
-
-        // 1. Post WIP Transaction as per requirement
-        Map<String, dynamic> wipPayload = {
-          "subOperation": "Induction Store",
-          "transactionDate": DateTime.now().toIso8601String(),
-          "transactionType": 1,
-          "uom": currentTrayData.workOrderLine.uom ?? 0,
-          "operatorDescription": "system",
-          "primaryQuantity":
-              currentTrayData.productionProgress.primaryQuantity ?? 0,
-          "secondaryQuantity":
-              currentTrayData.productionProgress.secondaryQuantity ?? 0,
-          "primaryUOM": currentTrayData.productionProgress.primaryUOM ?? 0,
-          "secondaryUOM": currentTrayData.productionProgress.secondaryUOM ?? 0,
-          "code": currentTrayData.item.code ?? "",
-          "productGrade": currentTrayData.productionProgress.productGrade ?? 0,
-          "productNature":
-              currentTrayData.productionProgress.productNature ?? 0,
-          "progressId": currentTrayData.productionProgress.id,
-          "operationId": currentTrayData.productionProgress.operationId,
-          "workOrderHeaderId": currentTrayData.workOrderHeader.id,
-          "workOrderLineId": currentTrayData.workOrderLine.id,
-          "itemId": currentTrayData.item.id,
-          "shiftId": currentTrayData.shift.id,
-          "primaryTrayId": currentTrayData.primaryTrayModel.id,
-          "machineId": currentTrayData.machineModel.id,
-          "planHeaderId":
-              currentTrayData.productionProgress.planHeaderId ??
-              currentTrayData.planHeader?.id,
-          "locatorId": 11,
-          "batchHeaderId": currentTrayData
-              .productionProgress
-              .batchHeaderId, // Sourced from progress
-          "batchLineId": currentTrayData
-              .productionProgress
-              .batchLinesId, // Sourced from progress
-          "processitemd":
-              currentTrayData.productionProgress.processedItemId ??
-              currentTrayData.item.id, // Renamed to processitemd
-        };
-
-        await _inductionRepo.postWipTransactions(wipPayload);
-
-        // 2. Update Production Progress
-        Map<String, dynamic> updatePayload = currentTrayData.productionProgress
-            .toJson();
-        updatePayload['pbsFlag'] = true; // Mark as inducted
-        updatePayload['pBSFlag'] = true; // Added to ensure ABP picks it up if case-sensitive
-        updatePayload['locatorId'] = 11; // Sync locator
-        updatePayload['date'] = DateTime.now().toIso8601String();
-
-        final res = await _inductionRepo.updateProductionProgress(
-          currentTrayData.productionProgress.id!,
-          updatePayload,
-        );
-
-        if (!res.success)
-          throw Exception('Failed to update tray ${scannedTray.trayCode}');
-
-        // 3. Update Tray Details API
-        final trayRes = await _inductionRepo.fetchTrayDetailById(currentTrayData.primaryTrayModel.id!);
-        if (trayRes.success) {
-          final tData = trayRes.data.containsKey('trayDetail') ? trayRes.data['trayDetail'] : trayRes.data;
-          Map<String, dynamic> trayUpd = Map<String, dynamic>.from(tData);
-          trayUpd["locatorId"] = 11; // Update locator for Induction Store
-          // Remove audit fields if they cause PUT issues
-          trayUpd.removeWhere((key, value) => ["creatorId", "creationTime", "lastModifierId", "lastModificationTime"].contains(key));
-          
-          await _inductionRepo.updateTrayDetails(currentTrayData.primaryTrayModel.id!, trayUpd);
-        }
-      }
-    } catch (e) {
-      isAllSuccess = false;
-      debugPrint("❌ Induction Save Error: $e");
-    } finally {
+      await controller.saveInductionChanges();
+      if (!mounted) return;
       AppLoader.hide(context);
-      if (mounted) {
-        if (isAllSuccess) {
-          HapticFeedbackHelper.scanSuccess();
-          AppSnackBar.showSuccess(context, message: 'Induction saved successfully');
-          Future.delayed(const Duration(milliseconds: 400), () {
-            if (mounted) Navigator.of(context).pop(true);
-          });
-        } else {
-          HapticFeedbackHelper.scanError();
-          AppSnackBar.showError(context, message: 'Failed to save some trays');
-        }
-      }
+      HapticFeedbackHelper.scanSuccess();
+      AppSnackBar.showSuccess(context, message: 'Induction saved successfully');
+      Future.delayed(const Duration(milliseconds: 400), () {
+        if (mounted) Navigator.of(context).pop(true);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      AppLoader.hide(context);
+      HapticFeedbackHelper.scanError();
+      AppSnackBar.showError(context, message: e.toString());
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final controller = context.watch<InductionController>();
+    final state = controller.state;
+
     return PopScope(
       canPop: !AppLoader.isVisible,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF1F5F9), // Slate background
+        backgroundColor: const Color(0xFFF1F5F9),
         resizeToAvoidBottomInset: false,
         body: SafeArea(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildPremiumHeader(),
+              _buildPremiumHeader(controller, state),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -373,7 +201,7 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
                         ),
                       ],
                     ),
-                    child: _buildScannedQueue(),
+                    child: _buildScannedQueue(controller, state),
                   ),
                 ),
               ),
@@ -384,7 +212,7 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
     );
   }
 
-  Widget _buildPremiumHeader() {
+  Widget _buildPremiumHeader(InductionController controller, InductionState state) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       child: Container(
@@ -421,15 +249,15 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
               ),
             ),
             ElevatedButton.icon(
-              onPressed: _scannedTrays.isEmpty
+              onPressed: state.scannedTrays.isEmpty
                   ? null
                   : () {
                       HapticFeedbackHelper.buttonClick();
-                      _onSave();
+                      _onSave(controller);
                     },
               icon: const Icon(Icons.save_rounded, size: 16),
               label: const Text('SAVE CHANGES'),
-              style: AppTheme.saveButtonStyle(isEnabled: _scannedTrays.isNotEmpty),
+              style: AppTheme.saveButtonStyle(isEnabled: state.scannedTrays.isNotEmpty),
             ),
           ],
         ),
@@ -437,9 +265,9 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
     );
   }
 
-  Widget _buildConfigurationPanel() {
+  Widget _buildConfigurationPanel(InductionController controller, InductionState state) {
     final Map<int, LotHeaderModel> uniqueBatches = {};
-    for (final tray in _availableTrays) {
+    for (final tray in state.availableTrays) {
       if (tray.batchHeader != null && tray.batchHeader!.id != null) {
         uniqueBatches[tray.batchHeader!.id!] = tray.batchHeader!;
       }
@@ -450,9 +278,7 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: const BoxDecoration(
         color: Color(0xFFF8FAFC),
-        border: Border(
-          bottom: BorderSide(color: Color(0xFFCFD8DC), width: 1),
-        ),
+        border: Border(bottom: BorderSide(color: Color(0xFFCFD8DC), width: 1)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -465,23 +291,16 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
               children: [
                 const Text(
                   'BATCH/LOT NUMBER',
-                  style: TextStyle(
-                    fontSize: 8,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF78909C),
-                    letterSpacing: 0.5,
-                  ),
+                  style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Color(0xFF78909C), letterSpacing: 0.5),
                 ),
                 const SizedBox(height: 6),
                 _InductionOverlayDropdown<LotHeaderModel>(
                   hint: "Select batch/lot number...",
                   items: availableBatches,
-                  selectedValue: _selectedBatch,
+                  selectedValue: state.selectedBatch,
                   itemLabel: (batch) => batch.batchHeaderCode ?? '-',
                   onChanged: (val) {
-                    setState(() {
-                      _selectedBatch = val;
-                    });
+                    controller.selectBatch(val);
                   },
                 ),
               ],
@@ -493,9 +312,9 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
             child: SizedBox(
               height: 40,
               child: ElevatedButton.icon(
-                onPressed: _selectedBatch == null
+                onPressed: state.selectedBatch == null
                     ? null
-                    : _showAvailableTraysDialog,
+                    : () => _showAvailableTraysDialog(controller, state),
                 icon: const Icon(Icons.layers_outlined, size: 16),
                 label: const Text(
                   'SHOW TRAYS',
@@ -506,9 +325,7 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
                   foregroundColor: Colors.white,
                   disabledBackgroundColor: Colors.grey.shade300,
                   disabledForegroundColor: Colors.grey.shade500,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   elevation: 0,
                 ),
               ),
@@ -519,14 +336,14 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
     );
   }
 
-  void _showAvailableTraysDialog() {
+  void _showAvailableTraysDialog(InductionController controller, InductionState state) {
     showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            final availableTrays = _availableTrays
-                .where((t) => t.batchHeader?.id == _selectedBatch?.id)
+            final availableTrays = state.availableTrays
+                .where((t) => t.batchHeader?.id == state.selectedBatch?.id)
                 .toList();
 
             return Dialog(
@@ -543,11 +360,7 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
                       children: [
                         Text(
                           'AVAILABLE TRAYS (${availableTrays.length})',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFFE67E22),
-                          ),
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFFE67E22)),
                         ),
                         IconButton(
                           icon: const Icon(Icons.close_rounded),
@@ -562,11 +375,7 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
                           ? const Center(
                               child: Text(
                                 'No available trays for this batch/lot',
-                                style: TextStyle(
-                                  color: Colors.grey,
-                                  fontSize: 13,
-                                  fontStyle: FontStyle.italic,
-                                ),
+                                style: TextStyle(color: Colors.grey, fontSize: 13, fontStyle: FontStyle.italic),
                               ),
                             )
                           : ListView.builder(
@@ -576,78 +385,31 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
                                 final qty = tray.productionProgress.primaryQuantity ?? 0.0;
                                 final weight = qty * (tray.item.pieceWeight ?? 0);
 
-                                const cellStyle = TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF1E293B),
-                                );
-
-                                const blueCellStyle = TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF0D47A1),
-                                );
+                                const cellStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1E293B));
+                                const blueCellStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF0D47A1));
 
                                 return Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                   decoration: BoxDecoration(
                                     color: index.isEven ? Colors.white : const Color(0xFFF8FAFC),
-                                    border: Border(
-                                      bottom: BorderSide(
-                                        color: Colors.grey.withValues(alpha: 0.1),
-                                        width: 1,
-                                      ),
-                                    ),
+                                    border: Border(bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.1), width: 1)),
                                   ),
                                   child: Row(
                                     children: [
-                                      Expanded(
-                                        flex: 2,
-                                        child: Text(
-                                          tray.primaryTrayModel.trayCode ?? 'N/A',
-                                          style: blueCellStyle,
-                                        ),
-                                      ),
-                                      Expanded(
-                                        flex: 2,
-                                        child: Text(
-                                          tray.workOrderHeader.workOrderCode ?? 'N/A',
-                                          style: cellStyle,
-                                        ),
-                                      ),
+                                      Expanded(flex: 2, child: Text(tray.primaryTrayModel.trayCode ?? 'N/A', style: blueCellStyle)),
+                                      Expanded(flex: 2, child: Text(tray.workOrderHeader.workOrderCode, style: cellStyle)),
                                       Expanded(
                                         flex: 4,
                                         child: Text(
-                                          tray.item.description ?? 'N/A',
+                                          tray.item.description,
                                           style: cellStyle,
                                           maxLines: 2,
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
-                                      Expanded(
-                                        flex: 2,
-                                        child: Text(
-                                          tray.item.sizeDescription ?? 'N/A',
-                                          textAlign: TextAlign.center,
-                                          style: cellStyle,
-                                        ),
-                                      ),
-                                      Expanded(
-                                        flex: 2,
-                                        child: Text(
-                                          qty.toStringAsFixed(0),
-                                          textAlign: TextAlign.center,
-                                          style: cellStyle,
-                                        ),
-                                      ),
-                                      Expanded(
-                                        flex: 2,
-                                        child: Text(
-                                          '${weight.toStringAsFixed(1)} g',
-                                          textAlign: TextAlign.center,
-                                          style: cellStyle,
-                                        ),
-                                      ),
+                                      Expanded(flex: 2, child: Text(tray.item.sizeDescription ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
+                                      Expanded(flex: 2, child: Text(qty.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
+                                      Expanded(flex: 2, child: Text('${weight.toStringAsFixed(1)} g', textAlign: TextAlign.center, style: cellStyle)),
                                     ],
                                   ),
                                 );
@@ -664,13 +426,12 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
     );
   }
 
-  Widget _buildScannedQueue() {
+  Widget _buildScannedQueue(InductionController controller, InductionState state) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildConfigurationPanel(),
-        if (_selectedBatch != null) ...[
-          // ── Toolbar ──────────────────────────────────────────────────
+        _buildConfigurationPanel(controller, state),
+        if (state.selectedBatch != null) ...[
           Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
@@ -684,7 +445,7 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF263238), letterSpacing: 0.5),
                     ),
                     Text(
-                      '${_scannedTrays.length} Trays Ready for Store',
+                      '${state.scannedTrays.length} Trays Ready for Store',
                       style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF78909C)),
                     ),
                   ],
@@ -692,7 +453,7 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
                 SizedBox(
                   height: 40,
                   child: ElevatedButton.icon(
-                    onPressed: _onScanTray,
+                    onPressed: () => _onScanTray(controller, state),
                     icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
                     label: const Text('SCAN TRAY', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 10)),
                     style: ElevatedButton.styleFrom(
@@ -707,22 +468,20 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
               ],
             ),
           ),
-          
-          // ── Fixed Header ─────────────────────────────────────────────
           const InductionTrayTableHeader(),
           Expanded(
-            child: _scannedTrays.isEmpty
+            child: state.scannedTrays.isEmpty
                 ? const EmptyScanState(hasBorder: false)
                 : ListView.builder(
                     padding: EdgeInsets.zero,
-                    itemCount: _scannedTrays.length,
+                    itemCount: state.scannedTrays.length,
                     itemBuilder: (context, index) {
-                      final reversedIndex = _scannedTrays.length - 1 - index;
+                      final reversedIndex = state.scannedTrays.length - 1 - index;
                       return InductionTrayRow(
                         index: reversedIndex,
-                        tray: _scannedTrays[reversedIndex],
+                        tray: state.scannedTrays[reversedIndex],
                         displayIndex: index,
-                        onRemove: () => _onRemoveTray(reversedIndex),
+                        onRemove: () => controller.removeScannedTray(reversedIndex),
                       );
                     },
                   ),
@@ -739,8 +498,6 @@ class _InductionStoreScreenState extends State<InductionStoreScreen> {
       ],
     );
   }
-
-  // Removed _buildTrayTableHeader and _buildTrayRow as they were extracted.
 }
 
 class _InductionOverlayDropdown<T> extends StatefulWidget {
@@ -824,11 +581,7 @@ class _InductionOverlayDropdownState<T> extends State<_InductionOverlayDropdown<
       builder: (context) => Stack(
         children: [
           Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: _closeDropdown,
-              child: Container(),
-            ),
+            child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: _closeDropdown, child: Container()),
           ),
           Positioned(
             width: size.width,
@@ -836,11 +589,7 @@ class _InductionOverlayDropdownState<T> extends State<_InductionOverlayDropdown<
               link: _layerLink,
               showWhenUnlinked: false,
               offset: Offset(0, size.height + 4),
-              child: Material(
-                elevation: 0,
-                color: Colors.transparent,
-                child: _buildDropdownMenu(),
-              ),
+              child: Material(elevation: 0, color: Colors.transparent, child: _buildDropdownMenu()),
             ),
           ),
         ],
@@ -860,10 +609,7 @@ class _InductionOverlayDropdownState<T> extends State<_InductionOverlayDropdown<
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: _isOpen ? const Color(0xFF1B64A3) : const Color(0xFFCFD8DC),
-              width: 1.2,
-            ),
+            border: Border.all(color: _isOpen ? const Color(0xFF1B64A3) : const Color(0xFFCFD8DC), width: 1.2),
           ),
           child: Row(
             children: [
@@ -895,9 +641,7 @@ class _InductionOverlayDropdownState<T> extends State<_InductionOverlayDropdown<
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 15, offset: const Offset(0, 8)),
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 15, offset: const Offset(0, 8))],
         border: Border.all(color: const Color(0xFFCFD8DC), width: 1),
       ),
       clipBehavior: Clip.antiAlias,
@@ -921,18 +665,9 @@ class _InductionOverlayDropdownState<T> extends State<_InductionOverlayDropdown<
                 prefixIcon: const Icon(Icons.search, size: 18, color: Colors.grey),
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Color(0xFFCFD8DC)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Color(0xFFCFD8DC)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Color(0xFF1B64A3)),
-                ),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFCFD8DC))),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFCFD8DC))),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF1B64A3))),
               ),
             ),
           ),
@@ -941,10 +676,7 @@ class _InductionOverlayDropdownState<T> extends State<_InductionOverlayDropdown<
             child: filteredItems.isEmpty
                 ? const Padding(
                     padding: EdgeInsets.all(16.0),
-                    child: Text(
-                      'No results found',
-                      style: TextStyle(color: Colors.grey, fontSize: 12),
-                    ),
+                    child: Text('No results found', style: TextStyle(color: Colors.grey, fontSize: 12)),
                   )
                 : ListView.separated(
                     shrinkWrap: true,
@@ -968,12 +700,7 @@ class _InductionOverlayDropdownState<T> extends State<_InductionOverlayDropdown<
                               Expanded(
                                 child: Text(
                                   widget.itemLabel(item),
-                                  style: TextStyle(
-                                      color: isSelected
-                                          ? const Color(0xFF1B64A3)
-                                          : const Color(0xFF263238),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700),
+                                  style: TextStyle(color: isSelected ? const Color(0xFF1B64A3) : const Color(0xFF263238), fontSize: 12, fontWeight: FontWeight.w700),
                                 ),
                               ),
                               if (isSelected) const Icon(Icons.check_rounded, color: Color(0xFF1B64A3), size: 16),

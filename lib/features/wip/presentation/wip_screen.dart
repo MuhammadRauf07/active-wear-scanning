@@ -1,32 +1,33 @@
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
-import 'package:active_wear_scanning/features/lot_making/repo/lot_repo.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
-import 'package:active_wear_scanning/features/wip/model/wip_model.dart';
 import 'package:active_wear_scanning/features/wip/model/wip_group.dart';
 import 'package:active_wear_scanning/features/wip/presentation/widgets/locator_expansion_item.dart';
-import 'package:active_wear_scanning/features/wip/repo/wip_repo.dart';
-import 'package:active_wear_scanning/features/common-models/common_models.dart';
-import 'package:active_wear_scanning/features/lot_making/model/lot_header_model.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:active_wear_scanning/features/wip/controller/wip_controller.dart';
 
-class WIPScreen extends StatefulWidget {
+class WIPScreen extends StatelessWidget {
   const WIPScreen({super.key});
 
   @override
-  State<WIPScreen> createState() => _WIPScreenState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider<WipController>(
+      create: (_) => WipController(),
+      child: const _WIPScreenView(),
+    );
+  }
 }
 
-class _WIPScreenState extends State<WIPScreen> {
-  final _wipRepo = WipRepo();
-  final _lotRepo = LotRepo();
-  List<LocatorResponse> _locators = [];
-  Map<int, List<ProductionProgressResponseModel>> _locatorTrays = {};
-  Map<int, bool> _loadingDetails = {};
+class _WIPScreenView extends StatefulWidget {
+  const _WIPScreenView();
 
+  @override
+  State<_WIPScreenView> createState() => _WIPScreenViewState();
+}
 
-
+class _WIPScreenViewState extends State<_WIPScreenView> {
   @override
   void initState() {
     super.initState();
@@ -36,157 +37,16 @@ class _WIPScreenState extends State<WIPScreen> {
   }
 
   Future<void> _fetchInitialData() async {
+    final controller = context.read<WipController>();
     AppLoader.show(context, message: 'Loading Locators...');
-    final result = await _wipRepo.fetchLocators();
-    AppLoader.hide(context);
-
-    if (result.success && result.data != null) {
-      if (mounted) {
-        final allLocs = result.data as List<LocatorResponse>;
-        setState(() {
-          // Condition: shows only those locators in dropdown whose logicalWH is FLOOR
-          // and filters out locators belonging to 'KNITTING' department or having 'KNITTING' in description/code
-          _locators = allLocs.where((l) {
-            final wh = l.locator.logicalWH?.toUpperCase() ?? '';
-            final deptCode = l.department.code.toUpperCase();
-            final desc = (l.locator.description ?? '').toUpperCase();
-            final code = (l.locator.locatorCode ?? '').toUpperCase();
-
-            final isFloor = wh.contains('FLOOR');
-            final isKnitting = deptCode.contains('KNITTING') ||
-                               desc.contains('KNITTING') ||
-                               code.contains('KNITTING');
-            return isFloor && !isKnitting;
-          }).toList().reversed.toList();
-        });
-      }
-    } else {
-      _showError(result.message);
-    }
-  }
-
-  Future<void> _fetchWipData(int locatorId) async {
-    // If we have data, skip reload for now
-    if (_locatorTrays.containsKey(locatorId) && _locatorTrays[locatorId]!.isNotEmpty) return;
-
-    setState(() => _loadingDetails[locatorId] = true);
-    final result = await _wipRepo.fetchWipDetails(locatorId);
-
+    await controller.fetchInitialData();
     if (mounted) {
-      if (result.success && result.data != null) {
-        final rawList = result.data as List<ProductionProgressResponseModel>;
-
-        // Enrich each tray with correct item details and user-selected machine (for batches)
-        final enrichedList = <ProductionProgressResponseModel>[];
-        for (final tray in rawList) {
-          // 1. Enrich Item Details
-          final mainItemId = tray.item.id;
-          double perGarmentTube = tray.item.perGarmentTube ?? 0;
-          String colorDesc = tray.item.colorDescription ?? '';
-          String sizeDesc = tray.item.sizeDescription ?? '';
-
-          if (mainItemId > 0) {
-            final itemRes = await _lotRepo.fetchItemDef(mainItemId);
-            if (itemRes.success && itemRes.data != null) {
-              final d = itemRes.data is Map ? itemRes.data as Map<String, dynamic> : {};
-              if (d['perGarmentTube'] != null) perGarmentTube = (d['perGarmentTube'] as num).toDouble();
-              if (d['colorDescription'] != null) colorDesc = d['colorDescription'];
-              if (d['sizeDescription'] != null) sizeDesc = d['sizeDescription'];
-            }
-          }
-
-          final updatedItem = tray.item.copyWith(
-            perGarmentTube: perGarmentTube,
-            colorDescription: colorDesc,
-            sizeDescription: sizeDesc,
-          );
-
-          // 2. Enrich Machine Details (Crucial for Processing & Knitting)
-          MachineModel? finalMachine = tray.machineModel;
-          final bhId = tray.productionProgress.batchHeaderId;
-          final trayResourceId = tray.primaryTrayModel.resourceId;
-
-          // Case A: Tray is in a Batch (Processing/Dyeing)
-          if (bhId != null) {
-            final bhRes = await _lotRepo.fetchLotHeaderById(bhId);
-            if (bhRes.success && bhRes.data != null) {
-              final bhFull = LotHeaderResponseModel.fromJson(bhRes.data);
-              if (bhFull.machine != null) {
-                finalMachine = bhFull.machine;
-              } else if (bhFull.batchHeader.machineId != null) {
-                final mRes = await _lotRepo.fetchMachineById(bhFull.batchHeader.machineId!);
-                if (mRes.success && mRes.data != null) {
-                  final mData = mRes.data as Map<String, dynamic>;
-                  finalMachine = MachineModel.fromJson(mData['resource'] ?? mData);
-                }
-              }
-            }
-          } 
-          // Case B: No Batch (Knitting) - Prefer resourceId from PrimaryTrayModel
-          // This represents the 'Knitting basic machine' assigned during initial scanning
-          else if (trayResourceId != null) {
-            final mRes = await _lotRepo.fetchMachineById(trayResourceId);
-            if (mRes.success && mRes.data != null) {
-              final mData = mRes.data as Map<String, dynamic>;
-              finalMachine = MachineModel.fromJson(mData['resource'] ?? mData);
-            }
-          }
-
-          enrichedList.add(tray.copyWith(
-            item: updatedItem,
-            machineModel: finalMachine ?? tray.machineModel,
-          ));
-        }
-
-        setState(() {
-          _loadingDetails[locatorId] = false;
-          _locatorTrays[locatorId] = enrichedList;
-        });
-      } else {
-        setState(() => _loadingDetails[locatorId] = false);
-        _showError(result.message);
+      AppLoader.hide(context);
+      final state = controller.state;
+      if (state.errorMessage != null) {
+        _showError(state.errorMessage!);
       }
     }
-  }
-
-  List<WIPGroup> _groupTrays(List<ProductionProgressResponseModel> trays, bool isKnitting, bool isProcessing) {
-    final Map<String, WIPGroup> groups = {};
-
-    for (final t in trays) {
-      String key;
-      if (isKnitting) {
-        // Group by WorkOrder + Machine + Item
-        final wo = t.workOrderHeader.workOrderCode;
-        final machine = t.machineModel.brand ?? t.machineModel.resourceCode ?? '-';
-        final item = t.item.description;
-        key = "${wo}_${machine}_$item";
-        
-        if (!groups.containsKey(key)) {
-          groups[key] = WIPGroup(title1: wo, title2: machine, subtitle: item, trays: []);
-        }
-      } else if (isProcessing) {
-        // Group by Lot No + Machine + Color
-        final lot = t.batchHeader?.batchHeaderCode ?? t.productionProgress.batchHeaderId?.toString() ?? '-';
-        final machine = t.machineModel.brand ?? t.machineModel.resourceCode ?? '-';
-        final color = t.batchHeader?.colorDescription ?? t.item.colorDescription ?? '-';
-        key = "${lot}_${machine}_$color";
-        
-        if (!groups.containsKey(key)) {
-          groups[key] = WIPGroup(title1: lot, title2: machine, title3: color, trays: []);
-        }
-      } else {
-        // Default Group by Lot No + Color
-        final lot = t.batchHeader?.batchHeaderCode ?? t.productionProgress.batchHeaderId?.toString() ?? '-';
-        final color = t.batchHeader?.colorDescription ?? t.item.colorDescription ?? '-';
-        key = "${lot}_$color";
-        
-        if (!groups.containsKey(key)) {
-          groups[key] = WIPGroup(title1: lot, title2: color, trays: []);
-        }
-      }
-      groups[key]!.trays.add(t);
-    }
-    return groups.values.toList();
   }
 
   void _showError(String msg) {
@@ -195,136 +55,25 @@ class _WIPScreenState extends State<WIPScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return PopScope(
-      canPop: !AppLoader.isVisible,
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF1F5F9), // Slate background
-        body: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildPremiumHeader(),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  child: _locators.isEmpty
-                      ? _buildEmptyLocatorsState()
-                      : ListView.builder(
-                          padding: const EdgeInsets.only(bottom: 24),
-                          itemCount: _locators.length,
-                          itemBuilder: (context, index) {
-                            final loc = _locators[index];
-                            final locatorId = loc.locator.id;
-                            final trays = _locatorTrays[locatorId] ?? [];
-                            final isLoading = _loadingDetails[locatorId] ?? false;
-                            final deptCode = loc.department.code.toUpperCase();
-                            final isKnitting = deptCode == 'KNITTING';
-                            final isProcessing = deptCode == 'PROCESSING';
-                            final groupedData = _groupTrays(trays, isKnitting, isProcessing);
-  
-                            return LocatorExpansionItem(
-                              locator: loc,
-                              groupedData: groupedData,
-                              isLoading: isLoading,
-                              onExpansionChanged: (expanded) {
-                                if (expanded) _fetchWipData(locatorId);
-                              },
-                              onViewDetails: (group) => _showTrayDetailsDialog(group),
-                            );
-                          },
-                        ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  Future<void> _onExpandLocator(WipController controller, int locatorId, bool expanded) async {
+    if (expanded) {
+      await controller.fetchWipData(locatorId);
+      if (mounted && controller.state.errorMessage != null) {
+        _showError(controller.state.errorMessage!);
+      }
+    }
   }
 
-  Widget _buildPremiumHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFB0BEC5), width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            const CustomBackButton(),
-            const Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Work In Progress',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF263238)),
-                  ),
-                  Text(
-                    'PHYSICAL INVENTORY MONITORING',
-                    style: TextStyle(fontSize: 9, color: Color(0xFF546E7A), fontWeight: FontWeight.w900, letterSpacing: 0.8),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(8)),
-              child: const Icon(Icons.monitor_heart_rounded, color: Color(0xFF0D47A1), size: 20),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-
-  // Removed _buildLocatorExpansionItem as it was extracted to LocatorExpansionItem.
-
-  Widget _buildEmptyLocatorsState() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.location_off_outlined, size: 64, color: Colors.blue.shade50),
-          const SizedBox(height: 16),
-          const Text('No stores or locators found with "FLOOR" logical warehouse.', style: TextStyle(color: Colors.black54)),
-        ],
-      ),
-    );
-  }
-
-
-  // Removed _buildTableHeader and _buildGroupRow as they were extracted to widgets.
-
-  void _showTrayDetailsDialog(WIPGroup group) async {
-    bool showTrays = false;
+  void _showTrayDetailsDialog(WipController controller, WIPGroup group) async {
     double? fetchedCapacity;
     
     if (group.trays.isNotEmpty) {
       final machineId = group.trays.first.productionProgress.machineId;
       if (machineId != null) {
         AppLoader.show(context, message: 'Loading Capacity...');
-        final res = await _lotRepo.fetchMachineById(machineId);
+        fetchedCapacity = await controller.fetchMachineCapacity(machineId);
+        if (!mounted) return;
         AppLoader.hide(context);
-        if (res.success && res.data != null) {
-          final mData = res.data as Map<String, dynamic>;
-          final mJson = mData['resource'] ?? mData;
-          fetchedCapacity = double.tryParse(mJson['capacity']?.toString() ?? '');
-        }
       }
     }
 
@@ -356,7 +105,7 @@ class _WIPScreenState extends State<WIPScreen> {
                   final qty = t.productionProgress.primaryQuantity ?? 0;
                   final pw = t.item.pieceWeight ?? 0;
                   totalWeight += qty * pw;
-                  final woCode = t.workOrderHeader.workOrderCode ?? 'Unknown WO';
+                  final woCode = t.workOrderHeader.workOrderCode;
                   byWO.putIfAbsent(woCode, () => []).add(t);
                 }
 
@@ -379,7 +128,6 @@ class _WIPScreenState extends State<WIPScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // ── 1. Instrumentation Header ───────────────────────
                         Container(
                           padding: const EdgeInsets.fromLTRB(20, 16, 8, 16),
                           color: const Color(0xFF1E293B),
@@ -411,8 +159,6 @@ class _WIPScreenState extends State<WIPScreen> {
                             ],
                           ),
                         ),
-
-                        // ── 2. HUD Grid Summary ─────────────────────────────
                         Padding(
                           padding: const EdgeInsets.all(16),
                           child: GridView.count(
@@ -434,8 +180,6 @@ class _WIPScreenState extends State<WIPScreen> {
                             ],
                           ),
                         ),
-
-                        // ── 3. Breakdown List ───────────────────────────────
                         Flexible(
                           child: Container(
                             margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -448,52 +192,76 @@ class _WIPScreenState extends State<WIPScreen> {
                             child: SingleChildScrollView(
                               padding: const EdgeInsets.all(12),
                               child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  const Text('WORK ORDER BREAKDOWN', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Color(0xFF64748B), letterSpacing: 0.5)),
-                                  const SizedBox(height: 12),
-                                  ...byWO.entries.map((woEntry) {
-                                    final woTrays = woEntry.value;
-                                    double woPcs = 0;
-                                    double woWeight = 0;
-                                    for (final t in woTrays) {
-                                      woPcs += t.productionProgress.primaryQuantity ?? 0;
-                                      woWeight += (t.productionProgress.primaryQuantity ?? 0) * (t.item.pieceWeight ?? 0);
-                                    }
-                                    return Container(
-                                      margin: const EdgeInsets.only(bottom: 8),
-                                      decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
-                                      child: ExpansionTile(
-                                        tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-                                        title: Text(woEntry.key, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF1E293B))),
-                                        subtitle: Text('${woTrays.length} TRAYS • ${woWeight.toStringAsFixed(1)} g', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF0D47A1))),
-                                        children: [
-                                          _buildMiniHeader(),
-                                          ...woTrays.map((t) => _buildMiniRow(t)),
-                                          const SizedBox(height: 8),
-                                        ],
+                                children: byWO.entries.map((entry) {
+                                  final woCode = entry.key;
+                                  final trays = entry.value;
+
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                        decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(6)),
+                                        child: Text(
+                                          'WORK ORDER: $woCode',
+                                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF475569)),
+                                        ),
                                       ),
-                                    );
-                                  }),
-                                  const SizedBox(height: 12),
-                                  ElevatedButton.icon(
-                                    onPressed: () => setDialogState(() => showTrays = !showTrays),
-                                    icon: Icon(showTrays ? Icons.visibility_off_rounded : Icons.visibility_rounded, size: 16),
-                                    label: Text(showTrays ? 'HIDE DETAILED LOGS' : 'VIEW DETAILED LOGS', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900)),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: showTrays ? const Color(0xFF64748B) : const Color(0xFF1E293B),
-                                      foregroundColor: Colors.white,
-                                      elevation: 0,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    ),
-                                  ),
-                                  if (showTrays) ...[
-                                    const SizedBox(height: 16),
-                                    const Text('INDIVIDUAL TRAY RECORDS', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Color(0xFF64748B), letterSpacing: 0.5)),
-                                    const SizedBox(height: 8),
-                                    _buildDetailedTrayTable(group.trays),
-                                  ],
-                                ],
+                                      const SizedBox(height: 6),
+                                      ...trays.map((t) {
+                                        final code = t.primaryTrayModel.trayCode ?? 'N/A';
+                                        final qty = t.productionProgress.primaryQuantity ?? 0;
+                                        final per = t.item.perGarmentTube;
+                                        final itemDesc = t.item.description;
+                                        final sizeDesc = t.item.sizeDescription ?? 'N/A';
+                                        final colorDesc = t.item.colorDescription ?? 'N/A';
+
+                                        return Container(
+                                          margin: const EdgeInsets.only(bottom: 6),
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                                          decoration: BoxDecoration(color: const Color(0xFFF1F5F9).withValues(alpha: 0.5), borderRadius: BorderRadius.circular(8)),
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Row(
+                                                      children: [
+                                                        const Icon(Icons.crop_free_rounded, size: 10, color: Color(0xFF64748B)),
+                                                        const SizedBox(width: 4),
+                                                        Text(code, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1B64A3))),
+                                                      ],
+                                                    ),
+                                                    const SizedBox(height: 2),
+                                                    Text(
+                                                      '$itemDesc • SIZE $sizeDesc • COLOR $colorDesc',
+                                                      style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w500, color: Color(0xFF64748B)),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              Column(
+                                                crossAxisAlignment: CrossAxisAlignment.end,
+                                                children: [
+                                                  Text(
+                                                    '${qty.toStringAsFixed(0)} Tubes',
+                                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
+                                                  ),
+                                                  Text(
+                                                    '${(qty * per).toStringAsFixed(0)} Pcs',
+                                                    style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Color(0xFF10B981)),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }),
+                                      const SizedBox(height: 12),
+                                    ],
+                                  );
+                                }).toList(),
                               ),
                             ),
                           ),
@@ -510,21 +278,30 @@ class _WIPScreenState extends State<WIPScreen> {
     );
   }
 
-  Widget _buildDialogHUD(String label, String value, IconData icon, Color accent) {
+  Widget _buildDialogHUD(String label, String value, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE2E8F0), width: 1)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+      ),
       child: Row(
         children: [
-          Icon(icon, color: accent, size: 16),
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+            child: Icon(icon, color: color, size: 16),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(label, style: const TextStyle(fontSize: 7, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 0.5)),
-                Text(value, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF1E293B))),
+                Text(label, style: const TextStyle(fontSize: 7, fontWeight: FontWeight.w800, color: Color(0xFF94A3B8), letterSpacing: 0.5)),
+                const SizedBox(height: 2),
+                Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: color), maxLines: 1, overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
@@ -533,87 +310,101 @@ class _WIPScreenState extends State<WIPScreen> {
     );
   }
 
-  Widget _buildMiniHeader() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      color: const Color(0xFFF1F5F9),
-      child: const Row(
-        children: [
-          Expanded(flex: 3, child: Text('TRAY CODE', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Color(0xFF64748B)))),
-          Expanded(flex: 4, child: Text('ITEM', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Color(0xFF64748B)))),
-          Expanded(flex: 2, child: Text('WEIGHT', textAlign: TextAlign.right, style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Color(0xFF64748B)))),
-        ],
+  @override
+  Widget build(BuildContext context) {
+    final controller = context.watch<WipController>();
+    final state = controller.state;
+
+    return PopScope(
+      canPop: !AppLoader.isVisible,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF1F5F9),
+        body: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildPremiumHeader(),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: state.locators.isEmpty
+                      ? _buildEmptyLocatorsState()
+                      : ListView.builder(
+                          padding: const EdgeInsets.only(bottom: 24),
+                          itemCount: state.locators.length,
+                          itemBuilder: (context, index) {
+                            final loc = state.locators[index];
+                            final locatorId = loc.locator.id;
+                            final trays = state.locatorTrays[locatorId] ?? [];
+                            final isLoading = state.loadingDetails[locatorId] ?? false;
+                            final deptCode = loc.department.code.toUpperCase();
+                            final isKnitting = deptCode == 'KNITTING';
+                            final isProcessing = deptCode == 'PROCESSING';
+                            final groupedData = controller.groupTrays(trays, isKnitting, isProcessing);
+  
+                            return LocatorExpansionItem(
+                              locator: loc,
+                              groupedData: groupedData,
+                              isLoading: isLoading,
+                              onExpansionChanged: (expanded) => _onExpandLocator(controller, locatorId, expanded),
+                              onViewDetails: (group) => _showTrayDetailsDialog(controller, group),
+                            );
+                          },
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildMiniRow(ProductionProgressResponseModel t) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      decoration: const BoxDecoration(border: Border(top: BorderSide(color: Color(0xFFF1F5F9)))),
-      child: Row(
-        children: [
-          Expanded(flex: 3, child: Text(t.primaryTrayModel.trayCode ?? '-', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF0D47A1)))),
-          Expanded(flex: 4, child: Text(t.item.description, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)),
-          Expanded(flex: 2, child: Text(((t.productionProgress.primaryQuantity ?? 0) * (t.item.pieceWeight ?? 0)).toStringAsFixed(1), textAlign: TextAlign.right, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800))),
-        ],
+  Widget _buildPremiumHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFB0BEC5), width: 1.5),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
+        ),
+        child: Row(
+          children: [
+            const CustomBackButton(),
+            const Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Work In Progress', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF263238))),
+                  Text('PHYSICAL INVENTORY MONITORING', style: TextStyle(fontSize: 9, color: Color(0xFF546E7A), fontWeight: FontWeight.w900, letterSpacing: 0.8)),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(8)),
+              child: const Icon(Icons.monitor_heart_rounded, color: Color(0xFF0D47A1), size: 20),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildDetailedTrayTable(List<ProductionProgressResponseModel> trays) {
-    return Container(
-      decoration: BoxDecoration(border: Border.all(color: const Color(0xFFE2E8F0)), borderRadius: BorderRadius.circular(8)),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          _buildMiniHeader(),
-          ...trays.map((t) => _buildMiniRow(t)),
-        ],
-      ),
-    );
-  }
-
-  Widget _statTile(String label, String value, IconData icon, {Color? valueColor}) {
-    return Expanded(
+  Widget _buildEmptyLocatorsState() {
+    return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 18, color: Colors.blue.shade600),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-              color: valueColor ?? Colors.blue.shade900,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            style: TextStyle(
-              fontSize: 9,
-              color: Colors.grey.shade600,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+          Icon(Icons.location_off_outlined, size: 64, color: Colors.blue.shade50),
+          const SizedBox(height: 16),
+          const Text('No stores or locators found with "FLOOR" logical warehouse.', style: TextStyle(color: Colors.black54)),
         ],
       ),
     );
   }
-
-  Widget _verticalDivider() {
-    return Container(
-      width: 1,
-      color: Colors.grey.shade200,
-      margin: const EdgeInsets.symmetric(vertical: 4),
-    );
-  }
-
-  // Removed _buildEmptyState and _WIPGroup as they were extracted.
 }

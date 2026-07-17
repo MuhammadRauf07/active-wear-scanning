@@ -26,7 +26,7 @@ class BatchScanSummary extends StatelessWidget {
 
     for (final t in trays) {
       final tubes = t.productionProgress.primaryQuantity ?? 0;
-      final pgt = t.item.perGarmentTube ?? 0;
+      final pgt = t.item.perGarmentTube;
       
       totalTubes += tubes;
       totalPcs += (pgt > 0 ? tubes * pgt : 0);
@@ -34,7 +34,7 @@ class BatchScanSummary extends StatelessWidget {
       if (t.productionProgress.isStarted == true) startedCount++;
       if (t.productionProgress.reworkFlag == true) reworkCount++;
 
-      final woCode = t.workOrderHeader?.workOrderCode ?? 'Unknown WO';
+      final woCode = t.workOrderHeader.workOrderCode;
       byWO.putIfAbsent(woCode, () => []).add(t);
     }
 
@@ -103,13 +103,10 @@ class BatchScanSummary extends StatelessWidget {
 
           final Map<String, List<ProductionProgressResponseModel>> byItem = {};
           double woPcs = 0;
-          double woWeight = 0;
           for (final t in woTrays) {
             final qty = t.productionProgress.primaryQuantity ?? 0;
-            final pw = t.item.pieceWeight ?? 0;
             woPcs += qty;
-            woWeight += qty * pw;
-            final itemDesc = t.item.description ?? 'Unknown';
+            final itemDesc = t.item.description;
             byItem.putIfAbsent(itemDesc, () => []).add(t);
           }
 
@@ -167,12 +164,9 @@ class BatchScanSummary extends StatelessWidget {
                   final itemTrays = itemEntry.value;
 
                   double itemPcs = 0;
-                  double itemWeight = 0;
                   for (final t in itemTrays) {
                     final qty = t.productionProgress.primaryQuantity ?? 0;
-                    final pw = t.item.pieceWeight ?? 0;
                     itemPcs += qty;
-                    itemWeight += qty * pw;
                   }
 
                   return Container(

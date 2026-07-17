@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:active_wear_scanning/core/widgets/content_card.dart';
 import 'package:active_wear_scanning/features/processing/model/batch_summary_item.dart';
 import 'package:active_wear_scanning/features/processing/presentation/widgets/batch_status_row.dart';
 

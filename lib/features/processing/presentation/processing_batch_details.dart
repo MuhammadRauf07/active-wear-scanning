@@ -1,25 +1,16 @@
-import 'dart:developer' as dev;
-
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
-import 'package:active_wear_scanning/core/widgets/content_card.dart';
-import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
-import 'package:active_wear_scanning/core/widgets/dynamic_info_display.dart';
 import 'package:active_wear_scanning/core/widgets/scanner_always_open.dart';
-import 'package:active_wear_scanning/core/widgets/section_header.dart';
-import 'package:active_wear_scanning/features/lot_making/model/lot_header_model.dart';
-import 'package:active_wear_scanning/features/lot_making/repo/lot_repo.dart';
-import 'package:active_wear_scanning/features/common-models/common_models.dart';
-import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:active_wear_scanning/features/lapping/presentation/lapping_detail_screen.dart';
-import 'package:active_wear_scanning/features/processing/presentation/widgets/batch_scan_summary.dart';
 import 'package:active_wear_scanning/features/processing/presentation/widgets/processing_tray_table.dart';
-import 'package:active_wear_scanning/features/processing/repo/processing_repo.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
+import 'package:active_wear_scanning/features/processing/controller/processing_batch_controller.dart';
+import 'package:active_wear_scanning/features/processing/model/processing_batch_state.dart';
+import 'package:active_wear_scanning/features/lot_making/repo/lot_repo.dart';
 
-class ProcessingBatchDetailsScreen extends StatefulWidget {
+class ProcessingBatchDetailsScreen extends StatelessWidget {
   final int batchHeaderId;
   final int currentOperationId;
   final String batchCode;
@@ -50,303 +41,86 @@ class ProcessingBatchDetailsScreen extends StatefulWidget {
   });
 
   @override
-  State<ProcessingBatchDetailsScreen> createState() => _ProcessingBatchDetailsScreenState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider<ProcessingBatchController>(
+      create: (_) => ProcessingBatchController(
+        batchHeaderId: batchHeaderId,
+        currentOperationId: currentOperationId,
+        batchCode: batchCode,
+        machineId: machineId,
+        machine: machine,
+        color: color,
+        trayCount: trayCount,
+        totalWeight: totalWeight,
+        operationName: operationName,
+        nextOperationName: nextOperationName,
+        nextOperationId: nextOperationId,
+        hasPreviousProcess: hasPreviousProcess,
+      )..loadInitialData(),
+      child: const _ProcessingBatchDetailsView(),
+    );
+  }
 }
 
-class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScreen> {
-  final _processingRepo = ProcessingRepo();
+class _ProcessingBatchDetailsView extends StatefulWidget {
+  const _ProcessingBatchDetailsView();
+
+  @override
+  State<_ProcessingBatchDetailsView> createState() => _ProcessingBatchDetailsViewState();
+}
+
+class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView> {
   final _lotRepo = LotRepo();
-  bool _showTrays = false;
-  bool _isLoadingTrays = false;
-  List<ProductionProgressResponseModel> _trays = [];
-  double? _machineCapacity;
-  late bool _hasPreviousProcess;
-
-  static final _tableHeaderStyle = TextStyle(
-    fontSize: 12,
-    fontWeight: FontWeight.w600,
-    color: Colors.grey.shade700,
-  );
-
-  bool _isReworkMode = false;
-  final Set<int> _selectedReworkTrayIds = {};
-  final Set<int> _failedTrayIds = {};
-  int? _reworkTargetOpId;
-  String? _reworkTargetOpName;
-
-  // ── Batch Start Tracking ───────────────────────────────────────────────
-  bool _isBatchStarted = false;
-  DateTime? _issueTime;   // creationTime of the production progress records
-  DateTime? _startTime;   // startDate from productionProgress (set on Start)
-  Set<int> _trayIdsWithWastage = {};
-  Map<int, ProductionProgressResponseModel> _wastageByOriginalId = {};
-
-  // ── Trolley Management ───────────────────────────────────────────────
-  String? _trolleyCode;
-  int? _trolleyDetailId;
-  bool _isUpdatingTrolley = false;
-  bool _isReassignedFromLines = false;
-  bool get _isReassignedBatch {
-    final fromTray = _trays.isNotEmpty && _trays.any((t) => t.primaryTrayModel.isReAssigned == true);
-    return _isReassignedFromLines || fromTray;
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _hasPreviousProcess = widget.hasPreviousProcess;
-    _fetchMachineCapacity();
-    _fetchBatchHeader();
-    SchedulerBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _fetchTraysIfNeeded();
-    });
-  }
-
-  Future<void> _fetchMachineCapacity() async {
-    if (widget.machineId == null) return;
-    final res = await _lotRepo.fetchMachineById(widget.machineId!);
-    if (res.success && res.data != null) {
-      final mData = res.data as Map<String, dynamic>;
-      final mJson = mData['resource'] ?? mData;
-      final cap = mJson['capacity'];
-      if (cap != null) {
-        if (mounted) {
-          setState(() {
-            _machineCapacity = double.tryParse(cap.toString());
-          });
-        }
-      }
-    }
-  }
-
-  // ── Fetch batch header to resolve current trolley ────────────────────────
-  Future<void> _fetchBatchHeader() async {
-    try {
-      final res = await _lotRepo.fetchLotHeaderById(widget.batchHeaderId);
-      if (!res.success || res.data == null) return;
-      final bh = LotHeaderResponseModel.fromJson(
-          res.data as Map<String, dynamic>);
-      final trayDetailId = bh.batchHeader.trayDetailId;
-      if (trayDetailId != null) {
-        final trayRes = await _lotRepo.fetchTrayDetailById(trayDetailId);
-        if (trayRes.success && trayRes.data != null) {
-          final trayRaw = trayRes.data as Map<String, dynamic>;
-          // API may return nested {trayDetail:{...}} or flat object
-          final tdMap = (trayRaw['trayDetail'] is Map)
-              ? Map<String, dynamic>.from(trayRaw['trayDetail'] as Map)
-              : trayRaw;
-          final code = tdMap['trayCode']?.toString();
-          if (mounted) {
-            setState(() {
-              _trolleyCode = code;
-              _trolleyDetailId = trayDetailId;
-            });
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('Fetch batch header error: $e');
-    }
-  }
-
-  Future<void> _fetchTraysIfNeeded() async {
-    if (_trays.isNotEmpty) return;
-
-    AppLoader.show(context, message: 'Loading Trays...');
-    setState(() => _isLoadingTrays = true);
-
-    try {
-      final res = await _processingRepo.fetchProductionProgress({
-        'BatchHeaderId': widget.batchHeaderId.toString(),
-        'OperationId': widget.currentOperationId.toString(),
-        'TransactionType': '2',
-      });
-
-      final blRes = await _lotRepo.fetchLotLines(batchHeaderId: widget.batchHeaderId);
-      if (blRes.success && blRes.data != null) {
-        final List lines = blRes.data as List;
-        final hasReassignedLine = lines.any((l) {
-          final bl = l['batchLines'] as Map<String, dynamic>? ?? l;
-          return bl['isReAssigned'] == true;
-        });
-        if (mounted) {
-          setState(() {
-            _isReassignedFromLines = hasReassignedLine;
-          });
-        }
-      }
-
-      if (res.success && res.data != null) {
-        if (mounted) {
-          final list = res.data as List<ProductionProgressResponseModel>;
-          
-           final wastageIds = list
-              .where((t) => t.productionProgress.locatorId == 18 || (t.productionProgress.waste ?? 0) > 0)
-              .map((t) => t.productionProgress.primaryTrayId)
-              .whereType<int>()
-              .toSet();
-
-          final Map<int, ProductionProgressResponseModel> wastageByOriginalId = {};
-          for (final t in list) {
-            final subOp = t.productionProgress.subOperation;
-            if (subOp != null) {
-              final origId = int.tryParse(subOp);
-              if (origId != null && t.productionProgress.locatorId == 18) {
-                wastageByOriginalId[origId] = t;
-              }
-            }
-          }
-
-          // ── De-duplicate by Tray Code ──────────────────────────────────────
-          // If multiple records exist for the same tray in this op/batch,
-          // keep only the one with the highest ID (most recent).
-          final Map<String, ProductionProgressResponseModel> uniqueTrays = {};
-          for (final tray in list) {
-            if (tray.productionProgress.transactionType != 2) continue; // Local filter
-            if (tray.productionProgress.operationId != widget.currentOperationId) continue; // Local filter
-            if (tray.productionProgress.locatorId == 18) continue; // Exclude wastage records from representing main tray rows
-
-            final code = tray.primaryTrayModel.trayCode ?? 'UNKNOWN';
-            if (!uniqueTrays.containsKey(code) || (tray.productionProgress.id ?? 0) > (uniqueTrays[code]!.productionProgress.id ?? 0)) {
-              uniqueTrays[code] = tray;
-            }
-          }
-          final deDuplicatedList = uniqueTrays.values.toList();
-
-          // Sort by trayCode consistently
-          deDuplicatedList.sort((a, b) => (a.primaryTrayModel.trayCode ?? '').compareTo(b.primaryTrayModel.trayCode ?? ''));
-
-          // Enrich each tray with color/size/perGarmentTube from item-defs API
-          final enrichedList = <ProductionProgressResponseModel>[];
-          for (final tray in deDuplicatedList) {
-            final mainItemId = tray.item.id; // Always use main item for display metadata
-            final processedItemId = tray.productionProgress.processedItemId;
-
-            String colorDesc = tray.item.colorDescription ?? '';
-            String sizeDesc = tray.item.sizeDescription ?? '';
-            double perGarmentTube = tray.item.perGarmentTube ?? 0;
-
-            if (mainItemId > 0) {
-              final itemRes = await _lotRepo.fetchItemDef(mainItemId);
-              if (itemRes.success && itemRes.data != null) {
-                final itemData = itemRes.data is Map ? itemRes.data as Map<String, dynamic> : {};
-                // perGarmentTube always from main item
-                if (itemData['perGarmentTube'] != null) {
-                  perGarmentTube = (itemData['perGarmentTube'] as num).toDouble();
-                }
-                // color/size from main item if not null
-                if (itemData['colorDescription'] != null) colorDesc = itemData['colorDescription'];
-                if (itemData['sizeDescription'] != null) sizeDesc = itemData['sizeDescription'];
-              }
-            }
-
-            // If color is still empty, try processedItemId as fallback
-            if (colorDesc.isEmpty && processedItemId != null && processedItemId > 0) {
-              final processedRes = await _lotRepo.fetchItemDef(processedItemId);
-              if (processedRes.success && processedRes.data != null) {
-                final pd = processedRes.data is Map ? processedRes.data as Map<String, dynamic> : {};
-                if (pd['colorDescription'] != null) colorDesc = pd['colorDescription'];
-                if (sizeDesc.isEmpty && pd['sizeDescription'] != null) sizeDesc = pd['sizeDescription'];
-              }
-            }
-
-            final updatedItem = tray.item.copyWith(
-              colorDescription: colorDesc,
-              sizeDescription: sizeDesc,
-              perGarmentTube: perGarmentTube,
-            );
-            enrichedList.add(tray.copyWith(item: updatedItem));
-          }
-
-          setState(() {
-            _trays = enrichedList;
-            _trayIdsWithWastage = wastageIds;
-            _wastageByOriginalId = wastageByOriginalId;
-            _isLoadingTrays = false;
-            // Derive start-tracking state from first tray
-            if (enrichedList.isNotEmpty) {
-              final pp = enrichedList.first.productionProgress;
-              _isBatchStarted = pp.isStarted == true;
-              _issueTime = pp.creationTime;
-              _startTime = pp.startDate;
-            }
-          });
-        }
-      }
-    } catch (e) {
-      debugPrint('Error loading trays: $e');
-    } finally {
-      if (mounted) {
-        setState(() => _isLoadingTrays = false);
-        AppLoader.hide(context);
-      }
-    }
-  }
-
-  Future<void> _toggleTrayDetails() async {
-    if (_showTrays) {
-      setState(() => _showTrays = false);
-      return;
-    }
-    setState(() => _showTrays = true);
-    await _fetchTraysIfNeeded();
-  }
 
   @override
   Widget build(BuildContext context) {
-    final isLapping = widget.operationName.toLowerCase().contains('lapping');
-    final isReworkBatch = _trays.isNotEmpty && _trays.any((t) => t.productionProgress.reworkFlag == true);
-    final isReassignedBatch = _isReassignedBatch;
+    final controller = context.watch<ProcessingBatchController>();
+    final state = controller.state;
 
     return PopScope(
-      canPop: !AppLoader.isVisible,
+      canPop: !state.isLoading && !AppLoader.isVisible,
       child: Scaffold(
         resizeToAvoidBottomInset: false,
         backgroundColor: const Color(0xFFF1F5F9),
         body: SafeArea(
-          child: Column(
-            children: [
-              _buildPremiumHeader(context),
-              Expanded(
-                child: AbsorbPointer(
-                  absorbing: _isLoadingTrays,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildBatchIntelligenceGrid(),
-                        const SizedBox(height: 12),
-                        _buildActionConsole(),
-                        if (_showTrays) ...[
-                          const SizedBox(height: 16),
-                          Expanded(
-                            child: _buildTrayTableContainer(),
+          child: state.isLoading && state.trays.isEmpty
+              ? const Center(child: CircularProgressIndicator())
+              : Column(
+                  children: [
+                    _buildPremiumHeader(context, controller, state),
+                    Expanded(
+                      child: AbsorbPointer(
+                        absorbing: state.isLoading,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _buildBatchIntelligenceGrid(controller, state),
+                              const SizedBox(height: 12),
+                              _buildActionConsole(controller, state),
+                              if (state.showTrays) ...[
+                                const SizedBox(height: 16),
+                                Expanded(
+                                  child: _buildTrayTableContainer(controller, state),
+                                ),
+                              ],
+                            ],
                           ),
-                        ],
-                      ],
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ),
-            ],
-          ),
         ),
       ),
     );
   }
 
-  Widget _buildPremiumHeader(BuildContext context) {
-    final isLapping = widget.operationName.toLowerCase().contains('lapping');
-    final isReworkBatch = _trays.isNotEmpty && _trays.any((t) => t.productionProgress.reworkFlag == true);
-    final isReassignedBatch = _isReassignedBatch;
-    final submitBlocked = !_isBatchStarted || (isLapping && !isReassignedBatch && !_isReworkMode);
-    
+  Widget _buildPremiumHeader(BuildContext context, ProcessingBatchController controller, ProcessingBatchState state) {
+    final isLapping = controller.operationName.toLowerCase().contains('lapping');
+    final submitBlocked = !state.isBatchStarted || (isLapping && !state.isReassignedBatch && !state.isReworkMode);
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       child: Container(
@@ -357,7 +131,6 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
           border: Border.all(
             color: const Color(0xFFB0BEC5),
             width: 1.5,
-            strokeAlign: BorderSide.strokeAlignOutside,
           ),
           boxShadow: [
             BoxShadow(
@@ -380,28 +153,28 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF263238)),
                   ),
                   Text(
-                    'BATCH: ${widget.batchCode}',
+                    'BATCH: ${controller.batchCode}',
                     style: const TextStyle(fontSize: 10, color: Color(0xFF546E7A), fontWeight: FontWeight.w600, letterSpacing: 0.5),
                   ),
                 ],
               ),
             ),
             ElevatedButton.icon(
-              onPressed: submitBlocked ? null : _confirmSubmit,
+              onPressed: submitBlocked ? null : () => _confirmSubmit(controller, state),
               icon: Icon(
-                _failedTrayIds.isNotEmpty ? Icons.replay_rounded : Icons.check_circle_rounded,
+                state.failedTrayIds.isNotEmpty ? Icons.replay_rounded : Icons.check_circle_rounded,
                 size: 16,
               ),
               label: Text(
-                _failedTrayIds.isNotEmpty
-                    ? 'RETRY SUBMISSION (${_failedTrayIds.length})'
+                state.failedTrayIds.isNotEmpty
+                    ? 'RETRY SUBMISSION (${state.failedTrayIds.length})'
                     : 'SUBMIT BATCH',
                 style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 11),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: _failedTrayIds.isNotEmpty
-                    ? const Color(0xFFE65100) // Deep Orange for retry action
-                    : const Color(0xFF2E7D32), // Standard Green
+                backgroundColor: state.failedTrayIds.isNotEmpty
+                    ? const Color(0xFFE65100)
+                    : const Color(0xFF2E7D32),
                 foregroundColor: Colors.white,
                 elevation: 0,
                 disabledBackgroundColor: Colors.grey.shade200,
@@ -415,24 +188,18 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
     );
   }
 
-  Widget _buildBatchIntelligenceGrid() {
-    final isReworkBatch = _trays.isNotEmpty && _trays.any((t) => t.productionProgress.reworkFlag == true);
-    final isReassignedBatch = _isReassignedBatch;
-
+  Widget _buildBatchIntelligenceGrid(ProcessingBatchController controller, ProcessingBatchState state) {
     return Column(
       children: [
-        // ── 1. PREMIUM PROCESS FLOW RIBBON ────────────────────────────────
-        _buildProcessFlowRibbon(),
+        _buildProcessFlowRibbon(controller),
         const SizedBox(height: 16),
-
-        // ── 2. PHYSICAL & OPERATIONAL METRICS HUD ────────────────────────
-        _buildAeroIntelligenceGrid(),
+        _buildAeroIntelligenceGrid(controller, state),
         const SizedBox(height: 16),
       ],
     );
   }
 
-  Widget _buildProcessFlowRibbon() {
+  Widget _buildProcessFlowRibbon(ProcessingBatchController controller) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -452,7 +219,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
       ),
       child: Row(
         children: [
-          _buildProcessNode('CURRENT', widget.operationName, Icons.settings_suggest_rounded, true),
+          _buildProcessNode('CURRENT', controller.operationName, Icons.settings_suggest_rounded, true),
           const Expanded(
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: 12),
@@ -465,7 +232,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
               ),
             ),
           ),
-          _buildProcessNode('NEXT', widget.nextOperationName, Icons.arrow_forward_rounded, false),
+          _buildProcessNode('NEXT', controller.nextOperationName, Icons.arrow_forward_rounded, false),
         ],
       ),
     );
@@ -478,10 +245,10 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
         Text(
           label,
           style: TextStyle(
-            fontSize: 9, 
-            fontWeight: FontWeight.w900, 
-            color: Colors.white.withValues(alpha: 0.7), 
-            letterSpacing: 1.2
+            fontSize: 9,
+            fontWeight: FontWeight.w900,
+            color: Colors.white.withValues(alpha: 0.7),
+            letterSpacing: 1.2,
           ),
         ),
         const SizedBox(height: 4),
@@ -502,10 +269,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
     );
   }
 
-  Widget _buildAeroIntelligenceGrid() {
-    final isReworkBatch = _trays.isNotEmpty && _trays.any((t) => t.productionProgress.reworkFlag == true);
-    final isReassignedBatch = _isReassignedBatch;
-
+  Widget _buildAeroIntelligenceGrid(ProcessingBatchController controller, ProcessingBatchState state) {
     return Column(
       children: [
         GridView.count(
@@ -514,14 +278,14 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
           crossAxisCount: 2,
           mainAxisSpacing: 10,
           crossAxisSpacing: 10,
-          childAspectRatio: 3.2, // Leaner, lower profile
+          childAspectRatio: 3.2,
           children: [
-            _buildHUDCard('BATCH #', widget.batchCode, Icons.tag_rounded),
-            _buildHUDCard('MACHINE', widget.machine, Icons.precision_manufacturing_rounded),
-            _buildHUDCard('COLOR', widget.color, Icons.palette_rounded),
-            _buildHUDCard('TROLLEY', _trolleyCode ?? 'N/A', Icons.local_shipping_rounded, valueColor: _trolleyCode != null ? const Color(0xFF1B64A3) : const Color(0xFF94A3B8)),
-            _buildHUDCard('TRAYS', '${widget.trayCount} UNITS', Icons.inventory_2_rounded),
-            _buildHUDCard('WEIGHT', '${widget.totalWeight.toStringAsFixed(1)} g', Icons.scale_rounded),
+            _buildHUDCard('BATCH #', controller.batchCode, Icons.tag_rounded),
+            _buildHUDCard('MACHINE', controller.machine, Icons.precision_manufacturing_rounded),
+            _buildHUDCard('COLOR', controller.color, Icons.palette_rounded),
+            _buildHUDCard('TROLLEY', state.trolleyCode ?? 'N/A', Icons.local_shipping_rounded, valueColor: state.trolleyCode != null ? const Color(0xFF1B64A3) : const Color(0xFF94A3B8)),
+            _buildHUDCard('TRAYS', '${controller.trayCount} UNITS', Icons.inventory_2_rounded),
+            _buildHUDCard('WEIGHT', '${controller.totalWeight.toStringAsFixed(1)} g', Icons.scale_rounded),
           ],
         ),
         const SizedBox(height: 14),
@@ -541,10 +305,10 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildModernTime('ISSUED', _issueTime),
-              _buildModernTime('STARTED', _startTime),
-              _buildModernStatus('RE-ASSIGN', isReassignedBatch ? 'YES' : 'NO', isReassignedBatch ? const Color(0xFF60A5FA) : Colors.white24),
-              _buildModernStatus('REWORK', isReworkBatch ? 'YES' : 'NO', isReworkBatch ? const Color(0xFFFB923C) : Colors.white24),
+              _buildModernTime('ISSUED', state.issueTime),
+              _buildModernTime('STARTED', state.startTime),
+              _buildModernStatus('RE-ASSIGN', state.isReassignedBatch ? 'YES' : 'NO', state.isReassignedBatch ? const Color(0xFF60A5FA) : Colors.white24),
+              _buildModernStatus('REWORK', state.isReworkBatch ? 'YES' : 'NO', state.isReworkBatch ? const Color(0xFFFB923C) : Colors.white24),
             ],
           ),
         ),
@@ -554,7 +318,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
 
   Widget _buildHUDCard(String label, String value, IconData icon, {Color? valueColor}) {
     return Container(
-      padding: const EdgeInsets.all(10), // Reduced from 12
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -573,8 +337,8 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                 Text(
                   value,
                   style: TextStyle(
-                    fontSize: 12, // Slightly smaller for slim fit
-                    fontWeight: FontWeight.w900, 
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
                     color: valueColor ?? const Color(0xFF1E293B),
                   ),
                   maxLines: 1,
@@ -597,10 +361,10 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
         Text(
           time != null ? _formatTimeOnly(time) : '--:--',
           style: TextStyle(
-            fontSize: 13, 
-            fontWeight: FontWeight.w900, 
+            fontSize: 13,
+            fontWeight: FontWeight.w900,
             color: time != null ? Colors.white : Colors.white24,
-            fontFamily: 'monospace'
+            fontFamily: 'monospace',
           ),
         ),
       ],
@@ -616,10 +380,10 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
         Text(
           value,
           style: TextStyle(
-            fontSize: 13, 
-            fontWeight: FontWeight.w900, 
+            fontSize: 13,
+            fontWeight: FontWeight.w900,
             color: valueColor,
-            letterSpacing: 0.5
+            letterSpacing: 0.5,
           ),
         ),
       ],
@@ -630,57 +394,12 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
     return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
 
-  Widget _buildMetricCard(String label, String value, IconData icon, {Color? valueColor}) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFB0BEC5), width: 1.2, strokeAlign: BorderSide.strokeAlignOutside),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: const Color(0xFF1B64A3), size: 14),
-          const SizedBox(height: 4),
-          Text(label, style: const TextStyle(fontSize: 7, fontWeight: FontWeight.w800, color: Color(0xFF94A3B8), letterSpacing: 0.3)),
-          const SizedBox(height: 1),
-          Text(
-            value,
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: valueColor ?? const Color(0xFF1E293B)),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
-
-
-
-  Widget _buildTimeIndicator(String label, String value, IconData icon) {
-    return Row(
-      children: [
-        Icon(icon, size: 14, color: const Color(0xFF78909C)),
-        const SizedBox(width: 6),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Color(0xFF90A4AE))),
-            Text(value, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF455A64))),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTrayTableContainer() {
+  Widget _buildTrayTableContainer(ProcessingBatchController controller, ProcessingBatchState state) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFB0BEC5), width: 1.5, strokeAlign: BorderSide.strokeAlignOutside),
+        border: Border.all(color: const Color(0xFFB0BEC5), width: 1.5),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -701,232 +420,40 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(color: const Color(0xFFECEFF1), borderRadius: BorderRadius.circular(6)),
-                  child: Text('${_trays.length} Units', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF455A64))),
+                  child: Text('${state.trays.length} Units', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF455A64))),
                 ),
               ],
             ),
           ),
           Expanded(
             child: ProcessingTrayTable(
-              trays: _trays,
-              isReworkMode: _isReworkMode,
-              selectedReworkTrayIds: _selectedReworkTrayIds,
-              trayIdsWithWastage: _trayIdsWithWastage,
-              isEditable: (widget.operationName.toLowerCase().contains('heat set') || widget.operationName.toLowerCase().contains('qa')) && _isBatchStarted,
-              operationName: widget.operationName,
+              trays: state.trays,
+              isReworkMode: state.isReworkMode,
+              selectedReworkTrayIds: state.selectedReworkTrayIds,
+              trayIdsWithWastage: state.trayIdsWithWastage,
+              isEditable: (controller.operationName.toLowerCase().contains('heat set') || controller.operationName.toLowerCase().contains('qa')) && state.isBatchStarted,
+              operationName: controller.operationName,
               onQuantitySubmit: (progressId, newQty) async {
                 try {
-                  final tIdx = _trays.indexWhere((t) => t.productionProgress.id == progressId);
-                  if (tIdx == -1) return;
-                  final tray = _trays[tIdx];
-
-                  // Use requiredQty if already populated (indicates existing wastage), otherwise fallback to primaryQuantity
-                  final double requiredQty = tray.productionProgress.requiredQty?.toDouble() ?? tray.productionProgress.primaryQuantity ?? 0.0;
-                  final double wastageQty = requiredQty - newQty;
-
-                  // 1. Update the existing tray progress: new primaryQuantity, requiredQty, and waste
-                  final json = tray.productionProgress.toJson();
-                  json['primaryQuantity'] = newQty;
-                  if (wastageQty > 0) {
-                    json['requiredQty'] = requiredQty.toInt();
-                    json['waste'] = wastageQty.toInt();
-                  } else {
-                    json['requiredQty'] = null;
-                    json['waste'] = null;
-                  }
-                  
-                  json.remove('id');
-                  json.remove('progressCode');
-                  json.remove('creationTime');
-                  json.remove('creatorId');
-                  json.remove('lastModificationTime');
-                  json.remove('lastModifierId');
-
-                  final res = await _processingRepo.updateProductionProgress(progressId, json);
-                  if (!res.success) {
-                    throw Exception(res.message ?? 'Update failed.');
-                  }
-
-                  // Sync the original line's quantity to its corresponding WIPTransaction
-                  try {
-                    final wipRes = await _lotRepo.fetchWipTransactionsByProgressId(progressId);
-                    if (wipRes.success && wipRes.data != null) {
-                      final List rawItems = wipRes.data is Map ? (wipRes.data['items'] ?? []) : wipRes.data;
-                      final items = rawItems.cast<Map<String, dynamic>>();
-                      final match = items.firstWhere(
-                        (e) => (e['wipTransaction']?['progressId'] ?? e['progressId'] ?? e['wipTransaction']?['productionProgressId'] ?? e['productionProgressId'])?.toString() == progressId.toString(),
-                        orElse: () => <String, dynamic>{},
-                      );
-                      if (match.isNotEmpty) {
-                        final wipId = match['wipTransaction']?['id'] as int?;
-                        if (wipId != null) {
-                          final wipPayload = Map<String, dynamic>.from(match['wipTransaction'] ?? match);
-                          wipPayload['primaryQuantity'] = newQty;
-                          wipPayload.remove('id');
-                          wipPayload.remove('concurrencyStamp');
-                          await _lotRepo.updateWipTransaction(wipId, wipPayload);
-                        }
-                      }
-                    }
-                  } catch (e) {
-                    debugPrint('Error syncing original WIP quantity: $e');
-                  }
-
-                  // 2. Manage the wastage record (No WIP transactions are updated/created/deleted for wastage records)
-                  if (wastageQty > 0) {
-                    final wastageRecord = _wastageByOriginalId[progressId];
-                    if (wastageRecord != null && wastageRecord.productionProgress.id != null) {
-                      // UPDATE existing wastage record
-                      final wJson = wastageRecord.productionProgress.toJson();
-                      wJson['primaryQuantity'] = wastageQty;
-                      wJson['waste'] = 0; // waste is 0 in waste entry
-                      wJson['requiredQty'] = requiredQty.toInt();
-                      wJson['locatorId'] = 18;
-
-                      wJson.remove('id');
-                      wJson.remove('progressCode');
-                      wJson.remove('creationTime');
-                      wJson.remove('creatorId');
-                      wJson.remove('lastModificationTime');
-                      wJson.remove('lastModifierId');
-
-                      final postRes = await _processingRepo.updateProductionProgress(wastageRecord.productionProgress.id!, wJson);
-                      if (!postRes.success) {
-                        throw Exception(postRes.message ?? 'Failed to update wastage record.');
-                      }
-                    } else {
-                      // CREATE new wastage record
-                      final newJson = tray.productionProgress.toJson();
-                      newJson.remove('id');
-                      newJson.remove('progressCode');
-                      newJson.remove('concurrencyStamp');
-                      newJson.remove('creationTime');
-                      newJson.remove('creatorId');
-                      newJson.remove('lastModificationTime');
-                      newJson.remove('lastModifierId');
-
-                      newJson['primaryQuantity'] = wastageQty;
-                      newJson['waste'] = 0; // waste is 0 in waste entry
-                      newJson['requiredQty'] = requiredQty.toInt();
-                      newJson['locatorId'] = 18;
-                      newJson['transactionType'] = tray.productionProgress.transactionType ?? 2;
-                      newJson['subOperation'] = progressId.toString();
-                      newJson['isStarted'] = false;
-                      newJson['startDate'] = null;
-                      newJson['date'] = DateTime.now().toIso8601String();
-
-                      final postRes = await _processingRepo.createProductionProgress(newJson);
-                      if (!postRes.success) {
-                        throw Exception(postRes.message ?? 'Failed to create wastage record.');
-                      }
-                    }
-                  } else {
-                    // newQty == requiredQty (wastage reduced to 0), delete the wastage record if exists
-                    final wastageRecord = _wastageByOriginalId[progressId];
-                    if (wastageRecord != null && wastageRecord.productionProgress.id != null) {
-                      final wId = wastageRecord.productionProgress.id!;
-                      await _processingRepo.deleteProductionProgress(wId);
-                    }
-                  }
-
-                  AppSnackBar.showSuccess(context, message: 'Quantity updated successfully.');
-                  setState(() {
-                    _trays.clear();
-                  });
-                  await _fetchTraysIfNeeded();
+                  await controller.updateQuantity(progressId, newQty);
+                  if (mounted) AppSnackBar.showSuccess(context, message: 'Quantity updated successfully.');
                 } catch (e) {
-                  AppSnackBar.showError(context, message: 'Failed to update quantity: $e');
+                  if (mounted) AppSnackBar.showError(context, message: 'Failed to update quantity: $e');
                 }
               },
               onDeleteWastage: (progressId) async {
                 try {
-                  final tIdx = _trays.indexWhere((t) => t.productionProgress.id == progressId);
-                  if (tIdx == -1) return;
-                  final tray = _trays[tIdx];
-
-                  final double requiredQty = tray.productionProgress.requiredQty?.toDouble() ?? tray.productionProgress.primaryQuantity ?? 0.0;
-
-                  // 1. Delete wastage entry (Bypassing any WIP transaction updates for the wastage entry)
-                  final wastageRecord = _wastageByOriginalId[progressId];
-                  if (wastageRecord != null && wastageRecord.productionProgress.id != null) {
-                    final wId = wastageRecord.productionProgress.id!;
-                    final delRes = await _processingRepo.deleteProductionProgress(wId);
-                    if (!delRes.success) {
-                      throw Exception(delRes.message ?? 'Failed to delete wastage record.');
-                    }
-                  }
-
-                  // 2. Restore primary quantity on original progress entry and clear waste/requiredQty fields
-                  final json = tray.productionProgress.toJson();
-                  json['primaryQuantity'] = requiredQty;
-                  json['requiredQty'] = null;
-                  json['waste'] = null;
-
-                  json.remove('id');
-                  json.remove('progressCode');
-                  json.remove('creationTime');
-                  json.remove('creatorId');
-                  json.remove('lastModificationTime');
-                  json.remove('lastModifierId');
-
-                  final res = await _processingRepo.updateProductionProgress(progressId, json);
-                  if (!res.success) {
-                    throw Exception(res.message ?? 'Failed to restore tray quantity.');
-                  }
-
-                  // Sync restored original quantity to its corresponding WIPTransaction
-                  try {
-                    final wipRes = await _lotRepo.fetchWipTransactionsByProgressId(progressId);
-                    if (wipRes.success && wipRes.data != null) {
-                      final List rawItems = wipRes.data is Map ? (wipRes.data['items'] ?? []) : wipRes.data;
-                      final items = rawItems.cast<Map<String, dynamic>>();
-                      final match = items.firstWhere(
-                        (e) => (e['wipTransaction']?['progressId'] ?? e['progressId'] ?? e['wipTransaction']?['productionProgressId'] ?? e['productionProgressId'])?.toString() == progressId.toString(),
-                        orElse: () => <String, dynamic>{},
-                      );
-                      if (match.isNotEmpty) {
-                        final wipId = match['wipTransaction']?['id'] as int?;
-                        if (wipId != null) {
-                          final wipPayload = Map<String, dynamic>.from(match['wipTransaction'] ?? match);
-                          wipPayload['primaryQuantity'] = requiredQty;
-                          wipPayload.remove('id');
-                          wipPayload.remove('concurrencyStamp');
-                          await _lotRepo.updateWipTransaction(wipId, wipPayload);
-                        }
-                      }
-                    }
-                  } catch (e) {
-                    debugPrint('Error syncing restored original WIP quantity: $e');
-                  }
-
-                  AppSnackBar.showSuccess(context, message: 'Wastage deleted successfully.');
-                  setState(() {
-                    _trays.clear();
-                  });
-                  await _fetchTraysIfNeeded();
+                  await controller.deleteWastage(progressId);
+                  if (mounted) AppSnackBar.showSuccess(context, message: 'Wastage deleted successfully.');
                 } catch (e) {
-                  AppSnackBar.showError(context, message: 'Failed to delete wastage: $e');
+                  if (mounted) AppSnackBar.showError(context, message: 'Failed to delete wastage: $e');
                 }
               },
               onReworkToggle: (progressId, selected) {
-                setState(() {
-                  if (selected) {
-                    _selectedReworkTrayIds.add(progressId);
-                  } else {
-                    _selectedReworkTrayIds.remove(progressId);
-                  }
-                });
+                controller.toggleReworkTray(progressId, selected);
               },
               onSelectAllToggle: (selected) {
-                setState(() {
-                  if (selected) {
-                    _selectedReworkTrayIds.addAll(
-                      _trays.map((t) => t.productionProgress.id).whereType<int>(),
-                    );
-                  } else {
-                    _selectedReworkTrayIds.clear();
-                  }
-                });
+                controller.selectAllReworkTrays(selected);
               },
             ),
           ),
@@ -935,29 +462,13 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
     );
   }
 
-  // ── Time formatting helpers ────────────────────────────────────────────────
-  String _formatTime(DateTime dt) {
-    final h = dt.hour.toString().padLeft(2, '0');
-    final m = dt.minute.toString().padLeft(2, '0');
-    final d = '${dt.day}/${dt.month}/${dt.year}';
-    return '$d $h:$m';
-  }
-
-  String _formatDuration(Duration d) {
-    final h = d.inHours;
-    final m = d.inMinutes.remainder(60);
-    if (h > 0) return '${h}h ${m}m';
-    return '${m}m';
-  }
-
-  // ── Trolley: Confirm Free ───────────────────────────────────────────────
-  void _confirmFreeTrolley() {
+  void _confirmFreeTrolley(ProcessingBatchController controller, ProcessingBatchState state) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Free Trolley'),
         content: Text(
-          'Remove trolley "$_trolleyCode" from batch ${widget.batchCode}?\n\n'
+          'Remove trolley "${state.trolleyCode}" from batch ${controller.batchCode}?\n\n'
           'You will need to re-attach a trolley before submitting.',
         ),
         actions: [
@@ -967,7 +478,10 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
             ),
-            onPressed: () { Navigator.pop(ctx); _freeTrolley(); },
+            onPressed: () {
+              Navigator.pop(ctx);
+              _freeTrolley(controller);
+            },
             child: const Text('Free Trolley'),
           ),
         ],
@@ -975,169 +489,41 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
     );
   }
 
-  // ── Trolley: Free (detach from batch header) ───────────────────────────
-  Future<void> _freeTrolley() async {
-    setState(() => _isUpdatingTrolley = true);
+  Future<void> _freeTrolley(ProcessingBatchController controller) async {
     AppLoader.show(context, message: 'Freeing trolley...');
-    try {
-      final bhRes = await _lotRepo.fetchLotHeaderById(widget.batchHeaderId);
-      if (!bhRes.success || bhRes.data == null) {
-        AppLoader.hide(context);
-        setState(() => _isUpdatingTrolley = false);
-        _showError('Failed to fetch batch header');
-        return;
-      }
-      final bh = LotHeaderResponseModel.fromJson(
-          bhRes.data as Map<String, dynamic>).batchHeader;
-      final updateRes = await _lotRepo.updateLotHeader(widget.batchHeaderId, {
-        'planDate': bh.planDate,
-        'colorDescription': bh.colorDescription,
-        'lockFlag': bh.lockFlag ?? false,
-        'batchHeaderCode': bh.batchHeaderCode,
-        'machineId': bh.machineId,
-        'colorCode': bh.colorCodeId,
-        'shiftId': bh.shiftId,
-        'trayDetailId': null,
-        'concurrencyStamp': bh.concurrencyStamp,
-      });
-      AppLoader.hide(context);
-      if (updateRes.success) {
-        setState(() {
-          _trolleyCode = null;
-          _trolleyDetailId = null;
-          _isUpdatingTrolley = false;
-        });
-        AppSnackBar.showWarning(context, message: 'Trolley free. Scan a new trolley before submitting.');
-      } else {
-        setState(() => _isUpdatingTrolley = false);
-        _showError('Free failed: ${updateRes.message}');
-      }
-    } catch (e) {
-      AppLoader.hide(context);
-      setState(() => _isUpdatingTrolley = false);
-      debugPrint('Free trolley error: $e');
+    await controller.freeTrolley();
+    AppLoader.hide(context);
+    if (!mounted) return;
+    if (controller.state.errorMessage != null) {
+      AppSnackBar.showError(context, message: controller.state.errorMessage!);
+    } else {
+      AppSnackBar.showWarning(context, message: 'Trolley free. Scan a new trolley before submitting.');
     }
   }
 
-  // ── Trolley: Scan dialog ───────────────────────────────────────────────
-  // ── Trolley: Open scanner (same as batch list) ──────────────────────────
-  Future<void> _showScanTrolleyDialog() async {
+  Future<void> _showScanTrolleyDialog(ProcessingBatchController controller) async {
     await ScannerAlwaysOpen.show(
       context,
       title: 'Scan Trolley',
       onResult: (scannedCode) async {
         final code = scannedCode.trim();
         if (code.isEmpty) return 'Invalid trolley code';
-        return await _attachTrolley(code);
+        final err = await controller.attachTrolley(code);
+        if (err != null) return err;
+        if (mounted) Navigator.of(context).pop();
+        return null;
       },
     );
   }
 
-  // ── Trolley: Attach (validate + update batch header) ─────────────────────
-  /// Returns null on success, error message string on failure.
-  /// The ScannerAlwaysOpen widget shows returned errors inside the scanner UI.
-  Future<String?> _attachTrolley(String code) async {
-    setState(() => _isUpdatingTrolley = true);
-    AppLoader.show(context, message: 'Validating trolley...');
-    try {
-      // 1. Look up tray detail by code
-      final result = await _lotRepo.fetchTrayDetailByCode(code);
-      AppLoader.hide(context);
-
-      if (!result.success || result.data == null) {
-        setState(() => _isUpdatingTrolley = false);
-        return 'Trolley not found: $code';
-      }
-
-      // Parse: API may return {trayDetail:{...}} or flat
-      final rawMap = result.data as Map<String, dynamic>;
-      final tdMap = (rawMap['trayDetail'] is Map)
-          ? Map<String, dynamic>.from(rawMap['trayDetail'] as Map)
-          : rawMap;
-
-      // 2. Validate active
-      if (tdMap['active'] != true) {
-        setState(() => _isUpdatingTrolley = false);
-        return 'Trolley "$code" is not active';
-      }
-
-      // 3. Validate type == 4 (Trolley)
-      if ((tdMap['trayType'] as int? ?? 0) != 4) {
-        setState(() => _isUpdatingTrolley = false);
-        return 'Invalid type. Only Type 4 (Trolley) is allowed.';
-      }
-
-      final trolleyId = tdMap['id'] as int?;
-      if (trolleyId == null) {
-        setState(() => _isUpdatingTrolley = false);
-        return 'Could not resolve trolley ID';
-      }
-
-      // 4. Uniqueness: batchHeaderId must be null OR equal this batch
-      final assignedBatchId = tdMap['batchHeaderId'] as int?;
-      if (assignedBatchId != null && assignedBatchId != widget.batchHeaderId) {
-        setState(() => _isUpdatingTrolley = false);
-        return 'Trolley already assigned to another batch (ID: $assignedBatchId)';
-      }
-
-      // 5. Attach: fetch fresh batch header and PUT with new trayDetailId
-      AppLoader.show(context, message: 'Attaching trolley...');
-      final bhRes = await _lotRepo.fetchLotHeaderById(widget.batchHeaderId);
-      if (!bhRes.success || bhRes.data == null) {
-        AppLoader.hide(context);
-        setState(() => _isUpdatingTrolley = false);
-        return 'Failed to fetch batch header';
-      }
-      final bh = LotHeaderResponseModel.fromJson(
-          bhRes.data as Map<String, dynamic>).batchHeader;
-      final updateRes = await _lotRepo.updateLotHeader(widget.batchHeaderId, {
-        'planDate': bh.planDate,
-        'colorDescription': bh.colorDescription,
-        'lockFlag': bh.lockFlag ?? false,
-        'batchHeaderCode': bh.batchHeaderCode,
-        'machineId': bh.machineId,
-        'colorCode': bh.colorCodeId,
-        'shiftId': bh.shiftId,
-        'trayDetailId': trolleyId,
-        'concurrencyStamp': bh.concurrencyStamp,
-      });
-      AppLoader.hide(context);
-      if (updateRes.success) {
-        final resolvedCode = tdMap['trayCode']?.toString() ?? code;
-        setState(() {
-          _trolleyCode = resolvedCode;
-          _trolleyDetailId = trolleyId;
-          _isUpdatingTrolley = false;
-        });
-        // Close the scanner
-        if (mounted) Navigator.of(context).pop();
-        AppSnackBar.showSuccess(context, message: 'Trolley "$resolvedCode" attached successfully.');
-        return null; // success
-      } else {
-        setState(() => _isUpdatingTrolley = false);
-        return 'Attach failed: ${updateRes.message}';
-      }
-    } catch (e) {
-      AppLoader.hide(context);
-      setState(() => _isUpdatingTrolley = false);
-      debugPrint('Attach trolley error: $e');
-      return 'Unexpected error. Please try again.';
-    }
-  }
-
-  void _showError(String msg) {
-    AppSnackBar.showError(context, message: msg);
-  }
-
-  // ── Confirm Start ─────────────────────────────────────────────────────────
-  void _confirmStart() {
+  void _confirmStart(ProcessingBatchController controller, ProcessingBatchState state) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Start Batch'),
         content: Text(
-          'Are you sure you want to start batch ${widget.batchCode}?\n'
-          '${_trays.length} tray${_trays.length != 1 ? 's' : ''} will be marked as started.',
+          'Are you sure you want to start batch ${controller.batchCode}?\n'
+          '${state.trays.length} tray${state.trays.length != 1 ? 's' : ''} will be marked as started.',
         ),
         actions: [
           TextButton(
@@ -1151,7 +537,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
             ),
             onPressed: () {
               Navigator.pop(ctx);
-              _startBatch();
+              _startBatch(controller);
             },
             child: const Text('Start'),
           ),
@@ -1160,46 +546,20 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
     );
   }
 
-  // ── Start Batch ───────────────────────────────────────────────────────────
-  Future<void> _startBatch() async {
+  Future<void> _startBatch(ProcessingBatchController controller) async {
     AppLoader.show(context, message: 'Starting batch...');
-    final now = DateTime.now();
-    bool anyFailed = false;
-
-    for (final t in _trays) {
-      final pp = t.productionProgress;
-      final payload = pp.toJson()
-        ..['isStarted'] = true
-        ..['startDate'] = now.toIso8601String();
-      // Remove read-only fields that the PUT endpoint rejects
-      payload.remove('id');
-      payload.remove('progressCode');
-      payload.remove('creationTime');
-      payload.remove('creatorId');
-      payload.remove('lastModificationTime');
-      payload.remove('lastModifierId');
-
-      final res = await _processingRepo.updateProductionProgress(pp.id!, payload);
-      if (!res.success) anyFailed = true;
-    }
-
-    AppLoader.hide(context);
-    if (!mounted) return;
-
-    if (anyFailed) {
-      AppSnackBar.showError(context, message: 'Some trays failed to start. Please retry.');
-    } else {
-      setState(() {
-        _isBatchStarted = true;
-        _startTime = now;
-        _trays.clear(); // Force refresh to get new concurrency stamps
-      });
-      await _fetchTraysIfNeeded();
+    try {
+      await controller.startBatch();
+      if (mounted) AppSnackBar.showSuccess(context, message: 'Batch started successfully.');
+    } catch (e) {
+      if (mounted) AppSnackBar.showError(context, message: 'Failed to start batch: $e');
+    } finally {
+      AppLoader.hide(context);
     }
   }
 
-  void _showReworkDialog() async {
-    final firstTray = _trays.isNotEmpty ? _trays.first : null;
+  void _showReworkDialog(ProcessingBatchController controller, ProcessingBatchState state) async {
+    final firstTray = state.trays.isNotEmpty ? state.trays.first : null;
     final int? routingItemId = firstTray?.productionProgress.processedItemId ?? firstTray?.item.id;
 
     if (routingItemId == null) {
@@ -1238,13 +598,9 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
       }
     }
 
-    // Sort by sequence
     parsedRoutings.sort((a, b) => (a['seq'] as int).compareTo(b['seq'] as int));
+    final currentIdx = parsedRoutings.indexWhere((r) => r['operationId'] == controller.currentOperationId);
 
-    // Find index of current operation in the route
-    final currentIdx = parsedRoutings.indexWhere((r) => r['operationId'] == widget.currentOperationId);
-
-    // We only display operations that come BEFORE the current operation in this specific routing sequence
     final List<Map<String, dynamic>> prevOps = [];
     if (currentIdx != -1) {
       prevOps.addAll(parsedRoutings.sublist(0, currentIdx));
@@ -1277,12 +633,11 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
                 title: Text(op['name']),
                 onTap: () {
                   Navigator.pop(context);
-                  setState(() {
-                    _isReworkMode = true;
-                    _reworkTargetOpId = op['operationId'] as int;
-                    _reworkTargetOpName = op['name'] as String;
-                    _showTrays = true;
-                  });
+                  controller.toggleReworkMode(
+                    enabled: true,
+                    targetOpId: op['operationId'] as int,
+                    targetOpName: op['name'] as String,
+                  );
                 },
               );
             },
@@ -1292,15 +647,14 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
     );
   }
 
-  void _confirmSubmit() {
-    // ── Guard: trolley must be attached ───────────────────────────────────
-    if (_trolleyDetailId == null) {
+  void _confirmSubmit(ProcessingBatchController controller, ProcessingBatchState state) {
+    if (state.trolleyDetailId == null) {
       AppSnackBar.showError(context, message: 'Please scan a trolley before submitting.');
       return;
     }
     String msg = 'Proceed with batch submission?';
-    if (_isReworkMode) {
-      msg = '${_selectedReworkTrayIds.length} trays will return to $_reworkTargetOpName.\nOthers will proceed to standard flow.';
+    if (state.isReworkMode) {
+      msg = '${state.selectedReworkTrayIds.length} trays will return to ${state.reworkTargetOpName}.\nOthers will proceed to standard flow.';
     }
 
     showDialog(
@@ -1313,7 +667,7 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              _submitBatch();
+              _submitBatch(controller);
             },
             child: const Text('Submit'),
           ),
@@ -1322,237 +676,15 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
     );
   }
 
-  Future<void> _submitBatch() async {
+  Future<void> _submitBatch(ProcessingBatchController controller) async {
     AppLoader.show(context, message: 'Submitting...');
     try {
-      final baseProgress = _trays.isNotEmpty ? _trays.first.productionProgress : null;
-      final targetOpId = widget.nextOperationId ?? widget.currentOperationId;
-      int nextLocatorId = baseProgress?.locatorId ?? 10;
-      final locRes = await _processingRepo.fetchLocators(operationId: targetOpId);
-      if (locRes.success && locRes.data != null) {
-        final List locList = locRes.data is Map ? (locRes.data['items'] ?? []) : locRes.data;
-        final match = locList.cast<Map>().firstWhere(
-          (e) => (e['operation']?['id'] ?? e['locator']?['operationId'])?.toString() == targetOpId.toString(),
-          orElse: () => {},
-        );
-        if (match.isNotEmpty) nextLocatorId = match['locator']?['id'] as int? ?? (baseProgress?.locatorId ?? 10);
-      }
-
-      final List<int> newFailedTrayIds = [];
-      final traysToProcess = _trays;
-
-      for (final t in traysToProcess) {
-        final pp = t.productionProgress;
-        final json = pp.toJson();
-        final isRework = _isReworkMode && _selectedReworkTrayIds.contains(pp.id);
-
-        try {
-          if (isRework) {
-            json['transactionType'] = 3;
-            json['wipStatus'] = 1;
-            json.remove('id');
-            json.remove('progressCode');
-            json.remove('creationTime');
-            json.remove('creatorId');
-            json.remove('lastModificationTime');
-            json.remove('lastModifierId');
-            final updRes = await _processingRepo.updateProductionProgress(pp.id!, json);
-            if (!updRes.success) throw Exception('Update failed: ${updRes.message}');
-
-            int rewLoc = pp.locatorId ?? 10;
-            final rewRes = await _processingRepo.fetchLocators(operationId: _reworkTargetOpId!);
-            if (rewRes.success && rewRes.data != null) {
-              final List rl = rewRes.data is Map ? (rewRes.data['items'] ?? []) : rewRes.data;
-              final rm = rl.cast<Map>().firstWhere(
-                    (e) => (e['operation']?['id'] ?? e['locator']?['operationId'])?.toString() == _reworkTargetOpId.toString(),
-                orElse: () => {},
-              );
-              if (rm.isNotEmpty) rewLoc = rm['locator']?['id'] as int? ?? (pp.locatorId ?? 10);
-            }
-
-            final newJ = pp.toJson();
-            newJ.remove('id');
-            newJ.remove('progressCode');
-            newJ.remove('concurrencyStamp');
-            newJ.addAll({
-              'transactionType': 2,
-              'reworkFlag': true,
-              'isStarted': false,
-              'startDate': null,
-              'machineId': null,
-              'batchLineId': pp.batchLinesId,
-              'batchLinesId': pp.batchLinesId,
-              'isLastProcess': false,
-              'operationId': _reworkTargetOpId,
-              'locatorId': rewLoc,
-              'date': DateTime.now().toIso8601String(),
-            });
-            final crRes = await _processingRepo.createProductionProgress(newJ);
-            if (!crRes.success) throw Exception('Create failed: ${crRes.message}');
-
-            int? targetProgressId;
-            final ppData = crRes.data;
-            if (ppData is Map) {
-              final rawId = int.tryParse(ppData['id']?.toString() ?? '');
-              if (rawId != null && rawId > 0) targetProgressId = rawId;
-            } else if (ppData is int && ppData > 0) {
-              targetProgressId = ppData;
-            }
-
-            if (targetProgressId != null && targetProgressId > 0 && pp.batchLinesId != null) {
-              final newWipRes = await _lotRepo.fetchWipTransactionsByProgressId(targetProgressId);
-              if (newWipRes.success && newWipRes.data != null) {
-                final List rawItems = newWipRes.data is Map ? (newWipRes.data['items'] ?? []) : newWipRes.data;
-                final items = rawItems.cast<Map<String, dynamic>>();
-                final match = items.firstWhere(
-                  (e) => (e['wipTransaction']?['progressId'] ?? e['progressId'] ?? e['wipTransaction']?['productionProgressId'] ?? e['productionProgressId'])?.toString() == targetProgressId.toString(),
-                  orElse: () => {},
-                );
-                if (match.isNotEmpty) {
-                  final newWipId = match['wipTransaction']?['id'] as int?;
-                  if (newWipId != null) {
-                    final wipPayload = Map<String, dynamic>.from(match['wipTransaction'] ?? match);
-                    wipPayload['batchLinesId'] = pp.batchLinesId;
-                    wipPayload['batchLineId'] = pp.batchLinesId;
-                    wipPayload.remove('id');
-                    wipPayload.remove('concurrencyStamp');
-                    await _lotRepo.updateWipTransaction(newWipId, wipPayload);
-                  }
-                }
-              }
-            }
-          } else if (widget.nextOperationId != null) {
-            json['transactionType'] = 3;
-            json['wipStatus'] = 1;
-            json.remove('id');
-            json.remove('progressCode');
-            json.remove('creationTime');
-            json.remove('creatorId');
-            json.remove('lastModificationTime');
-            json.remove('lastModifierId');
-            
-            dev.log('🚀 [HEATSET/NEXT] Updating old PP ID ${pp.id} to TxType 3: $json');
-            final updRes = await _processingRepo.updateProductionProgress(pp.id!, json);
-            dev.log('✅ [HEATSET/NEXT] Update Response: ${updRes.success} | ${updRes.message} | ${updRes.data}');
-            if (!updRes.success) throw Exception('Update failed: ${updRes.message}');
-
-            final newJ = pp.toJson();
-            newJ.remove('id');
-            newJ.remove('progressCode');
-            newJ.remove('concurrencyStamp');
-            newJ.addAll({
-              'transactionType': 2,
-              'reworkFlag': pp.reworkFlag ?? false,
-              'isStarted': false,
-              'startDate': null,
-              'machineId': null,
-              'batchLineId': pp.batchLinesId,
-              'batchLinesId': pp.batchLinesId,
-              'isLastProcess': false,
-              'operationId': widget.nextOperationId,
-              'locatorId': nextLocatorId,
-              'date': DateTime.now().toIso8601String(),
-            });
-            final crRes = await _processingRepo.createProductionProgress(newJ);
-            if (!crRes.success) throw Exception('Create failed: ${crRes.message}');
-
-            int? targetProgressId;
-            final ppData = crRes.data;
-            if (ppData is Map) {
-              final rawId = int.tryParse(ppData['id']?.toString() ?? '');
-              if (rawId != null && rawId > 0) targetProgressId = rawId;
-            } else if (ppData is int && ppData > 0) {
-              targetProgressId = ppData;
-            }
-
-            if (targetProgressId != null && targetProgressId > 0 && pp.batchLinesId != null) {
-              final newWipRes = await _lotRepo.fetchWipTransactionsByProgressId(targetProgressId);
-              if (newWipRes.success && newWipRes.data != null) {
-                final List rawItems = newWipRes.data is Map ? (newWipRes.data['items'] ?? []) : newWipRes.data;
-                final items = rawItems.cast<Map<String, dynamic>>();
-                final match = items.firstWhere(
-                  (e) => (e['wipTransaction']?['progressId'] ?? e['progressId'] ?? e['wipTransaction']?['productionProgressId'] ?? e['productionProgressId'])?.toString() == targetProgressId.toString(),
-                  orElse: () => {},
-                );
-                if (match.isNotEmpty) {
-                  final newWipId = match['wipTransaction']?['id'] as int?;
-                  if (newWipId != null) {
-                    final wipPayload = Map<String, dynamic>.from(match['wipTransaction'] ?? match);
-                    wipPayload['batchLinesId'] = pp.batchLinesId;
-                    wipPayload['batchLineId'] = pp.batchLinesId;
-                    wipPayload.remove('id');
-                    wipPayload.remove('concurrencyStamp');
-                    await _lotRepo.updateWipTransaction(newWipId, wipPayload);
-                  }
-                }
-              }
-            }
-          } else {
-            json['transactionType'] = 3;
-            json['wipStatus'] = 1;
-            json['isLastProcess'] = true; // ✅ Flags tray as ready for Induction
-            json.remove('id');
-            json.remove('progressCode');
-            json.remove('creationTime');
-            json.remove('creatorId');
-            json.remove('lastModificationTime');
-            json.remove('lastModifierId');
-            final updRes = await _processingRepo.updateProductionProgress(pp.id!, json);
-            if (!updRes.success) throw Exception('Update final progress failed: ${updRes.message}');
-          }
-        } catch (e) {
-          dev.log('❌ Tray submission error for PP ${pp.id}: $e');
-          newFailedTrayIds.add(pp.id!);
-        }
-      }
-
-      setState(() {
-        if (_failedTrayIds.isEmpty) {
-          _failedTrayIds.addAll(newFailedTrayIds);
-        } else {
-          for (final t in traysToProcess) {
-            final id = t.productionProgress.id!;
-            if (newFailedTrayIds.contains(id)) {
-              _failedTrayIds.add(id);
-            } else {
-              _failedTrayIds.remove(id);
-            }
-          }
+      await controller.submitBatch((result) {
+        if (mounted) {
+          AppLoader.hide(context);
+          Navigator.pop(context, result);
         }
       });
-
-      if (_failedTrayIds.isNotEmpty) {
-        throw Exception('${_failedTrayIds.length} tray(s) failed to submit. Please check connection and retry.');
-      }
-
-      if (mounted) {
-        AppLoader.hide(context);
-        
-        final List<int> targetOps = [];
-        if (_isReworkMode && _reworkTargetOpId != null) {
-          targetOps.add(_reworkTargetOpId!);
-        }
-        
-        bool hasStandard = false;
-        if (_isReworkMode) {
-          hasStandard = _trays.any((t) => !_selectedReworkTrayIds.contains(t.productionProgress.id));
-        } else {
-          hasStandard = true;
-        }
-        
-        if (hasStandard && widget.nextOperationId != null) {
-          if (!targetOps.contains(widget.nextOperationId!)) {
-            targetOps.add(widget.nextOperationId!);
-          }
-        }
-
-        Navigator.pop(context, {
-          'submitted': true,
-          'targetOps': targetOps,
-          'isRework': _isReworkMode,
-          'isReassigned': false,
-        });
-      }
     } catch (e) {
       AppLoader.hide(context);
       if (mounted) {
@@ -1561,13 +693,11 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
     }
   }
 
-  Widget _buildActionConsole() {
-    final isLapping = widget.operationName.toLowerCase().contains('lapping');
-    final isReworkBatch = _trays.isNotEmpty && _trays.any((t) => t.productionProgress.reworkFlag == true);
-    final isReassignedBatch = _isReassignedBatch;
+  Widget _buildActionConsole(ProcessingBatchController controller, ProcessingBatchState state) {
+    final isLapping = controller.operationName.toLowerCase().contains('lapping');
 
     return Container(
-      width: double.infinity, // Expand to full width
+      width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1581,106 +711,102 @@ class _ProcessingBatchDetailsScreenState extends State<ProcessingBatchDetailsScr
           const SizedBox(height: 12),
           Row(
             children: [
-              Builder(
-                builder: (context) {
-                  final opName = widget.operationName.toLowerCase();
-                  final isEditable = opName.contains('heat set') || opName.contains('qa');
-                  final label = _showTrays
+              Expanded(
+                child: _buildConsoleButton(
+                  label: state.showTrays
                       ? 'HIDE'
-                      : (isEditable ? 'EDIT TRAYS' : 'SHOW');
-                  final icon = _showTrays
+                      : ((controller.operationName.toLowerCase().contains('heat set') || controller.operationName.toLowerCase().contains('qa'))
+                          ? 'EDIT TRAYS'
+                          : 'SHOW'),
+                  icon: state.showTrays
                       ? Icons.visibility_off_rounded
-                      : (isEditable ? Icons.edit_note_rounded : Icons.visibility_rounded);
-
-                  return Expanded(
-                    child: _buildConsoleButton(
-                      label: label,
-                      icon: icon,
-                      color: const Color(0xFF1B64A3),
-                      onPressed: _toggleTrayDetails,
-                    ),
-                  );
-                }
+                      : ((controller.operationName.toLowerCase().contains('heat set') || controller.operationName.toLowerCase().contains('qa'))
+                          ? Icons.edit_note_rounded
+                          : Icons.visibility_rounded),
+                  color: const Color(0xFF1B64A3),
+                  onPressed: controller.toggleShowTrays,
+                ),
               ),
               const SizedBox(width: 6),
               Expanded(
                 child: _buildConsoleButton(
-                  label: _isBatchStarted ? 'STARTED' : 'START',
-                  icon: _isBatchStarted ? Icons.check_circle_outline_rounded : Icons.play_arrow_rounded,
-                  color: _isBatchStarted ? const Color(0xFF94A3B8) : const Color(0xFF2E7D32),
-                  onPressed: (_isBatchStarted || _trays.isEmpty) ? null : _confirmStart,
+                  label: state.isBatchStarted ? 'STARTED' : 'START',
+                  icon: state.isBatchStarted ? Icons.check_circle_outline_rounded : Icons.play_arrow_rounded,
+                  color: state.isBatchStarted ? const Color(0xFF94A3B8) : const Color(0xFF2E7D32),
+                  onPressed: (state.isBatchStarted || state.trays.isEmpty) ? null : () => _confirmStart(controller, state),
                 ),
               ),
               const SizedBox(width: 6),
-              if (_hasPreviousProcess && !isLapping) ...[
+              if (controller.hasPreviousProcess && !isLapping) ...[
                 Expanded(
                   child: _buildConsoleButton(
-                    label: _isReworkMode ? 'CANCEL' : 'REWORK',
+                    label: state.isReworkMode ? 'CANCEL' : 'REWORK',
                     icon: Icons.sync_problem_rounded,
-                    color: _isReworkMode ? Colors.red : Colors.orange.shade800,
-                    onPressed: !_isBatchStarted
+                    color: state.isReworkMode ? Colors.red : Colors.orange.shade800,
+                    onPressed: !state.isBatchStarted
                         ? null
                         : () {
-                            if (_isReworkMode) {
-                              setState(() {
-                                _isReworkMode = false;
-                                _selectedReworkTrayIds.clear();
-                                _reworkTargetOpId = null;
-                                _reworkTargetOpName = null;
-                              });
+                            if (state.isReworkMode) {
+                              controller.toggleReworkMode(enabled: false);
                             } else {
-                              _showReworkDialog();
+                              _showReworkDialog(controller, state);
                             }
                           },
                   ),
                 ),
                 const SizedBox(width: 6),
               ],
-              if (isLapping && !isReassignedBatch) ...[
+              if (isLapping && !state.isReassignedBatch) ...[
                 Expanded(
                   child: _buildConsoleButton(
                     label: 'RE-ASSIGN',
                     icon: Icons.assignment_turned_in_rounded,
                     color: Colors.teal,
-                    onPressed: !_isBatchStarted ? null : () async {
-                      final result = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => LappingDetailScreen(
-                            batchHeaderId: widget.batchHeaderId,
-                            batchCode: widget.batchCode,
-                            machineId: widget.machineId,
-                            machine: widget.machine,
-                            color: widget.color,
-                            trayCount: widget.trayCount,
-                            totalWeight: widget.totalWeight,
-                            currentOperationId: widget.currentOperationId,
-                            nextOperationId: widget.nextOperationId,
-                            nextOperationName: widget.nextOperationName,
-                          ),
-                        ),
-                      );
-                      if (mounted && result == true) {
-                        Navigator.pop(context, {
-                          'submitted': true,
-                          'targetOps': [if (widget.nextOperationId != null) widget.nextOperationId!],
-                          'isReassigned': true,
-                          'isRework': false,
-                        });
-                      }
-                    },
+                    onPressed: !state.isBatchStarted
+                        ? null
+                        : () async {
+                            final result = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => LappingDetailScreen(
+                                  batchHeaderId: controller.batchHeaderId,
+                                  batchCode: controller.batchCode,
+                                  machineId: controller.machineId,
+                                  machine: controller.machine,
+                                  color: controller.color,
+                                  trayCount: controller.trayCount,
+                                  totalWeight: controller.totalWeight,
+                                  currentOperationId: controller.currentOperationId,
+                                  nextOperationId: controller.nextOperationId,
+                                  nextOperationName: controller.nextOperationName,
+                                ),
+                              ),
+                            );
+                            if (mounted && result == true) {
+                              Navigator.pop(context, {
+                                'submitted': true,
+                                'targetOps': [if (controller.nextOperationId != null) controller.nextOperationId!],
+                                'isReassigned': true,
+                                'isRework': false,
+                              });
+                            }
+                          },
                   ),
                 ),
                 const SizedBox(width: 6),
               ],
               Expanded(
                 child: _buildConsoleButton(
-                  label: _trolleyCode != null ? 'FREE TROLLEY' : 'SCAN TROLLEY',
-                  icon: _trolleyCode != null ? Icons.link_off_rounded : Icons.qr_code_scanner_rounded,
-                  color: _trolleyCode != null ? Colors.red.shade700 : Colors.teal.shade700,
-                  onPressed: !_isBatchStarted
+                  label: state.trolleyCode != null ? 'FREE TROLLEY' : 'SCAN TROLLEY',
+                  icon: state.trolleyCode != null ? Icons.link_off_rounded : Icons.qr_code_scanner_rounded,
+                  color: state.trolleyCode != null ? Colors.red.shade700 : Colors.teal.shade700,
+                  onPressed: !state.isBatchStarted
                       ? null
-                      : (_isUpdatingTrolley ? null : (_trolleyCode != null ? _confirmFreeTrolley : _showScanTrolleyDialog)),
+                      : (state.isUpdatingTrolley
+                          ? null
+                          : (state.trolleyCode != null
+                              ? () => _confirmFreeTrolley(controller, state)
+                              : () => _showScanTrolleyDialog(controller))),
                 ),
               ),
             ],
