@@ -433,9 +433,9 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
               trayIdsWithWastage: state.trayIdsWithWastage,
               isEditable: (controller.operationName.toLowerCase().contains('heat set') || controller.operationName.toLowerCase().contains('qa')) && state.isBatchStarted,
               operationName: controller.operationName,
-              onQuantitySubmit: (progressId, newQty) async {
+              onQuantitySubmit: (progressId, newQty, productGrade) async {
                 try {
-                  await controller.updateQuantity(progressId, newQty);
+                  await controller.updateQuantity(progressId, newQty, productGrade);
                   if (mounted) AppSnackBar.showSuccess(context, message: 'Quantity updated successfully.');
                 } catch (e) {
                   if (mounted) AppSnackBar.showError(context, message: 'Failed to update quantity: $e');

@@ -390,7 +390,7 @@ class ProcessingBatchController extends ChangeNotifier {
     }
   }
 
-  Future<void> updateQuantity(int progressId, double newQty) async {
+  Future<void> updateQuantity(int progressId, double newQty, [int productGrade = 1]) async {
     _state = _state.copyWith(isLoading: true, clearError: true);
     notifyListeners();
 
@@ -460,6 +460,7 @@ class ProcessingBatchController extends ChangeNotifier {
           wJson['waste'] = 0;
           wJson['requiredQty'] = requiredQty.toInt();
           wJson['locatorId'] = 18;
+          wJson['productGrade'] = productGrade;
 
           wJson.remove('id');
           wJson.remove('progressCode');
@@ -487,6 +488,7 @@ class ProcessingBatchController extends ChangeNotifier {
           newJson['waste'] = 0;
           newJson['requiredQty'] = requiredQty.toInt();
           newJson['locatorId'] = 18;
+          newJson['productGrade'] = productGrade;
           newJson['transactionType'] = tray.productionProgress.transactionType ?? 2;
           newJson['subOperation'] = progressId.toString();
           newJson['isStarted'] = false;

@@ -15,7 +15,7 @@ class ProcessingTrayTable extends StatefulWidget {
   final void Function(bool selected)? onSelectAllToggle;
   final bool isEditable;
   final String operationName;
-  final Future<void> Function(int progressId, double newQty)? onQuantitySubmit;
+  final Future<void> Function(int progressId, double newQty, int productGrade)? onQuantitySubmit;
   final Future<void> Function(int progressId)? onDeleteWastage;
   final Set<int> trayIdsWithWastage;
 
@@ -290,12 +290,12 @@ class _ProcessingTrayTableState extends State<ProcessingTrayTable> {
         operationName: widget.operationName,
         currentQty: currentQty,
         requiredQty: requiredQty,
-        onSave: (finalQty) async {
+        onSave: (finalQty, productGrade) async {
           setState(() {
             _loadingRows[progressId] = true;
           });
           try {
-            await widget.onQuantitySubmit?.call(progressId, finalQty);
+            await widget.onQuantitySubmit?.call(progressId, finalQty, productGrade);
           } finally {
             if (mounted) {
               setState(() {
@@ -328,7 +328,8 @@ class _EditTrayQuantityDialog extends StatefulWidget {
   final String operationName;
   final double currentQty;
   final double requiredQty;
-  final Future<void> Function(double finalQty) onSave;
+  final int initialProductGrade;
+  final Future<void> Function(double finalQty, int productGrade) onSave;
   final Future<void> Function()? onDelete;
 
   const _EditTrayQuantityDialog({
@@ -336,6 +337,7 @@ class _EditTrayQuantityDialog extends StatefulWidget {
     required this.operationName,
     required this.currentQty,
     required this.requiredQty,
+    this.initialProductGrade = 1,
     required this.onSave,
     this.onDelete,
   });
@@ -346,6 +348,7 @@ class _EditTrayQuantityDialog extends StatefulWidget {
 
 class _EditTrayQuantityDialogState extends State<_EditTrayQuantityDialog> {
   int _selectedMode = 1; // 1 = Direct Quantity, 2 = Wastage
+  int _selectedProductGrade = 1; // 1 = Grade B, 2 = Grade C
   late TextEditingController _qtyController;
   late TextEditingController _wastageController;
   bool _isSaving = false;
@@ -353,6 +356,7 @@ class _EditTrayQuantityDialogState extends State<_EditTrayQuantityDialog> {
   @override
   void initState() {
     super.initState();
+    _selectedProductGrade = (widget.initialProductGrade == 2) ? 2 : 1;
     _qtyController = TextEditingController(text: widget.currentQty.toStringAsFixed(0));
     final initialWaste = widget.requiredQty - widget.currentQty;
     _wastageController = TextEditingController(
@@ -573,6 +577,46 @@ class _EditTrayQuantityDialogState extends State<_EditTrayQuantityDialog> {
                 ),
               ],
             ),
+            const SizedBox(height: 12),
+            const Text(
+              'Product Grade',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Expanded(
+                  child: RadioListTile<int>(
+                    contentPadding: EdgeInsets.zero,
+                    value: 1,
+                    groupValue: _selectedProductGrade,
+                    title: const Text('Grade B', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    onChanged: _isSaving
+                        ? null
+                        : (v) {
+                            setState(() {
+                              _selectedProductGrade = v!;
+                            });
+                          },
+                  ),
+                ),
+                Expanded(
+                  child: RadioListTile<int>(
+                    contentPadding: EdgeInsets.zero,
+                    value: 2,
+                    groupValue: _selectedProductGrade,
+                    title: const Text('Grade C', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    onChanged: _isSaving
+                        ? null
+                        : (v) {
+                            setState(() {
+                              _selectedProductGrade = v!;
+                            });
+                          },
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -630,7 +674,7 @@ class _EditTrayQuantityDialogState extends State<_EditTrayQuantityDialog> {
                         _isSaving = true;
                       });
                       try {
-                        await widget.onSave(parsedQty);
+                        await widget.onSave(parsedQty, _selectedProductGrade);
                         if (mounted) Navigator.pop(context);
                       } catch (e) {
                         if (mounted) {
