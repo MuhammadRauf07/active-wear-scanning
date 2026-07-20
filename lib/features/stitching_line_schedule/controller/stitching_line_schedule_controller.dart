@@ -263,6 +263,85 @@ class StitchingLineScheduleController extends ChangeNotifier {
         );
       }
 
+      // Sync to sewing-mappings
+      final po = _state.selectedCustomerPO;
+      final customer = _state.selectedCustomer;
+      debugPrint('🔍 saveChanges sync: selectedCustomer=$customer, selectedCustomerPO=$po');
+      if (po != null && customer != null) {
+        final selectedBundleNos = selectedItems
+            .map((item) => item.stitchingLineSchedule.bundleNo)
+            .whereType<String>()
+            .toSet();
+        debugPrint('🔍 Selected bundle numbers: $selectedBundleNos');
+
+        if (selectedBundleNos.isNotEmpty) {
+          debugPrint('🔍 Fetching sewing mappings for PO: $po');
+          final sewingRes = await _stitchingLineScheduleRepo.fetchSewingMappings(po: po);
+          debugPrint('🔍 Fetch sewing mappings response success: ${sewingRes.success}, status: ${sewingRes.code}');
+          
+          if (sewingRes.success && sewingRes.data != null) {
+            final List rawItems = sewingRes.data is Map ? (sewingRes.data['items'] ?? []) : sewingRes.data;
+            debugPrint('🔍 Fetched ${rawItems.length} raw items from sewing-mappings');
+            final List<Future<PlexApiResult>> sewingUpdateFutures = [];
+
+            for (final rawItem in rawItems) {
+              final itemMap = Map<String, dynamic>.from(rawItem as Map);
+              if (itemMap.containsKey('sewingMapping') && itemMap['sewingMapping'] != null) {
+                final sewingMapping = Map<String, dynamic>.from(itemMap['sewingMapping'] as Map);
+
+                final mappingCustomer = sewingMapping['customer']?.toString().toUpperCase();
+                final mappingPo = sewingMapping['po']?.toString().toUpperCase();
+                final mappingBundleNo = sewingMapping['bundleNo']?.toString();
+                final mappingId = sewingMapping['id'] as int?;
+
+                debugPrint('🔍 Check mapping - ID: $mappingId, customer: $mappingCustomer, po: $mappingPo, bundleNo: $mappingBundleNo');
+
+                if (mappingCustomer == customer.toUpperCase() &&
+                    mappingPo == po.toUpperCase() &&
+                    mappingBundleNo != null &&
+                    selectedBundleNos.contains(mappingBundleNo)) {
+                  if (mappingId != null) {
+                    final oldLineCode = sewingMapping['lineCode'];
+                    sewingMapping['lineCode'] = _state.selectedCostCenterLine!.name;
+                    sewingMapping['line'] = _state.selectedCostCenterLine!.description;
+                    debugPrint('🔍 Match found! ID $mappingId, bundleNo $mappingBundleNo. Changing lineCode from "$oldLineCode" to "${sewingMapping['lineCode']}", line description to "${sewingMapping['line']}"');
+
+                    sewingUpdateFutures.add(
+                      _stitchingLineScheduleRepo.updateSewingMapping(mappingId, sewingMapping).then((res) {
+                        debugPrint('🔍 Update result for ID $mappingId: success=${res.success}, code=${res.code}, msg=${res.message}');
+                        return res;
+                      })
+                    );
+                  }
+                }
+              } else {
+                debugPrint('🔍 rawItem does not contain sewingMapping key. Keys: ${itemMap.keys}');
+              }
+            }
+
+            if (sewingUpdateFutures.isNotEmpty) {
+              debugPrint('🔍 Sending ${sewingUpdateFutures.length} sewing mapping update requests...');
+              final sewingResults = await Future.wait(sewingUpdateFutures);
+              final List<String> sewingErrors = [];
+              for (final res in sewingResults) {
+                if (!res.success) {
+                  sewingErrors.add(res.message);
+                }
+              }
+              if (sewingErrors.isNotEmpty) {
+                debugPrint('⚠️ Sewing mappings update errors: ${sewingErrors.join(", ")}');
+              } else {
+                debugPrint('✅ All sewing mappings updated successfully!');
+              }
+            } else {
+              debugPrint('🔍 No matching sewing mappings found to update.');
+            }
+          } else {
+            debugPrint('❌ Fetch sewing mappings failed or data null: ${sewingRes.message}');
+          }
+        }
+      }
+
       _state = _state.copyWith(isLoading: false);
     } catch (e) {
       _state = _state.copyWith(isLoading: false, errorMessage: e.toString().replaceFirst("Exception: ", ""));

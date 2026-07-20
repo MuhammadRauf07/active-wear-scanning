@@ -61,4 +61,14 @@ class StitchingLineScheduleRepo {
   Future<PlexApiResult> updateStitchingLineSchedule(int id, Map<String, dynamic> data) async {
     return await _api.put('/api/app/po-styles/$id', body: data);
   }
+
+  Future<PlexApiResult> fetchSewingMappings({required String po}) async {
+    final encodedPo = Uri.encodeComponent(po);
+    final result = await _api.getList('/api/app/sewing-mappings?po=$encodedPo&MaxResultCount=1000');
+    return result;
+  }
+
+  Future<PlexApiResult> updateSewingMapping(int id, Map<String, dynamic> data) async {
+    return await _api.put('/api/app/sewing-mappings/$id', body: data);
+  }
 }
