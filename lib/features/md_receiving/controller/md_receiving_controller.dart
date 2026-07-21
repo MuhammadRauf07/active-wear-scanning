@@ -68,6 +68,12 @@ class MdReceivingController extends ChangeNotifier {
         ? Map<String, dynamic>.from(firstItem['productionProgress'] as Map)
         : Map<String, dynamic>.from(firstItem);
 
+    final toLocId = rawProgress['toLocatorId'] as int? ?? rawProgress['toLocator']?['id'] as int?;
+    final locId = rawProgress['locatorId'] as int? ?? rawProgress['locator']?['id'] as int?;
+    if (toLocId == 14 || locId == 14) {
+      return 'Carton has already been received in MD!';
+    }
+
     final updatedScanned = List<PackingInstructionResponseModel>.from(_state.scannedCartons)..add(model);
     final updatedMap = Map<int, Map<String, dynamic>>.from(_state.productionProgressMap)..[lineDetailId] = rawProgress;
 
