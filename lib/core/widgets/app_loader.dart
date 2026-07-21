@@ -128,4 +128,17 @@ class AppLoader {
       }
     });
   }
+
+  static Future<T> runWithLoader<T>(
+    BuildContext context, {
+    required Future<T> Function() action,
+    String message = 'Please wait...',
+  }) async {
+    show(context, message: message);
+    try {
+      return await action();
+    } finally {
+      hide(context);
+    }
+  }
 }

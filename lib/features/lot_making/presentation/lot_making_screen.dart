@@ -155,147 +155,147 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
           value: controller,
           child: Consumer<LotMakingController>(
             builder: (_, latestController, __) {
-            final latestState = latestController.state;
-            _syncControllers(latestState.scannedTrays);
-            if (latestState.scannedTrays.isEmpty) {
-              return const Center(
-                child: Text(
-                  'No trays scanned yet',
-                  style: TextStyle(color: Color(0xFF90A4AE), fontSize: 13),
+              final latestState = latestController.state;
+              _syncControllers(latestState.scannedTrays);
+              if (latestState.scannedTrays.isEmpty) {
+                return const Center(
+                  child: Text(
+                    'No trays scanned yet',
+                    style: TextStyle(color: Color(0xFF90A4AE), fontSize: 13),
+                  ),
+                );
+              }
+              return Container(
+                margin: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFFB0BEC5),
+                    width: 1.5,
+                    strokeAlign: BorderSide.strokeAlignOutside,
+                  ),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  children: [
+                    const TrayTableHeader(actionColumnWidth: 44, showBatchTubes: true, showDetailedTubes: true),
+                    Expanded(
+                      child: ListView.builder(
+                        padding: EdgeInsets.zero,
+                        itemCount: latestState.scannedTrays.length,
+                        itemBuilder: (context, index) {
+                          final tray = latestState.scannedTrays[index];
+                          final qtys = latestController.getTrayQuantities(tray);
+                          final actualVal = qtys['actual']!;
+                          final alreadyScannedVal = qtys['alreadyScanned']!;
+                          final remainingVal = qtys['remaining']!;
+                          final qty = double.tryParse(_quantityControllers[index].text) ?? 0;
+                          final perTube = tray.item.perGarmentTube;
+                          final pcs = qty * perTube;
+                          final weight = qty * (tray.item.pieceWeight ?? 0);
+
+                          const cellStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238));
+                          const blueCellStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1B64A3));
+
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: index.isEven ? Colors.white : const Color(0xFFF8FAFC),
+                              border: Border(bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.1), width: 1)),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(flex: 6, child: Text(tray.primaryTrayModel.trayCode ?? 'N/A', textAlign: TextAlign.center, style: blueCellStyle)),
+                                Expanded(flex: 4, child: Text(tray.workOrderHeader.workOrderCode ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
+                                Expanded(flex: 4, child: Text(tray.item.sizeDescription ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
+                                Expanded(flex: 4, child: Text(perTube.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
+                                Expanded(flex: 3, child: Text(actualVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
+                                Expanded(flex: 3, child: Text(alreadyScannedVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle.copyWith(color: Colors.orange.shade800))),
+                                Expanded(flex: 3, child: Text(remainingVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle.copyWith(color: const Color(0xFF2E7D32)))),
+                                Expanded(flex: 4, child: Text(pcs.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
+                                Expanded(flex: 4, child: Text('${weight.toStringAsFixed(0)}g', textAlign: TextAlign.center, style: cellStyle)),
+                                Expanded(
+                                  flex: 4,
+                                  child: Container(
+                                    height: 30,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: const Color(0xFFCFD8DC), width: 1.2),
+                                    ),
+                                    child: TextField(
+                                      controller: _quantityControllers[index],
+                                      textAlign: TextAlign.center,
+                                      keyboardType: TextInputType.number,
+                                      style: cellStyle.copyWith(fontWeight: FontWeight.w700, color: const Color(0xFF1B64A3)),
+                                      decoration: const InputDecoration(
+                                        contentPadding: EdgeInsets.symmetric(vertical: 6),
+                                        isCollapsed: true,
+                                        border: InputBorder.none,
+                                      ),
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.digitsOnly,
+                                        TubesInputFormatter(remainingVal.toInt()),
+                                      ],
+                                      onChanged: (val) {
+                                        setState(() {});
+                                      },
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: () async {
+                                      final confirm = await showDialog<bool>(
+                                        context: screenContext,
+                                        builder: (context) => AlertDialog(
+                                          title: const Text('Confirm Delete'),
+                                          content: const Text('Are you sure you want to delete this tray?'),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(context, false),
+                                              child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                                            ),
+                                            ElevatedButton(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: const Color(0xFFEF4444),
+                                                foregroundColor: Colors.white,
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                              ),
+                                              onPressed: () => Navigator.pop(context, true),
+                                              child: const Text('Delete'),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                      if (confirm == true) {
+                                        latestController.removeScannedTray(index);
+                                      }
+                                    },
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.withValues(alpha: 0.05),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.redAccent),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               );
-            }
-            return Container(
-              margin: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: const Color(0xFFB0BEC5),
-                  width: 1.5,
-                  strokeAlign: BorderSide.strokeAlignOutside,
-                ),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                children: [
-                  const TrayTableHeader(actionColumnWidth: 44, showBatchTubes: true, showDetailedTubes: true),
-                  Expanded(
-                    child: ListView.builder(
-                      padding: EdgeInsets.zero,
-                      itemCount: latestState.scannedTrays.length,
-                      itemBuilder: (context, index) {
-                        final tray = latestState.scannedTrays[index];
-                        final qtys = latestController.getTrayQuantities(tray);
-                        final actualVal = qtys['actual']!;
-                        final alreadyScannedVal = qtys['alreadyScanned']!;
-                        final remainingVal = qtys['remaining']!;
-                        final qty = double.tryParse(_quantityControllers[index].text) ?? 0;
-                        final perTube = tray.item.perGarmentTube;
-                        final pcs = qty * perTube;
-                        final weight = qty * (tray.item.pieceWeight ?? 0);
-
-                        const cellStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238));
-                        const blueCellStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1B64A3));
-
-                        return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: index.isEven ? Colors.white : const Color(0xFFF8FAFC),
-                            border: Border(bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.1), width: 1)),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(flex: 6, child: Text(tray.primaryTrayModel.trayCode ?? 'N/A', textAlign: TextAlign.center, style: blueCellStyle)),
-                              Expanded(flex: 4, child: Text(tray.workOrderHeader.workOrderCode ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
-                              Expanded(flex: 4, child: Text(tray.item.sizeDescription ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
-                              Expanded(flex: 4, child: Text(perTube.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
-                              Expanded(flex: 3, child: Text(actualVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
-                              Expanded(flex: 3, child: Text(alreadyScannedVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle.copyWith(color: Colors.orange.shade800))),
-                              Expanded(flex: 3, child: Text(remainingVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle.copyWith(color: const Color(0xFF2E7D32)))),
-                              Expanded(flex: 4, child: Text(pcs.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
-                              Expanded(flex: 4, child: Text('${weight.toStringAsFixed(0)}g', textAlign: TextAlign.center, style: cellStyle)),
-                              Expanded(
-                                flex: 4,
-                                child: Container(
-                                  height: 30,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: const Color(0xFFCFD8DC), width: 1.2),
-                                  ),
-                                  child: TextField(
-                                    controller: _quantityControllers[index],
-                                    textAlign: TextAlign.center,
-                                    keyboardType: TextInputType.number,
-                                    style: cellStyle.copyWith(fontWeight: FontWeight.w700, color: const Color(0xFF1B64A3)),
-                                    decoration: const InputDecoration(
-                                      contentPadding: EdgeInsets.symmetric(vertical: 6),
-                                      isCollapsed: true,
-                                      border: InputBorder.none,
-                                    ),
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.digitsOnly,
-                                      TubesInputFormatter(remainingVal.toInt()),
-                                    ],
-                                    onChanged: (val) {
-                                      setState(() {});
-                                    },
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  onTap: () async {
-                                    final confirm = await showDialog<bool>(
-                                      context: screenContext,
-                                      builder: (context) => AlertDialog(
-                                        title: const Text('Confirm Delete'),
-                                        content: const Text('Are you sure you want to delete this tray?'),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () => Navigator.pop(context, false),
-                                            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
-                                          ),
-                                          ElevatedButton(
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: const Color(0xFFEF4444),
-                                              foregroundColor: Colors.white,
-                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                            ),
-                                            onPressed: () => Navigator.pop(context, true),
-                                            child: const Text('Delete'),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                    if (confirm == true) {
-                                      latestController.removeScannedTray(index);
-                                    }
-                                  },
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: BoxDecoration(
-                                      color: Colors.red.withValues(alpha: 0.05),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.redAccent),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
+            },
           ),
         );
       },
@@ -339,64 +339,64 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
                     Expanded(
                       child: availableTrays.isEmpty
                           ? const Center(
-                              child: Text(
-                                'No available GBS trays for this work order',
-                                style: TextStyle(color: Colors.grey, fontSize: 13, fontStyle: FontStyle.italic),
-                              ),
-                            )
+                        child: Text(
+                          'No available GBS trays for this work order',
+                          style: TextStyle(color: Colors.grey, fontSize: 13, fontStyle: FontStyle.italic),
+                        ),
+                      )
                           : ListView.builder(
-                              itemCount: availableTrays.length,
-                              itemBuilder: (ctx, index) {
-                                final tray = availableTrays[index];
-                                final qtys = controller.getTrayQuantities(tray);
-                                final actualVal = qtys['actual']!;
-                                final alreadyScannedVal = qtys['alreadyScanned']!;
-                                final remainingVal = qtys['remaining']!;
-                                final qty = remainingVal;
-                                final perTube = tray.item.perGarmentTube;
-                                final pcs = qty * perTube;
-                                final weight = qty * (tray.item.pieceWeight ?? 0);
+                        itemCount: availableTrays.length,
+                        itemBuilder: (ctx, index) {
+                          final tray = availableTrays[index];
+                          final qtys = controller.getTrayQuantities(tray);
+                          final actualVal = qtys['actual']!;
+                          final alreadyScannedVal = qtys['alreadyScanned']!;
+                          final remainingVal = qtys['remaining']!;
+                          final qty = remainingVal;
+                          final perTube = tray.item.perGarmentTube;
+                          final pcs = qty * perTube;
+                          final weight = qty * (tray.item.pieceWeight ?? 0);
 
-                                const cellStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238));
-                                const blueCellStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1B64A3));
+                          const cellStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238));
+                          const blueCellStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1B64A3));
 
-                                final isScanned = state.scannedTrays.any(
-                                  (st) => st.productionProgress.id == tray.productionProgress.id,
-                                );
+                          final isScanned = state.scannedTrays.any(
+                                (st) => st.productionProgress.id == tray.productionProgress.id,
+                          );
 
-                                return Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                  decoration: BoxDecoration(
-                                    color: index.isEven ? Colors.white : const Color(0xFFF8FAFC),
-                                    border: Border(bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.1), width: 1)),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Expanded(flex: 6, child: Text(tray.primaryTrayModel.trayCode ?? 'N/A', textAlign: TextAlign.center, style: blueCellStyle)),
-                                      Expanded(flex: 4, child: Text(tray.workOrderHeader.workOrderCode ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
-                                      Expanded(flex: 4, child: Text(tray.item.sizeDescription ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
-                                      Expanded(flex: 4, child: Text(perTube.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
-                                      Expanded(flex: 3, child: Text(actualVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
-                                      Expanded(flex: 3, child: Text(alreadyScannedVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle.copyWith(color: Colors.orange.shade800))),
-                                      Expanded(flex: 3, child: Text(remainingVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle.copyWith(color: const Color(0xFF2E7D32)))),
-                                      Expanded(flex: 4, child: Text(pcs.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
-                                      Expanded(flex: 4, child: Text('${weight.toStringAsFixed(0)}g', textAlign: TextAlign.center, style: cellStyle)),
-                                      Expanded(
-                                        flex: 6,
-                                        child: Text(
-                                          isScanned ? state.lotCode : '-',
-                                          textAlign: TextAlign.center,
-                                          style: cellStyle.copyWith(
-                                            color: isScanned ? const Color(0xFF2E7D32) : Colors.grey,
-                                            fontWeight: isScanned ? FontWeight.bold : FontWeight.normal,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: index.isEven ? Colors.white : const Color(0xFFF8FAFC),
+                              border: Border(bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.1), width: 1)),
                             ),
+                            child: Row(
+                              children: [
+                                Expanded(flex: 6, child: Text(tray.primaryTrayModel.trayCode ?? 'N/A', textAlign: TextAlign.center, style: blueCellStyle)),
+                                Expanded(flex: 4, child: Text(tray.workOrderHeader.workOrderCode ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
+                                Expanded(flex: 4, child: Text(tray.item.sizeDescription ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
+                                Expanded(flex: 4, child: Text(perTube.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
+                                Expanded(flex: 3, child: Text(actualVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
+                                Expanded(flex: 3, child: Text(alreadyScannedVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle.copyWith(color: Colors.orange.shade800))),
+                                Expanded(flex: 3, child: Text(remainingVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle.copyWith(color: const Color(0xFF2E7D32)))),
+                                Expanded(flex: 4, child: Text(pcs.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
+                                Expanded(flex: 4, child: Text('${weight.toStringAsFixed(0)}g', textAlign: TextAlign.center, style: cellStyle)),
+                                Expanded(
+                                  flex: 6,
+                                  child: Text(
+                                    isScanned ? state.lotCode : '-',
+                                    textAlign: TextAlign.center,
+                                    style: cellStyle.copyWith(
+                                      color: isScanned ? const Color(0xFF2E7D32) : Colors.grey,
+                                      fontWeight: isScanned ? FontWeight.bold : FontWeight.normal,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ],
                 ),
@@ -624,9 +624,9 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
             ElevatedButton.icon(
               onPressed: (state.selectedMachine != null && state.scannedTrays.isNotEmpty)
                   ? () {
-                      HapticFeedbackHelper.buttonClick();
-                      _saveLotChanges(controller, state);
-                    }
+                HapticFeedbackHelper.buttonClick();
+                _saveLotChanges(controller, state);
+              }
                   : null,
               icon: const Icon(Icons.save_rounded, size: 16),
               label: const Text('SAVE LOT'),
@@ -809,23 +809,23 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
                           child: state.selectedMachine == null
                               ? const SizedBox.shrink()
                               : Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text('WORK ORDER', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Color(0xFF78909C), letterSpacing: 0.5)),
-                                    const SizedBox(height: 6),
-                                    _LotOverlayDropdown<WorkOrderHeader>(
-                                      hint: "Select work order...",
-                                      items: availableWOs,
-                                      selectedValue: state.selectedWorkOrder,
-                                      itemLabel: (wo) => wo.workOrderCode ?? '-',
-                                      isReadOnly: false,
-                                      onChanged: (val) {
-                                        HapticFeedbackHelper.buttonClick();
-                                        controller.selectWorkOrder(val);
-                                      },
-                                    ),
-                                  ],
-                                ),
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('WORK ORDER', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Color(0xFF78909C), letterSpacing: 0.5)),
+                              const SizedBox(height: 6),
+                              _LotOverlayDropdown<WorkOrderHeader>(
+                                hint: "Select work order...",
+                                items: availableWOs,
+                                selectedValue: state.selectedWorkOrder,
+                                itemLabel: (wo) => wo.workOrderCode ?? '-',
+                                isReadOnly: false,
+                                onChanged: (val) {
+                                  HapticFeedbackHelper.buttonClick();
+                                  controller.selectWorkOrder(val);
+                                },
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -859,29 +859,29 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
                             child: state.selectedColor == null
                                 ? const SizedBox.shrink()
                                 : Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const SizedBox(height: 14),
-                                      SizedBox(
-                                        width: double.infinity,
-                                        height: 44,
-                                        child: ElevatedButton.icon(
-                                          onPressed: () => _showAvailableTraysDialog(controller, state),
-                                          icon: const Icon(Icons.layers_outlined, size: 16),
-                                          label: const Text(
-                                            'SHOW AVAILABLE TRAYS',
-                                            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900),
-                                          ),
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: const Color(0xFFE67E22),
-                                            foregroundColor: Colors.white,
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                            elevation: 0,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const SizedBox(height: 14),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 44,
+                                  child: ElevatedButton.icon(
+                                    onPressed: () => _showAvailableTraysDialog(controller, state),
+                                    icon: const Icon(Icons.layers_outlined, size: 16),
+                                    label: const Text(
+                                      'SHOW AVAILABLE TRAYS',
+                                      style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900),
+                                    ),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFE67E22),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      elevation: 0,
+                                    ),
                                   ),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
@@ -962,10 +962,10 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
                         child: state.scannedTrays.isEmpty
                             ? const EmptyScanState(hasBorder: false)
                             : ListView.builder(
-                                padding: EdgeInsets.zero,
-                                itemCount: state.scannedTrays.length,
-                                itemBuilder: (ctx, idx) => _buildTrayRow(controller, state, idx),
-                              ),
+                          padding: EdgeInsets.zero,
+                          itemCount: state.scannedTrays.length,
+                          itemBuilder: (ctx, idx) => _buildTrayRow(controller, state, idx),
+                        ),
                       ),
                     ],
                   ),
@@ -1498,41 +1498,41 @@ class _LotOverlayDropdownState<T> extends State<_LotOverlayDropdown<T>> with Sin
           Flexible(
             child: filteredItems.isEmpty
                 ? const Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: Text('No results found', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                  )
+              padding: EdgeInsets.all(16.0),
+              child: Text('No results found', style: TextStyle(color: Colors.grey, fontSize: 12)),
+            )
                 : ListView.separated(
-                    shrinkWrap: true,
-                    padding: EdgeInsets.zero,
-                    itemCount: filteredItems.length,
-                    separatorBuilder: (context, index) => Divider(height: 1, color: Colors.grey.shade100),
-                    itemBuilder: (context, index) {
-                      final item = filteredItems[index];
-                      final isSelected = item == widget.selectedValue;
+              shrinkWrap: true,
+              padding: EdgeInsets.zero,
+              itemCount: filteredItems.length,
+              separatorBuilder: (context, index) => Divider(height: 1, color: Colors.grey.shade100),
+              itemBuilder: (context, index) {
+                final item = filteredItems[index];
+                final isSelected = item == widget.selectedValue;
 
-                      return InkWell(
-                        onTap: () {
-                          widget.onChanged(item);
-                          _closeDropdown();
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          color: isSelected ? const Color(0xFFF1F5F9) : Colors.transparent,
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  widget.itemLabelInList != null ? widget.itemLabelInList!(item) : widget.itemLabel(item),
-                                  style: TextStyle(color: isSelected ? const Color(0xFF1B64A3) : const Color(0xFF263238), fontSize: 12, fontWeight: FontWeight.w700),
-                                ),
-                              ),
-                              if (isSelected) const Icon(Icons.check_rounded, color: Color(0xFF1B64A3), size: 16),
-                            ],
+                return InkWell(
+                  onTap: () {
+                    widget.onChanged(item);
+                    _closeDropdown();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    color: isSelected ? const Color(0xFFF1F5F9) : Colors.transparent,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            widget.itemLabelInList != null ? widget.itemLabelInList!(item) : widget.itemLabel(item),
+                            style: TextStyle(color: isSelected ? const Color(0xFF1B64A3) : const Color(0xFF263238), fontSize: 12, fontWeight: FontWeight.w700),
                           ),
                         ),
-                      );
-                    },
+                        if (isSelected) const Icon(Icons.check_rounded, color: Color(0xFF1B64A3), size: 16),
+                      ],
+                    ),
                   ),
+                );
+              },
+            ),
           ),
         ],
       ),

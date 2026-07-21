@@ -1074,75 +1074,100 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
   }
 
   void _showAvailableTraysDialog(KnittingProductionController controller) {
+    final scrollController = ScrollController();
+
+    scrollController.addListener(() {
+      if (scrollController.position.pixels >= scrollController.position.maxScrollExtent - 50) {
+        controller.fetchMoreAvailableTrays();
+      }
+    });
+
     showDialog(
       context: context,
       builder: (context) {
-        final availableTrays = controller.getFilteredAvailableTrays();
+        return ListenableBuilder(
+          listenable: controller,
+          builder: (context, _) {
+            final availableTrays = controller.getFilteredAvailableTrays();
+            final isLoadingMore = controller.isLoadingMoreAvailableTrays;
 
-        return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Container(
-            constraints: const BoxConstraints(maxHeight: 500, maxWidth: 400),
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            return Dialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: Container(
+                constraints: const BoxConstraints(maxHeight: 500, maxWidth: 400),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      'AVAILABLE TRAYS (${availableTrays.length})',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF1E293B),
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'AVAILABLE TRAYS (${availableTrays.length})',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF1E293B),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.pop(context),
+                    const Divider(),
+                    Expanded(
+                      child: availableTrays.isEmpty && !isLoadingMore
+                          ? const Center(
+                              child: Text(
+                                'No available trays found',
+                                style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                              ),
+                            )
+                          : ListView.separated(
+                              controller: scrollController,
+                              itemCount: availableTrays.length + (isLoadingMore ? 1 : 0),
+                              separatorBuilder: (_, __) => const Divider(),
+                              itemBuilder: (context, idx) {
+                                if (idx == availableTrays.length) {
+                                  return const Padding(
+                                    padding: EdgeInsets.all(12.0),
+                                    child: Center(
+                                      child: CircularProgressIndicator(strokeWidth: 2.5),
+                                    ),
+                                  );
+                                }
+                                final code = availableTrays[idx].trayDetails?.trayCode ?? '';
+                                return ListTile(
+                                  leading: const Icon(Icons.layers_outlined, color: Color(0xFFE67E22)),
+                                  title: Text(
+                                    code,
+                                    style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF1E293B)),
+                                  ),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    final err = await controller.validateAndAddTray(code, _overrideQuantityController.text);
+                                    if (err != null && mounted) {
+                                      _showError(err);
+                                    } else {
+                                      HapticFeedbackHelper.scanSuccess();
+                                    }
+                                  },
+                                );
+                              },
+                            ),
                     ),
                   ],
                 ),
-                const Divider(),
-                Expanded(
-                  child: availableTrays.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'No available trays found',
-                            style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w500),
-                          ),
-                        )
-                      : ListView.separated(
-                          itemCount: availableTrays.length,
-                          separatorBuilder: (_, __) => const Divider(),
-                          itemBuilder: (context, idx) {
-                            final code = availableTrays[idx].trayDetails?.trayCode ?? '';
-                            return ListTile(
-                              leading: const Icon(Icons.layers_outlined, color: Color(0xFFE67E22)),
-                              title: Text(
-                                code,
-                                style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF1E293B)),
-                              ),
-                              onTap: () async {
-                                Navigator.pop(context);
-                                final err = await controller.validateAndAddTray(code, _overrideQuantityController.text);
-                                if (err != null && mounted) {
-                                  _showError(err);
-                                } else {
-                                  HapticFeedbackHelper.scanSuccess();
-                                }
-                              },
-                            );
-                          },
-                        ),
-                ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
-    );
+    ).then((_) {
+      scrollController.dispose();
+    });
   }
 
   Future<void> _onScanMachineBarcode(KnittingProductionController controller) async {

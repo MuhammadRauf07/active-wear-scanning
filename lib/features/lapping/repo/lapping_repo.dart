@@ -24,8 +24,7 @@ class LappingRepo {
   }
   Future<PlexApiResult> fetchProductionProgress(Map<String, String> query) async {
     final Map<String, String> finalQuery = {
-      'MaxResultCount': '1000',
-      'maxResultCount': '1000',
+      'MaxResultCount': query['MaxResultCount'] ?? query['maxResultCount'] ?? '10',
       ...query,
     };
     final result = await _api.getList('/api/app/production-progresses', query: finalQuery);

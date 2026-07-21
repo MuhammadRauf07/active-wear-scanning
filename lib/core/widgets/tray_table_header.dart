@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 class TrayTableHeader extends StatelessWidget {
   final double actionColumnWidth;
+  final bool showWorkOrderColumn;
   final bool showLotColumn;
   final bool showBatchTubes;
   final bool showDetailedTubes;
@@ -10,6 +11,7 @@ class TrayTableHeader extends StatelessWidget {
   const TrayTableHeader({
     super.key,
     this.actionColumnWidth = 40.0,
+    this.showWorkOrderColumn = true,
     this.showLotColumn = false,
     this.showBatchTubes = false,
     this.showDetailedTubes = false,
@@ -35,7 +37,8 @@ class TrayTableHeader extends StatelessWidget {
       child: Row(
         children: [
           Expanded(flex: 6, child: Text('TRAY CODE', textAlign: TextAlign.center, style: _headerStyle)),
-          Expanded(flex: 4, child: Text('WORK ORDER', textAlign: TextAlign.center, style: _headerStyle)),
+          if (showWorkOrderColumn)
+            Expanded(flex: 4, child: Text('WORK ORDER', textAlign: TextAlign.center, style: _headerStyle)),
           Expanded(flex: 4, child: Text('SIZE', textAlign: TextAlign.center, style: _headerStyle)),
           Expanded(flex: 4, child: Text('PCS/TUBE', textAlign: TextAlign.center, style: _headerStyle)),
           if (showDetailedTubes) ...[

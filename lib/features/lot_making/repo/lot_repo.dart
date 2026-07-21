@@ -72,10 +72,10 @@ class LotRepo {
     return result;
   }
 
-  Future<PlexApiResult> fetchTrayDetails() async {
+  Future<PlexApiResult> fetchTrayDetails({int maxResultCount = 10, int skipCount = 0}) async {
     final result = await _api.getList('/api/app/tray-details', query: {
-      'MaxResultCount': '1000',
-      'SkipCount': '0',
+      'MaxResultCount': maxResultCount.toString(),
+      'SkipCount': skipCount.toString(),
     });
 
     if (!result.success || result.data == null) {

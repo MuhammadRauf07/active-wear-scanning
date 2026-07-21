@@ -16,7 +16,7 @@ class InductionRepo {
           'TransactionType': '3',
           'PBSFlag': 'false',
           'IsLastProcess': 'true',
-          'MaxResultCount': '1000',
+          'MaxResultCount': params?['MaxResultCount'] ?? '10',
         };
 
     final result = await _api.getList(

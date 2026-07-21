@@ -74,8 +74,12 @@ class GBSReceivingRepo {
     return result;
   }
 
-  Future<PlexApiResult> fetchAvailableTrayDetails() async {
-    final result = await _api.getList('/api/app/tray-details?MaxResultCount=1000');
+  Future<PlexApiResult> fetchAvailableTrayDetails({int maxResultCount = 10, int skipCount = 0}) async {
+    final result = await _api.getList('/api/app/tray-details', query: {
+      'Active': 'true',
+      'MaxResultCount': maxResultCount.toString(),
+      'SkipCount': skipCount.toString(),
+    });
     if (!result.success || result.data == null) return result;
 
     try {

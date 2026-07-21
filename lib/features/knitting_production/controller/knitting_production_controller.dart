@@ -151,17 +151,51 @@ class KnittingProductionController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> fetchAvailableTrays() async {
+  bool _isLoadingMoreAvailableTrays = false;
+  bool get isLoadingMoreAvailableTrays => _isLoadingMoreAvailableTrays;
+  bool _hasMoreAvailableTrays = true;
+  bool get hasMoreAvailableTrays => _hasMoreAvailableTrays;
+
+  Future<void> fetchAvailableTrays({bool isRefresh = true}) async {
+    if (isRefresh) {
+      _hasMoreAvailableTrays = true;
+      _state = _state.copyWith(availableTraysDetail: []);
+      notifyListeners();
+    }
+
     try {
-      final trayDetailsModel = await _repo.fetchAvailableTrayDetails();
+      final skipCount = isRefresh ? 0 : _state.availableTraysDetail.length;
+      final trayDetailsModel = await _repo.fetchAvailableTrayDetails(
+        maxResultCount: 10,
+        skipCount: skipCount,
+      );
       if (trayDetailsModel.success && trayDetailsModel.data != null) {
-        final list = (trayDetailsModel.data as List).map((item) => item as TrayDetailsModel).toList();
-        _state = _state.copyWith(availableTraysDetail: list);
+        final newItems = (trayDetailsModel.data as List).map((item) => item as TrayDetailsModel).toList();
+        if (newItems.length < 10) {
+          _hasMoreAvailableTrays = false;
+        }
+        final updatedList = isRefresh ? newItems : [..._state.availableTraysDetail, ...newItems];
+        _state = _state.copyWith(availableTraysDetail: updatedList);
         notifyListeners();
+      } else {
+        if (isRefresh) {
+          _hasMoreAvailableTrays = false;
+        }
       }
     } catch (e) {
       debugPrint('Error fetching available trays: $e');
     }
+  }
+
+  Future<void> fetchMoreAvailableTrays() async {
+    if (_isLoadingMoreAvailableTrays || !_hasMoreAvailableTrays) return;
+    _isLoadingMoreAvailableTrays = true;
+    notifyListeners();
+
+    await fetchAvailableTrays(isRefresh: false);
+
+    _isLoadingMoreAvailableTrays = false;
+    notifyListeners();
   }
 
   Future<void> fetchMachineData(String scannedCode) async {

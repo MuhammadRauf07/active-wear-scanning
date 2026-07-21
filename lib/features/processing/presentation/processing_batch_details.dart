@@ -431,7 +431,7 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
               isReworkMode: state.isReworkMode,
               selectedReworkTrayIds: state.selectedReworkTrayIds,
               trayIdsWithWastage: state.trayIdsWithWastage,
-              isEditable: (controller.operationName.toLowerCase().contains('heat set') || controller.operationName.toLowerCase().contains('qa')) && state.isBatchStarted,
+              isEditable: state.isBatchStarted,
               operationName: controller.operationName,
               onQuantitySubmit: (progressId, newQty, productGrade) async {
                 try {
@@ -647,6 +647,218 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
     );
   }
 
+  void _showBatchRoutingDialog(ProcessingBatchController controller, ProcessingBatchState state) async {
+    final firstTray = state.trays.isNotEmpty ? state.trays.first : null;
+    final int? routingItemId = firstTray?.productionProgress.processedItemId ?? firstTray?.item.id;
+
+    if (routingItemId == null) {
+      AppSnackBar.showError(context, message: 'Could not resolve batch item ID.');
+      return;
+    }
+
+    AppLoader.show(context, message: 'Fetching batch routing...');
+    final routingRes = await _lotRepo.fetchItemRoutings(routingItemId);
+    AppLoader.hide(context);
+
+    if (!routingRes.success || routingRes.data == null) {
+      if (mounted) {
+        AppSnackBar.showError(context, message: 'Failed to fetch batch routing: ${routingRes.message}');
+      }
+      return;
+    }
+
+    final routingItems = routingRes.data as List;
+    final List<Map<String, dynamic>> parsedRoutings = [];
+    for (final r in routingItems) {
+      final rMap = r is Map ? r as Map<String, dynamic> : {};
+      final itemRouting = rMap['itemRouting'] as Map?;
+      final op = rMap['operation'] as Map?;
+      if (itemRouting != null && op != null) {
+        final opId = itemRouting['operationId'] as int?;
+        final seq = itemRouting['seq'] as int?;
+        final opName = op['name'] as String?;
+        final opCode = op['code'] as String?;
+        if (opId != null && seq != null && opName != null) {
+          parsedRoutings.add({
+            'operationId': opId,
+            'seq': seq,
+            'name': opName,
+            'code': opCode ?? '',
+          });
+        }
+      }
+    }
+
+    parsedRoutings.sort((a, b) => (a['seq'] as int).compareTo(b['seq'] as int));
+
+    if (parsedRoutings.isEmpty) {
+      if (mounted) {
+        AppSnackBar.showWarning(context, message: 'No routing operations found for this batch.');
+      }
+      return;
+    }
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        final currentIdx = parsedRoutings.indexWhere((r) => r['operationId'] == controller.currentOperationId);
+
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Container(
+            width: 420,
+            constraints: const BoxConstraints(maxHeight: 520),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.alt_route_rounded, color: Color(0xFF1B64A3), size: 24),
+                        const SizedBox(width: 10),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'BATCH ROUTING',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF0D47A1)),
+                            ),
+                            Text(
+                              'Batch #${controller.batchCode}',
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+                const Divider(height: 24),
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: parsedRoutings.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, idx) {
+                      final step = parsedRoutings[idx];
+                      final isCurrent = step['operationId'] == controller.currentOperationId;
+                      final isPassed = currentIdx != -1 && idx < currentIdx;
+
+                      final bgColor = isCurrent
+                          ? const Color(0xFF0D47A1)
+                          : (isPassed ? const Color(0xFFF0FDF4) : const Color(0xFFF8FAFC));
+                      final borderColor = isCurrent
+                          ? const Color(0xFF1565C0)
+                          : (isPassed ? const Color(0xFFBBF7D0) : const Color(0xFFE2E8F0));
+                      final textColor = isCurrent
+                          ? Colors.white
+                          : (isPassed ? const Color(0xFF166534) : const Color(0xFF334155));
+
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: bgColor,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: borderColor, width: isCurrent ? 2 : 1),
+                          boxShadow: isCurrent
+                              ? [
+                                  BoxShadow(
+                                    color: const Color(0xFF0D47A1).withValues(alpha: 0.25),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  )
+                                ]
+                              : null,
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 28,
+                              height: 28,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isCurrent
+                                    ? Colors.white.withValues(alpha: 0.25)
+                                    : (isPassed ? const Color(0xFF16A34A) : const Color(0xFF94A3B8)),
+                              ),
+                              child: Center(
+                                child: isPassed
+                                    ? const Icon(Icons.check, size: 16, color: Colors.white)
+                                    : Text(
+                                        '${idx + 1}',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 12,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    step['name'],
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 13,
+                                      color: textColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (isCurrent)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.shade400,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  'CURRENT PROCESS',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF1E293B),
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              )
+                            else if (isPassed)
+                              const Text(
+                                'PASSED',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF16A34A),
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _confirmSubmit(ProcessingBatchController controller, ProcessingBatchState state) {
     if (state.trolleyDetailId == null) {
       AppSnackBar.showError(context, message: 'Please scan a trolley before submitting.');
@@ -713,16 +925,8 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
             children: [
               Expanded(
                 child: _buildConsoleButton(
-                  label: state.showTrays
-                      ? 'HIDE'
-                      : ((controller.operationName.toLowerCase().contains('heat set') || controller.operationName.toLowerCase().contains('qa'))
-                          ? 'EDIT TRAYS'
-                          : 'SHOW'),
-                  icon: state.showTrays
-                      ? Icons.visibility_off_rounded
-                      : ((controller.operationName.toLowerCase().contains('heat set') || controller.operationName.toLowerCase().contains('qa'))
-                          ? Icons.edit_note_rounded
-                          : Icons.visibility_rounded),
+                  label: state.showTrays ? 'HIDE' : 'SHOW TRAYS',
+                  icon: state.showTrays ? Icons.visibility_off_rounded : Icons.visibility_rounded,
                   color: const Color(0xFF1B64A3),
                   onPressed: controller.toggleShowTrays,
                 ),
@@ -734,6 +938,15 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
                   icon: state.isBatchStarted ? Icons.check_circle_outline_rounded : Icons.play_arrow_rounded,
                   color: state.isBatchStarted ? const Color(0xFF94A3B8) : const Color(0xFF2E7D32),
                   onPressed: (state.isBatchStarted || state.trays.isEmpty) ? null : () => _confirmStart(controller, state),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: _buildConsoleButton(
+                  label: 'ROUTING',
+                  icon: Icons.alt_route_rounded,
+                  color: const Color(0xFF6A1B9A),
+                  onPressed: () => _showBatchRoutingDialog(controller, state),
                 ),
               ),
               const SizedBox(width: 6),
