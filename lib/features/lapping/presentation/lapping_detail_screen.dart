@@ -12,6 +12,7 @@ import 'package:active_wear_scanning/features/lapping/presentation/widgets/lappi
 import 'package:active_wear_scanning/features/lapping/presentation/widgets/work_order_selection_card.dart';
 import 'package:active_wear_scanning/features/lapping/controller/lapping_controller.dart';
 import 'package:active_wear_scanning/features/lapping/model/lapping_state.dart';
+import 'package:active_wear_scanning/features/lapping/model/work_order_summary.dart';
 
 class LappingDetailScreen extends StatelessWidget {
   final int batchHeaderId;
@@ -497,6 +498,168 @@ class _LappingDetailScreenViewState extends State<_LappingDetailScreenView> {
     );
   }
 
+  void _showWasteDialog(BuildContext context, LappingController controller, WorkOrderSummary wo) {
+    final compositeId = wo.id;
+    final double originalQty = wo.originalPieces;
+    final double reassignedQty = (controller.state.scannedTraysByWO[compositeId] ?? []).fold<double>(
+      0.0,
+      (sum, t) => sum + (controller.state.trayOverrideQuantities[t.primaryTrayModel.trayCode?.toLowerCase() ?? ''] ?? 0.0),
+    );
+    final double currentWaste = controller.state.itemWasteQuantities[compositeId] ?? 0.0;
+
+    // Suggest difference as default waste if current waste is 0
+    final double suggestedWaste = currentWaste > 0 ? currentWaste : (originalQty - reassignedQty > 0 ? originalQty - reassignedQty : 0.0);
+
+    final txtController = TextEditingController(text: suggestedWaste > 0 ? suggestedWaste.toInt().toString() : '0');
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            final double enteredWaste = double.tryParse(txtController.text) ?? 0.0;
+            final double totalQty = reassignedQty + enteredWaste;
+            final bool isMatch = totalQty == originalQty;
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: [
+                  const Icon(Icons.delete_sweep_outlined, color: Color(0xFFE67E22)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Manage Waste',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      wo.componentDescription,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF475569),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+                      ),
+                      child: Column(
+                        children: [
+                          _buildWasteInfoRow('Incoming (Prev. Process):', '${originalQty.toInt()} tubes'),
+                          const SizedBox(height: 6),
+                          _buildWasteInfoRow('Reassigned (Scanned):', '${reassignedQty.toInt()} tubes'),
+                          const Divider(height: 16),
+                          _buildWasteInfoRow(
+                            'Current Sum:',
+                            '${totalQty.toInt()} tubes',
+                            valueColor: isMatch ? Colors.green.shade700 : Colors.red.shade700,
+                            isBold: true,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: txtController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: false),
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: InputDecoration(
+                        labelText: 'Waste Quantity (tubes)',
+                        hintText: 'Enter waste quantity',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        suffixIcon: isMatch
+                            ? const Icon(Icons.check_circle_rounded, color: Colors.green)
+                            : const Icon(Icons.warning_amber_rounded, color: Colors.red),
+                      ),
+                      onChanged: (val) {
+                        setStateDialog(() {});
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    if (!isMatch)
+                      Text(
+                        'Total quantity (${totalQty.toInt()}) must equal incoming (${originalQty.toInt()}). Difference: ${(originalQty - totalQty).toInt()}',
+                        style: TextStyle(
+                          color: Colors.red.shade600,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      )
+                    else
+                      Text(
+                        'Quantities match perfectly!',
+                        style: TextStyle(
+                          color: Colors.green.shade600,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('CANCEL'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    final double wasteVal = double.tryParse(txtController.text) ?? 0.0;
+                    controller.setWasteQuantity(compositeId, wasteVal);
+                    Navigator.of(ctx).pop();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1E293B),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('SAVE'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildWasteInfoRow(String label, String value, {Color? valueColor, bool isBold = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: isBold ? FontWeight.w800 : FontWeight.w700,
+            color: valueColor ?? const Color(0xFF1E293B),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<LappingController>();
@@ -577,6 +740,7 @@ class _LappingDetailScreenViewState extends State<_LappingDetailScreenView> {
                                         scannedTraysByWO: state.scannedTraysByWO,
                                         trayOverrideQuantities: state.trayOverrideQuantities,
                                         onSelected: (val) => controller.setSelectedWorkOrderId(val),
+                                        onAddWaste: (wo) => _showWasteDialog(context, controller, wo),
                                       ),
                                     ),
                                     if (state.selectedWorkOrderId != null) ...[

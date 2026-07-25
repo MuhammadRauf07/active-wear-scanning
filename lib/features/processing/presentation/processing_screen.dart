@@ -407,6 +407,8 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
               }
             }
 
+            final bool isDraft = groupRecords.any((r) => r.productionProgress.pbsFlag == true || r.productionProgress.draftFlag == true);
+
             summaries.add(
               BatchSummaryItem(
                 batchHeaderId: bhId,
@@ -421,6 +423,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                 isStarted: isStarted,
                 reworkFlag: isRework,
                 isReassigned: isReassigned,
+                isDraft: isDraft,
                 nextOperationId: nextOpId,
                 nextOperationName: nextOpName,
               ),
@@ -736,6 +739,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                                                 s.reworkFlag,
                                             isReassigned: isReassigned ||
                                                 s.isReassigned,
+                                            isDraft: false,
                                           );
                                           if (!targetList.any((b) =>
                                           b.batchHeaderId == s.batchHeaderId)) {

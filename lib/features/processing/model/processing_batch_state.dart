@@ -43,7 +43,12 @@ class ProcessingBatchState {
     this.failedTrayIds = const {},
   });
 
+  bool get isDraftBatch {
+    return trays.isNotEmpty && trays.any((t) => t.productionProgress.draftFlag == true);
+  }
+
   bool get isReassignedBatch {
+    if (isDraftBatch) return false;
     final fromTray = trays.isNotEmpty && trays.any((t) => t.primaryTrayModel.isReAssigned == true);
     return isReassignedFromLines || fromTray;
   }

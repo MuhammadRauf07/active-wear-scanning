@@ -11,6 +11,7 @@ class BatchSummaryItem {
   final bool isStarted;
   final bool reworkFlag;
   final bool isReassigned;
+  final bool isDraft;
   final int? nextOperationId;
   final String? nextOperationName;
 
@@ -27,6 +28,7 @@ class BatchSummaryItem {
     required this.isStarted,
     required this.reworkFlag,
     required this.isReassigned,
+    required this.isDraft,
     this.nextOperationId,
     this.nextOperationName,
   });

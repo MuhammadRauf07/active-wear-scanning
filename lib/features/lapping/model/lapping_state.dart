@@ -13,6 +13,10 @@ class LappingState {
   final Set<int> failedCloseLappingIds;
   final Map<String, double> trayOverrideQuantities;
   final Set<int> resetDraftProgressIds;
+  final Map<String, double> itemWasteQuantities;
+  final Map<String, int?> itemWasteProgressIds;
+  final Map<String, int> trayBatchLineIds;
+  final Set<int> resetBatchLineIds;
 
   const LappingState({
     this.isLoading = false,
@@ -26,6 +30,10 @@ class LappingState {
     this.failedCloseLappingIds = const {},
     this.trayOverrideQuantities = const {},
     this.resetDraftProgressIds = const {},
+    this.itemWasteQuantities = const {},
+    this.itemWasteProgressIds = const {},
+    this.trayBatchLineIds = const {},
+    this.resetBatchLineIds = const {},
   });
 
   LappingState copyWith({
@@ -40,6 +48,10 @@ class LappingState {
     Set<int>? failedCloseLappingIds,
     Map<String, double>? trayOverrideQuantities,
     Set<int>? resetDraftProgressIds,
+    Map<String, double>? itemWasteQuantities,
+    Map<String, int?>? itemWasteProgressIds,
+    Map<String, int>? trayBatchLineIds,
+    Set<int>? resetBatchLineIds,
     bool clearSelectedWorkOrderId = false,
     bool clearError = false,
   }) {
@@ -55,6 +67,10 @@ class LappingState {
       failedCloseLappingIds: failedCloseLappingIds ?? this.failedCloseLappingIds,
       trayOverrideQuantities: trayOverrideQuantities ?? this.trayOverrideQuantities,
       resetDraftProgressIds: resetDraftProgressIds ?? this.resetDraftProgressIds,
+      itemWasteQuantities: itemWasteQuantities ?? this.itemWasteQuantities,
+      itemWasteProgressIds: itemWasteProgressIds ?? this.itemWasteProgressIds,
+      trayBatchLineIds: trayBatchLineIds ?? this.trayBatchLineIds,
+      resetBatchLineIds: resetBatchLineIds ?? this.resetBatchLineIds,
     );
   }
 }

@@ -8,6 +8,7 @@ class WorkOrderSelectionCard extends StatelessWidget {
   final Map<String, List<LappingModel>> scannedTraysByWO;
   final Map<String, double> trayOverrideQuantities;
   final ValueChanged<String?> onSelected;
+  final ValueChanged<WorkOrderSummary> onAddWaste;
 
   const WorkOrderSelectionCard({
     super.key,
@@ -16,6 +17,7 @@ class WorkOrderSelectionCard extends StatelessWidget {
     required this.scannedTraysByWO,
     required this.trayOverrideQuantities,
     required this.onSelected,
+    required this.onAddWaste,
   });
 
   @override
@@ -61,7 +63,7 @@ class WorkOrderSelectionCard extends StatelessWidget {
               _buildHeadCell('TRAYS', 2),
               _buildHeadCell('TUBES', 2),
               _buildHeadCell('RE-ASSIGN', 2, color: const Color(0xFF10B981)),
-              const SizedBox(width: 32), // Space for Radio
+              const SizedBox(width: 64), // Space for Radio & Action
             ],
           ),
         ),
@@ -89,7 +91,7 @@ class WorkOrderSelectionCard extends StatelessWidget {
                   Expanded(flex: 3, child: Text(wo.description, style: _cellStyle(isSelected, isBold: true))),
                   Expanded(flex: 5, child: Text(wo.componentDescription, style: _cellStyle(isSelected, isSmall: true))),
                   Expanded(flex: 2, child: Text('${wo.trayCount}', style: _cellStyle(isSelected))),
-                  Expanded(flex: 2, child: Text('${wo.cumulativePieces.toInt()}', style: _cellStyle(isSelected, color: const Color(0xFF0D47A1), isBold: true))),
+                  Expanded(flex: 2, child: Text('${wo.originalPieces.toInt()}', style: _cellStyle(isSelected, color: const Color(0xFF0D47A1), isBold: true))),
                   Expanded(flex: 2, child: Text(reassigned > 0 ? '${reassigned.toInt()}' : '-', style: _cellStyle(isSelected, color: const Color(0xFF10B981), isBold: true))),
                   SizedBox(
                     height: 24,
@@ -101,6 +103,18 @@ class WorkOrderSelectionCard extends StatelessWidget {
                       visualDensity: VisualDensity.compact,
                       onChanged: (val) => onSelected(val),
                     ),
+                  ),
+                  const SizedBox(width: 12),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.delete_sweep_outlined,
+                      color: Color(0xFFE67E22),
+                      size: 20,
+                    ),
+                    tooltip: 'Add Waste',
+                    onPressed: () => onAddWaste(wo),
+                    constraints: const BoxConstraints(),
+                    padding: EdgeInsets.zero,
                   ),
                 ],
               ),

@@ -4,6 +4,7 @@ class WorkOrderSummary {
   final String componentDescription;
   final int trayCount;
   final double cumulativePieces;
+  final double originalPieces;
 
   WorkOrderSummary({
     required this.id,
@@ -11,5 +12,6 @@ class WorkOrderSummary {
     required this.componentDescription,
     required this.trayCount,
     required this.cumulativePieces,
+    required this.originalPieces,
   });
 }

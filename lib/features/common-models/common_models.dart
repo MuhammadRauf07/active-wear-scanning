@@ -63,6 +63,7 @@ class ProductionProgress {
   final bool? isLastProcess;
   final bool? reworkFlag;
   final bool? isStarted;
+  final bool? draftFlag;
   final DateTime? startDate;
   final String? progressCode;
   final int? productGrade;
@@ -106,6 +107,7 @@ class ProductionProgress {
     this.isLastProcess,
     this.reworkFlag,
     this.isStarted,
+    this.draftFlag,
     this.startDate,
     this.progressCode,
     this.productGrade,
@@ -150,6 +152,8 @@ class ProductionProgress {
       isLastProcess: json['isLastProcess'],
       reworkFlag: json['reworkFlag'],
       isStarted: json['isStarted'] as bool?,
+      draftFlag: (json['draftFlag'] is bool ? json['draftFlag'] as bool : (json['draftFlag'] == 1 || json['draftFlag'] == 'true')) ||
+                 (json['draftStatus'] is bool ? json['draftStatus'] as bool : (json['draftStatus'] == 1 || json['draftStatus'] == 'true')),
       startDate: json['startDate'] != null ? DateTime.parse(json['startDate']) : null,
       progressCode: json['progressCode'],
       productGrade: int.tryParse(json['productGrade']?.toString() ?? ''),
@@ -190,11 +194,13 @@ class ProductionProgress {
       'secondaryQuantity': secondaryQuantity,
       'secondaryUOM': secondaryUOM,
       'wipStatus': wipStatus,
-      'gbsFlag': gbsFlag,
-      'pbsFlag': pbsFlag,
-      'isLastProcess': isLastProcess,
-      'reworkFlag': reworkFlag,
-      'isStarted': isStarted,
+      'gbsFlag': gbsFlag ?? false,
+      'pbsFlag': pbsFlag ?? false,
+      'isLastProcess': isLastProcess ?? false,
+      'reworkFlag': reworkFlag ?? false,
+      'isStarted': isStarted ?? false,
+      'draftFlag': draftFlag ?? false,
+      'draftStatus': draftFlag ?? false,
       'startDate': startDate?.toIso8601String(),
       'progressCode': progressCode,
       'productGrade': productGrade,
@@ -236,6 +242,7 @@ class ProductionProgress {
     bool? isLastProcess,
     bool? reworkFlag,
     bool? isStarted,
+    bool? draftFlag,
     DateTime? startDate,
     String? progressCode,
     int? productGrade,
@@ -278,6 +285,7 @@ class ProductionProgress {
       isLastProcess: isLastProcess ?? this.isLastProcess,
       reworkFlag: reworkFlag ?? this.reworkFlag,
       isStarted: isStarted ?? this.isStarted,
+      draftFlag: draftFlag ?? this.draftFlag,
       startDate: startDate ?? this.startDate,
       progressCode: progressCode ?? this.progressCode,
       productGrade: productGrade ?? this.productGrade,

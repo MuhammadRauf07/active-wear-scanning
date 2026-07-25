@@ -171,11 +171,20 @@ class BatchStatusRow extends StatelessWidget {
 
   Widget _buildStateBadge() {
     final bool isStarted = summary.isStarted == true;
+    final bool isDraft = summary.isDraft == true;
 
-    final String label = isStarted ? 'STARTED' : 'OFFERED';
-    final Color bgColor = isStarted ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7);
-    final Color textColor = isStarted ? const Color(0xFF166534) : const Color(0xFF92400E);
-    final IconData icon = isStarted ? Icons.play_circle_outline_rounded : Icons.pause_circle_outline_rounded;
+    final String label = isDraft
+        ? 'SAVED AS DRAFT'
+        : (isStarted ? 'STARTED' : 'OFFERED');
+    final Color bgColor = isDraft
+        ? const Color(0xFFEFF6FF)
+        : (isStarted ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7));
+    final Color textColor = isDraft
+        ? const Color(0xFF1E40AF)
+        : (isStarted ? const Color(0xFF166534) : const Color(0xFF92400E));
+    final IconData icon = isDraft
+        ? Icons.drafts_outlined
+        : (isStarted ? Icons.play_circle_outline_rounded : Icons.pause_circle_outline_rounded);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
@@ -194,7 +203,6 @@ class BatchStatusRow extends StatelessWidget {
               fontSize: 8,
               fontWeight: FontWeight.w900,
               color: textColor,
-              letterSpacing: 0.3,
             ),
           ),
         ],

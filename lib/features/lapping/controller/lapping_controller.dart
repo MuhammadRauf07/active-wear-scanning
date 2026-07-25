@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'dart:developer' as dev;
 import 'package:active_wear_scanning/features/common-models/common_models.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:active_wear_scanning/features/lapping/model/lapping_model.dart';
@@ -65,22 +66,106 @@ class LappingController extends ChangeNotifier {
         final Map<String, LappingModel> uniqueTrays = {};
         final Map<String, List<LappingModel>> draftScannedTraysByWO = {};
         final Map<String, double> draftOverrides = {};
+        final Map<String, double> loadedWasteQuantities = {};
+        final Map<String, int?> loadedWasteProgressIds = {};
+        final Map<String, int> loadedBatchLineIds = {};
+
+        // Fetch batch lines for this batch header
+        final List<Map<String, dynamic>> lotLines = [];
+        final blRes = await _lotRepo.fetchLotLines(batchHeaderId: batchHeaderId);
+        if (blRes.success && blRes.data != null) {
+          final List rawLines = blRes.data is List ? blRes.data : [];
+          lotLines.addAll(rawLines.cast<Map<String, dynamic>>());
+        }
+
+        // Reconstruct draft scanned trays list from batch lines (lotLines) where isReAssigned is true
+        final draftLines = lotLines.where((line) {
+          final Map blMap = line['batchLines'] ?? line;
+          return blMap['isReAssigned'] == true;
+        }).toList();
+
+        for (final line in draftLines) {
+          final Map bl = line['batchLines'] ?? line;
+          final trayId = bl['trayId'] as int?;
+          final double qty = (bl['primaryQuantity'] ?? 0.0).toDouble();
+          final blId = bl['id'] as int?;
+          final woId = bl['workOrderHeaderId'] as int?;
+
+          if (trayId != null && woId != null) {
+            final trayRes = await _lotRepo.fetchTrayDetailById(trayId);
+            if (trayRes.success && trayRes.data != null) {
+              final trayDetailMap = Map<String, dynamic>.from(trayRes.data['trayDetail'] ?? trayRes.data);
+              final trayCode = trayDetailMap['trayCode'] as String? ?? '';
+              
+              final primaryTrayModel = PrimaryTrayModel(
+                id: trayId,
+                trayCode: trayCode,
+                trayType: trayDetailMap['trayType'] as int? ?? 1,
+                trayQuantity: (trayDetailMap['trayQuantity'] ?? 0.0).toDouble(),
+                active: trayDetailMap['active'] as bool? ?? true,
+                locatorId: trayDetailMap['locatorId'] as int?,
+                isReAssigned: true,
+                concurrencyStamp: trayDetailMap['concurrencyStamp'] as String?,
+              );
+
+              // Find template tray with matching woId in rawTrays to copy metadata
+              final templateTray = rawTrays.firstWhere(
+                (t) => t.workOrderHeader.id == woId,
+                orElse: () => rawTrays.first,
+              );
+
+              final lappingModel = LappingModel(
+                productionProgress: templateTray.productionProgress.copyWith(
+                  id: bl['progressId'] as int?,
+                  draftFlag: true,
+                  operationId: currentOperationId,
+                  transactionType: 2,
+                  primaryTrayId: trayId,
+                  primaryQuantity: qty,
+                ),
+                operation: templateTray.operation,
+                item: templateTray.item,
+                processedItem: templateTray.processedItem,
+                machineModel: templateTray.machineModel,
+                primaryTrayModel: primaryTrayModel,
+                shift: templateTray.shift,
+                workOrderHeader: templateTray.workOrderHeader,
+                workOrderLine: templateTray.workOrderLine,
+                planHeader: templateTray.planHeader,
+                batchHeader: templateTray.batchHeader,
+              );
+
+              final itemDesc = lappingModel.processedItem?.description ?? lappingModel.item.description;
+              if (itemDesc.isNotEmpty) {
+                final compositeId = '${woId}_$itemDesc';
+                draftScannedTraysByWO.putIfAbsent(compositeId, () => []);
+                if (!draftScannedTraysByWO[compositeId]!.any((st) => st.primaryTrayModel.id == trayId)) {
+                  draftScannedTraysByWO[compositeId]!.add(lappingModel);
+                }
+
+                final code = trayCode.toLowerCase();
+                draftOverrides[code] = qty;
+                if (blId != null) {
+                  loadedBatchLineIds[code] = blId;
+                }
+              }
+            }
+          }
+        }
 
         for (final tray in rawTrays) {
           if (tray.productionProgress.transactionType != 2) continue;
 
-          if (tray.productionProgress.pbsFlag == true) {
+          // Detect waste records (no trayId, waste > 0, or subOperation = 'waste')
+          if ((tray.productionProgress.subOperation ?? '').toLowerCase() == 'waste' ||
+              (tray.productionProgress.waste ?? 0) > 0 ||
+              tray.productionProgress.primaryTrayId == null) {
             final woId = tray.workOrderHeader.id;
             final itemDesc = tray.processedItem?.description ?? tray.item.description;
             if (itemDesc.isNotEmpty) {
               final compositeId = '${woId}_$itemDesc';
-              draftScannedTraysByWO.putIfAbsent(compositeId, () => []);
-              draftScannedTraysByWO[compositeId]!.add(tray);
-
-              final code = tray.primaryTrayModel.trayCode?.toLowerCase();
-              if (code != null) {
-                draftOverrides[code] = (tray.productionProgress.primaryQuantity ?? 0.0).toDouble();
-              }
+              loadedWasteQuantities[compositeId] = (tray.productionProgress.waste ?? tray.productionProgress.primaryQuantity ?? 0.0).toDouble();
+              loadedWasteProgressIds[compositeId] = tray.productionProgress.id;
             }
             continue;
           }
@@ -93,35 +178,73 @@ class LappingController extends ChangeNotifier {
           }
         }
 
+        // Determine previous process operationId to find original incoming quantities
+        final prevOps = rawTrays
+            .map((t) => t.productionProgress.operationId)
+            .where((opId) => opId != null && opId < currentOperationId)
+            .toList();
+        final int? prevOpId = prevOps.isEmpty ? null : prevOps.reduce((a, b) => a! > b! ? a : b);
+
+        final Map<String, double> originalPiecesMap = {};
+        for (final tray in rawTrays) {
+          final isTargetOp = prevOpId != null
+              ? (tray.productionProgress.operationId == prevOpId)
+              : (tray.productionProgress.operationId == currentOperationId &&
+                 tray.productionProgress.primaryTrayId != null);
+
+          if (isTargetOp &&
+              tray.productionProgress.transactionType == 2 &&
+              (tray.productionProgress.subOperation ?? '').toLowerCase() != 'waste') {
+            final woId = tray.workOrderHeader.id;
+            final itemDesc = tray.processedItem?.description ?? tray.item.description;
+            if (itemDesc.isNotEmpty) {
+              final compositeId = '${woId}_$itemDesc';
+              originalPiecesMap[compositeId] = (originalPiecesMap[compositeId] ?? 0.0) +
+                  (tray.productionProgress.primaryQuantity ?? 0.0);
+            }
+          }
+        }
+
         final fetchedTrays = uniqueTrays.values.toList();
         final Map<String, WorkOrderSummary> summaries = {};
 
+        // Discover and initialize all work order summaries based on original quantities
+        for (final tray in rawTrays) {
+          final woId = tray.workOrderHeader.id;
+          final itemDesc = tray.processedItem?.description ?? tray.item.description;
+          if (itemDesc.isEmpty) continue;
+          final compositeId = '${woId}_$itemDesc';
+
+          if (!summaries.containsKey(compositeId)) {
+            final origQty = originalPiecesMap[compositeId] ?? 0.0;
+            summaries[compositeId] = WorkOrderSummary(
+              id: compositeId,
+              description: tray.workOrderHeader.description ?? '-',
+              componentDescription: itemDesc,
+              trayCount: 0,
+              cumulativePieces: 0.0,
+              originalPieces: origQty,
+            );
+          }
+        }
+
+        // Add available/unscanned tray counts and quantities
         for (final tray in fetchedTrays) {
           final woId = tray.workOrderHeader.id;
           final itemDesc = tray.processedItem?.description ?? tray.item.description;
+          if (itemDesc.isEmpty) continue;
+          final compositeId = '${woId}_$itemDesc';
 
-          if (itemDesc.isNotEmpty) {
-            final compositeId = '${woId}_$itemDesc';
-
-            if (summaries.containsKey(compositeId)) {
-              final existing = summaries[compositeId]!;
-              summaries[compositeId] = WorkOrderSummary(
-                id: compositeId,
-                description: existing.description,
-                componentDescription: existing.componentDescription,
-                trayCount: existing.trayCount + 1,
-                cumulativePieces: existing.cumulativePieces + (tray.productionProgress.primaryQuantity ?? 0),
-              );
-            } else {
-              final woDesc = tray.workOrderHeader.description;
-              summaries[compositeId] = WorkOrderSummary(
-                id: compositeId,
-                description: woDesc,
-                componentDescription: itemDesc,
-                trayCount: 1,
-                cumulativePieces: tray.productionProgress.primaryQuantity ?? 0,
-              );
-            }
+          if (summaries.containsKey(compositeId)) {
+            final existing = summaries[compositeId]!;
+            summaries[compositeId] = WorkOrderSummary(
+              id: compositeId,
+              description: existing.description,
+              componentDescription: existing.componentDescription,
+              trayCount: existing.trayCount + 1,
+              cumulativePieces: existing.cumulativePieces + (tray.productionProgress.primaryQuantity ?? 0),
+              originalPieces: existing.originalPieces,
+            );
           }
         }
 
@@ -131,7 +254,11 @@ class LappingController extends ChangeNotifier {
           workOrders: summaries,
           scannedTraysByWO: draftScannedTraysByWO,
           trayOverrideQuantities: draftOverrides,
+          itemWasteQuantities: loadedWasteQuantities,
+          itemWasteProgressIds: loadedWasteProgressIds,
+          trayBatchLineIds: loadedBatchLineIds,
           resetDraftProgressIds: {},
+          resetBatchLineIds: {},
           isLoading: false,
           clearSelectedWorkOrderId: true,
         );
@@ -146,8 +273,9 @@ class LappingController extends ChangeNotifier {
         isLoading: false,
         errorMessage: e.toString(),
       );
+    } finally {
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   Future<String?> onTrayScanned(String code, double inputPcs) async {
@@ -295,11 +423,29 @@ class LappingController extends ChangeNotifier {
       updatedReset.add(t.productionProgress.id!);
     }
 
+    final updatedResetLines = Set<int>.from(_state.resetBatchLineIds);
+    final code = t.primaryTrayModel.trayCode?.toLowerCase();
+    if (code != null && _state.trayBatchLineIds.containsKey(code)) {
+      updatedResetLines.add(_state.trayBatchLineIds[code]!);
+    }
+
     _state = _state.copyWith(
       trayOverrideQuantities: updatedOverrides,
       scannedTraysByWO: updatedScanned,
       resetDraftProgressIds: updatedReset,
+      resetBatchLineIds: updatedResetLines,
     );
+    notifyListeners();
+  }
+
+  void setWasteQuantity(String compositeId, double qty) {
+    final updatedWaste = Map<String, double>.from(_state.itemWasteQuantities);
+    if (qty <= 0) {
+      updatedWaste.remove(compositeId);
+    } else {
+      updatedWaste[compositeId] = qty;
+    }
+    _state = _state.copyWith(itemWasteQuantities: updatedWaste);
     notifyListeners();
   }
 
@@ -333,7 +479,9 @@ class LappingController extends ChangeNotifier {
       headersRes.success && headersRes.data != null ? List<Map<String, dynamic>>.from(headersRes.data as List) : [],
       linesRes.success && linesRes.data != null ? List<Map<String, dynamic>>.from(linesRes.data as List) : [],
     ];
-  }  Future<void> saveChanges({bool isDraft = false}) async {
+  }
+
+  Future<void> saveChanges({bool isDraft = false}) async {
     final allScannedTrays = _state.scannedTraysByWO.values.expand((list) => list).toList();
 
     if (!isDraft) {
@@ -341,10 +489,24 @@ class LappingController extends ChangeNotifier {
         throw Exception('No Trays Scanned. Please scan at least one tray.');
       }
 
-      // Completion validation
+      // Completion validation & item-wise quantity matching validation
       for (final wo in _state.workOrders.values) {
-        if ((_state.scannedTraysByWO[wo.id] ?? []).isEmpty) {
-          throw Exception('Incomplete. Missing trays for "${wo.componentDescription}"');
+        final compositeId = wo.id;
+        final double reassignedQty = (_state.scannedTraysByWO[compositeId] ?? []).fold<double>(
+          0.0,
+          (sum, t) => sum + (_state.trayOverrideQuantities[t.primaryTrayModel.trayCode?.toLowerCase() ?? ''] ?? 0.0),
+        );
+        final double wasteQty = _state.itemWasteQuantities[compositeId] ?? 0.0;
+        final double originalQty = wo.originalPieces;
+
+        if ((reassignedQty + wasteQty) != originalQty) {
+          throw Exception(
+            'Quantity mismatch for "${wo.componentDescription}".\n'
+            'Came from previous process: ${originalQty.toInt()} tubes\n'
+            'Reassigned scanned quantity: ${reassignedQty.toInt()} tubes\n'
+            'Waste quantity entered: ${wasteQty.toInt()} tubes\n'
+            'Total Scanned + Waste must equal the original incoming quantity.',
+          );
         }
       }
     }
@@ -353,13 +515,20 @@ class LappingController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // --- Step 0: Reset Removed Draft Progress Records ---
+      // --- Step 0: Delete/Reset Removed Batch Lines and Draft Progress Flags ---
+      if (_state.resetBatchLineIds.isNotEmpty) {
+        for (final blId in _state.resetBatchLineIds) {
+          await _lotRepo.deleteLotLine(blId);
+        }
+      }
+
       if (_state.resetDraftProgressIds.isNotEmpty) {
         for (final resetId in _state.resetDraftProgressIds) {
           final match = _state.rawActiveTrays.where((t) => t.productionProgress.id == resetId).firstOrNull;
           if (match != null) {
             final Map<String, dynamic> resetJson = match.productionProgress.toJson();
-            resetJson['pbsFlag'] = false;
+            resetJson['draftFlag'] = false;
+            resetJson['draftStatus'] = false;
             resetJson.remove('id');
             resetJson.remove('progressCode');
             resetJson.remove('creationTime');
@@ -367,6 +536,35 @@ class LappingController extends ChangeNotifier {
             resetJson.remove('lastModificationTime');
             resetJson.remove('lastModifierId');
             await _processingRepo.updateProductionProgress(resetId, resetJson);
+          }
+        }
+      }
+
+      // Update draftStatus and draftFlag on all active Lapping progress records for this batch on save draft
+      if (isDraft) {
+        final activeLappingProgresses = _state.rawActiveTrays
+            .where((t) => t.productionProgress.operationId == currentOperationId)
+            .map((t) => t.productionProgress)
+            .toList();
+
+        final Set<int> updatedPpIds = {};
+        for (final pp in activeLappingProgresses) {
+          if (pp.id != null && !updatedPpIds.contains(pp.id)) {
+            updatedPpIds.add(pp.id!);
+            final Map<String, dynamic> updateJson = pp.toJson();
+            updateJson['draftFlag'] = true;
+            updateJson['draftStatus'] = true;
+            updateJson.remove('id');
+            updateJson.remove('progressCode');
+            updateJson.remove('creationTime');
+            updateJson.remove('creatorId');
+            updateJson.remove('lastModificationTime');
+            updateJson.remove('lastModifierId');
+
+            final updRes = await _processingRepo.updateProductionProgress(pp.id!, updateJson);
+            if (!updRes.success) {
+              dev.log("LappingController: Failed to update draftStatus on active Lapping record ${pp.id}: ${updRes.message}");
+            }
           }
         }
       }
@@ -401,67 +599,62 @@ class LappingController extends ChangeNotifier {
 
           if (isDraft) {
             // --- DRAFT PATH ---
-            if (pp.id != null) {
-              // Update existing lapping progress entry with pbsFlag = true
-              final Map<String, dynamic> updateJson = pp.toJson();
-              updateJson['pbsFlag'] = true;
-              updateJson['primaryQuantity'] = trayQty;
-              updateJson.remove('id');
-              updateJson.remove('progressCode');
-              updateJson.remove('creationTime');
-              updateJson.remove('creatorId');
-              updateJson.remove('lastModificationTime');
-              updateJson.remove('lastModifierId');
+            // Re-resolve the correct lapping progress record ID for this work order to link the draft batch line
+            final originalLappingRecord = _state.rawActiveTrays.firstWhere(
+              (t) => t.workOrderHeader.id == scannedTray.workOrderHeader.id && t.productionProgress.id != null,
+              orElse: () => _state.rawActiveTrays.first,
+            );
+            final int? draftProgressId = originalLappingRecord.productionProgress.id;
 
-              final updRes = await _processingRepo.updateProductionProgress(pp.id!, updateJson);
-              if (!updRes.success) {
-                handoverErrors[scannedTray.primaryTrayModel.id!] = 'Draft update failed: ${updRes.message}';
+            // Create/Update the batch line entry in draft
+            final String code = scannedTray.primaryTrayModel.trayCode?.toLowerCase() ?? '';
+            final int? blId = _state.trayBatchLineIds[code];
+
+            final Map<String, dynamic> lotLinePayload = {
+              "planDate": DateTime.now().toIso8601String(),
+              "transactionDate": DateTime.now().toIso8601String(),
+              "primaryQuantity": trayQty,
+              "primaryUOM": pp.primaryUOM ?? 4,
+              "secondaryQuantity": 0,
+              "secondaryUOM": pp.secondaryUOM ?? 1,
+              "batchLineCode": "BL-$batchHeaderId-${scannedTray.primaryTrayModel.id}",
+              "batchHeaderId": batchHeaderId,
+              "progressId": draftProgressId, // linked to Lapping progress record in draft
+              "workOrderHeaderId": scannedTray.workOrderHeader.id,
+              "workOrderLineId": scannedTray.workOrderLine.id,
+              "itemId": scannedTray.item.id,
+              "trayId": scannedTray.primaryTrayModel.id,
+              "locatorId": targetLocatorId,
+              "processItemId": scannedTray.processedItem?.id ?? pp.processedItemId ?? scannedTray.item.id,
+              "active": true,
+              "isReAssigned": true,
+            };
+
+            if (blId != null) {
+              final blFetchRes = await _lotRepo.fetchLotLines(batchHeaderId: batchHeaderId);
+              if (blFetchRes.success && blFetchRes.data != null) {
+                final List rawList = blFetchRes.data is List ? blFetchRes.data : [];
+                final match = rawList.cast<Map>().firstWhere(
+                  (item) => (item['batchLines']?['id'] ?? item['id'])?.toString() == blId.toString(),
+                  orElse: () => {},
+                );
+                if (match.isNotEmpty) {
+                  final blMap = match['batchLines'] ?? match;
+                  if (blMap['concurrencyStamp'] != null) {
+                    lotLinePayload['concurrencyStamp'] = blMap['concurrencyStamp'];
+                  }
+                }
+              }
+
+              final blRes = await _lotRepo.updateLotLine(blId, lotLinePayload);
+              if (!blRes.success) {
+                handoverErrors[scannedTray.primaryTrayModel.id!] = 'Draft batchline update failed: ${blRes.message}';
                 return false;
               }
             } else {
-              // Create new lapping progress entry (under current operation) with pbsFlag = true
-              Map<String, dynamic> nextJson = pp.toJson();
-              nextJson.remove('id');
-              nextJson.remove('progressCode');
-              nextJson.remove('concurrencyStamp');
-              nextJson.remove('batchLinesId');
-              nextJson.remove('batchLineId');
-
-              nextJson.addAll({
-                "subOperation": "Handover",
-                "transactionType": 2,
-                "primaryTrayId": scannedTray.primaryTrayModel.id,
-                "secondaryTrayId": scannedTray.primaryTrayModel.id,
-                "primaryQuantity": trayQty,
-                "secondaryQuantity": pp.secondaryQuantity ?? 0,
-                "primaryUOM": pp.primaryUOM ?? 4,
-                "secondaryUOM": pp.secondaryUOM ?? 1,
-                "productGrade": pp.productGrade ?? 0,
-                "productNature": pp.productNature ?? 0,
-                "shiftId": pp.shiftId ?? 1,
-                "machineId": pp.machineId ?? (_state.trays.isNotEmpty ? _state.trays.first.productionProgress.machineId : null),
-                "isLastProcess": false,
-                "isStarted": false,
-                "reworkFlag": pp.reworkFlag ?? false,
-                "lotMakingFlag": false,
-                "locatorId": targetLocatorId, // current locator
-                "operationId": targetOpId, // current operation
-                "wipStatus": 1,
-                "pbsFlag": true, // Saved as Draft
-                "gbsFlag": false,
-                "date": DateTime.now().toIso8601String(),
-                "operatorDescription": "system",
-                "processedItemId": scannedTray.processedItem?.id ?? pp.processedItemId ?? scannedTray.item.id,
-                "itemId": scannedTray.item.id,
-                "workOrderHeaderId": scannedTray.workOrderHeader.id,
-                "workOrderLineId": scannedTray.workOrderLine.id,
-                "batchHeaderId": batchHeaderId,
-              });
-              nextJson.remove("planHeaderId");
-
-              final ppRes = await _processingRepo.createProductionProgress(nextJson);
-              if (!ppRes.success) {
-                handoverErrors[scannedTray.primaryTrayModel.id!] = 'Draft create failed: ${ppRes.message}';
+              final blRes = await _lotRepo.createLotLine(lotLinePayload);
+              if (!blRes.success) {
+                handoverErrors[scannedTray.primaryTrayModel.id!] = 'Draft batchline create failed: ${blRes.message}';
                 return false;
               }
             }
@@ -486,11 +679,25 @@ class LappingController extends ChangeNotifier {
             }
           }
 
-          // 2. UPDATE THE EXISTING LAPPING ENTRY (to reset pbsFlag = false and update quantity)
+          // 2. UPDATE THE EXISTING LAPPING ENTRY (to reset draftFlag = false and update quantity)
           if (pp.id != null) {
+            String? freshStamp = pp.concurrencyStamp;
+            final freshPPRes = await _processingRepo.fetchProductionProgress({'OperationId': currentOperationId.toString(), 'TransactionType': '2'});
+            if (freshPPRes.success && freshPPRes.data != null) {
+              final list = freshPPRes.data as List<ProductionProgressResponseModel>;
+              final match = list.where((r) => r.productionProgress.id == pp.id).firstOrNull;
+              if (match != null) {
+                freshStamp = match.productionProgress.concurrencyStamp;
+              }
+            }
+
             final Map<String, dynamic> updateLappingJson = pp.toJson();
-            updateLappingJson['pbsFlag'] = false;
+            updateLappingJson['draftFlag'] = false;
+            updateLappingJson['draftStatus'] = false;
             updateLappingJson['primaryQuantity'] = trayQty;
+            if (freshStamp != null) {
+              updateLappingJson['concurrencyStamp'] = freshStamp;
+            }
             updateLappingJson.remove('id');
             updateLappingJson.remove('progressCode');
             updateLappingJson.remove('creationTime');
@@ -534,7 +741,7 @@ class LappingController extends ChangeNotifier {
             "locatorId": targetLocatorId, // Next locator ID
             "operationId": targetOpId, // Next operation ID
             "wipStatus": nextOperationId != null ? 0 : 1,
-            "pbsFlag": false, // Final Submission
+            "pbsFlag": false,
             "gbsFlag": false,
             "date": DateTime.now().toIso8601String(),
             "operatorDescription": "system",
@@ -585,8 +792,11 @@ class LappingController extends ChangeNotifier {
             return false;
           }
 
-          // --- 3. CREATE BATCH LINE ---
+          // --- 3. CREATE/UPDATE BATCH LINE ---
           int? blId;
+          final String code = scannedTray.primaryTrayModel.trayCode?.toLowerCase() ?? '';
+          final int? existingBlId = _state.trayBatchLineIds[code];
+
           final Map<String, dynamic> lotLinePayload = {
             "planDate": DateTime.now().toIso8601String(),
             "transactionDate": DateTime.now().toIso8601String(),
@@ -610,13 +820,37 @@ class LappingController extends ChangeNotifier {
             lotLinePayload["wipTransactionId"] = wipId;
           }
 
-          final blRes = await _lotRepo.createLotLine(lotLinePayload);
-          if (!blRes.success || blRes.data == null) {
-            handoverErrors[scannedTray.primaryTrayModel.id!] = 'Step 3 failed: ${blRes.message}';
-            return false;
+          if (existingBlId != null) {
+            final blFetchRes = await _lotRepo.fetchLotLines(batchHeaderId: batchHeaderId);
+            if (blFetchRes.success && blFetchRes.data != null) {
+              final List rawList = blFetchRes.data is List ? blFetchRes.data : [];
+              final match = rawList.cast<Map>().firstWhere(
+                (item) => (item['batchLines']?['id'] ?? item['id'])?.toString() == existingBlId.toString(),
+                orElse: () => {},
+              );
+              if (match.isNotEmpty) {
+                final blMap = match['batchLines'] ?? match;
+                if (blMap['concurrencyStamp'] != null) {
+                  lotLinePayload['concurrencyStamp'] = blMap['concurrencyStamp'];
+                }
+              }
+            }
+
+            final blRes = await _lotRepo.updateLotLine(existingBlId, lotLinePayload);
+            if (!blRes.success) {
+              handoverErrors[scannedTray.primaryTrayModel.id!] = 'Failed to update batch line to final progress: ${blRes.message}';
+              return false;
+            }
+            blId = existingBlId;
+          } else {
+            final blRes = await _lotRepo.createLotLine(lotLinePayload);
+            if (!blRes.success || blRes.data == null) {
+              handoverErrors[scannedTray.primaryTrayModel.id!] = 'Step 3 create failed: ${blRes.message}';
+              return false;
+            }
+            final rawBlData = blRes.data;
+            blId = (rawBlData is Map) ? (rawBlData['batchLines']?['id'] ?? rawBlData['id']) : null;
           }
-          final rawBlData = blRes.data;
-          blId = (rawBlData is Map) ? (rawBlData['batchLines']?['id'] ?? rawBlData['id']) : null;
 
           if (blId == null || blId == 0) {
             final refetchBl = await _lotRepo.fetchLotLines(batchHeaderId: batchHeaderId);
@@ -792,6 +1026,68 @@ class LappingController extends ChangeNotifier {
             .map((id) => 'Tray $id:\n${handoverErrors[id] ?? "Unknown error"}')
             .join('\n\n');
         throw Exception(errorDetails);
+      }
+
+      // --- Step 5: Save/Update Waste Progress Records ---
+      for (final wo in _state.workOrders.values) {
+        final compositeId = wo.id;
+        final double wasteQty = _state.itemWasteQuantities[compositeId] ?? 0.0;
+        final int? existingId = _state.itemWasteProgressIds[compositeId];
+
+        if (wasteQty > 0) {
+          LappingModel? match = _state.rawActiveTrays.where((t) =>
+            '${t.workOrderHeader.id}_${t.processedItem?.description ?? t.item.description}' == compositeId
+          ).firstOrNull ?? _state.trays.where((t) =>
+            '${t.workOrderHeader.id}_${t.processedItem?.description ?? t.item.description}' == compositeId
+          ).firstOrNull;
+
+          if (match != null) {
+            final Map<String, dynamic> wasteJson = {
+              "subOperation": "Waste",
+              "transactionType": 2,
+              "primaryQuantity": 0,
+              "secondaryQuantity": 0,
+              "primaryUOM": match.productionProgress.primaryUOM ?? 4,
+              "secondaryUOM": match.productionProgress.secondaryUOM ?? 1,
+              "waste": wasteQty,
+              "pbsFlag": false,
+              "draftFlag": isDraft,
+              "draftStatus": isDraft,
+              "gbsFlag": false,
+              "productGrade": 0,
+              "productNature": 0,
+              "wipStatus": 0,
+              "date": DateTime.now().toIso8601String(),
+              "operatorDescription": "system",
+              "operationId": currentOperationId,
+              "locatorId": targetLocatorId,
+              "batchHeaderId": batchHeaderId,
+              "workOrderHeaderId": match.workOrderHeader.id,
+              "workOrderLineId": match.workOrderLine.id,
+              "itemId": match.item.id,
+              "processedItemId": match.processedItem?.id ?? match.item.id,
+              "shiftId": 1,
+              "isStarted": false,
+              "isLastProcess": false,
+              "reworkFlag": false,
+              "lotMakingFlag": false,
+            };
+
+            if (existingId != null) {
+              final existingWasteRecord = _state.rawActiveTrays
+                  .where((t) => t.productionProgress.id == existingId)
+                  .firstOrNull;
+              if (existingWasteRecord?.productionProgress.concurrencyStamp != null) {
+                wasteJson['concurrencyStamp'] = existingWasteRecord!.productionProgress.concurrencyStamp;
+              }
+              await _processingRepo.updateProductionProgress(existingId, wasteJson);
+            } else {
+              await _processingRepo.createProductionProgress(wasteJson);
+            }
+          }
+        } else if (existingId != null) {
+          await _processingRepo.deleteProductionProgress(existingId);
+        }
       }
 
       if (isDraft) {
