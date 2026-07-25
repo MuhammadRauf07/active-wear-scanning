@@ -439,6 +439,27 @@ class _LappingDetailScreenViewState extends State<_LappingDetailScreenView> {
     }
   }
 
+  Future<void> _onSaveDraft(BuildContext context, LappingController controller) async {
+    AppLoader.show(context, message: 'Saving draft to database...');
+    try {
+      await controller.saveChanges(isDraft: true);
+      if (!context.mounted) return;
+      AppLoader.hide(context);
+      HapticFeedbackHelper.scanSuccess();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Draft saved successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      AppLoader.hide(context);
+      HapticFeedbackHelper.scanError();
+      _showInfoDialog('Save Draft Error', e.toString());
+    }
+  }
+
   Future<void> _onSubmit(LappingController controller) async {
     AppLoader.show(context, message: 'Submitting changes...');
     try {
@@ -505,6 +526,34 @@ class _LappingDetailScreenViewState extends State<_LappingDetailScreenView> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    if (state.scannedTraysByWO.values.any((list) => list.any((t) => t.productionProgress.pbsFlag == true))) ...[
+                                      Container(
+                                        width: double.infinity,
+                                        margin: const EdgeInsets.only(bottom: 16),
+                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFEFF6FF),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: const Color(0xFFBFDBFE), width: 1.5),
+                                        ),
+                                        child: const Row(
+                                          children: [
+                                            Icon(Icons.drafts_outlined, color: Color(0xFF1D4ED8), size: 18),
+                                            SizedBox(width: 12),
+                                            Expanded(
+                                              child: Text(
+                                                'Editing Draft State: Work progress loaded from server.',
+                                                style: TextStyle(
+                                                  color: Color(0xFF1E40AF),
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                     _buildProcessFlowRibbon(controller),
                                     const SizedBox(height: 16),
                                     _buildAeroIntelligenceGrid(controller),
@@ -670,6 +719,33 @@ class _LappingDetailScreenViewState extends State<_LappingDetailScreenView> {
                 ],
               ),
             ),
+            if (!retryMode) ...[
+              ElevatedButton.icon(
+                onPressed: state.isLoading
+                    ? null
+                    : () {
+                        HapticFeedbackHelper.buttonClick();
+                        _onSaveDraft(context, controller);
+                      },
+                icon: const Icon(Icons.drafts_rounded, size: 16),
+                label: const Text('SAVE DRAFT'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1E293B),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  disabledBackgroundColor: Colors.grey.shade200,
+                  minimumSize: const Size(0, 44),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  textStyle: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+            ],
             ElevatedButton.icon(
               onPressed: state.isLoading
                   ? null

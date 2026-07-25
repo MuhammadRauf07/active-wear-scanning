@@ -6,6 +6,7 @@ import 'package:active_wear_scanning/features/knitting_production/repo/knitting_
 import 'package:active_wear_scanning/features/carton_packing/repo/carton_packing_repo.dart';
 import 'package:active_wear_scanning/features/md_receiving/repo/md_receiving_repo.dart';
 import 'package:active_wear_scanning/features/stitching_line_schedule/repo/stitching_line_schedule_repo.dart';
+import 'package:active_wear_scanning/features/processing_waste_receiving/repo/processing_waste_repo.dart';
 import 'package:active_wear_scanning/features/user/model/active_wear_user.dart';
 import 'package:active_wear_scanning/features/user/repo/active_wear_user.dart';
 import 'package:active_wear_scanning/features/user/repo/profile.dart';
@@ -32,6 +33,7 @@ void main() {
   injectSingleton(CartonPackingRepo());
   injectSingleton(MdReceivingRepo());
   injectSingleton(StitchingLineScheduleRepo());
+  injectSingleton(ProcessingWasteRepo());
 
   runApp(
     PlexApp(

@@ -63,8 +63,28 @@ class LappingController extends ChangeNotifier {
         final List<LappingModel> rawTrays = List<LappingModel>.from(res.data);
 
         final Map<String, LappingModel> uniqueTrays = {};
+        final Map<String, List<LappingModel>> draftScannedTraysByWO = {};
+        final Map<String, double> draftOverrides = {};
+
         for (final tray in rawTrays) {
           if (tray.productionProgress.transactionType != 2) continue;
+
+          if (tray.productionProgress.pbsFlag == true) {
+            final woId = tray.workOrderHeader.id;
+            final itemDesc = tray.processedItem?.description ?? tray.item.description;
+            if (itemDesc.isNotEmpty) {
+              final compositeId = '${woId}_$itemDesc';
+              draftScannedTraysByWO.putIfAbsent(compositeId, () => []);
+              draftScannedTraysByWO[compositeId]!.add(tray);
+
+              final code = tray.primaryTrayModel.trayCode?.toLowerCase();
+              if (code != null) {
+                draftOverrides[code] = (tray.productionProgress.primaryQuantity ?? 0.0).toDouble();
+              }
+            }
+            continue;
+          }
+
           if (tray.productionProgress.operationId != currentOperationId) continue;
 
           final code = tray.primaryTrayModel.trayCode ?? 'UNKNOWN';
@@ -109,6 +129,9 @@ class LappingController extends ChangeNotifier {
           trays: fetchedTrays,
           rawActiveTrays: rawTrays,
           workOrders: summaries,
+          scannedTraysByWO: draftScannedTraysByWO,
+          trayOverrideQuantities: draftOverrides,
+          resetDraftProgressIds: {},
           isLoading: false,
           clearSelectedWorkOrderId: true,
         );
@@ -267,9 +290,15 @@ class LappingController extends ChangeNotifier {
       updatedScanned[selectedId] = List<LappingModel>.from(updatedScanned[selectedId]!)..remove(t);
     }
 
+    final updatedReset = Set<int>.from(_state.resetDraftProgressIds);
+    if (t.productionProgress.id != null) {
+      updatedReset.add(t.productionProgress.id!);
+    }
+
     _state = _state.copyWith(
       trayOverrideQuantities: updatedOverrides,
       scannedTraysByWO: updatedScanned,
+      resetDraftProgressIds: updatedReset,
     );
     notifyListeners();
   }
@@ -304,19 +333,19 @@ class LappingController extends ChangeNotifier {
       headersRes.success && headersRes.data != null ? List<Map<String, dynamic>>.from(headersRes.data as List) : [],
       linesRes.success && linesRes.data != null ? List<Map<String, dynamic>>.from(linesRes.data as List) : [],
     ];
-  }
-
-  Future<void> saveChanges() async {
+  }  Future<void> saveChanges({bool isDraft = false}) async {
     final allScannedTrays = _state.scannedTraysByWO.values.expand((list) => list).toList();
 
-    if (allScannedTrays.isEmpty) {
-      throw Exception('No Trays Scanned. Please scan at least one tray.');
-    }
+    if (!isDraft) {
+      if (allScannedTrays.isEmpty) {
+        throw Exception('No Trays Scanned. Please scan at least one tray.');
+      }
 
-    // Completion validation
-    for (final wo in _state.workOrders.values) {
-      if ((_state.scannedTraysByWO[wo.id] ?? []).isEmpty) {
-        throw Exception('Incomplete. Missing trays for "${wo.componentDescription}"');
+      // Completion validation
+      for (final wo in _state.workOrders.values) {
+        if ((_state.scannedTraysByWO[wo.id] ?? []).isEmpty) {
+          throw Exception('Incomplete. Missing trays for "${wo.componentDescription}"');
+        }
       }
     }
 
@@ -324,21 +353,40 @@ class LappingController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final assignedTrays = allScannedTrays;
-      final baseProgress = assignedTrays.first.productionProgress;
-      int nextLocatorId = baseProgress.locatorId ?? 3;
-      final handoverOpId = nextOperationId ?? baseProgress.operationId;
+      // --- Step 0: Reset Removed Draft Progress Records ---
+      if (_state.resetDraftProgressIds.isNotEmpty) {
+        for (final resetId in _state.resetDraftProgressIds) {
+          final match = _state.rawActiveTrays.where((t) => t.productionProgress.id == resetId).firstOrNull;
+          if (match != null) {
+            final Map<String, dynamic> resetJson = match.productionProgress.toJson();
+            resetJson['pbsFlag'] = false;
+            resetJson.remove('id');
+            resetJson.remove('progressCode');
+            resetJson.remove('creationTime');
+            resetJson.remove('creatorId');
+            resetJson.remove('lastModificationTime');
+            resetJson.remove('lastModifierId');
+            await _processingRepo.updateProductionProgress(resetId, resetJson);
+          }
+        }
+      }
 
-      if (handoverOpId != null) {
-        final locRes = await _lotRepo.fetchLocators(operationId: handoverOpId);
+      final assignedTrays = allScannedTrays;
+      final baseProgress = assignedTrays.isNotEmpty ? assignedTrays.first.productionProgress : null;
+
+      int targetLocatorId = baseProgress?.locatorId ?? 3;
+      final int targetOpId = isDraft ? currentOperationId : (nextOperationId ?? currentOperationId);
+
+      if (!isDraft && nextOperationId != null) {
+        final locRes = await _lotRepo.fetchLocators(operationId: nextOperationId);
         if (locRes.success && locRes.data != null) {
           final List locList = locRes.data is Map ? (locRes.data['items'] ?? []) : locRes.data;
           final matchingEntry = locList.cast<Map>().firstWhere(
-                (entry) => (entry['operation']?['id'] ?? entry['locator']?['operationId'])?.toString() == handoverOpId.toString(),
+                (entry) => (entry['operation']?['id'] ?? entry['locator']?['operationId'])?.toString() == nextOperationId.toString(),
             orElse: () => {},
           );
           if (matchingEntry.isNotEmpty) {
-            nextLocatorId = matchingEntry['locator']?['id'] as int? ?? (baseProgress.locatorId ?? 3);
+            targetLocatorId = matchingEntry['locator']?['id'] as int? ?? (baseProgress?.locatorId ?? 3);
           }
         }
       }
@@ -351,7 +399,77 @@ class LappingController extends ChangeNotifier {
         try {
           final double trayQty = _state.trayOverrideQuantities[scannedTray.primaryTrayModel.trayCode?.toLowerCase() ?? ''] ?? 0;
 
-          // --- 1. WIP TRANSACTION ---
+          if (isDraft) {
+            // --- DRAFT PATH ---
+            if (pp.id != null) {
+              // Update existing lapping progress entry with pbsFlag = true
+              final Map<String, dynamic> updateJson = pp.toJson();
+              updateJson['pbsFlag'] = true;
+              updateJson['primaryQuantity'] = trayQty;
+              updateJson.remove('id');
+              updateJson.remove('progressCode');
+              updateJson.remove('creationTime');
+              updateJson.remove('creatorId');
+              updateJson.remove('lastModificationTime');
+              updateJson.remove('lastModifierId');
+
+              final updRes = await _processingRepo.updateProductionProgress(pp.id!, updateJson);
+              if (!updRes.success) {
+                handoverErrors[scannedTray.primaryTrayModel.id!] = 'Draft update failed: ${updRes.message}';
+                return false;
+              }
+            } else {
+              // Create new lapping progress entry (under current operation) with pbsFlag = true
+              Map<String, dynamic> nextJson = pp.toJson();
+              nextJson.remove('id');
+              nextJson.remove('progressCode');
+              nextJson.remove('concurrencyStamp');
+              nextJson.remove('batchLinesId');
+              nextJson.remove('batchLineId');
+
+              nextJson.addAll({
+                "subOperation": "Handover",
+                "transactionType": 2,
+                "primaryTrayId": scannedTray.primaryTrayModel.id,
+                "secondaryTrayId": scannedTray.primaryTrayModel.id,
+                "primaryQuantity": trayQty,
+                "secondaryQuantity": pp.secondaryQuantity ?? 0,
+                "primaryUOM": pp.primaryUOM ?? 4,
+                "secondaryUOM": pp.secondaryUOM ?? 1,
+                "productGrade": pp.productGrade ?? 0,
+                "productNature": pp.productNature ?? 0,
+                "shiftId": pp.shiftId ?? 1,
+                "machineId": pp.machineId ?? (_state.trays.isNotEmpty ? _state.trays.first.productionProgress.machineId : null),
+                "isLastProcess": false,
+                "isStarted": false,
+                "reworkFlag": pp.reworkFlag ?? false,
+                "lotMakingFlag": false,
+                "locatorId": targetLocatorId, // current locator
+                "operationId": targetOpId, // current operation
+                "wipStatus": 1,
+                "pbsFlag": true, // Saved as Draft
+                "gbsFlag": false,
+                "date": DateTime.now().toIso8601String(),
+                "operatorDescription": "system",
+                "processedItemId": scannedTray.processedItem?.id ?? pp.processedItemId ?? scannedTray.item.id,
+                "itemId": scannedTray.item.id,
+                "workOrderHeaderId": scannedTray.workOrderHeader.id,
+                "workOrderLineId": scannedTray.workOrderLine.id,
+                "batchHeaderId": batchHeaderId,
+              });
+              nextJson.remove("planHeaderId");
+
+              final ppRes = await _processingRepo.createProductionProgress(nextJson);
+              if (!ppRes.success) {
+                handoverErrors[scannedTray.primaryTrayModel.id!] = 'Draft create failed: ${ppRes.message}';
+                return false;
+              }
+            }
+            return true;
+          }
+
+          // --- SUBMISSION PATH ---
+          // 1. WIP TRANSACTION
           int? wipId;
           if (pp.id != null) {
             final nativeWipRes = await _lotRepo.fetchWipTransactionsByProgressId(pp.id!);
@@ -368,7 +486,27 @@ class LappingController extends ChangeNotifier {
             }
           }
 
-          // --- 2. CREATE HANDOVER PRODUCTION PROGRESS ---
+          // 2. UPDATE THE EXISTING LAPPING ENTRY (to reset pbsFlag = false and update quantity)
+          if (pp.id != null) {
+            final Map<String, dynamic> updateLappingJson = pp.toJson();
+            updateLappingJson['pbsFlag'] = false;
+            updateLappingJson['primaryQuantity'] = trayQty;
+            updateLappingJson.remove('id');
+            updateLappingJson.remove('progressCode');
+            updateLappingJson.remove('creationTime');
+            updateLappingJson.remove('creatorId');
+            updateLappingJson.remove('lastModificationTime');
+            updateLappingJson.remove('lastModifierId');
+
+            final updRes = await _processingRepo.updateProductionProgress(pp.id!, updateLappingJson);
+            if (!updRes.success) {
+              handoverErrors[scannedTray.primaryTrayModel.id!] = 'Failed to reset draft status on lapping entry: ${updRes.message}';
+              return false;
+            }
+          }
+
+          // 3. ALWAYS CREATE NEW HANDOVER ENTRY (with locator id of next process)
+          int? targetProgressId;
           Map<String, dynamic> nextJson = pp.toJson();
           nextJson.remove('id');
           nextJson.remove('progressCode');
@@ -393,11 +531,11 @@ class LappingController extends ChangeNotifier {
             "isStarted": false,
             "reworkFlag": pp.reworkFlag ?? false,
             "lotMakingFlag": false,
-            "locatorId": nextLocatorId,
-            "operationId": handoverOpId ?? pp.operationId,
+            "locatorId": targetLocatorId, // Next locator ID
+            "operationId": targetOpId, // Next operation ID
             "wipStatus": nextOperationId != null ? 0 : 1,
+            "pbsFlag": false, // Final Submission
             "gbsFlag": false,
-            "pbsFlag": false,
             "date": DateTime.now().toIso8601String(),
             "operatorDescription": "system",
             "processedItemId": scannedTray.processedItem?.id ?? pp.processedItemId ?? scannedTray.item.id,
@@ -410,12 +548,11 @@ class LappingController extends ChangeNotifier {
 
           final ppRes = await _processingRepo.createProductionProgress(nextJson);
           if (!ppRes.success) {
-            handoverErrors[scannedTray.primaryTrayModel.id!] = 'Step 2 failed: ${ppRes.message}';
+            handoverErrors[scannedTray.primaryTrayModel.id!] = 'Handover entry create failed: ${ppRes.message}';
             return false;
           }
 
           final dynamic ppData = ppRes.data;
-          int? targetProgressId;
           if (ppData is Map) {
             final rawId = int.tryParse(ppData['id']?.toString() ?? '');
             if (rawId != null && rawId > 0) targetProgressId = rawId;
@@ -426,7 +563,7 @@ class LappingController extends ChangeNotifier {
           ProductionProgressResponseModel? latestHandoverPP;
           if (targetProgressId == null || targetProgressId == 0) {
             final refetchRes = await _processingRepo.fetchProductionProgress({
-              'OperationId': (handoverOpId ?? pp.operationId).toString(),
+              'OperationId': targetOpId.toString(),
               'TransactionType': '2',
             });
             if (refetchRes.success && refetchRes.data != null) {
@@ -444,7 +581,7 @@ class LappingController extends ChangeNotifier {
           }
 
           if (targetProgressId == null || targetProgressId == 0) {
-            handoverErrors[scannedTray.primaryTrayModel.id!] = 'Step 2.5 failed to resolve progress ID';
+            handoverErrors[scannedTray.primaryTrayModel.id!] = 'Step 2.5 failed to resolve handover progress ID';
             return false;
           }
 
@@ -464,7 +601,7 @@ class LappingController extends ChangeNotifier {
             "workOrderLineId": scannedTray.workOrderLine.id,
             "itemId": scannedTray.item.id,
             "trayId": scannedTray.primaryTrayModel.id,
-            "locatorId": nextLocatorId,
+            "locatorId": targetLocatorId,
             "processItemId": scannedTray.processedItem?.id ?? pp.processedItemId ?? scannedTray.item.id,
             "active": true,
             "isReAssigned": true,
@@ -504,7 +641,7 @@ class LappingController extends ChangeNotifier {
           // --- 3.7. UPDATE PRODUCTION PROGRESS batchLineId ---
           if (latestHandoverPP == null) {
             final refetchRes = await _processingRepo.fetchProductionProgress({
-              'OperationId': (handoverOpId ?? pp.operationId).toString(),
+              'OperationId': targetOpId.toString(),
               'TransactionType': '2',
             });
             if (refetchRes.success && refetchRes.data != null) {
@@ -527,7 +664,7 @@ class LappingController extends ChangeNotifier {
             finalJson.remove('creatorId');
             finalJson.remove('lastModificationTime');
             finalJson.remove('lastModifierId');
-            final finalRes = await _processingRepo.updateProductionProgress(targetProgressId, finalJson);
+            final finalRes = await _processingRepo.updateProductionProgress(targetProgressId!, finalJson);
             if (!finalRes.success) {
               handoverErrors[scannedTray.primaryTrayModel.id!] = 'Step 3.7 update failed: ${finalRes.message}';
               return false;
@@ -579,7 +716,7 @@ class LappingController extends ChangeNotifier {
             if (machineId != null) {
               trayUpd["resourceId"] = machineId;
             }
-            trayUpd["locatorId"] = nextLocatorId;
+            trayUpd["locatorId"] = targetLocatorId;
 
             trayUpd["batchLineId"] = blId;
 
@@ -590,7 +727,7 @@ class LappingController extends ChangeNotifier {
                 "trayCode": scannedTray.primaryTrayModel.trayCode,
                 "trayQuantity": trayQty.toInt(),
                 "batchHeaderId": batchHeaderId,
-                "locatorId": nextLocatorId,
+                "locatorId": targetLocatorId,
                 "isReAssigned": false,
                 "workOrderHeaderId": trayUpd["workOrderHeaderId"],
                 "workOrderLineId": trayUpd["workOrderLineId"],
@@ -655,6 +792,11 @@ class LappingController extends ChangeNotifier {
             .map((id) => 'Tray $id:\n${handoverErrors[id] ?? "Unknown error"}')
             .join('\n\n');
         throw Exception(errorDetails);
+      }
+
+      if (isDraft) {
+        await fetchBatchData();
+        return;
       }
 
       // --- Step 6: Concurrent Lapping Closure ---
@@ -737,6 +879,7 @@ class LappingController extends ChangeNotifier {
         trayOverrideQuantities: {},
         failedHandoverTrayIds: {},
         failedCloseLappingIds: {},
+        resetDraftProgressIds: {},
       );
     } catch (e) {
       _state = _state.copyWith(

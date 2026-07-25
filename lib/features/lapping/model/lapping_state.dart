@@ -12,6 +12,7 @@ class LappingState {
   final Set<int> failedHandoverTrayIds;
   final Set<int> failedCloseLappingIds;
   final Map<String, double> trayOverrideQuantities;
+  final Set<int> resetDraftProgressIds;
 
   const LappingState({
     this.isLoading = false,
@@ -24,6 +25,7 @@ class LappingState {
     this.failedHandoverTrayIds = const {},
     this.failedCloseLappingIds = const {},
     this.trayOverrideQuantities = const {},
+    this.resetDraftProgressIds = const {},
   });
 
   LappingState copyWith({
@@ -37,6 +39,7 @@ class LappingState {
     Set<int>? failedHandoverTrayIds,
     Set<int>? failedCloseLappingIds,
     Map<String, double>? trayOverrideQuantities,
+    Set<int>? resetDraftProgressIds,
     bool clearSelectedWorkOrderId = false,
     bool clearError = false,
   }) {
@@ -51,6 +54,7 @@ class LappingState {
       failedHandoverTrayIds: failedHandoverTrayIds ?? this.failedHandoverTrayIds,
       failedCloseLappingIds: failedCloseLappingIds ?? this.failedCloseLappingIds,
       trayOverrideQuantities: trayOverrideQuantities ?? this.trayOverrideQuantities,
+      resetDraftProgressIds: resetDraftProgressIds ?? this.resetDraftProgressIds,
     );
   }
 }

@@ -9,6 +9,7 @@ import 'package:active_wear_scanning/features/tray_tracking/presentation/tray_tr
 import 'package:active_wear_scanning/features/carton_packing/presentation/carton_packing_screen.dart';
 import 'package:active_wear_scanning/features/md_receiving/presentation/md_receiving_screen.dart';
 import 'package:active_wear_scanning/features/stitching_line_schedule/presentation/stitching_line_schedule_screen.dart';
+import 'package:active_wear_scanning/features/processing_waste_receiving/presentation/processing_waste_receiving_screen.dart';
 import 'package:flutter/material.dart';
 
 class ScanningSectionsScreen extends StatelessWidget {
@@ -145,6 +146,18 @@ class ScanningSectionsScreen extends StatelessWidget {
                             sectionCode: 'MDRC',
                             progressValue: 0.5,
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const MdReceivingScreen())),
+                          ),
+                        ]),
+                      ),
+                      _FadeSlideTransition(
+                        delay: 500,
+                        child: _buildRow(context, [
+                          SectionCard(
+                            title: 'Processing Waste Receiving',
+                            subtitle: 'Log and receive waste products',
+                            sectionCode: 'MDRC',
+                            progressValue: 0.5,
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ProcessingWasteReceivingScreen())),
                           ),
                         ]),
                       ),
