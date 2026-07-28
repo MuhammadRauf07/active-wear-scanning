@@ -20,6 +20,7 @@ class ProcessingBatchState {
   final double? machineCapacity;
   final bool showTrays;
   final Set<int> failedTrayIds;
+  final Set<int> holdTrayIds;
 
   const ProcessingBatchState({
     this.isLoading = false,
@@ -41,6 +42,7 @@ class ProcessingBatchState {
     this.machineCapacity,
     this.showTrays = false,
     this.failedTrayIds = const {},
+    this.holdTrayIds = const {},
   });
 
   bool get isDraftBatch {
@@ -77,6 +79,7 @@ class ProcessingBatchState {
     double? machineCapacity,
     bool? showTrays,
     Set<int>? failedTrayIds,
+    Set<int>? holdTrayIds,
     bool clearError = false,
   }) {
     return ProcessingBatchState(
@@ -99,6 +102,7 @@ class ProcessingBatchState {
       machineCapacity: machineCapacity ?? this.machineCapacity,
       showTrays: showTrays ?? this.showTrays,
       failedTrayIds: failedTrayIds ?? this.failedTrayIds,
+      holdTrayIds: holdTrayIds ?? this.holdTrayIds,
     );
   }
 }

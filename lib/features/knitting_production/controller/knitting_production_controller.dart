@@ -331,17 +331,18 @@ class KnittingProductionController extends ChangeNotifier {
   void updateTrayQuantity(int index, String qty) {
     final list = List<ScannedTray>.from(_state.scannedTrays);
     final tray = list[index];
-    list[index] = ScannedTray(
-      trayCode: tray.trayCode,
-      trayUpdateId: tray.trayUpdateId,
-      trayConcurrencyStamp: tray.trayConcurrencyStamp,
-      colorDescription: tray.colorDescription,
-      sizeDescription: tray.sizeDescription,
-      perGarmentTube: tray.perGarmentTube,
-      quantity: qty,
-    );
+    list[index] = tray.copyWith(quantity: qty);
     _state = _state.copyWith(scannedTrays: list);
     notifyListeners();
+  }
+
+  void toggleTrayHold(int index, bool isHold) {
+    if (index >= 0 && index < _state.scannedTrays.length) {
+      final list = List<ScannedTray>.from(_state.scannedTrays);
+      list[index] = list[index].copyWith(isHold: isHold);
+      _state = _state.copyWith(scannedTrays: list);
+      notifyListeners();
+    }
   }
 
   String getPlanQuantityPerTray() {
@@ -702,6 +703,8 @@ class KnittingProductionController extends ChangeNotifier {
             "secondaryTrayId": latestTrayDetail?.id,
             "machineId": _state.selectedPlanLine!.planLine.resourceId,
             "locatorId": 2,
+            "holdFlag": tray.isHold,
+            "holdDate": tray.isHold ? DateTime.now().toIso8601String() : null,
           };
 
           if (_state.selectedPlanLine!.planLine.planHeaderId != null) {

@@ -45,7 +45,7 @@ class InductionController extends ChangeNotifier {
     final res = await _inductionRepo.getProductionProgress();
     if (res.success && res.data != null) {
       final allTrays = res.data as List<InductionModel>;
-      final filtered = allTrays.where((t) => t.productionProgress.locatorId != 11).toList();
+      final filtered = allTrays.where((t) => t.productionProgress.locatorId != 11 && t.productionProgress.holdFlag != true).toList();
       _state = _state.copyWith(
         availableTrays: filtered,
         isLoading: false,
@@ -67,6 +67,20 @@ class InductionController extends ChangeNotifier {
       (t) => t.trayCode.trim().toLowerCase() == code,
     );
     if (alreadyScanned) return 'Already scanned';
+
+    final res = await _inductionRepo.getProductionProgress();
+    if (res.success && res.data != null) {
+      final allTrays = res.data as List<InductionModel>;
+      final holdMatch = allTrays.where((t) {
+        final tCode = (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase();
+        final pCode = (t.productionProgress.progressCode ?? '').trim().toLowerCase();
+        return tCode == code || pCode == code;
+      }).firstOrNull;
+
+      if (holdMatch != null && holdMatch.productionProgress.holdFlag == true) {
+        return 'Tray ${holdMatch.primaryTrayModel.trayCode} is on HOLD in PBS and cannot be received in Induction Store.';
+      }
+    }
 
     final matchIndex = _state.availableTrays.indexWhere((t) {
       final tCode = (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase();

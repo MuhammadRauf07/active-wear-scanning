@@ -10,6 +10,7 @@ class GbsState {
   final List<ProductionProgressResponseModel> availableTrayForGbs;
   final Set<int> selectedProgressIds;
   final WorkOrderHeader? selectedWorkOrder;
+  final Item? selectedItem;
 
   const GbsState({
     this.isLoading = false,
@@ -19,6 +20,7 @@ class GbsState {
     this.availableTrayForGbs = const [],
     this.selectedProgressIds = const {},
     this.selectedWorkOrder,
+    this.selectedItem,
   });
 
   GbsState copyWith({
@@ -29,7 +31,9 @@ class GbsState {
     List<ProductionProgressResponseModel>? availableTrayForGbs,
     Set<int>? selectedProgressIds,
     WorkOrderHeader? selectedWorkOrder,
+    Item? selectedItem,
     bool clearSelectedWorkOrder = false,
+    bool clearSelectedItem = false,
     bool clearError = false,
   }) {
     return GbsState(
@@ -40,6 +44,7 @@ class GbsState {
       availableTrayForGbs: availableTrayForGbs ?? this.availableTrayForGbs,
       selectedProgressIds: selectedProgressIds ?? this.selectedProgressIds,
       selectedWorkOrder: clearSelectedWorkOrder ? null : (selectedWorkOrder ?? this.selectedWorkOrder),
+      selectedItem: clearSelectedItem ? null : (selectedItem ?? this.selectedItem),
     );
   }
 }

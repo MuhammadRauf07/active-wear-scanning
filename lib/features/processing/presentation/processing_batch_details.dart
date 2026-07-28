@@ -455,6 +455,12 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
               onSelectAllToggle: (selected) {
                 controller.selectAllReworkTrays(selected);
               },
+              holdTrayIds: state.holdTrayIds,
+              onHoldToggle: (controller.operationName.toUpperCase().contains('PBS') || controller.currentOperationId == 2)
+                  ? (trayId) {
+                      controller.toggleHoldTray(trayId);
+                    }
+                  : null,
             ),
           ),
         ],

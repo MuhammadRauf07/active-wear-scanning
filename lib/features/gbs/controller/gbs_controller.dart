@@ -41,6 +41,15 @@ class GbsController extends ChangeNotifier {
   void selectWorkOrder(WorkOrderHeader? wo) {
     _state = _state.copyWith(
       selectedWorkOrder: wo,
+      clearSelectedItem: true,
+      selectedProgressIds: {},
+    );
+    notifyListeners();
+  }
+
+  void selectItem(Item? item) {
+    _state = _state.copyWith(
+      selectedItem: item,
       selectedProgressIds: {},
     );
     notifyListeners();
@@ -53,6 +62,7 @@ class GbsController extends ChangeNotifier {
       scannedTrays: [],
       selectedProgressIds: {},
       clearSelectedWorkOrder: true,
+      clearSelectedItem: true,
     );
     notifyListeners();
   }
@@ -88,21 +98,26 @@ class GbsController extends ChangeNotifier {
   }
 
   List<ProductionProgressResponseModel> getUnfilteredTraysForReceiving() {
+    final unheldTrays = _state.availableTrayForGbs.where((t) => t.productionProgress.holdFlag != true).toList();
     if (_state.receivingType == 'sample') {
-      return _state.availableTrayForGbs.where((t) => t.productionProgress.productNature == 1).toList();
+      return unheldTrays.where((t) => t.productionProgress.productNature == 1).toList();
     } else if (_state.receivingType == 'c_grade') {
-      return _state.availableTrayForGbs.where((t) => t.productionProgress.productGrade == 2).toList();
+      return unheldTrays.where((t) => t.productionProgress.productGrade == 2).toList();
     } else {
-      return _state.availableTrayForGbs.where((t) => t.productionProgress.productNature != 1 && t.productionProgress.productGrade != 2).toList();
+      return unheldTrays.where((t) => t.productionProgress.productNature != 1 && t.productionProgress.productGrade != 2).toList();
     }
   }
 
   List<ProductionProgressResponseModel> getFilteredTrays() {
     final baseList = getUnfilteredTraysForReceiving();
+    var list = baseList;
     if (_state.selectedWorkOrder != null) {
-      return baseList.where((t) => t.workOrderHeader.id == _state.selectedWorkOrder!.id).toList();
+      list = list.where((t) => t.workOrderHeader.id == _state.selectedWorkOrder!.id).toList();
     }
-    return baseList;
+    if (_state.selectedItem != null) {
+      list = list.where((t) => (t.productionProgress.processedItemId ?? t.item.id) == _state.selectedItem!.id || t.item.id == _state.selectedItem!.id).toList();
+    }
+    return list;
   }
 
   Future<String?> validateTrayForReceiving(String scannedCode) async {
@@ -111,6 +126,19 @@ class GbsController extends ChangeNotifier {
 
     final alreadyScanned = _state.scannedTrays.any((t) => t.trayCode.trim().toLowerCase() == code);
     if (alreadyScanned) return 'Already assigned';
+
+    final holdMatch = _state.availableTrayForGbs.where((t) {
+      final String tCode = (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase();
+      final String pCode = (t.productionProgress.progressCode ?? '').trim().toLowerCase();
+      if (tCode == code || pCode == code) return true;
+      String cleanTCode = tCode.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').replaceAll(RegExp(r'^0+'), '');
+      String cleanScanned = code.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').replaceAll(RegExp(r'^0+'), '');
+      return (cleanTCode.isNotEmpty && cleanTCode == cleanScanned) || (tCode.endsWith(code) && code.length > 3);
+    }).firstOrNull;
+
+    if (holdMatch != null && holdMatch.productionProgress.holdFlag == true) {
+      return 'Tray ${holdMatch.primaryTrayModel.trayCode} is on HOLD in Knitting Production and cannot be received.';
+    }
 
     final match = getFilteredTrays().where((t) {
       final String tCode = (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase();
@@ -134,6 +162,13 @@ class GbsController extends ChangeNotifier {
 
     if (_state.selectedWorkOrder != null && match.workOrderHeader.id != _state.selectedWorkOrder?.id) {
       return 'Tray belongs to another Work Order (${match.workOrderHeader.workOrderCode})';
+    }
+
+    if (_state.selectedItem != null) {
+      final trayItemId = match.productionProgress.processedItemId ?? match.item.id;
+      if (trayItemId != _state.selectedItem?.id && match.item.id != _state.selectedItem?.id) {
+        return 'Tray belongs to another Item (${match.item.description})';
+      }
     }
 
     if ((match.primaryTrayModel.trayType ?? 0) != 1) {

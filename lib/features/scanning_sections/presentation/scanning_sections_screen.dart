@@ -10,6 +10,7 @@ import 'package:active_wear_scanning/features/carton_packing/presentation/carton
 import 'package:active_wear_scanning/features/md_receiving/presentation/md_receiving_screen.dart';
 import 'package:active_wear_scanning/features/stitching_line_schedule/presentation/stitching_line_schedule_screen.dart';
 import 'package:active_wear_scanning/features/processing_waste_receiving/presentation/processing_waste_receiving_screen.dart';
+import 'package:active_wear_scanning/features/unhold_trays/presentation/unhold_trays_screen.dart';
 import 'package:flutter/material.dart';
 
 class ScanningSectionsScreen extends StatelessWidget {
@@ -158,6 +159,13 @@ class ScanningSectionsScreen extends StatelessWidget {
                             sectionCode: 'MDRC',
                             progressValue: 0.5,
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ProcessingWasteReceivingScreen())),
+                          ),
+                          SectionCard(
+                            title: 'Unhold Trays',
+                            subtitle: 'Release held trays from Knitting/PBS',
+                            sectionCode: 'HOLD',
+                            progressValue: 0.5,
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const UnholdTraysScreen())),
                           ),
                         ]),
                       ),

@@ -7,6 +7,7 @@ class TrayTableHeader extends StatelessWidget {
   final bool showLotColumn;
   final bool showBatchTubes;
   final bool showDetailedTubes;
+  final bool showHoldColumn;
 
   const TrayTableHeader({
     super.key,
@@ -15,6 +16,7 @@ class TrayTableHeader extends StatelessWidget {
     this.showLotColumn = false,
     this.showBatchTubes = false,
     this.showDetailedTubes = false,
+    this.showHoldColumn = false,
   });
 
   static const _headerStyle = TextStyle(
@@ -54,6 +56,8 @@ class TrayTableHeader extends StatelessWidget {
             Expanded(flex: 6, child: Text('LOT #', textAlign: TextAlign.center, style: _headerStyle)),
           if (showBatchTubes)
             Expanded(flex: 4, child: Text('BATCH TUBES', textAlign: TextAlign.center, style: _headerStyle)),
+          if (showHoldColumn)
+            Expanded(flex: 3, child: Text('HOLD', textAlign: TextAlign.center, style: _headerStyle)),
           SizedBox(width: actionColumnWidth),
         ],
       ),

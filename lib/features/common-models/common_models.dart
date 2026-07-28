@@ -90,6 +90,10 @@ class ProductionProgress {
   final double? waste;
   final double? requiredQty;
 
+  final bool? holdFlag;
+  final DateTime? holdDate;
+  final DateTime? unHoldDate;
+
   var batchLinesId;
 
   ProductionProgress({
@@ -134,6 +138,9 @@ class ProductionProgress {
     this.remarks,
     this.waste,
     this.requiredQty,
+    this.holdFlag,
+    this.holdDate,
+    this.unHoldDate,
   });
 
   factory ProductionProgress.fromJson(Map<String, dynamic> json) {
@@ -153,7 +160,7 @@ class ProductionProgress {
       reworkFlag: json['reworkFlag'],
       isStarted: json['isStarted'] as bool?,
       draftFlag: (json['draftFlag'] is bool ? json['draftFlag'] as bool : (json['draftFlag'] == 1 || json['draftFlag'] == 'true')) ||
-                 (json['draftStatus'] is bool ? json['draftStatus'] as bool : (json['draftStatus'] == 1 || json['draftStatus'] == 'true')),
+          (json['draftStatus'] is bool ? json['draftStatus'] as bool : (json['draftStatus'] == 1 || json['draftStatus'] == 'true')),
       startDate: json['startDate'] != null ? DateTime.parse(json['startDate']) : null,
       progressCode: json['progressCode'],
       productGrade: int.tryParse(json['productGrade']?.toString() ?? ''),
@@ -180,6 +187,9 @@ class ProductionProgress {
       remarks: json['remarks'],
       waste: json['waste'] != null ? double.tryParse(json['waste'].toString()) : null,
       requiredQty: json['requiredQty'] != null ? double.tryParse(json['requiredQty'].toString()) : null,
+      holdFlag: (json['holdFlag'] is bool ? json['holdFlag'] as bool : (json['holdFlag'] == 1 || json['holdFlag'] == 'true')),
+      holdDate: json['holdDate'] != null ? DateTime.parse(json['holdDate']) : null,
+      unHoldDate: json['unHoldDate'] != null ? DateTime.parse(json['unHoldDate']) : null,
     );
   }
 
@@ -224,6 +234,9 @@ class ProductionProgress {
       'remarks': remarks,
       'waste': waste,
       'requiredQty': requiredQty,
+      'holdFlag': holdFlag ?? false,
+      'holdDate': holdDate?.toIso8601String(),
+      'unHoldDate': unHoldDate?.toIso8601String(),
     };
   }
 
@@ -269,6 +282,9 @@ class ProductionProgress {
     String? remarks,
     double? waste,
     double? requiredQty,
+    bool? holdFlag,
+    DateTime? holdDate,
+    DateTime? unHoldDate,
   }) {
     return ProductionProgress(
       subOperation: subOperation ?? this.subOperation,
@@ -312,6 +328,9 @@ class ProductionProgress {
       remarks: remarks ?? this.remarks,
       waste: waste ?? this.waste,
       requiredQty: requiredQty ?? this.requiredQty,
+      holdFlag: holdFlag ?? this.holdFlag,
+      holdDate: holdDate ?? this.holdDate,
+      unHoldDate: unHoldDate ?? this.unHoldDate,
     );
   }
 }

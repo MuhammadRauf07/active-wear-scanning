@@ -8,6 +8,7 @@ class ScannedTrayRow extends StatelessWidget {
   final TextEditingController quantityController;
   final PlanLineResponseModel? selectedPlanLine;
   final VoidCallback onDelete;
+  final ValueChanged<bool>? onHoldChanged;
 
   const ScannedTrayRow({
     super.key,
@@ -16,6 +17,7 @@ class ScannedTrayRow extends StatelessWidget {
     required this.quantityController,
     this.selectedPlanLine,
     required this.onDelete,
+    this.onHoldChanged,
   });
 
   static const _cellStyle = TextStyle(
@@ -127,6 +129,26 @@ class ScannedTrayRow extends StatelessWidget {
                   style: _cellStyle,
                 );
               },
+            ),
+          ),
+
+          // Hold Checkbox
+          Expanded(
+            flex: 3,
+            child: Center(
+              child: SizedBox(
+                height: 24,
+                width: 24,
+                child: Checkbox(
+                  value: tray.isHold,
+                  activeColor: Colors.orange.shade700,
+                  onChanged: (val) {
+                    if (val != null && onHoldChanged != null) {
+                      onHoldChanged!(val);
+                    }
+                  },
+                ),
+              ),
             ),
           ),
           

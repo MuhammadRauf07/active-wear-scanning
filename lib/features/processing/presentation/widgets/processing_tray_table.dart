@@ -18,6 +18,8 @@ class ProcessingTrayTable extends StatefulWidget {
   final Future<void> Function(int progressId, double newQty, int productGrade)? onQuantitySubmit;
   final Future<void> Function(int progressId)? onDeleteWastage;
   final Set<int> trayIdsWithWastage;
+  final Set<int> holdTrayIds;
+  final void Function(int trayId)? onHoldToggle;
 
   const ProcessingTrayTable({
     super.key,
@@ -31,6 +33,8 @@ class ProcessingTrayTable extends StatefulWidget {
     this.onQuantitySubmit,
     this.onDeleteWastage,
     this.trayIdsWithWastage = const {},
+    this.holdTrayIds = const {},
+    this.onHoldToggle,
   });
 
   @override
@@ -114,6 +118,8 @@ class _ProcessingTrayTableState extends State<ProcessingTrayTable> {
                 Expanded(flex: 2, child: Text('PCS', style: _headerStyle)),
                 if (widget.isEditable)
                   Expanded(flex: 3, child: Text('EDIT QTY', style: _headerStyle)),
+                if (widget.onHoldToggle != null)
+                  const Expanded(flex: 2, child: Text('HOLD', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.red))),
                 if (widget.isReworkMode)
                   SizedBox(
                     width: 44,
@@ -257,6 +263,21 @@ class _ProcessingTrayTableState extends State<ProcessingTrayTable> {
                                         ),
                                 )
                               : const SizedBox.shrink(),
+                        ),
+                      if (widget.onHoldToggle != null)
+                        Expanded(
+                          flex: 2,
+                          child: Checkbox(
+                            visualDensity: VisualDensity.compact,
+                            value: widget.holdTrayIds.contains(t.primaryTrayModel.id) || widget.holdTrayIds.contains(t.productionProgress.id),
+                            activeColor: Colors.red.shade700,
+                            onChanged: (val) {
+                              final trayId = t.primaryTrayModel.id ?? t.productionProgress.id;
+                              if (trayId != null) {
+                                widget.onHoldToggle!(trayId);
+                              }
+                            },
+                          ),
                         ),
                       if (widget.isReworkMode)
                         SizedBox(

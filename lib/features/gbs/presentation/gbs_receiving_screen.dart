@@ -325,12 +325,21 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
   }
 
   Widget _buildConfigurationPanel(GbsController controller, GbsState state) {
-    final Map<int, WorkOrderHeader> uniqueWOs = {};
     final unfiltered = controller.getUnfilteredTraysForReceiving();
+    final Map<int, WorkOrderHeader> uniqueWOs = {};
     for (final tray in unfiltered) {
       uniqueWOs[tray.workOrderHeader.id] = tray.workOrderHeader;
     }
     final List<WorkOrderHeader> availableWOs = uniqueWOs.values.toList();
+
+    final Map<int, Item> uniqueItems = {};
+    if (state.selectedWorkOrder != null) {
+      final woTrays = unfiltered.where((t) => t.workOrderHeader.id == state.selectedWorkOrder!.id);
+      for (final tray in woTrays) {
+        uniqueItems[tray.item.id] = tray.item;
+      }
+    }
+    final List<Item> availableItems = uniqueItems.values.toList();
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -356,6 +365,27 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
                   itemLabel: (wo) => wo.workOrderCode,
                   onChanged: (val) {
                     controller.selectWorkOrder(val);
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 4,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('ITEM DESCRIPTION', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Color(0xFF78909C), letterSpacing: 0.5)),
+                const SizedBox(height: 6),
+                _GbsOverlayDropdown<Item>(
+                  hint: state.selectedWorkOrder == null ? "Select WO first..." : "Select item...",
+                  items: availableItems,
+                  selectedValue: state.selectedItem,
+                  itemLabel: (item) => item.description,
+                  onChanged: (val) {
+                    controller.selectItem(val);
                   },
                 ),
               ],

@@ -14,6 +14,9 @@ import 'package:active_wear_scanning/features/knitting_production/presentation/w
 import 'package:active_wear_scanning/features/knitting_production/model/plan_header_model.dart';
 import 'package:active_wear_scanning/features/knitting_production/model/tray_details_model.dart';
 import 'package:active_wear_scanning/features/common-models/common_models.dart';
+import 'package:plex/plex_di/plex_dependency_injection.dart';
+import 'package:active_wear_scanning/features/knitting_production/repo/knitting_production_repo.dart';
+import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:active_wear_scanning/features/knitting_production/controller/knitting_production_controller.dart';
@@ -302,7 +305,7 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
-          const TrayTableHeader(),
+          const TrayTableHeader(showHoldColumn: true),
           Expanded(
             child: state.scannedTrays.isEmpty
                 ? const EmptyScanState()
@@ -317,6 +320,7 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
                         tray: tray,
                         quantityController: qtyCtrl,
                         selectedPlanLine: state.selectedPlanLine,
+                        onHoldChanged: (val) => controller.toggleTrayHold(index, val),
                         onDelete: () async {
                           final confirm = await showDialog<bool>(
                             context: context,
@@ -529,34 +533,54 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
                                 ),
                                 if (state.machineBarcode.isNotEmpty) ...[
                                   const SizedBox(width: 8),
-                                  SizedBox(
-                                    height: 48,
-                                    child: ElevatedButton.icon(
-                                      onPressed: () async {
-                                        AppLoader.show(context, message: 'Fetching available trays...');
-                                        await controller.fetchAvailableTrays();
-                                        if (context.mounted) {
-                                          AppLoader.hide(context);
-                                          _showAvailableTraysDialog(controller);
-                                        }
-                                      },
-                                      icon: const Icon(Icons.layers_outlined, size: 16),
-                                      label: const Text(
-                                        'SHOW TRAYS',
-                                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900),
-                                      ),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFFE67E22),
-                                        foregroundColor: Colors.white,
-                                        disabledBackgroundColor: Colors.grey.shade300,
-                                        disabledForegroundColor: Colors.grey.shade500,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8),
+                                  Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      SizedBox(
+                                        height: 32,
+                                        child: ElevatedButton.icon(
+                                          onPressed: () => _showHeldTraysDialog(controller),
+                                          icon: const Icon(Icons.front_hand_outlined, size: 14),
+                                          label: const Text(
+                                            'HOLD TRAYS',
+                                            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900),
+                                          ),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFFC62828),
+                                            foregroundColor: Colors.white,
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                            elevation: 0,
+                                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                                          ),
                                         ),
-                                        elevation: 0,
-                                        padding: const EdgeInsets.symmetric(horizontal: 12),
                                       ),
-                                    ),
+                                      const SizedBox(height: 4),
+                                      SizedBox(
+                                        height: 32,
+                                        child: ElevatedButton.icon(
+                                          onPressed: () async {
+                                            AppLoader.show(context, message: 'Fetching available trays...');
+                                            await controller.fetchAvailableTrays();
+                                            if (context.mounted) {
+                                              AppLoader.hide(context);
+                                              _showAvailableTraysDialog(controller);
+                                            }
+                                          },
+                                          icon: const Icon(Icons.layers_outlined, size: 14),
+                                          label: const Text(
+                                            'SHOW TRAYS',
+                                            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900),
+                                          ),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFFE67E22),
+                                            foregroundColor: Colors.white,
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                            elevation: 0,
+                                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ],
@@ -1241,7 +1265,7 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
                 clipBehavior: Clip.antiAlias,
                 child: Column(
                   children: [
-                    const TrayTableHeader(),
+                    const TrayTableHeader(showHoldColumn: true),
                     Expanded(
                       child: ListView.builder(
                         padding: EdgeInsets.zero,
@@ -1254,6 +1278,7 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
                             tray: tray,
                             quantityController: qtyCtrl,
                             selectedPlanLine: latestState.selectedPlanLine,
+                            onHoldChanged: (val) => latestController.toggleTrayHold(index, val),
                             onDelete: () async {
                               final confirm = await showDialog<bool>(
                                 context: context,
@@ -1368,6 +1393,72 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
     } catch (e) {
       _showError(e.toString());
     }
+  }
+
+  Future<void> _showHeldTraysDialog(KnittingProductionController controller) async {
+    AppLoader.show(context, message: 'Fetching held trays...');
+    final repo = fromPlex<KnittingProductionRepo>();
+    final res = await repo.fetchProductionProgress();
+    if (mounted) AppLoader.hide(context);
+
+    if (!res.success || res.data == null) {
+      if (mounted) _showError(res.message.isNotEmpty ? res.message : 'Failed to fetch held trays');
+      return;
+    }
+
+    final allTrays = res.data as List<ProductionProgressResponseModel>;
+    final heldTrays = allTrays.where((t) =>
+      t.productionProgress.holdFlag == true &&
+      (t.productionProgress.operationId == 1 ||
+       (t.operation.code).toUpperCase() == 'KNT' ||
+       (t.operation.name).toUpperCase() == 'KNITTING' ||
+       (t.productionProgress.subOperation ?? '').toLowerCase() == 'knitting')
+    ).toList();
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.85,
+          height: MediaQuery.of(context).size.height * 0.7,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('HELD TRAYS (KNITTING)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFFC62828))),
+                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                ],
+              ),
+              const Divider(),
+              Expanded(
+                child: heldTrays.isEmpty
+                    ? const Center(child: Text('No held trays found in Knitting Production.'))
+                    : ListView.separated(
+                        itemCount: heldTrays.length,
+                        separatorBuilder: (c, i) => const Divider(height: 1),
+                        itemBuilder: (c, idx) {
+                          final item = heldTrays[idx];
+                          return ListTile(
+                            dense: true,
+                            leading: const Icon(Icons.front_hand_outlined, color: Colors.red),
+                            title: Text(item.primaryTrayModel.trayCode ?? '-', style: const TextStyle(fontWeight: FontWeight.w800)),
+                            subtitle: Text('${item.item.description} | WO: ${item.workOrderHeader.workOrderCode}'),
+                            trailing: Text('${item.productionProgress.primaryQuantity?.toStringAsFixed(0) ?? "0"} tubes', style: const TextStyle(fontWeight: FontWeight.w700)),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

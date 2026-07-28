@@ -89,6 +89,17 @@ class ProcessingBatchController extends ChangeNotifier {
     }
   }
 
+  void toggleHoldTray(int trayId) {
+    final updated = Set<int>.from(_state.holdTrayIds);
+    if (updated.contains(trayId)) {
+      updated.remove(trayId);
+    } else {
+      updated.add(trayId);
+    }
+    _state = _state.copyWith(holdTrayIds: updated);
+    notifyListeners();
+  }
+
   Future<void> fetchTrays() async {
     _state = _state.copyWith(isLoading: true);
     notifyListeners();
@@ -647,6 +658,15 @@ class ProcessingBatchController extends ChangeNotifier {
       final List<int> newFailedTrayIds = [];
       final traysToProcess = _state.trays;
 
+      // Check if user is attempting to submit trays that are already on HOLD in PBS without toggling/unholding
+      for (final t in traysToProcess) {
+        final pp = t.productionProgress;
+        if (pp.holdFlag == true && !_state.holdTrayIds.contains(pp.primaryTrayId) && !_state.holdTrayIds.contains(pp.id)) {
+          final trayCode = t.primaryTrayModel.trayCode ?? '${pp.primaryTrayId}';
+          throw Exception('Tray $trayCode is on HOLD. Unhold it from Unhold Trays section to submit.');
+        }
+      }
+
       for (final t in traysToProcess) {
         final pp = t.productionProgress;
         final json = pp.toJson();
@@ -729,65 +749,84 @@ class ProcessingBatchController extends ChangeNotifier {
               }
             }
           } else if (nextOperationId != null) {
-            json['transactionType'] = 3;
-            json['wipStatus'] = 1;
-            json.remove('id');
-            json.remove('progressCode');
-            json.remove('creationTime');
-            json.remove('creatorId');
-            json.remove('lastModificationTime');
-            json.remove('lastModifierId');
-            
-            final updRes = await _processingRepo.updateProductionProgress(pp.id!, json);
-            if (!updRes.success) throw Exception('Update failed: ${updRes.message}');
+            final bool isHold = _state.holdTrayIds.contains(pp.primaryTrayId) || _state.holdTrayIds.contains(pp.id) || pp.holdFlag == true;
 
-            final newJ = pp.toJson();
-            newJ.remove('id');
-            newJ.remove('progressCode');
-            newJ.remove('concurrencyStamp');
-            newJ.addAll({
-              'transactionType': 2,
-              'reworkFlag': pp.reworkFlag ?? false,
-              'isStarted': false,
-              'startDate': null,
-              'machineId': null,
-              'batchLineId': pp.batchLinesId,
-              'batchLinesId': pp.batchLinesId,
-              'isLastProcess': false,
-              'operationId': nextOperationId,
-              'locatorId': nextLocatorId,
-              'date': DateTime.now().toIso8601String(),
-            });
-            final crRes = await _processingRepo.createProductionProgress(newJ);
-            if (!crRes.success) throw Exception('Create failed: ${crRes.message}');
+            if (isHold) {
+              // Tray remains in PBS as HOLD under the same batch
+              final Map<String, dynamic> holdJson = pp.toJson();
+              holdJson['holdFlag'] = true;
+              holdJson['holdDate'] = DateTime.now().toIso8601String();
+              holdJson.remove('id');
+              holdJson.remove('progressCode');
+              holdJson.remove('creationTime');
+              holdJson.remove('creatorId');
+              holdJson.remove('lastModificationTime');
+              holdJson.remove('lastModifierId');
 
-            int? targetProgressId;
-            final ppData = crRes.data;
-            if (ppData is Map) {
-              final rawId = int.tryParse(ppData['id']?.toString() ?? '');
-              if (rawId != null && rawId > 0) targetProgressId = rawId;
-            } else if (ppData is int && ppData > 0) {
-              targetProgressId = ppData;
-            }
+              final updHoldRes = await _processingRepo.updateProductionProgress(pp.id!, holdJson);
+              if (!updHoldRes.success) throw Exception('Hold update failed: ${updHoldRes.message}');
+            } else {
+              json['transactionType'] = 3;
+              json['wipStatus'] = 1;
+              json.remove('id');
+              json.remove('progressCode');
+              json.remove('creationTime');
+              json.remove('creatorId');
+              json.remove('lastModificationTime');
+              json.remove('lastModifierId');
+              
+              final updRes = await _processingRepo.updateProductionProgress(pp.id!, json);
+              if (!updRes.success) throw Exception('Update failed: ${updRes.message}');
 
-            if (targetProgressId != null && targetProgressId > 0 && pp.batchLinesId != null) {
-              final newWipRes = await _lotRepo.fetchWipTransactionsByProgressId(targetProgressId);
-              if (newWipRes.success && newWipRes.data != null) {
-                final List rawItems = newWipRes.data is Map ? (newWipRes.data['items'] ?? []) : newWipRes.data;
-                final items = rawItems.cast<Map<String, dynamic>>();
-                final match = items.firstWhere(
-                  (e) => (e['wipTransaction']?['progressId'] ?? e['progressId'] ?? e['wipTransaction']?['productionProgressId'] ?? e['productionProgressId'])?.toString() == targetProgressId.toString(),
-                  orElse: () => {},
-                );
-                if (match.isNotEmpty) {
-                  final newWipId = match['wipTransaction']?['id'] as int?;
-                  if (newWipId != null) {
-                    final wipPayload = Map<String, dynamic>.from(match['wipTransaction'] ?? match);
-                    wipPayload['batchLinesId'] = pp.batchLinesId;
-                    wipPayload['batchLineId'] = pp.batchLinesId;
-                    wipPayload.remove('id');
-                    wipPayload.remove('concurrencyStamp');
-                    await _lotRepo.updateWipTransaction(newWipId, wipPayload);
+              final Map<String, dynamic> newJ = pp.toJson();
+              newJ.remove('id');
+              newJ.remove('progressCode');
+              newJ.remove('concurrencyStamp');
+              newJ.addAll({
+                'transactionType': 2,
+                'reworkFlag': pp.reworkFlag ?? false,
+                'isStarted': false,
+                'startDate': null,
+                'machineId': null,
+                'batchLineId': pp.batchLinesId,
+                'batchLinesId': pp.batchLinesId,
+                'isLastProcess': false,
+                'operationId': nextOperationId,
+                'locatorId': nextLocatorId,
+                'date': DateTime.now().toIso8601String(),
+                'holdFlag': false,
+              });
+              final crRes = await _processingRepo.createProductionProgress(newJ);
+              if (!crRes.success) throw Exception('Create failed: ${crRes.message}');
+
+              int? targetProgressId;
+              final ppData = crRes.data;
+              if (ppData is Map) {
+                final rawId = int.tryParse(ppData['id']?.toString() ?? '');
+                if (rawId != null && rawId > 0) targetProgressId = rawId;
+              } else if (ppData is int && ppData > 0) {
+                targetProgressId = ppData;
+              }
+
+              if (targetProgressId != null && targetProgressId > 0 && pp.batchLinesId != null) {
+                final newWipRes = await _lotRepo.fetchWipTransactionsByProgressId(targetProgressId);
+                if (newWipRes.success && newWipRes.data != null) {
+                  final List rawItems = newWipRes.data is Map ? (newWipRes.data['items'] ?? []) : newWipRes.data;
+                  final items = rawItems.cast<Map<String, dynamic>>();
+                  final match = items.firstWhere(
+                    (e) => (e['wipTransaction']?['progressId'] ?? e['progressId'] ?? e['wipTransaction']?['productionProgressId'] ?? e['productionProgressId'])?.toString() == targetProgressId.toString(),
+                    orElse: () => {},
+                  );
+                  if (match.isNotEmpty) {
+                    final newWipId = match['wipTransaction']?['id'] as int?;
+                    if (newWipId != null) {
+                      final wipPayload = Map<String, dynamic>.from(match['wipTransaction'] ?? match);
+                      wipPayload['batchLinesId'] = pp.batchLinesId;
+                      wipPayload['batchLineId'] = pp.batchLinesId;
+                      wipPayload.remove('id');
+                      wipPayload.remove('concurrencyStamp');
+                      await _lotRepo.updateWipTransaction(newWipId, wipPayload);
+                    }
                   }
                 }
               }
