@@ -16,8 +16,12 @@ class KnittingProductionRepo {
     if (!result.success || result.data == null) return result;
 
     try {
-      final data = result.data as List<Map<String, dynamic>>;
-      final resource = data.map((item) => ResourceResponseModel.fromJson(item)).toList();
+      final List rawData = result.data is Map
+          ? (result.data['items'] ?? [])
+          : (result.data is List ? result.data : []);
+      final resource = rawData
+          .map((item) => ResourceResponseModel.fromJson(Map<String, dynamic>.from(item as Map)))
+          .toList();
       return PlexApiResult(true, 200, "Success", resource);
     } catch (e) {
       return PlexApiResult(false, 500, e.toString(), null);
@@ -32,11 +36,11 @@ class KnittingProductionRepo {
     if (!result.success || result.data == null) return result;
 
     try {
-      final List data = result.data as List;
+      final List rawData = result.data is Map ? (result.data['items'] ?? []) : (result.data is List ? result.data : []);
       final list = <ProductionProgressResponseModel>[];
-      for (final item in data) {
+      for (final item in rawData) {
         try {
-          list.add(ProductionProgressResponseModel.fromJson(Map<String, dynamic>.from(item)));
+          list.add(ProductionProgressResponseModel.fromJson(Map<String, dynamic>.from(item as Map)));
         } catch (e) {
           dev.log("KnittingProductionRepo parsing error on production progress record: $e. Raw: $item");
         }
@@ -52,13 +56,13 @@ class KnittingProductionRepo {
 
     if (!result.success || result.data == null) return result;
 
-    dev.log("PrintedResultOfPlanLines :: ${result.data.toString()}");
-
-
     try {
-
-      final data = result.data as List<Map<String, dynamic>>;
-      final list = data.map((item) => PlanLineResponseModel.fromJson(item)).toList();
+      final List rawData = result.data is Map
+          ? (result.data['items'] ?? [])
+          : (result.data is List ? result.data : []);
+      final list = rawData
+          .map((item) => PlanLineResponseModel.fromJson(Map<String, dynamic>.from(item as Map)))
+          .toList();
 
       return PlexApiResult(true, 200, "Success", list);
     } catch (e) {
@@ -73,7 +77,12 @@ class KnittingProductionRepo {
     final resource = resourceResult.data as List<ResourceResponseModel>;
     if (resource.isEmpty) return PlexApiResult(false, 500, 'No resource found', null);
 
-    return fetchPlanLines(resource.first.resource.id);
+    final targetResource = resource.firstWhere(
+      (r) => (r.resource.serialNumber ?? '').trim() == serialNumber.trim(),
+      orElse: () => resource.first,
+    );
+
+    return fetchPlanLines(targetResource.resource.id);
   }
 
   Future<PlexApiResult> fetchAvailableTrayDetails({int maxResultCount = 10, int skipCount = 0}) async {
