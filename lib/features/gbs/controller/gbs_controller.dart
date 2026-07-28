@@ -114,9 +114,6 @@ class GbsController extends ChangeNotifier {
     if (_state.selectedWorkOrder != null) {
       list = list.where((t) => t.workOrderHeader.id == _state.selectedWorkOrder!.id).toList();
     }
-    if (_state.selectedItem != null) {
-      list = list.where((t) => (t.productionProgress.processedItemId ?? t.item.id) == _state.selectedItem!.id || t.item.id == _state.selectedItem!.id).toList();
-    }
     return list;
   }
 
@@ -162,13 +159,6 @@ class GbsController extends ChangeNotifier {
 
     if (_state.selectedWorkOrder != null && match.workOrderHeader.id != _state.selectedWorkOrder?.id) {
       return 'Tray belongs to another Work Order (${match.workOrderHeader.workOrderCode})';
-    }
-
-    if (_state.selectedItem != null) {
-      final trayItemId = match.productionProgress.processedItemId ?? match.item.id;
-      if (trayItemId != _state.selectedItem?.id && match.item.id != _state.selectedItem?.id) {
-        return 'Tray belongs to another Item (${match.item.description})';
-      }
     }
 
     if ((match.primaryTrayModel.trayType ?? 0) != 1) {

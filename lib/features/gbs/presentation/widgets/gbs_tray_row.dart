@@ -38,7 +38,7 @@ class GBSTrayRow extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            flex: 6,
+            flex: 5,
             child: Text(
               tray.trayCode,
               maxLines: 2,
@@ -48,17 +48,17 @@ class GBSTrayRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            flex: 4,
+            flex: 16,
             child: Text(
-              tray.workOrderCode,
-              maxLines: 1,
+              tray.itemDescription.isNotEmpty ? tray.itemDescription : '-',
+              maxLines: 2,
               textAlign: TextAlign.center,
               overflow: TextOverflow.ellipsis,
               style: _cellStyle,
             ),
           ),
           Expanded(
-            flex: 4,
+            flex: 3,
             child: Text(
               tray.sizeDescription.isNotEmpty ? tray.sizeDescription : '-',
               maxLines: 1,
@@ -70,31 +70,9 @@ class GBSTrayRow extends StatelessWidget {
           Expanded(
             flex: 4,
             child: Text(
-              tray.perGarmentTube > 0 ? tray.perGarmentTube.toStringAsFixed(0) : '-',
-              textAlign: TextAlign.center,
-              style: _cellStyle,
-            ),
-          ),
-          Expanded(
-            flex: 4,
-            child: Text(
               tray.primaryQuantity,
               textAlign: TextAlign.center,
               style: _cellStyle,
-            ),
-          ),
-          Expanded(
-            flex: 4,
-            child: Builder(
-              builder: (_) {
-                final tubes = double.tryParse(tray.primaryQuantity) ?? 0;
-                final garmentPcs = (tray.perGarmentTube > 0) ? (tubes * tray.perGarmentTube) : 0;
-                return Text(
-                  garmentPcs > 0 ? garmentPcs.toStringAsFixed(0) : '-',
-                  textAlign: TextAlign.center,
-                  style: _cellStyle,
-                );
-              },
             ),
           ),
           Expanded(

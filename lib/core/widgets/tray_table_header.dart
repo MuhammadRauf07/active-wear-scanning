@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 class TrayTableHeader extends StatelessWidget {
   final double actionColumnWidth;
   final bool showWorkOrderColumn;
+  final bool showItemDescriptionColumn;
   final bool showLotColumn;
   final bool showBatchTubes;
   final bool showDetailedTubes;
@@ -13,6 +14,7 @@ class TrayTableHeader extends StatelessWidget {
     super.key,
     this.actionColumnWidth = 40.0,
     this.showWorkOrderColumn = true,
+    this.showItemDescriptionColumn = false,
     this.showLotColumn = false,
     this.showBatchTubes = false,
     this.showDetailedTubes = false,
@@ -38,11 +40,14 @@ class TrayTableHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Expanded(flex: 6, child: Text('TRAY CODE', textAlign: TextAlign.center, style: _headerStyle)),
-          if (showWorkOrderColumn)
+          Expanded(flex: 5, child: Text('TRAY CODE', textAlign: TextAlign.center, style: _headerStyle)),
+          if (showWorkOrderColumn && !showItemDescriptionColumn)
             Expanded(flex: 4, child: Text('WORK ORDER', textAlign: TextAlign.center, style: _headerStyle)),
-          Expanded(flex: 4, child: Text('SIZE', textAlign: TextAlign.center, style: _headerStyle)),
-          Expanded(flex: 4, child: Text('PCS/TUBE', textAlign: TextAlign.center, style: _headerStyle)),
+          if (showItemDescriptionColumn)
+            Expanded(flex: 16, child: Text('ITEM DESCRIPTION', textAlign: TextAlign.center, style: _headerStyle)),
+          Expanded(flex: 3, child: Text('SIZE', textAlign: TextAlign.center, style: _headerStyle)),
+          if (!showItemDescriptionColumn)
+            Expanded(flex: 3, child: Text('PCS/TUBE', textAlign: TextAlign.center, style: _headerStyle)),
           if (showDetailedTubes) ...[
             Expanded(flex: 3, child: Text('ACTUAL', textAlign: TextAlign.center, style: _headerStyle)),
             Expanded(flex: 3, child: Text('ALREADY', textAlign: TextAlign.center, style: _headerStyle)),
@@ -50,7 +55,8 @@ class TrayTableHeader extends StatelessWidget {
           ] else ...[
             Expanded(flex: 4, child: Text('TUBES', textAlign: TextAlign.center, style: _headerStyle)),
           ],
-          Expanded(flex: 4, child: Text('PCS', textAlign: TextAlign.center, style: _headerStyle)),
+          if (!showItemDescriptionColumn)
+            Expanded(flex: 4, child: Text('PCS', textAlign: TextAlign.center, style: _headerStyle)),
           Expanded(flex: 4, child: Text('WEIGHT', textAlign: TextAlign.center, style: _headerStyle)),
           if (showLotColumn)
             Expanded(flex: 6, child: Text('LOT #', textAlign: TextAlign.center, style: _headerStyle)),

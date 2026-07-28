@@ -692,8 +692,12 @@ class LappingController extends ChangeNotifier {
             }
 
             final Map<String, dynamic> updateLappingJson = pp.toJson();
-            updateLappingJson['draftFlag'] = false;
-            updateLappingJson['draftStatus'] = false;
+            if (!isDraft) {
+              updateLappingJson['transactionType'] = 3;
+              updateLappingJson['wipStatus'] = 1;
+              updateLappingJson['draftFlag'] = false;
+              updateLappingJson['draftStatus'] = false;
+            }
             updateLappingJson['primaryQuantity'] = trayQty;
             if (freshStamp != null) {
               updateLappingJson['concurrencyStamp'] = freshStamp;
@@ -724,6 +728,9 @@ class LappingController extends ChangeNotifier {
           nextJson.addAll({
             "subOperation": "Handover",
             "transactionType": 2,
+            "draftFlag": false,
+            "draftStatus": false,
+            "draftDate": null,
             "primaryTrayId": scannedTray.primaryTrayModel.id,
             "secondaryTrayId": scannedTray.primaryTrayModel.id,
             "primaryQuantity": trayQty,

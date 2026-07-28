@@ -45,9 +45,58 @@ class InductionController extends ChangeNotifier {
     final res = await _inductionRepo.getProductionProgress();
     if (res.success && res.data != null) {
       final allTrays = res.data as List<InductionModel>;
-      final filtered = allTrays.where((t) => t.productionProgress.locatorId != 11 && t.productionProgress.holdFlag != true).toList();
+      
+      // De-duplicate by primaryTrayId to keep ONLY the latest progress record for each tray
+      final Map<int, InductionModel> latestByTray = {};
+      for (final t in allTrays) {
+        final trayId = t.productionProgress.primaryTrayId ?? t.primaryTrayModel.id;
+        if (trayId != null) {
+          if (!latestByTray.containsKey(trayId) || (t.productionProgress.id ?? 0) > (latestByTray[trayId]!.productionProgress.id ?? 0)) {
+            latestByTray[trayId] = t;
+          }
+        }
+      }
+
+      final filtered = latestByTray.values.where((t) {
+        if (t.productionProgress.holdFlag == true) return false;
+        if (t.productionProgress.pbsFlag == true) return false;
+        return true;
+      }).toList();
+
+      final Map<int, LotHeaderModel> batchHeaderCache = {};
+      final enrichedFiltered = <InductionModel>[];
+      for (final t in filtered) {
+        InductionModel itemToUse = t;
+        final bhId = itemToUse.productionProgress.batchHeaderId;
+        if ((itemToUse.batchHeader == null || itemToUse.batchHeader?.batchHeaderCode == null) && bhId != null && bhId > 0) {
+          if (batchHeaderCache.containsKey(bhId)) {
+            itemToUse = itemToUse.copyWith(batchHeader: batchHeaderCache[bhId]);
+          } else {
+            try {
+              final bhRes = await _inductionRepo.fetchLotHeaderById(bhId);
+              if (bhRes.success && bhRes.data != null) {
+                final Map<String, dynamic> dataMap = Map<String, dynamic>.from(bhRes.data is Map ? bhRes.data : {});
+                LotHeaderModel? bhModel;
+                if (dataMap.containsKey('batchHeader') && dataMap['batchHeader'] != null) {
+                  bhModel = LotHeaderModel.fromJson(Map<String, dynamic>.from(dataMap['batchHeader']));
+                } else if (dataMap.containsKey('id') || dataMap.containsKey('batchHeaderCode')) {
+                  bhModel = LotHeaderModel.fromJson(dataMap);
+                }
+                if (bhModel != null) {
+                  batchHeaderCache[bhId] = bhModel;
+                  itemToUse = itemToUse.copyWith(batchHeader: bhModel);
+                }
+              }
+            } catch (e) {
+              debugPrint("⚠️ Exception parsing LotHeader in InductionController: $e");
+            }
+          }
+        }
+        enrichedFiltered.add(itemToUse);
+      }
+
       _state = _state.copyWith(
-        availableTrays: filtered,
+        availableTrays: enrichedFiltered,
         isLoading: false,
       );
     } else {
@@ -71,7 +120,17 @@ class InductionController extends ChangeNotifier {
     final res = await _inductionRepo.getProductionProgress();
     if (res.success && res.data != null) {
       final allTrays = res.data as List<InductionModel>;
-      final holdMatch = allTrays.where((t) {
+      final Map<int, InductionModel> latestByTray = {};
+      for (final t in allTrays) {
+        final trayId = t.productionProgress.primaryTrayId ?? t.primaryTrayModel.id;
+        if (trayId != null) {
+          if (!latestByTray.containsKey(trayId) || (t.productionProgress.id ?? 0) > (latestByTray[trayId]!.productionProgress.id ?? 0)) {
+            latestByTray[trayId] = t;
+          }
+        }
+      }
+
+      final holdMatch = latestByTray.values.where((t) {
         final tCode = (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase();
         final pCode = (t.productionProgress.progressCode ?? '').trim().toLowerCase();
         return tCode == code || pCode == code;

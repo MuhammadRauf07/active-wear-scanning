@@ -461,6 +461,11 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
                       controller.toggleHoldTray(trayId);
                     }
                   : null,
+              onSelectAllHoldToggle: (controller.operationName.toUpperCase().contains('PBS') || controller.currentOperationId == 2)
+                  ? (selected) {
+                      controller.selectAllHoldTrays(selected);
+                    }
+                  : null,
             ),
           ),
         ],

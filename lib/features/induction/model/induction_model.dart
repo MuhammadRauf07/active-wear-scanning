@@ -1,4 +1,6 @@
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
+import 'package:active_wear_scanning/features/common-models/common_models.dart';
+import 'package:active_wear_scanning/features/lot_making/model/lot_header_model.dart';
 
 class InductionModel extends ProductionProgressResponseModel {
   InductionModel({
@@ -29,6 +31,35 @@ class InductionModel extends ProductionProgressResponseModel {
       workOrderLine: base.workOrderLine,
       planHeader: base.planHeader,
       batchHeader: base.batchHeader,
+    );
+  }
+
+  @override
+  InductionModel copyWith({
+    ProductionProgress? productionProgress,
+    Operation? operation,
+    Shift? shift,
+    MachineModel? machineModel,
+    WorkOrderHeader? workOrderHeader,
+    WorkOrderLine? workOrderLine,
+    PrimaryTrayModel? primaryTrayModel,
+    Item? item,
+    Item? processedItem,
+    PlanHeader? planHeader,
+    LotHeaderModel? batchHeader,
+  }) {
+    return InductionModel(
+      productionProgress: productionProgress ?? this.productionProgress,
+      operation: operation ?? this.operation,
+      shift: shift ?? this.shift,
+      machineModel: machineModel ?? this.machineModel,
+      workOrderHeader: workOrderHeader ?? this.workOrderHeader,
+      workOrderLine: workOrderLine ?? this.workOrderLine,
+      primaryTrayModel: primaryTrayModel ?? this.primaryTrayModel,
+      item: item ?? this.item,
+      processedItem: processedItem ?? this.processedItem,
+      planHeader: planHeader ?? this.planHeader,
+      batchHeader: batchHeader ?? this.batchHeader,
     );
   }
 }

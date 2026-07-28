@@ -100,6 +100,24 @@ class ProcessingBatchController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void selectAllHoldTrays(bool selected) {
+    final updated = Set<int>.from(_state.holdTrayIds);
+    for (final t in _state.trays) {
+      if (t.productionProgress.holdFlag != true) {
+        final trayId = t.primaryTrayModel.id ?? t.productionProgress.id;
+        if (trayId != null) {
+          if (selected) {
+            updated.add(trayId);
+          } else {
+            updated.remove(trayId);
+          }
+        }
+      }
+    }
+    _state = _state.copyWith(holdTrayIds: updated);
+    notifyListeners();
+  }
+
   Future<void> fetchTrays() async {
     _state = _state.copyWith(isLoading: true);
     notifyListeners();
@@ -145,6 +163,7 @@ class ProcessingBatchController extends ChangeNotifier {
         final Map<String, ProductionProgressResponseModel> uniqueTrays = {};
         for (final tray in list) {
           if (tray.productionProgress.transactionType != 2) continue;
+          if (tray.productionProgress.wipStatus != 0) continue;
           if (tray.productionProgress.operationId != currentOperationId) continue;
           if (tray.productionProgress.locatorId == 18) continue;
 
@@ -206,8 +225,17 @@ class ProcessingBatchController extends ChangeNotifier {
           startTime = pp.startDate;
         }
 
+        final initialHoldTrayIds = <int>{};
+        for (final t in enrichedList) {
+          if (t.productionProgress.holdFlag == true) {
+            if (t.primaryTrayModel.id != null) initialHoldTrayIds.add(t.primaryTrayModel.id!);
+            if (t.productionProgress.id != null) initialHoldTrayIds.add(t.productionProgress.id!);
+          }
+        }
+
         _state = _state.copyWith(
           trays: enrichedList,
+          holdTrayIds: initialHoldTrayIds,
           trayIdsWithWastage: wastageIds,
           wastageByOriginalId: wastageByOriginalId,
           isBatchStarted: isBatchStarted,
@@ -748,7 +776,7 @@ class ProcessingBatchController extends ChangeNotifier {
                 }
               }
             }
-          } else if (nextOperationId != null) {
+          } else {
             final bool isHold = _state.holdTrayIds.contains(pp.primaryTrayId) || _state.holdTrayIds.contains(pp.id) || pp.holdFlag == true;
 
             if (isHold) {
@@ -756,6 +784,8 @@ class ProcessingBatchController extends ChangeNotifier {
               final Map<String, dynamic> holdJson = pp.toJson();
               holdJson['holdFlag'] = true;
               holdJson['holdDate'] = DateTime.now().toIso8601String();
+              holdJson['transactionType'] = 2;
+              holdJson['wipStatus'] = 0;
               holdJson.remove('id');
               holdJson.remove('progressCode');
               holdJson.remove('creationTime');
@@ -768,6 +798,7 @@ class ProcessingBatchController extends ChangeNotifier {
             } else {
               json['transactionType'] = 3;
               json['wipStatus'] = 1;
+              if (nextOperationId == null) json['isLastProcess'] = true;
               json.remove('id');
               json.remove('progressCode');
               json.remove('creationTime');
@@ -778,71 +809,64 @@ class ProcessingBatchController extends ChangeNotifier {
               final updRes = await _processingRepo.updateProductionProgress(pp.id!, json);
               if (!updRes.success) throw Exception('Update failed: ${updRes.message}');
 
-              final Map<String, dynamic> newJ = pp.toJson();
-              newJ.remove('id');
-              newJ.remove('progressCode');
-              newJ.remove('concurrencyStamp');
-              newJ.addAll({
-                'transactionType': 2,
-                'reworkFlag': pp.reworkFlag ?? false,
-                'isStarted': false,
-                'startDate': null,
-                'machineId': null,
-                'batchLineId': pp.batchLinesId,
-                'batchLinesId': pp.batchLinesId,
-                'isLastProcess': false,
-                'operationId': nextOperationId,
-                'locatorId': nextLocatorId,
-                'date': DateTime.now().toIso8601String(),
-                'holdFlag': false,
-              });
-              final crRes = await _processingRepo.createProductionProgress(newJ);
-              if (!crRes.success) throw Exception('Create failed: ${crRes.message}');
+              if (nextOperationId != null) {
+                final Map<String, dynamic> newJ = pp.toJson();
+                newJ.remove('id');
+                newJ.remove('progressCode');
+                newJ.remove('concurrencyStamp');
+                newJ.addAll({
+                  'transactionType': 2,
+                  'draftFlag': false,
+                  'draftStatus': false,
+                  'draftDate': null,
+                  'reworkFlag': pp.reworkFlag ?? false,
+                  'isStarted': false,
+                  'startDate': null,
+                  'machineId': null,
+                  'batchLineId': pp.batchLinesId,
+                  'batchLinesId': pp.batchLinesId,
+                  'isLastProcess': false,
+                  'operationId': nextOperationId,
+                  'locatorId': nextLocatorId,
+                  'date': DateTime.now().toIso8601String(),
+                  'holdFlag': false,
+                });
+                final crRes = await _processingRepo.createProductionProgress(newJ);
+                if (!crRes.success) throw Exception('Create failed: ${crRes.message}');
 
-              int? targetProgressId;
-              final ppData = crRes.data;
-              if (ppData is Map) {
-                final rawId = int.tryParse(ppData['id']?.toString() ?? '');
-                if (rawId != null && rawId > 0) targetProgressId = rawId;
-              } else if (ppData is int && ppData > 0) {
-                targetProgressId = ppData;
-              }
+                int? targetProgressId;
+                final ppData = crRes.data;
+                if (ppData is Map) {
+                  final rawId = int.tryParse(ppData['id']?.toString() ?? '');
+                  if (rawId != null && rawId > 0) targetProgressId = rawId;
+                } else if (ppData is int && ppData > 0) {
+                  targetProgressId = ppData;
+                }
 
-              if (targetProgressId != null && targetProgressId > 0 && pp.batchLinesId != null) {
-                final newWipRes = await _lotRepo.fetchWipTransactionsByProgressId(targetProgressId);
-                if (newWipRes.success && newWipRes.data != null) {
-                  final List rawItems = newWipRes.data is Map ? (newWipRes.data['items'] ?? []) : newWipRes.data;
-                  final items = rawItems.cast<Map<String, dynamic>>();
-                  final match = items.firstWhere(
-                    (e) => (e['wipTransaction']?['progressId'] ?? e['progressId'] ?? e['wipTransaction']?['productionProgressId'] ?? e['productionProgressId'])?.toString() == targetProgressId.toString(),
-                    orElse: () => {},
-                  );
-                  if (match.isNotEmpty) {
-                    final newWipId = match['wipTransaction']?['id'] as int?;
-                    if (newWipId != null) {
-                      final wipPayload = Map<String, dynamic>.from(match['wipTransaction'] ?? match);
-                      wipPayload['batchLinesId'] = pp.batchLinesId;
-                      wipPayload['batchLineId'] = pp.batchLinesId;
-                      wipPayload.remove('id');
-                      wipPayload.remove('concurrencyStamp');
-                      await _lotRepo.updateWipTransaction(newWipId, wipPayload);
+                if (targetProgressId != null && targetProgressId > 0 && pp.batchLinesId != null) {
+                  final newWipRes = await _lotRepo.fetchWipTransactionsByProgressId(targetProgressId);
+                  if (newWipRes.success && newWipRes.data != null) {
+                    final List rawItems = newWipRes.data is Map ? (newWipRes.data['items'] ?? []) : newWipRes.data;
+                    final items = rawItems.cast<Map<String, dynamic>>();
+                    final match = items.firstWhere(
+                      (e) => (e['wipTransaction']?['progressId'] ?? e['progressId'] ?? e['wipTransaction']?['productionProgressId'] ?? e['productionProgressId'])?.toString() == targetProgressId.toString(),
+                      orElse: () => {},
+                    );
+                    if (match.isNotEmpty) {
+                      final newWipId = match['wipTransaction']?['id'] as int?;
+                      if (newWipId != null) {
+                        final wipPayload = Map<String, dynamic>.from(match['wipTransaction'] ?? match);
+                        wipPayload['batchLinesId'] = pp.batchLinesId;
+                        wipPayload['batchLineId'] = pp.batchLinesId;
+                        wipPayload.remove('id');
+                        wipPayload.remove('concurrencyStamp');
+                        await _lotRepo.updateWipTransaction(newWipId, wipPayload);
+                      }
                     }
                   }
                 }
               }
             }
-          } else {
-            json['transactionType'] = 3;
-            json['wipStatus'] = 1;
-            json['isLastProcess'] = true;
-            json.remove('id');
-            json.remove('progressCode');
-            json.remove('creationTime');
-            json.remove('creatorId');
-            json.remove('lastModificationTime');
-            json.remove('lastModifierId');
-            final updRes = await _processingRepo.updateProductionProgress(pp.id!, json);
-            if (!updRes.success) throw Exception('Update final progress failed: ${updRes.message}');
           }
         } catch (e) {
           dev.log('❌ Tray submission error for PP ${pp.id}: $e');
@@ -891,11 +915,15 @@ class ProcessingBatchController extends ChangeNotifier {
         }
       }
 
+      final bool hasRemainingHeldTrays = _state.trays.any((t) => t.productionProgress.holdFlag == true);
+
       onSuccess({
         'submitted': true,
         'targetOps': targetOps,
         'isRework': _state.isReworkMode,
         'isReassigned': false,
+        'hasRemainingHeldTrays': hasRemainingHeldTrays,
+        'batchHeaderId': _state.trays.isNotEmpty ? _state.trays.first.productionProgress.batchHeaderId : null,
       });
 
     } catch (e) {

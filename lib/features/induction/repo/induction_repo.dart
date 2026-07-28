@@ -13,10 +13,7 @@ class InductionRepo {
     final Map<String, String> p =
         params ??
         {
-          'TransactionType': '3',
-          'PBSFlag': 'false',
-          'IsLastProcess': 'true',
-          'MaxResultCount': params?['MaxResultCount'] ?? '10',
+          'MaxResultCount': '1000',
         };
 
     final result = await _api.getList(
@@ -31,13 +28,18 @@ class InductionRepo {
           ? (result.data['items'] ?? [])
           : result.data;
 
-      final productionProgress = rawData
-          .map(
-            (item) => InductionModel.fromJson(
-              Map<String, dynamic>.from(item),
-            ),
-          )
-          .toList();
+      final List<InductionModel> productionProgress = [];
+      for (final item in rawData) {
+        try {
+          if (item is Map) {
+            productionProgress.add(
+              InductionModel.fromJson(Map<String, dynamic>.from(item)),
+            );
+          }
+        } catch (e) {
+          debugPrint("⚠️ Skipping unparseable item in Induction Repo: $e");
+        }
+      }
 
       return PlexApiResult(true, 200, "Success", productionProgress);
     } catch (e) {
@@ -73,5 +75,9 @@ class InductionRepo {
   Future<PlexApiResult> fetchItemDef(int id) async {
     final result = await _api.getObject('/api/app/item-defs/$id');
     return result;
+  }
+
+  Future<PlexApiResult> fetchLotHeaderById(int id) async {
+    return await _api.getObject('/api/app/lot-headers/$id');
   }
 }

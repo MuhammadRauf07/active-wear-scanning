@@ -20,6 +20,7 @@ class ProcessingTrayTable extends StatefulWidget {
   final Set<int> trayIdsWithWastage;
   final Set<int> holdTrayIds;
   final void Function(int trayId)? onHoldToggle;
+  final ValueChanged<bool>? onSelectAllHoldToggle;
 
   const ProcessingTrayTable({
     super.key,
@@ -35,6 +36,7 @@ class ProcessingTrayTable extends StatefulWidget {
     this.trayIdsWithWastage = const {},
     this.holdTrayIds = const {},
     this.onHoldToggle,
+    this.onSelectAllHoldToggle,
   });
 
   @override
@@ -99,6 +101,17 @@ class _ProcessingTrayTableState extends State<ProcessingTrayTable> {
     final bool isAnySelected = widget.trays.isNotEmpty &&
         widget.trays.any((t) => widget.selectedReworkTrayIds.contains(t.productionProgress.id));
 
+    final nonBackendHeldTrays = widget.trays.where((t) => t.productionProgress.holdFlag != true).toList();
+    final bool isAllHoldSelected = nonBackendHeldTrays.isNotEmpty &&
+        nonBackendHeldTrays.every((t) {
+          final trayId = t.primaryTrayModel.id ?? t.productionProgress.id;
+          return widget.holdTrayIds.contains(trayId);
+        });
+    final bool isAnyHoldSelected = widget.trays.any((t) {
+      final trayId = t.primaryTrayModel.id ?? t.productionProgress.id;
+      return t.productionProgress.holdFlag == true || widget.holdTrayIds.contains(trayId);
+    });
+
     return ContentCard(
       padding: EdgeInsets.zero,
       child: Column(
@@ -119,7 +132,44 @@ class _ProcessingTrayTableState extends State<ProcessingTrayTable> {
                 if (widget.isEditable)
                   Expanded(flex: 3, child: Text('EDIT QTY', style: _headerStyle)),
                 if (widget.onHoldToggle != null)
-                  const Expanded(flex: 2, child: Text('HOLD', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.red))),
+                  Expanded(
+                    flex: 2,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Checkbox(
+                            visualDensity: VisualDensity.compact,
+                            value: isAllHoldSelected ? true : (isAnyHoldSelected ? null : false),
+                            tristate: true,
+                            activeColor: Colors.red.shade700,
+                            onChanged: (val) {
+                              final shouldSelect = val == true;
+                              if (widget.onSelectAllHoldToggle != null) {
+                                widget.onSelectAllHoldToggle!(shouldSelect);
+                              } else {
+                                for (final t in nonBackendHeldTrays) {
+                                  final trayId = t.primaryTrayModel.id ?? t.productionProgress.id;
+                                  if (trayId != null) {
+                                    final isCur = widget.holdTrayIds.contains(trayId);
+                                    if ((shouldSelect && !isCur) || (!shouldSelect && isCur)) {
+                                      widget.onHoldToggle!(trayId);
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                          ),
+                          const Text(
+                            'HOLD',
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.red),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 if (widget.isReworkMode)
                   SizedBox(
                     width: 44,
@@ -156,6 +206,10 @@ class _ProcessingTrayTableState extends State<ProcessingTrayTable> {
                 final initialQty = id != null ? (_initialQuantities[id] ?? 0) : 0.0;
                 final isSaving = id != null && _loadingRows[id] == true;
 
+                final bool isAlreadyHeld = t.productionProgress.holdFlag == true;
+                final bool isToggledHold = widget.holdTrayIds.contains(t.primaryTrayModel.id) || widget.holdTrayIds.contains(t.productionProgress.id);
+                final bool isHeld = isAlreadyHeld || isToggledHold;
+
                 final bool hasWastage = (id != null && initialQty > 0 && tubes < initialQty) ||
                     widget.trayIdsWithWastage.contains(t.productionProgress.primaryTrayId);
 
@@ -163,20 +217,47 @@ class _ProcessingTrayTableState extends State<ProcessingTrayTable> {
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: hasWastage ? const Color(0xFFFFEBEE) : Colors.white,
+                    color: isHeld
+                        ? const Color(0xFFFFF1F2)
+                        : (hasWastage ? const Color(0xFFFFEBEE) : Colors.white),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: hasWastage ? Colors.red.shade200 : const Color(0xFFF1F5F9),
-                      width: 1,
+                      color: isHeld
+                          ? const Color(0xFFFCA5A5)
+                          : (hasWastage ? Colors.red.shade200 : const Color(0xFFF1F5F9)),
+                      width: isHeld ? 1.5 : 1,
                     ),
                   ),
                   child: Row(
                     children: [
                       Expanded(
                         flex: 2,
-                        child: Text(
-                          t.primaryTrayModel.trayCode ?? '-',
-                          style: const TextStyle(fontSize: 10),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Text(
+                              t.primaryTrayModel.trayCode ?? '-',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: isHeld ? FontWeight.bold : FontWeight.normal,
+                                color: isHeld ? const Color(0xFFDC2626) : Colors.black87,
+                              ),
+                            ),
+                            if (isAlreadyHeld)
+                              Container(
+                                margin: const EdgeInsets.only(top: 2),
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFDC2626),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  'ON HOLD',
+                                  style: TextStyle(fontSize: 7, fontWeight: FontWeight.bold, color: Colors.white),
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                       Expanded(
@@ -269,14 +350,16 @@ class _ProcessingTrayTableState extends State<ProcessingTrayTable> {
                           flex: 2,
                           child: Checkbox(
                             visualDensity: VisualDensity.compact,
-                            value: widget.holdTrayIds.contains(t.primaryTrayModel.id) || widget.holdTrayIds.contains(t.productionProgress.id),
+                            value: isHeld,
                             activeColor: Colors.red.shade700,
-                            onChanged: (val) {
-                              final trayId = t.primaryTrayModel.id ?? t.productionProgress.id;
-                              if (trayId != null) {
-                                widget.onHoldToggle!(trayId);
-                              }
-                            },
+                            onChanged: isAlreadyHeld
+                                ? null
+                                : (val) {
+                                    final trayId = t.primaryTrayModel.id ?? t.productionProgress.id;
+                                    if (trayId != null) {
+                                      widget.onHoldToggle!(trayId);
+                                    }
+                                  },
                           ),
                         ),
                       if (widget.isReworkMode)

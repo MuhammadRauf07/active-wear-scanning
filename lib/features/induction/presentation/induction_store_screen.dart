@@ -268,8 +268,14 @@ class _InductionStoreScreenViewState extends State<_InductionStoreScreenView> {
   Widget _buildConfigurationPanel(InductionController controller, InductionState state) {
     final Map<int, LotHeaderModel> uniqueBatches = {};
     for (final tray in state.availableTrays) {
-      if (tray.batchHeader != null && tray.batchHeader!.id != null) {
-        uniqueBatches[tray.batchHeader!.id!] = tray.batchHeader!;
+      final bh = tray.batchHeader;
+      final bhId = bh?.id ?? tray.productionProgress.batchHeaderId;
+      if (bhId != null && bhId > 0) {
+        if (bh != null && bh.batchHeaderCode != null && bh.batchHeaderCode!.trim().isNotEmpty) {
+          uniqueBatches[bhId] = bh;
+        } else {
+          uniqueBatches[bhId] = LotHeaderModel(id: bhId, batchHeaderCode: 'Batch #$bhId');
+        }
       }
     }
     final List<LotHeaderModel> availableBatches = uniqueBatches.values.toList();

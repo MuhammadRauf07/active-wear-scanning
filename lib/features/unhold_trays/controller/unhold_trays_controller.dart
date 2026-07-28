@@ -115,6 +115,12 @@ class UnholdTraysController extends ChangeNotifier {
         final payload = match.productionProgress.toJson();
         payload['holdFlag'] = false;
         payload['unHoldDate'] = nowStr;
+        payload.remove('id');
+        payload.remove('progressCode');
+        payload.remove('creationTime');
+        payload.remove('creatorId');
+        payload.remove('lastModificationTime');
+        payload.remove('lastModifierId');
 
         final res = await _processingRepo.updateProductionProgress(id, payload);
         if (!res.success) {

@@ -108,7 +108,7 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
                 clipBehavior: Clip.antiAlias,
                 child: Column(
                   children: [
-                    const TrayTableHeader(actionColumnWidth: 44),
+                    const TrayTableHeader(actionColumnWidth: 44, showItemDescriptionColumn: true),
                     Expanded(
                       child: ListView.builder(
                         padding: EdgeInsets.zero,
@@ -332,15 +332,6 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
     }
     final List<WorkOrderHeader> availableWOs = uniqueWOs.values.toList();
 
-    final Map<int, Item> uniqueItems = {};
-    if (state.selectedWorkOrder != null) {
-      final woTrays = unfiltered.where((t) => t.workOrderHeader.id == state.selectedWorkOrder!.id);
-      for (final tray in woTrays) {
-        uniqueItems[tray.item.id] = tray.item;
-      }
-    }
-    final List<Item> availableItems = uniqueItems.values.toList();
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: const BoxDecoration(
@@ -351,7 +342,6 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Expanded(
-            flex: 3,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
@@ -370,45 +360,21 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
               ],
             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            flex: 4,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('ITEM DESCRIPTION', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Color(0xFF78909C), letterSpacing: 0.5)),
-                const SizedBox(height: 6),
-                _GbsOverlayDropdown<Item>(
-                  hint: state.selectedWorkOrder == null ? "Select WO first..." : "Select item...",
-                  items: availableItems,
-                  selectedValue: state.selectedItem,
-                  itemLabel: (item) => item.description,
-                  onChanged: (val) {
-                    controller.selectItem(val);
-                  },
-                ),
-              ],
-            ),
-          ),
           if (state.receivingType == 'gbs') ...[
             const SizedBox(width: 12),
-            Expanded(
-              flex: 2,
-              child: SizedBox(
-                height: 40,
-                child: ElevatedButton.icon(
-                  onPressed: state.selectedWorkOrder == null ? null : () => _showAvailableTraysDialog(controller, state),
-                  icon: const Icon(Icons.layers_outlined, size: 16),
-                  label: const Text('SHOW TRAYS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE67E22),
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.grey.shade300,
-                    disabledForegroundColor: Colors.grey.shade500,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    elevation: 0,
-                  ),
+            SizedBox(
+              height: 40,
+              child: ElevatedButton.icon(
+                onPressed: state.selectedWorkOrder == null ? null : () => _showAvailableTraysDialog(controller, state),
+                icon: const Icon(Icons.layers_outlined, size: 16),
+                label: const Text('SHOW TRAYS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFE67E22),
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: Colors.grey.shade300,
+                  disabledForegroundColor: Colors.grey.shade500,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  elevation: 0,
                 ),
               ),
             ),
@@ -451,7 +417,7 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    const TrayTableHeader(actionColumnWidth: 0, showLotColumn: false),
+                    const TrayTableHeader(actionColumnWidth: 0, showItemDescriptionColumn: true),
                     Expanded(
                       child: availableTrays.isEmpty
                           ? const Center(
@@ -465,8 +431,6 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
                               itemBuilder: (ctx, index) {
                                 final tray = availableTrays[index];
                                 final qty = tray.productionProgress.primaryQuantity ?? 0.0;
-                                final perTube = tray.item.perGarmentTube;
-                                final pcs = qty * perTube;
                                 final weight = qty * (tray.item.pieceWeight ?? 0);
 
                                 const cellStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238));
@@ -480,13 +444,11 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
                                   ),
                                   child: Row(
                                     children: [
-                                      Expanded(flex: 3, child: Text(tray.primaryTrayModel.trayCode ?? 'N/A', textAlign: TextAlign.center, style: blueCellStyle)),
-                                      Expanded(flex: 2, child: Text(tray.workOrderHeader.workOrderCode, textAlign: TextAlign.center, style: cellStyle)),
-                                      Expanded(flex: 2, child: Text(tray.item.sizeDescription ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
-                                      Expanded(flex: 2, child: Text(perTube.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
-                                      Expanded(flex: 2, child: Text(qty.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
-                                      Expanded(flex: 2, child: Text(pcs.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
-                                      Expanded(flex: 2, child: Text('${weight.toStringAsFixed(0)}g', textAlign: TextAlign.center, style: cellStyle)),
+                                      Expanded(flex: 5, child: Text(tray.primaryTrayModel.trayCode ?? 'N/A', textAlign: TextAlign.center, style: blueCellStyle)),
+                                      Expanded(flex: 16, child: Text(tray.item.description, maxLines: 2, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis, style: cellStyle)),
+                                      Expanded(flex: 3, child: Text(tray.item.sizeDescription ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
+                                      Expanded(flex: 4, child: Text(qty.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
+                                      Expanded(flex: 4, child: Text('${weight.toStringAsFixed(0)}g', textAlign: TextAlign.center, style: cellStyle)),
                                     ],
                                   ),
                                 );
@@ -545,7 +507,7 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
                 ],
               ),
             ),
-            const TrayTableHeader(actionColumnWidth: 44),
+            const TrayTableHeader(actionColumnWidth: 44, showItemDescriptionColumn: true),
             Expanded(
               child: state.scannedTrays.isEmpty
                   ? const EmptyScanState(hasBorder: false)
