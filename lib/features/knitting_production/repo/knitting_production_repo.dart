@@ -85,7 +85,7 @@ class KnittingProductionRepo {
     return fetchPlanLines(targetResource.resource.id);
   }
 
-  Future<PlexApiResult> fetchAvailableTrayDetails({int maxResultCount = 10, int skipCount = 0}) async {
+  Future<PlexApiResult> fetchAvailableTrayDetails({int maxResultCount = 100, int skipCount = 0}) async {
     final result = await _api.getList('/api/app/tray-details', query: {
       'Active': 'true',
       'TrayType': '1',

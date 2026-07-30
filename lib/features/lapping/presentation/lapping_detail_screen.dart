@@ -615,6 +615,15 @@ class _LappingDetailScreenViewState extends State<_LappingDetailScreenView> {
                 ),
               ),
               actions: [
+                if (currentWaste > 0 || controller.state.itemWasteProgressIds[compositeId] != null)
+                  TextButton.icon(
+                    onPressed: () {
+                      controller.setWasteQuantity(compositeId, 0.0);
+                      Navigator.of(ctx).pop();
+                    },
+                    icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
+                    label: const Text('DELETE WASTE', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                  ),
                 TextButton(
                   onPressed: () => Navigator.of(ctx).pop(),
                   child: const Text('CANCEL'),

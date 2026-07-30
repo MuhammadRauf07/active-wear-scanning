@@ -218,7 +218,7 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
                           _KnittingProductionFadeSlideTransition(
                             delay: 280,
                             child: SizedBox(
-                              height: 320,
+                              height: 480,
                               child: _buildScannedTraysTable(controller, state),
                             ),
                           ),
@@ -305,7 +305,7 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
-          const TrayTableHeader(showHoldColumn: true),
+          const TrayTableHeader(showWorkOrderColumn: false, showHoldColumn: true),
           Expanded(
             child: state.scannedTrays.isEmpty
                 ? const EmptyScanState()
@@ -318,6 +318,7 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
                       return ScannedTrayRow(
                         index: index,
                         tray: tray,
+                        showWorkOrderColumn: false,
                         quantityController: qtyCtrl,
                         selectedPlanLine: state.selectedPlanLine,
                         onHoldChanged: (val) => controller.toggleTrayHold(index, val),
@@ -983,6 +984,15 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
   Widget _buildQuantityInputFieldSection(KnittingProductionState state) {
     final title = state.productionType == 'sample' ? 'Sample Quantity' : 'C Grade Quantity';
     final isRemarksEnabled = _quantityInputFieldController.text.trim().isNotEmpty;
+    final tubes = double.tryParse(_quantityInputFieldController.text) ?? 0;
+    final pw = state.selectedPlanLine?.item.pieceWeight ?? 0;
+    final pgt = state.selectedPlanLine?.item.perGarmentTube ?? 0;
+    final pcs = (pgt > 0) ? (tubes * pgt) : tubes;
+    final weightGrams = pcs * pw;
+    final String calculatedWeightStr = weightGrams >= 1000
+        ? '${(weightGrams / 1000).toStringAsFixed(2)} kg'
+        : '${weightGrams.toStringAsFixed(1)} g';
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1043,6 +1053,38 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
                 contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 border: InputBorder.none,
                 prefixIcon: Icon(Icons.add_box_rounded, color: Color(0xFF0D47A1)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'CALCULATED WEIGHT',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF546E7A),
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
+            ),
+            child: TextField(
+              controller: TextEditingController(text: calculatedWeightStr),
+              enabled: false,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF0D47A1),
+              ),
+              decoration: const InputDecoration(
+                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                border: InputBorder.none,
+                prefixIcon: Icon(Icons.scale_rounded, color: Color(0xFF0D47A1)),
               ),
             ),
           ),
@@ -1199,6 +1241,7 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
     await ScannerAlwaysOpen.show(
       context,
       title: 'Scan Machine',
+      showDoneButton: false,
       onResult: (scannedCode) async {
         final code = scannedCode.trim();
         if (code.isEmpty) return 'Invalid machine code';
@@ -1265,7 +1308,7 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
                 clipBehavior: Clip.antiAlias,
                 child: Column(
                   children: [
-                    const TrayTableHeader(showHoldColumn: true),
+                    const TrayTableHeader(showWorkOrderColumn: false, showHoldColumn: true),
                     Expanded(
                       child: ListView.builder(
                         padding: EdgeInsets.zero,
@@ -1276,6 +1319,7 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
                           return ScannedTrayRow(
                             index: index,
                             tray: tray,
+                            showWorkOrderColumn: false,
                             quantityController: qtyCtrl,
                             selectedPlanLine: latestState.selectedPlanLine,
                             onHoldChanged: (val) => latestController.toggleTrayHold(index, val),

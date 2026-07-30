@@ -166,12 +166,12 @@ class KnittingProductionController extends ChangeNotifier {
     try {
       final skipCount = isRefresh ? 0 : _state.availableTraysDetail.length;
       final trayDetailsModel = await _repo.fetchAvailableTrayDetails(
-        maxResultCount: 10,
+        maxResultCount: 100,
         skipCount: skipCount,
       );
       if (trayDetailsModel.success && trayDetailsModel.data != null) {
         final newItems = (trayDetailsModel.data as List).map((item) => item as TrayDetailsModel).toList();
-        if (newItems.length < 10) {
+        if (newItems.length < 100) {
           _hasMoreAvailableTrays = false;
         }
         final updatedList = isRefresh ? newItems : [..._state.availableTraysDetail, ...newItems];

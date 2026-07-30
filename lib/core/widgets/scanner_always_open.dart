@@ -10,12 +10,14 @@ class ScannerAlwaysOpen extends StatefulWidget {
   final String title;
   final FutureOr<String?> Function(String code) onResult;
   final Widget Function(BuildContext context)? scannedItemsBuilder;
+  final bool showDoneButton;
 
   const ScannerAlwaysOpen({
     super.key,
     required this.title,
     required this.onResult,
     this.scannedItemsBuilder,
+    this.showDoneButton = true,
   });
 
   static Future<void> show(
@@ -23,6 +25,7 @@ class ScannerAlwaysOpen extends StatefulWidget {
     required String title,
     required FutureOr<String?> Function(String) onResult,
     Widget Function(BuildContext context)? scannedItemsBuilder,
+    bool showDoneButton = true,
   }) {
     return showGeneralDialog<void>(
       context: context,
@@ -50,6 +53,7 @@ class ScannerAlwaysOpen extends StatefulWidget {
               title: title,
               onResult: onResult,
               scannedItemsBuilder: scannedItemsBuilder,
+              showDoneButton: showDoneButton,
             ),
           ),
         ),
@@ -232,16 +236,16 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
               onBackPress: _close,
               topPadding: 0,
               horizontalPadding: 12,
-              widget: CustomOutlinedButton(
-                borderColor: Colors.blue,
-                label: 'Done',
-                fillColor: Colors.blue,
-                textColor: Colors.white,
-                buttonHeight: 36.0,
-                onPressed: () {
-                  _close();
-                },
-              ),
+              widget: widget.showDoneButton
+                  ? CustomOutlinedButton(
+                      borderColor: Colors.blue,
+                      label: 'Done',
+                      fillColor: Colors.blue,
+                      textColor: Colors.white,
+                      buttonHeight: 36.0,
+                      onPressed: _close,
+                    )
+                  : null,
             ),
             Padding(
               padding: const EdgeInsets.all(12),

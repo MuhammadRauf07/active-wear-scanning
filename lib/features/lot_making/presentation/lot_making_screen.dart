@@ -649,9 +649,14 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
       totalWeightGrams += qty * (state.scannedTrays[i].item.pieceWeight ?? 0);
     }
 
-    final capacityValue = double.tryParse(state.selectedMachine?.resource?.capacity ?? '0') ?? 0;
+    final capacityKg = double.tryParse(state.selectedMachine?.resource?.capacity ?? '0') ?? 0;
+    final capacityGrams = capacityKg * 1000;
     final allocatedWeightGrams = totalWeightGrams;
-    final remainingWeightGrams = capacityValue - allocatedWeightGrams;
+    final remainingWeightGrams = capacityGrams - allocatedWeightGrams;
+
+    final String capacityLabel = '${capacityKg.toStringAsFixed(0)} kg';
+    final String allocLabel = '${(allocatedWeightGrams / 1000).toStringAsFixed(2)} kg';
+    final String remLabel = '${(remainingWeightGrams / 1000).toStringAsFixed(2)} kg';
 
     return Container(
       decoration: BoxDecoration(
@@ -689,11 +694,11 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
                     const SizedBox(width: 6),
                     _buildMetricCard('TUBES', '$totalTubes', Icons.grid_view_rounded, const Color(0xFF2E7D32)),
                     const SizedBox(width: 6),
-                    _buildMetricCard('CAPACITY', '${capacityValue.toStringAsFixed(0)}g', Icons.speed_rounded, const Color(0xFF1B64A3)),
+                    _buildMetricCard('CAPACITY', capacityLabel, Icons.speed_rounded, const Color(0xFF1B64A3)),
                     const SizedBox(width: 6),
-                    _buildMetricCard('ALLOC. WEIGHT', '${allocatedWeightGrams.toStringAsFixed(0)}g', Icons.monitor_weight_outlined, const Color(0xFF8E44AD)),
+                    _buildMetricCard('ALLOC. WEIGHT', allocLabel, Icons.monitor_weight_outlined, const Color(0xFF8E44AD)),
                     const SizedBox(width: 6),
-                    _buildMetricCard('REM. WEIGHT', '${remainingWeightGrams.toStringAsFixed(0)}g', Icons.hourglass_empty_rounded, const Color(0xFF00796B)),
+                    _buildMetricCard('REM. WEIGHT', remLabel, Icons.hourglass_empty_rounded, const Color(0xFF00796B)),
                   ],
                 ),
               ),
@@ -979,7 +984,8 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
   }
 
   Widget _buildCapacityProgress(LotMakingState state) {
-    final capacityValue = double.tryParse(state.selectedMachine?.resource?.capacity ?? '0') ?? 0;
+    final capacityKg = double.tryParse(state.selectedMachine?.resource?.capacity ?? '0') ?? 0;
+    final capacityGrams = capacityKg * 1000;
 
     double allocatedWeightGrams = 0;
     for (int i = 0; i < state.scannedTrays.length; i++) {
@@ -988,7 +994,7 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
       allocatedWeightGrams += qty * (tray.item.pieceWeight ?? 0);
     }
 
-    final progress = capacityValue > 0 ? (allocatedWeightGrams / capacityValue) : 0.0;
+    final progress = capacityGrams > 0 ? (allocatedWeightGrams / capacityGrams) : 0.0;
     final percentage = (progress * 100).clamp(0, 100).toInt();
 
     return Column(

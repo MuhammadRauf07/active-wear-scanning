@@ -9,6 +9,7 @@ class ScannedTrayRow extends StatelessWidget {
   final PlanLineResponseModel? selectedPlanLine;
   final VoidCallback onDelete;
   final ValueChanged<bool>? onHoldChanged;
+  final bool showWorkOrderColumn;
 
   const ScannedTrayRow({
     super.key,
@@ -18,6 +19,7 @@ class ScannedTrayRow extends StatelessWidget {
     this.selectedPlanLine,
     required this.onDelete,
     this.onHoldChanged,
+    this.showWorkOrderColumn = true,
   });
 
   static const _cellStyle = TextStyle(
@@ -49,7 +51,7 @@ class ScannedTrayRow extends StatelessWidget {
         children: [
           // Tray Code (Now Blue)
           Expanded(
-            flex: 6,
+            flex: 5,
             child: Text(
               displayCode,
               textAlign: TextAlign.center,
@@ -59,19 +61,20 @@ class ScannedTrayRow extends StatelessWidget {
             ),
           ),
           
-          // Work Order (Now Black)
-          Expanded(
-            flex: 4,
-            child: Text(
-              selectedPlanLine?.workOrderHeader.workOrderCode ?? "-",
-              textAlign: TextAlign.center,
-              style: _cellStyle,
+          // Work Order
+          if (showWorkOrderColumn)
+            Expanded(
+              flex: 4,
+              child: Text(
+                selectedPlanLine?.workOrderHeader.workOrderCode ?? "-",
+                textAlign: TextAlign.center,
+                style: _cellStyle,
+              ),
             ),
-          ),
           
           // Size
           Expanded(
-            flex: 4,
+            flex: 3,
             child: Text(
               tray.sizeDescription.isNotEmpty ? tray.sizeDescription : "-",
               textAlign: TextAlign.center,
@@ -81,7 +84,7 @@ class ScannedTrayRow extends StatelessWidget {
           
           // Pcs Per Tube
           Expanded(
-            flex: 4,
+            flex: 3,
             child: Text(
               tray.perGarmentTube > 0 ? tray.perGarmentTube.toStringAsFixed(0) : '-',
               textAlign: TextAlign.center,

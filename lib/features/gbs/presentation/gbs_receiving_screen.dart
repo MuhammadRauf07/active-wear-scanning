@@ -634,8 +634,9 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
   }
 
   Widget _buildSampleCGradeTableSection(GbsController controller, GbsState state) {
-    final filtered = controller.getFilteredTrays();
-    final isAllSelected = filtered.isNotEmpty && filtered.every((t) => state.selectedProgressIds.contains(t.productionProgress.id));
+    final grouped = controller.getGroupedSampleOrCGradeEntries();
+    final allIds = controller.getFilteredTrays().map((t) => t.productionProgress.id).whereType<int>().toList();
+    final isAllSelected = allIds.isNotEmpty && allIds.every((id) => state.selectedProgressIds.contains(id));
 
     return Container(
       decoration: BoxDecoration(
@@ -661,7 +662,7 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
                         state.receivingType == 'sample' ? 'SAMPLE PENDING ENTRIES' : 'C GRADE PENDING ENTRIES',
                         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF263238), letterSpacing: 0.5),
                       ),
-                      Text('${filtered.length} Pending, ${state.selectedProgressIds.length} Selected', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF78909C))),
+                      Text('${grouped.length} Pending Groups, ${state.selectedProgressIds.length} Selected Records', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF78909C))),
                     ],
                   ),
                   SizedBox(
@@ -686,13 +687,13 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
             ),
             _buildSampleCGradeTableHeader(controller, state, isAllSelected),
             Expanded(
-              child: filtered.isEmpty
+              child: grouped.isEmpty
                   ? const EmptyScanState(hasBorder: false)
                   : ListView.builder(
                       padding: EdgeInsets.zero,
-                      itemCount: filtered.length,
+                      itemCount: grouped.length,
                       itemBuilder: (context, index) {
-                        return _buildSampleCGradeRow(controller, state, filtered[index], index);
+                        return _buildSampleCGradeRow(controller, state, grouped[index], index);
                       },
                     ),
             ),
@@ -726,24 +727,81 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
             ),
           ),
           const SizedBox(width: 8),
-          Expanded(flex: 3, child: Text('Work Order', style: _tableHeaderStyle)),
-          Expanded(flex: 4, child: Text('Item / Date', style: _tableHeaderStyle)),
-          Expanded(flex: 2, child: Text('Tubes', textAlign: TextAlign.center, style: _tableHeaderStyle)),
-          Expanded(flex: 2, child: Text('Pcs', textAlign: TextAlign.center, style: _tableHeaderStyle)),
-          Expanded(flex: 3, child: Text('Remarks', style: _tableHeaderStyle)),
+          Expanded(flex: 9, child: Text('ITEM DESCRIPTION', style: _tableHeaderStyle)),
+          Expanded(flex: 3, child: Text('TUBES', textAlign: TextAlign.center, style: _tableHeaderStyle)),
+          Expanded(flex: 3, child: Text('PCS', textAlign: TextAlign.center, style: _tableHeaderStyle)),
+          Expanded(flex: 3, child: Text('WEIGHT', textAlign: TextAlign.center, style: _tableHeaderStyle)),
+          Expanded(flex: 4, child: Text('REMARKS', textAlign: TextAlign.center, style: _tableHeaderStyle)),
         ],
       ),
     );
   }
 
-  Widget _buildSampleCGradeRow(GbsController controller, GbsState state, ProductionProgressResponseModel item, int index) {
-    final pp = item.productionProgress;
-    final isSelected = state.selectedProgressIds.contains(pp.id);
+  void _showRemarksDialog(BuildContext context, String itemDesc, String remarks) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFFF8FAFC),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.comment_rounded, color: Color(0xFF0D47A1), size: 20),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Entry Remarks',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              itemDesc,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF1B64A3)),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFCBD5E1)),
+              ),
+              child: Text(
+                remarks,
+                style: const TextStyle(fontSize: 13, color: Color(0xFF334155), height: 1.4),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0D47A1),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
 
-    String dateStr = '';
-    if (pp.date != null) {
-      dateStr = "${pp.date!.year}-${pp.date!.month.toString().padLeft(2, '0')}-${pp.date!.day.toString().padLeft(2, '0')} ${pp.date!.hour.toString().padLeft(2, '0')}:${pp.date!.minute.toString().padLeft(2, '0')}";
-    }
+  Widget _buildSampleCGradeRow(GbsController controller, GbsState state, GbsSampleCGradeGroup group, int index) {
+    final isGroupSelected = group.allProgressIds.isNotEmpty && group.allProgressIds.every((id) => state.selectedProgressIds.contains(id));
+
+    final weightGrams = group.totalWeightGrams;
+    final String weightStr = weightGrams >= 1000
+        ? '${(weightGrams / 1000).toStringAsFixed(2)} kg'
+        : '${weightGrams.toStringAsFixed(1)} g';
+
+    final remarksText = group.remarks.trim().isNotEmpty ? group.remarks.trim() : '-';
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
@@ -756,66 +814,81 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
           SizedBox(
             width: 32,
             child: Checkbox(
-              value: isSelected,
+              value: isGroupSelected,
               activeColor: const Color(0xFF0D47A1),
               onChanged: (val) {
                 HapticFeedbackHelper.buttonClick();
-                if (pp.id != null) {
-                  controller.toggleSelectedProgressId(pp.id!, val == true);
-                }
+                controller.toggleGroupProgressIds(group.allProgressIds, val == true);
               },
             ),
           ),
           const SizedBox(width: 8),
           Expanded(
+            flex: 9,
+            child: Text(
+              group.itemDescription,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1B64A3)),
+            ),
+          ),
+          Expanded(
             flex: 3,
             child: Text(
-              item.workOrderHeader.workOrderCode,
+              group.totalTubes.toStringAsFixed(0),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238)),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              group.totalPcs.toStringAsFixed(0),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238)),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              weightStr,
+              textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238)),
             ),
           ),
           Expanded(
             flex: 4,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.item.description,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1B64A3)),
+            child: InkWell(
+              onTap: remarksText == '-' ? null : () => _showRemarksDialog(context, group.itemDescription, remarksText),
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: remarksText == '-' ? Colors.transparent : const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(6),
+                  border: remarksText == '-' ? null : Border.all(color: const Color(0xFFBFDBFE)),
                 ),
-                const SizedBox(height: 2),
-                Text(dateStr, style: TextStyle(fontSize: 9, color: Colors.grey.shade600)),
-              ],
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              pp.primaryQuantity?.toStringAsFixed(0) ?? '0',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238)),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              pp.secondaryQuantity?.toStringAsFixed(0) ?? '0',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238)),
-            ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(
-              pp.remarks ?? '-',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 10,
-                fontStyle: pp.remarks != null ? FontStyle.normal : FontStyle.italic,
-                color: pp.remarks != null ? const Color(0xFF263238) : Colors.grey.shade500,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        remarksText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: remarksText == '-' ? FontWeight.normal : FontWeight.w600,
+                          color: remarksText == '-' ? Colors.grey.shade500 : const Color(0xFF1D4ED8),
+                        ),
+                      ),
+                    ),
+                    if (remarksText != '-') ...[
+                      const SizedBox(width: 4),
+                      const Icon(Icons.info_outline_rounded, size: 12, color: Color(0xFF1D4ED8)),
+                    ],
+                  ],
+                ),
               ),
             ),
           ),

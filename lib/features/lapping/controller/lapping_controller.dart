@@ -430,9 +430,13 @@ class LappingController extends ChangeNotifier {
     }
 
     final updatedResetLines = Set<int>.from(_state.resetBatchLineIds);
+    final updatedBatchLineIds = Map<String, int>.from(_state.trayBatchLineIds);
     final code = t.primaryTrayModel.trayCode?.toLowerCase();
-    if (code != null && _state.trayBatchLineIds.containsKey(code)) {
-      updatedResetLines.add(_state.trayBatchLineIds[code]!);
+    if (code != null) {
+      if (_state.trayBatchLineIds.containsKey(code)) {
+        updatedResetLines.add(_state.trayBatchLineIds[code]!);
+        updatedBatchLineIds.remove(code);
+      }
     }
 
     _state = _state.copyWith(
@@ -440,6 +444,7 @@ class LappingController extends ChangeNotifier {
       scannedTraysByWO: updatedScanned,
       resetDraftProgressIds: updatedReset,
       resetBatchLineIds: updatedResetLines,
+      trayBatchLineIds: updatedBatchLineIds,
     );
     notifyListeners();
   }
@@ -537,6 +542,11 @@ class LappingController extends ChangeNotifier {
                 ? Map<String, dynamic>.from(rawMap['productionProgress'] as Map)
                 : rawMap;
 
+            final String? stamp = (rawMap['concurrencyStamp'] ?? resetJson['concurrencyStamp'])?.toString();
+            if (stamp != null && stamp.isNotEmpty) {
+              resetJson['concurrencyStamp'] = stamp;
+            }
+
             resetJson['draftFlag'] = false;
             resetJson['draftStatus'] = false;
             resetJson.remove('id');
@@ -553,6 +563,11 @@ class LappingController extends ChangeNotifier {
           }
         }
       }
+
+      _state = _state.copyWith(
+        resetBatchLineIds: {},
+        resetDraftProgressIds: {},
+      );
 
       // Update draftStatus and draftFlag on all active Lapping progress records for this batch on save draft
       if (isDraft) {
@@ -572,6 +587,11 @@ class LappingController extends ChangeNotifier {
               final Map<String, dynamic> updateJson = rawMap.containsKey('productionProgress')
                   ? Map<String, dynamic>.from(rawMap['productionProgress'] as Map)
                   : rawMap;
+
+              final String? stamp = (rawMap['concurrencyStamp'] ?? updateJson['concurrencyStamp'])?.toString();
+              if (stamp != null && stamp.isNotEmpty) {
+                updateJson['concurrencyStamp'] = stamp;
+              }
 
               updateJson['draftFlag'] = true;
               updateJson['draftStatus'] = true;
@@ -716,6 +736,11 @@ class LappingController extends ChangeNotifier {
                   ? Map<String, dynamic>.from(rawMap['productionProgress'] as Map)
                   : rawMap;
 
+              final String? stamp = (rawMap['concurrencyStamp'] ?? updateLappingJson['concurrencyStamp'])?.toString();
+              if (stamp != null && stamp.isNotEmpty) {
+                updateLappingJson['concurrencyStamp'] = stamp;
+              }
+
               if (!isDraft) {
                 updateLappingJson['transactionType'] = 3;
                 updateLappingJson['wipStatus'] = 1;
@@ -734,7 +759,41 @@ class LappingController extends ChangeNotifier {
               updateLappingJson.remove('lotMakingFlag');
               updateLappingJson.remove('processCompletionTime');
 
-              final updRes = await _processingRepo.updateProductionProgress(pp.id!, updateLappingJson);
+              var updRes = await _processingRepo.updateProductionProgress(pp.id!, updateLappingJson);
+
+              // Retry once with fresh fetch if concurrency stamp or user change conflict occurs
+              if (!updRes.success) {
+                final refetchRes = await _lotRepo.fetchProductionProgressById(pp.id!);
+                if (refetchRes.success && refetchRes.data != null) {
+                  final Map<String, dynamic> rMap = Map<String, dynamic>.from(refetchRes.data is Map ? refetchRes.data : {});
+                  final Map<String, dynamic> retryJson = rMap.containsKey('productionProgress')
+                      ? Map<String, dynamic>.from(rMap['productionProgress'] as Map)
+                      : rMap;
+                  final String? freshStamp = (rMap['concurrencyStamp'] ?? retryJson['concurrencyStamp'])?.toString();
+                  if (freshStamp != null && freshStamp.isNotEmpty) {
+                    retryJson['concurrencyStamp'] = freshStamp;
+                  }
+                  if (!isDraft) {
+                    retryJson['transactionType'] = 3;
+                    retryJson['wipStatus'] = 1;
+                    retryJson['draftFlag'] = false;
+                    retryJson['draftStatus'] = false;
+                  }
+                  retryJson['primaryQuantity'] = trayQty;
+                  retryJson.remove('id');
+                  retryJson.remove('progressCode');
+                  retryJson.remove('creationTime');
+                  retryJson.remove('creatorId');
+                  retryJson.remove('lastModificationTime');
+                  retryJson.remove('lastModifierId');
+                  retryJson.remove('isFirstProcess');
+                  retryJson.remove('isLastProcess');
+                  retryJson.remove('lotMakingFlag');
+                  retryJson.remove('processCompletionTime');
+                  updRes = await _processingRepo.updateProductionProgress(pp.id!, retryJson);
+                }
+              }
+
               if (!updRes.success) {
                 handoverErrors[scannedTray.primaryTrayModel.id!] = 'Failed to reset draft status on lapping entry: ${updRes.message}';
                 return false;
@@ -744,47 +803,47 @@ class LappingController extends ChangeNotifier {
 
           // 3. ALWAYS CREATE NEW HANDOVER ENTRY (with locator id of next process)
           int? targetProgressId;
-          Map<String, dynamic> nextJson = pp.toJson();
-          nextJson.remove('id');
-          nextJson.remove('progressCode');
-          nextJson.remove('concurrencyStamp');
-          nextJson.remove('batchLinesId');
-          nextJson.remove('batchLineId');
-
-          nextJson.addAll({
+          final Map<String, dynamic> nextJson = {
             "subOperation": "Handover",
+            "date": DateTime.now().toIso8601String(),
             "transactionType": 2,
-            "draftFlag": false,
-            "draftStatus": false,
-            "draftDate": null,
-            "primaryTrayId": scannedTray.primaryTrayModel.id,
-            "secondaryTrayId": scannedTray.primaryTrayModel.id,
+            "operatorDescription": "system",
             "primaryQuantity": trayQty,
-            "secondaryQuantity": pp.secondaryQuantity ?? 0,
             "primaryUOM": pp.primaryUOM ?? 4,
+            "secondaryQuantity": (pp.secondaryQuantity ?? 0).toDouble(),
             "secondaryUOM": pp.secondaryUOM ?? 1,
+            "wipStatus": nextOperationId != null ? 0 : 1,
+            "gbsFlag": false,
+            "pbsFlag": false,
             "productGrade": pp.productGrade ?? 0,
             "productNature": pp.productNature ?? 0,
-            "shiftId": pp.shiftId ?? 1,
-            "machineId": pp.machineId ?? (_state.trays.isNotEmpty ? _state.trays.first.productionProgress.machineId : null),
             "isLastProcess": false,
-            "isStarted": false,
             "reworkFlag": pp.reworkFlag ?? false,
-            "lotMakingFlag": false,
-            "locatorId": targetLocatorId, // Next locator ID
-            "operationId": targetOpId, // Next operation ID
-            "wipStatus": nextOperationId != null ? 0 : 1,
-            "pbsFlag": false,
-            "gbsFlag": false,
-            "date": DateTime.now().toIso8601String(),
-            "operatorDescription": "system",
-            "processedItemId": scannedTray.processedItem?.id ?? pp.processedItemId ?? scannedTray.item.id,
-            "itemId": scannedTray.item.id,
+            "isStarted": false,
+            "draftFlag": false,
+            "draftStatus": false,
+            "holdFlag": false,
+            "operationId": targetOpId,
             "workOrderHeaderId": scannedTray.workOrderHeader.id,
             "workOrderLineId": scannedTray.workOrderLine.id,
+            "processedItemId": scannedTray.processedItem?.id ?? pp.processedItemId ?? scannedTray.item.id,
+            "itemId": scannedTray.item.id,
+            "shiftId": pp.shiftId ?? 1,
+            "primaryTrayId": scannedTray.primaryTrayModel.id,
+            "secondaryTrayId": scannedTray.primaryTrayModel.id,
+            "locatorId": targetLocatorId,
             "batchHeaderId": batchHeaderId,
-          });
-          nextJson.remove("planHeaderId");
+          };
+
+          if (pp.machineId != null || (_state.trays.isNotEmpty && _state.trays.first.productionProgress.machineId != null)) {
+            nextJson["machineId"] = pp.machineId ?? _state.trays.first.productionProgress.machineId;
+          }
+          if (pp.waste != null) {
+            nextJson["waste"] = pp.waste!.round();
+          }
+          if (pp.requiredQty != null) {
+            nextJson["requiredQty"] = pp.requiredQty!.round();
+          }
 
           final ppRes = await _processingRepo.createProductionProgress(nextJson);
           if (!ppRes.success) {
@@ -917,6 +976,11 @@ class LappingController extends ChangeNotifier {
               final Map<String, dynamic> finalJson = rawMap.containsKey('productionProgress')
                   ? Map<String, dynamic>.from(rawMap['productionProgress'] as Map)
                   : rawMap;
+
+              final String? stamp = (rawMap['concurrencyStamp'] ?? finalJson['concurrencyStamp'])?.toString();
+              if (stamp != null && stamp.isNotEmpty) {
+                finalJson['concurrencyStamp'] = stamp;
+              }
 
               finalJson['batchHeaderId'] = batchHeaderId;
               finalJson['batchLineId'] = blId;
@@ -1072,46 +1136,69 @@ class LappingController extends ChangeNotifier {
           ).firstOrNull;
 
           if (match != null) {
-            final Map<String, dynamic> wasteJson = {
-              "subOperation": "Waste",
-              "transactionType": 2,
-              "primaryQuantity": 0,
-              "secondaryQuantity": 0,
-              "primaryUOM": match.productionProgress.primaryUOM ?? 4,
-              "secondaryUOM": match.productionProgress.secondaryUOM ?? 1,
-              "waste": wasteQty,
-              "pbsFlag": false,
-              "draftFlag": isDraft,
-              "draftStatus": isDraft,
-              "gbsFlag": false,
-              "productGrade": 0,
-              "productNature": 0,
-              "wipStatus": 0,
-              "date": DateTime.now().toIso8601String(),
-              "operatorDescription": "system",
-              "operationId": currentOperationId,
-              "locatorId": targetLocatorId,
-              "batchHeaderId": batchHeaderId,
-              "workOrderHeaderId": match.workOrderHeader.id,
-              "workOrderLineId": match.workOrderLine.id,
-              "itemId": match.item.id,
-              "processedItemId": match.processedItem?.id ?? match.item.id,
-              "shiftId": 1,
-              "isStarted": false,
-              "isLastProcess": false,
-              "reworkFlag": false,
-              "lotMakingFlag": false,
-            };
-
             if (existingId != null) {
-              final existingWasteRecord = _state.rawActiveTrays
-                  .where((t) => t.productionProgress.id == existingId)
-                  .firstOrNull;
-              if (existingWasteRecord?.productionProgress.concurrencyStamp != null) {
-                wasteJson['concurrencyStamp'] = existingWasteRecord!.productionProgress.concurrencyStamp;
+              final freshRes = await _lotRepo.fetchProductionProgressById(existingId);
+              if (freshRes.success && freshRes.data != null) {
+                final rawMap = Map<String, dynamic>.from(freshRes.data is Map ? freshRes.data : {});
+                final Map<String, dynamic> updateWasteJson = rawMap.containsKey('productionProgress')
+                    ? Map<String, dynamic>.from(rawMap['productionProgress'] as Map)
+                    : rawMap;
+
+                final String? stamp = (rawMap['concurrencyStamp'] ?? updateWasteJson['concurrencyStamp'])?.toString();
+                if (stamp != null && stamp.isNotEmpty) {
+                  updateWasteJson['concurrencyStamp'] = stamp;
+                }
+
+                updateWasteJson['transactionType'] = 2;
+                updateWasteJson['locatorId'] = 18;
+                updateWasteJson['primaryQuantity'] = wasteQty.round();
+                updateWasteJson['waste'] = wasteQty.round();
+                updateWasteJson['draftFlag'] = isDraft;
+                updateWasteJson['draftStatus'] = isDraft;
+                updateWasteJson.remove('id');
+                updateWasteJson.remove('progressCode');
+                updateWasteJson.remove('creationTime');
+                updateWasteJson.remove('creatorId');
+                updateWasteJson.remove('lastModificationTime');
+                updateWasteJson.remove('lastModifierId');
+                updateWasteJson.remove('isFirstProcess');
+                updateWasteJson.remove('isLastProcess');
+                updateWasteJson.remove('lotMakingFlag');
+                updateWasteJson.remove('processCompletionTime');
+
+                await _processingRepo.updateProductionProgress(existingId, updateWasteJson);
               }
-              await _processingRepo.updateProductionProgress(existingId, wasteJson);
             } else {
+              final Map<String, dynamic> wasteJson = {
+                "subOperation": "Waste",
+                "transactionType": 2,
+                "primaryQuantity": wasteQty.round(),
+                "secondaryQuantity": 0,
+                "primaryUOM": match.productionProgress.primaryUOM ?? 4,
+                "secondaryUOM": match.productionProgress.secondaryUOM ?? 1,
+                "waste": wasteQty.round(),
+                "pbsFlag": false,
+                "draftFlag": isDraft,
+                "draftStatus": isDraft,
+                "gbsFlag": false,
+                "productGrade": 0,
+                "productNature": 0,
+                "wipStatus": 0,
+                "date": DateTime.now().toIso8601String(),
+                "operatorDescription": "system",
+                "operationId": currentOperationId,
+                "locatorId": 18,
+                "batchHeaderId": batchHeaderId,
+                "workOrderHeaderId": match.workOrderHeader.id,
+                "workOrderLineId": match.workOrderLine.id,
+                "itemId": match.item.id,
+                "processedItemId": match.processedItem?.id ?? match.item.id,
+                "shiftId": 1,
+                "isStarted": false,
+                "isLastProcess": false,
+                "reworkFlag": false,
+                "lotMakingFlag": false,
+              };
               await _processingRepo.createProductionProgress(wasteJson);
             }
           }
@@ -1129,17 +1216,24 @@ class LappingController extends ChangeNotifier {
       final lappingPpRes = await _lappingRepo.fetchProductionProgress({
         'BatchHeaderId': batchHeaderId.toString(),
         'TransactionType': '2',
+        'MaxResultCount': '1000',
       });
       List<LappingModel> traysToClose = [];
       if (lappingPpRes.success && lappingPpRes.data != null) {
         final list = lappingPpRes.data as List<LappingModel>;
         traysToClose = list.where((r) =>
           (nextOperationId == null || r.productionProgress.operationId != nextOperationId) &&
-          (r.productionProgress.subOperation ?? '').toLowerCase() != 'handover'
+          (r.productionProgress.subOperation ?? '').toLowerCase() != 'handover' &&
+          (r.productionProgress.subOperation ?? '').toLowerCase() != 'waste' &&
+          r.productionProgress.locatorId != 18
         ).toList();
       }
       if (traysToClose.isEmpty) {
-        traysToClose = _state.trays.where((t) => (t.productionProgress.subOperation ?? '').toLowerCase() != 'handover').toList();
+        traysToClose = _state.trays.where((t) =>
+          (t.productionProgress.subOperation ?? '').toLowerCase() != 'handover' &&
+          (t.productionProgress.subOperation ?? '').toLowerCase() != 'waste' &&
+          t.productionProgress.locatorId != 18
+        ).toList();
       }
 
       final closuresToProcess = _state.failedCloseLappingIds.isEmpty
@@ -1147,21 +1241,44 @@ class LappingController extends ChangeNotifier {
           : traysToClose.where((t) => _state.failedCloseLappingIds.contains(t.productionProgress.id)).toList();
 
       final List<Future<bool>> closureTasks = closuresToProcess.map((realLappingPP) async {
-        if (realLappingPP.productionProgress.id != null && realLappingPP.productionProgress.id! > 0) {
+        final ppId = realLappingPP.productionProgress.id;
+        if (ppId != null && ppId > 0) {
           try {
-            final closeJson = realLappingPP.productionProgress.toJson();
-            closeJson['transactionType'] = 3;
-            closeJson['wipStatus'] = 1;
-            closeJson.remove('id');
-            closeJson.remove('progressCode');
-            closeJson.remove('creationTime');
-            closeJson.remove('creatorId');
-            closeJson.remove('lastModificationTime');
-            closeJson.remove('lastModifierId');
-            final closeRes = await _processingRepo.updateProductionProgress(
-              realLappingPP.productionProgress.id!, closeJson,
-            );
-            return closeRes.success;
+            final freshRes = await _lotRepo.fetchProductionProgressById(ppId);
+            if (freshRes.success && freshRes.data != null) {
+              final rawMap = Map<String, dynamic>.from(freshRes.data is Map ? freshRes.data : {});
+              final Map<String, dynamic> closeJson = rawMap.containsKey('productionProgress')
+                  ? Map<String, dynamic>.from(rawMap['productionProgress'] as Map)
+                  : rawMap;
+
+              final String? stamp = (rawMap['concurrencyStamp'] ?? closeJson['concurrencyStamp'])?.toString();
+              if (stamp != null && stamp.isNotEmpty) {
+                closeJson['concurrencyStamp'] = stamp;
+              }
+
+              final int? locId = closeJson['locatorId'] as int? ?? realLappingPP.productionProgress.locatorId;
+              final String subOp = (closeJson['subOperation'] ?? realLappingPP.productionProgress.subOperation ?? '').toString().toLowerCase();
+
+              // Do not update transactionType to 3 for waste entries (locatorId 18)
+              if (locId != 18 && subOp != 'waste') {
+                closeJson['transactionType'] = 3;
+                closeJson['wipStatus'] = 1;
+              }
+
+              closeJson.remove('id');
+              closeJson.remove('progressCode');
+              closeJson.remove('creationTime');
+              closeJson.remove('creatorId');
+              closeJson.remove('lastModificationTime');
+              closeJson.remove('lastModifierId');
+              closeJson.remove('isFirstProcess');
+              closeJson.remove('isLastProcess');
+              closeJson.remove('lotMakingFlag');
+              closeJson.remove('processCompletionTime');
+
+              final closeRes = await _processingRepo.updateProductionProgress(ppId, closeJson);
+              return closeRes.success;
+            }
           } catch (e) {
             return false;
           }

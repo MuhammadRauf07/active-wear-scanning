@@ -97,6 +97,89 @@ class GbsController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void toggleGroupProgressIds(List<int> ids, bool selected) {
+    final Set<int> updated = Set<int>.from(_state.selectedProgressIds);
+    if (selected) {
+      updated.addAll(ids);
+    } else {
+      updated.removeAll(ids);
+    }
+    _state = _state.copyWith(selectedProgressIds: updated);
+    notifyListeners();
+  }
+
+  List<GbsSampleCGradeGroup> getGroupedSampleOrCGradeEntries() {
+    final filtered = getFilteredTrays();
+    final Map<String, List<ProductionProgressResponseModel>> groupsMap = {};
+
+    for (final item in filtered) {
+      final woId = item.workOrderHeader.id;
+      final itemId = item.item.id;
+      final key = '${woId}_$itemId';
+      groupsMap.putIfAbsent(key, () => []).add(item);
+    }
+
+    final List<GbsSampleCGradeGroup> result = [];
+    for (final entry in groupsMap.entries) {
+      final list = entry.value;
+      if (list.isEmpty) continue;
+
+      final first = list.first;
+      double tubes = 0;
+      double pcs = 0;
+      double weightGrams = 0;
+      DateTime? maxDate;
+      final Set<String> remarksSet = {};
+
+      for (final r in list) {
+        final pp = r.productionProgress;
+        final primaryQty = (pp.primaryQuantity ?? 0) > 0 ? (pp.primaryQuantity ?? 0) : (pp.waste ?? 0);
+        tubes += primaryQty.toDouble();
+
+        final secQty = pp.secondaryQuantity ?? 0;
+        double itemPcs = 0;
+        if (secQty > 0) {
+          itemPcs = secQty.toDouble();
+        } else if (r.item.perGarmentTube > 0) {
+          itemPcs = (primaryQty * r.item.perGarmentTube).toDouble();
+        } else {
+          itemPcs = primaryQty.toDouble();
+        }
+        pcs += itemPcs;
+
+        final double pw = r.item.pieceWeight ?? 0;
+        weightGrams += itemPcs * pw;
+
+        if (pp.date != null) {
+          if (maxDate == null || pp.date!.isAfter(maxDate)) {
+            maxDate = pp.date;
+          }
+        }
+
+        if (pp.remarks != null && pp.remarks!.trim().isNotEmpty) {
+          remarksSet.add(pp.remarks!.trim());
+        }
+      }
+
+      result.add(
+        GbsSampleCGradeGroup(
+          workOrderHeaderId: first.workOrderHeader.id,
+          workOrderCode: first.workOrderHeader.workOrderCode,
+          itemId: first.item.id,
+          itemDescription: first.item.description,
+          totalTubes: tubes,
+          totalPcs: pcs,
+          totalWeightGrams: weightGrams,
+          latestDate: maxDate,
+          remarks: remarksSet.join(', '),
+          records: list,
+        ),
+      );
+    }
+
+    return result;
+  }
+
   List<ProductionProgressResponseModel> getUnfilteredTraysForReceiving() {
     final unheldTrays = _state.availableTrayForGbs.where((t) => t.productionProgress.holdFlag != true).toList();
     if (_state.receivingType == 'sample') {
@@ -397,4 +480,32 @@ class GbsController extends ChangeNotifier {
       notifyListeners();
     }
   }
+}
+
+class GbsSampleCGradeGroup {
+  final int workOrderHeaderId;
+  final String workOrderCode;
+  final int itemId;
+  final String itemDescription;
+  final double totalTubes;
+  final double totalPcs;
+  final double totalWeightGrams;
+  final DateTime? latestDate;
+  final String remarks;
+  final List<ProductionProgressResponseModel> records;
+
+  GbsSampleCGradeGroup({
+    required this.workOrderHeaderId,
+    required this.workOrderCode,
+    required this.itemId,
+    required this.itemDescription,
+    required this.totalTubes,
+    required this.totalPcs,
+    required this.totalWeightGrams,
+    required this.latestDate,
+    required this.remarks,
+    required this.records,
+  });
+
+  List<int> get allProgressIds => records.map((r) => r.productionProgress.id).whereType<int>().toList();
 }

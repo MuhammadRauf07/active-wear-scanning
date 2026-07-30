@@ -477,8 +477,9 @@ class LotMakingController extends ChangeNotifier {
     }
 
     final capacityRaw = _state.selectedMachine?.resource?.capacity;
-    final capacity = capacityRaw != null ? double.tryParse(capacityRaw.toString()) : null;
-    if (capacity != null && capacity > 0) {
+    final capacityKg = capacityRaw != null ? double.tryParse(capacityRaw.toString()) : null;
+    if (capacityKg != null && capacityKg > 0) {
+      final capacityGrams = capacityKg * 1000;
       final newQty = overrideQty > 0 ? overrideQty : (tray.productionProgress.primaryQuantity ?? 0);
       final pw = tray.item.pieceWeight ?? 0;
       double currentTotal = 0;
@@ -487,7 +488,7 @@ class LotMakingController extends ChangeNotifier {
         final p = _state.scannedTrays[i].item.pieceWeight ?? 0;
         currentTotal += qty * p;
       }
-      if (currentTotal + (newQty * pw) > capacity) {
+      if (currentTotal + (newQty * pw) > capacityGrams) {
         return 'Exceeds machine capacity';
       }
     }
@@ -587,6 +588,59 @@ class LotMakingController extends ChangeNotifier {
 
       if (batchHeaderId == 0) {
         throw Exception('Invalid Lot ID generated.');
+      }
+
+      if (existingBatch != null) {
+        final existingLinesRes = await _lotRepo.fetchLotLines(batchHeaderId: batchHeaderId);
+        if (existingLinesRes.success && existingLinesRes.data != null) {
+          final List rawList = existingLinesRes.data is Map
+              ? (existingLinesRes.data['items'] ?? [])
+              : (existingLinesRes.data is List ? existingLinesRes.data : []);
+
+          final Set<int?> currentScannedTrayIds = _state.scannedTrays.map((t) => t.primaryTrayModel.id).toSet();
+
+          for (final line in rawList) {
+            final lineMap = Map<String, dynamic>.from(line as Map);
+            final int? lineId = lineMap['id'] != null ? int.tryParse(lineMap['id'].toString()) : null;
+            final int? trayId = lineMap['trayId'] != null ? int.tryParse(lineMap['trayId'].toString()) : null;
+            final int? progressId = lineMap['progressId'] != null ? int.tryParse(lineMap['progressId'].toString()) : null;
+
+            if (lineId != null && lineId > 0) {
+              await _lotRepo.deleteLotLine(lineId);
+            }
+
+            if (trayId != null && !currentScannedTrayIds.contains(trayId)) {
+              if (progressId != null && progressId > 0) {
+                final ppFetch = await _lotRepo.fetchProductionProgressById(progressId);
+                if (ppFetch.success && ppFetch.data != null) {
+                  final ppMap = Map<String, dynamic>.from(ppFetch.data as Map);
+                  ppMap['batchHeaderId'] = null;
+                  ppMap['batchLineId'] = null;
+                  ppMap.remove('id');
+                  ppMap.remove('progressCode');
+                  ppMap.remove('concurrencyStamp');
+                  ppMap.remove('creationTime');
+                  ppMap.remove('creatorId');
+                  ppMap.remove('lastModificationTime');
+                  ppMap.remove('lastModifierId');
+                  await _lotRepo.updateProductionProgress(progressId, ppMap);
+                }
+              }
+
+              final trayData = await _lotRepo.fetchTrayDetailById(trayId);
+              if (trayData.success && trayData.data != null) {
+                final tMap = Map<String, dynamic>.from(trayData.data as Map);
+                tMap['batchHeaderId'] = null;
+                tMap['batchLineId'] = null;
+                tMap.remove('creatorId');
+                tMap.remove('creationTime');
+                tMap.remove('lastModifierId');
+                tMap.remove('lastModificationTime');
+                await _lotRepo.updateTrayDetails(trayId, tMap);
+              }
+            }
+          }
+        }
       }
 
       for (int i = 0; i < _state.scannedTrays.length; i++) {
