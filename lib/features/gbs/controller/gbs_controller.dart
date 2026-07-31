@@ -128,27 +128,34 @@ class GbsController extends ChangeNotifier {
       double tubes = 0;
       double pcs = 0;
       double weightGrams = 0;
+      double totalWeightKg = 0;
       DateTime? maxDate;
       final Set<String> remarksSet = {};
 
       for (final r in list) {
         final pp = r.productionProgress;
+        final isCGrade = (pp.productGrade ?? 0) == 2;
         final primaryQty = (pp.primaryQuantity ?? 0) > 0 ? (pp.primaryQuantity ?? 0) : (pp.waste ?? 0);
-        tubes += primaryQty.toDouble();
 
-        final secQty = pp.secondaryQuantity ?? 0;
-        double itemPcs = 0;
-        if (secQty > 0) {
-          itemPcs = secQty.toDouble();
-        } else if (r.item.perGarmentTube > 0) {
-          itemPcs = (primaryQty * r.item.perGarmentTube).toDouble();
+        if (isCGrade) {
+          totalWeightKg += primaryQty.toDouble();
         } else {
-          itemPcs = primaryQty.toDouble();
-        }
-        pcs += itemPcs;
+          tubes += primaryQty.toDouble();
 
-        final double pw = r.item.pieceWeight ?? 0;
-        weightGrams += itemPcs * pw;
+          final secQty = pp.secondaryQuantity ?? 0;
+          double itemPcs = 0;
+          if (secQty > 0) {
+            itemPcs = secQty.toDouble();
+          } else if (r.item.perGarmentTube > 0) {
+            itemPcs = (primaryQty * r.item.perGarmentTube).toDouble();
+          } else {
+            itemPcs = primaryQty.toDouble();
+          }
+          pcs += itemPcs;
+
+          final double pw = r.item.pieceWeight ?? 0;
+          weightGrams += itemPcs * pw;
+        }
 
         if (pp.date != null) {
           if (maxDate == null || pp.date!.isAfter(maxDate)) {
@@ -170,6 +177,7 @@ class GbsController extends ChangeNotifier {
           totalTubes: tubes,
           totalPcs: pcs,
           totalWeightGrams: weightGrams,
+          totalWeightKg: totalWeightKg,
           latestDate: maxDate,
           remarks: remarksSet.join(', '),
           records: list,
@@ -490,6 +498,7 @@ class GbsSampleCGradeGroup {
   final double totalTubes;
   final double totalPcs;
   final double totalWeightGrams;
+  final double totalWeightKg;
   final DateTime? latestDate;
   final String remarks;
   final List<ProductionProgressResponseModel> records;
@@ -502,6 +511,7 @@ class GbsSampleCGradeGroup {
     required this.totalTubes,
     required this.totalPcs,
     required this.totalWeightGrams,
+    required this.totalWeightKg,
     required this.latestDate,
     required this.remarks,
     required this.records,

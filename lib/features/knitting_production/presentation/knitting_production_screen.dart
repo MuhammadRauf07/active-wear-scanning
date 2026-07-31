@@ -142,7 +142,7 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
       return state.scannedTrays.isNotEmpty;
     } else {
       final qtyText = _quantityInputFieldController.text.trim();
-      final q = int.tryParse(qtyText) ?? 0;
+      final q = double.tryParse(qtyText) ?? 0.0;
       return q > 0;
     }
   }
@@ -982,7 +982,8 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
   }
 
   Widget _buildQuantityInputFieldSection(KnittingProductionState state) {
-    final title = state.productionType == 'sample' ? 'Sample Quantity' : 'C Grade Quantity';
+    final isCGrade = state.productionType == 'c_grade';
+    final title = isCGrade ? 'C Grade Weight (KG)' : 'Sample Quantity';
     final isRemarksEnabled = _quantityInputFieldController.text.trim().isNotEmpty;
     final tubes = double.tryParse(_quantityInputFieldController.text) ?? 0;
     final pw = state.selectedPlanLine?.item.pieceWeight ?? 0;
@@ -1025,12 +1026,12 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
             ),
             child: TextField(
               controller: _quantityInputFieldController,
-              keyboardType: TextInputType.number,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-              ],
+              keyboardType: isCGrade ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.number,
+              inputFormatters: isCGrade
+                  ? [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))]
+                  : [FilteringTextInputFormatter.digitsOnly],
               onChanged: (val) {
-                if (val.startsWith('0')) {
+                if (val.startsWith('0') && !val.startsWith('0.')) {
                   _quantityInputFieldController.text = val.replaceFirst(RegExp(r'^0+'), '');
                   _quantityInputFieldController.selection = TextSelection.fromPosition(
                     TextPosition(offset: _quantityInputFieldController.text.length),
@@ -1043,51 +1044,56 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF1E293B),
               ),
-              decoration: const InputDecoration(
-                hintText: 'Enter Quantity',
-                hintStyle: TextStyle(
+              decoration: InputDecoration(
+                hintText: isCGrade ? 'Enter Weight in KGs (e.g. 10.5)' : 'Enter Quantity',
+                hintStyle: const TextStyle(
                   color: Color(0xFF94A3B8),
                   fontSize: 14,
                   fontWeight: FontWeight.normal,
                 ),
-                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 border: InputBorder.none,
-                prefixIcon: Icon(Icons.add_box_rounded, color: Color(0xFF0D47A1)),
+                prefixIcon: Icon(
+                  isCGrade ? Icons.scale_rounded : Icons.add_box_rounded,
+                  color: const Color(0xFF0D47A1),
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          const Text(
-            'CALCULATED WEIGHT',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF546E7A),
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
-            ),
-            child: TextField(
-              controller: TextEditingController(text: calculatedWeightStr),
-              enabled: false,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF0D47A1),
-              ),
-              decoration: const InputDecoration(
-                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                border: InputBorder.none,
-                prefixIcon: Icon(Icons.scale_rounded, color: Color(0xFF0D47A1)),
+          if (!isCGrade) ...[
+            const SizedBox(height: 16),
+            const Text(
+              'CALCULATED WEIGHT',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF546E7A),
+                letterSpacing: 0.5,
               ),
             ),
-          ),
+            const SizedBox(height: 12),
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
+              ),
+              child: TextField(
+                controller: TextEditingController(text: calculatedWeightStr),
+                enabled: false,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF0D47A1),
+                ),
+                decoration: const InputDecoration(
+                  contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  border: InputBorder.none,
+                  prefixIcon: Icon(Icons.scale_rounded, color: Color(0xFF0D47A1)),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           const Text(
             'REMARKS',

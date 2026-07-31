@@ -816,7 +816,7 @@ class KnittingProductionController extends ChangeNotifier {
           "operatorDescription": "system",
           "primaryQuantity": x.toDouble(),
           "primaryUOM": _state.selectedPlanLine!.planLine.primaryUOM,
-          "secondaryQuantity": x * _state.selectedPlanLine!.item.perGarmentTube,
+          "secondaryQuantity": _state.productionType == 'c_grade' ? 0 : (x * _state.selectedPlanLine!.item.perGarmentTube),
           "secondaryUOM": _state.selectedPlanLine!.planLine.secondaryUOM,
           "wipStatus": 0,
           "gbsFlag": false,
@@ -845,8 +845,6 @@ class KnittingProductionController extends ChangeNotifier {
         if (res.success) {
           if (_state.productionType == 'sample') {
             await _updatePlanLineQuantity(sampleQty: x.toDouble());
-          } else {
-            await _updatePlanLineQuantity(cGradeQty: x.toDouble());
           }
           _state = _state.copyWith(
             machineBarcode: '',

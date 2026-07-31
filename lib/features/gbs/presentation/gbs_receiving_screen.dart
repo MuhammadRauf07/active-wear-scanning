@@ -707,6 +707,8 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
   }
 
   Widget _buildSampleCGradeTableHeader(GbsController controller, GbsState state, bool isAllSelected) {
+    final isCGrade = state.receivingType == 'c_grade';
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
       decoration: const BoxDecoration(
@@ -728,9 +730,13 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
           ),
           const SizedBox(width: 8),
           Expanded(flex: 9, child: Text('ITEM DESCRIPTION', style: _tableHeaderStyle)),
-          Expanded(flex: 3, child: Text('TUBES', textAlign: TextAlign.center, style: _tableHeaderStyle)),
-          Expanded(flex: 3, child: Text('PCS', textAlign: TextAlign.center, style: _tableHeaderStyle)),
-          Expanded(flex: 3, child: Text('WEIGHT', textAlign: TextAlign.center, style: _tableHeaderStyle)),
+          if (!isCGrade) ...[
+            Expanded(flex: 3, child: Text('TUBES', textAlign: TextAlign.center, style: _tableHeaderStyle)),
+            Expanded(flex: 3, child: Text('PCS', textAlign: TextAlign.center, style: _tableHeaderStyle)),
+            Expanded(flex: 3, child: Text('WEIGHT', textAlign: TextAlign.center, style: _tableHeaderStyle)),
+          ] else ...[
+            Expanded(flex: 3, child: Text('WEIGHT (KG)', textAlign: TextAlign.center, style: _tableHeaderStyle)),
+          ],
           Expanded(flex: 4, child: Text('REMARKS', textAlign: TextAlign.center, style: _tableHeaderStyle)),
         ],
       ),
@@ -794,12 +800,13 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
   }
 
   Widget _buildSampleCGradeRow(GbsController controller, GbsState state, GbsSampleCGradeGroup group, int index) {
+    final isCGrade = state.receivingType == 'c_grade';
     final isGroupSelected = group.allProgressIds.isNotEmpty && group.allProgressIds.every((id) => state.selectedProgressIds.contains(id));
 
     final weightGrams = group.totalWeightGrams;
-    final String weightStr = weightGrams >= 1000
-        ? '${(weightGrams / 1000).toStringAsFixed(2)} kg'
-        : '${weightGrams.toStringAsFixed(1)} g';
+    final String weightStr = isCGrade
+        ? '${group.totalWeightKg.toStringAsFixed(2)} kg'
+        : (weightGrams >= 1000 ? '${(weightGrams / 1000).toStringAsFixed(2)} kg' : '${weightGrams.toStringAsFixed(1)} g');
 
     final remarksText = group.remarks.trim().isNotEmpty ? group.remarks.trim() : '-';
 
@@ -830,22 +837,24 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
               style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1B64A3)),
             ),
           ),
-          Expanded(
-            flex: 3,
-            child: Text(
-              group.totalTubes.toStringAsFixed(0),
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238)),
+          if (!isCGrade) ...[
+            Expanded(
+              flex: 3,
+              child: Text(
+                group.totalTubes.toStringAsFixed(0),
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238)),
+              ),
             ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(
-              group.totalPcs.toStringAsFixed(0),
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238)),
+            Expanded(
+              flex: 3,
+              child: Text(
+                group.totalPcs.toStringAsFixed(0),
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238)),
+              ),
             ),
-          ),
+          ],
           Expanded(
             flex: 3,
             child: Text(
