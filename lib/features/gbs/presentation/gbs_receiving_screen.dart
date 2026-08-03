@@ -417,7 +417,7 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    const TrayTableHeader(actionColumnWidth: 0, showItemDescriptionColumn: true),
+                    const TrayTableHeader(actionColumnWidth: 0, showItemDescriptionColumn: true, fontSize: 9.0),
                     Expanded(
                       child: availableTrays.isEmpty
                           ? const Center(
@@ -433,11 +433,11 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
                                 final qty = tray.productionProgress.primaryQuantity ?? 0.0;
                                 final weight = qty * (tray.item.pieceWeight ?? 0);
 
-                                const cellStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238));
-                                const blueCellStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1B64A3));
+                                const cellStyle = TextStyle(fontSize: 9.0, fontWeight: FontWeight.w600, color: Color(0xFF263238));
+                                const blueCellStyle = TextStyle(fontSize: 9.0, fontWeight: FontWeight.w700, color: Color(0xFF1B64A3));
 
                                 return Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                   decoration: BoxDecoration(
                                     color: index.isEven ? Colors.white : const Color(0xFFF8FAFC),
                                     border: Border(bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.1), width: 1)),
@@ -445,7 +445,7 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
                                   child: Row(
                                     children: [
                                       Expanded(flex: 5, child: Text(tray.primaryTrayModel.trayCode ?? 'N/A', textAlign: TextAlign.center, style: blueCellStyle)),
-                                      Expanded(flex: 16, child: Text(tray.item.description, maxLines: 2, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis, style: cellStyle)),
+                                      Expanded(flex: 16, child: Text(tray.item.description, maxLines: 1, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis, style: cellStyle)),
                                       Expanded(flex: 3, child: Text(tray.item.sizeDescription ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
                                       Expanded(flex: 4, child: Text(qty.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
                                       Expanded(flex: 4, child: Text('${weight.toStringAsFixed(0)}g', textAlign: TextAlign.center, style: cellStyle)),

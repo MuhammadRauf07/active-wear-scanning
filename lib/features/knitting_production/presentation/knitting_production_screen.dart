@@ -1375,10 +1375,12 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
 
   Future<void> _saveEntry(KnittingProductionController controller) async {
     try {
+      AppLoader.show(context, message: 'Saving changes...');
       await controller.saveTrayAndProductionProgress(
         remarksText: _remarksInputFieldController.text,
         singleQtyText: _quantityInputFieldController.text,
         onConfirmOverproduction: () async {
+          AppLoader.hide(context);
           final res = await showDialog<bool>(
             context: context,
             barrierDismissible: false,
@@ -1428,9 +1430,13 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
               );
             },
           );
+          if (res == true && mounted) {
+            AppLoader.show(context, message: 'Saving changes...');
+          }
           return res ?? false;
         },
         onSuccess: () {
+          AppLoader.hide(context);
           HapticFeedbackHelper.scanSuccess();
           AppSnackBar.showSuccess(context, message: 'Saved successfully!');
           _remarksInputFieldController.clear();
@@ -1441,7 +1447,10 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
         },
       );
     } catch (e) {
+      AppLoader.hide(context);
       _showError(e.toString());
+    } finally {
+      AppLoader.hide(context);
     }
   }
 

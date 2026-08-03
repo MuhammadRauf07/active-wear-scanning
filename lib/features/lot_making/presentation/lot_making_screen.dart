@@ -53,6 +53,21 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
   DateTime? _lastKeyPress;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final controller = context.read<LotMakingController>();
+      if (controller.state.isLoading || controller.state.isCachingColors) {
+        AppLoader.show(context, message: 'Loading lot data...');
+        while (controller.state.isLoading || controller.state.isCachingColors) {
+          await Future.delayed(const Duration(milliseconds: 100));
+        }
+        if (mounted) AppLoader.hide(context);
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _focusNode.dispose();
     _overrideQuantityController.dispose();
@@ -824,9 +839,11 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
                                 selectedValue: state.selectedWorkOrder,
                                 itemLabel: (wo) => wo.workOrderCode ?? '-',
                                 isReadOnly: false,
-                                onChanged: (val) {
+                                onChanged: (val) async {
                                   HapticFeedbackHelper.buttonClick();
-                                  controller.selectWorkOrder(val);
+                                  AppLoader.show(context, message: 'Loading color details...');
+                                  await controller.selectWorkOrder(val);
+                                  if (context.mounted) AppLoader.hide(context);
                                 },
                               ),
                             ],

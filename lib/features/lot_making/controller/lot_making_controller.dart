@@ -51,12 +51,75 @@ class LotMakingController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void selectWorkOrder(WorkOrderHeader? wo) {
+  Future<void> selectWorkOrder(WorkOrderHeader? wo) async {
     _state = _state.copyWith(
       selectedWorkOrder: wo,
       clearSelectedTray: true,
       clearReferenceRouting: _state.scannedTrays.isEmpty,
     );
+    notifyListeners();
+
+    if (wo?.id != null) {
+      await ensureWorkOrderColorsCached(wo!.id!);
+    }
+  }
+
+  Future<void> ensureWorkOrderColorsCached(int woId) async {
+    if (_state.workOrderValidColors.containsKey(woId)) return;
+
+    _state = _state.copyWith(isCachingColors: true);
+    notifyListeners();
+
+    try {
+      final trays = _state.productionProgressTrays.where((t) {
+        final progressId = t.productionProgress.id;
+        final isCurrentBatchDbTray = progressId != null && _state.currentBatchDatabaseProgressIds.contains(progressId);
+        return t.productionProgress.locatorId == 3 &&
+            t.productionProgress.gbsFlag == true &&
+            t.workOrderHeader?.id == woId &&
+            (progressId == null || !_state.lotProgressIds.contains(progressId) || isCurrentBatchDbTray);
+      }).toList();
+
+      final lineIds = trays
+          .map((t) => t.productionProgress.workOrderLineId ?? t.workOrderLine?.id)
+          .whereType<int>()
+          .toSet();
+
+      final Set<String> validColors = {};
+      final updatedPlanQuantities = Map<String, double>.from(_state.colorPlanQuantities);
+
+      for (final lineId in lineIds) {
+        final res = await _lotRepo.fetchAllWorkOrderLineDetails(lineId);
+        if (res.success && res.data != null) {
+          updatedPlanQuantities.removeWhere((key, _) => key.startsWith("${lineId}_"));
+          final items = res.data as List;
+          for (final item in items) {
+            final detail = (item as Map)['workOrderLineDetail'];
+            if (detail != null) {
+              final colorDesc = detail['colorDescription']?.toString().trim().toUpperCase();
+              final planQty = (detail['planQuantity'] as num?)?.toDouble() ?? 0.0;
+              if (colorDesc != null && colorDesc.isNotEmpty) {
+                validColors.add(colorDesc);
+                final key = "${lineId}_$colorDesc";
+                updatedPlanQuantities[key] = (updatedPlanQuantities[key] ?? 0.0) + planQty;
+              }
+            }
+          }
+        }
+      }
+
+      final updatedValidColors = Map<int, Set<String>>.from(_state.workOrderValidColors);
+      updatedValidColors[woId] = validColors;
+
+      _state = _state.copyWith(
+        workOrderValidColors: updatedValidColors,
+        colorPlanQuantities: updatedPlanQuantities,
+        isCachingColors: false,
+      );
+    } catch (e) {
+      dev.log('Error caching colors for WO $woId: $e');
+      _state = _state.copyWith(isCachingColors: false);
+    }
     notifyListeners();
   }
 
@@ -88,10 +151,14 @@ class LotMakingController extends ChangeNotifier {
       final isCurrentBatchHeader = existingBatch?.batchHeader.id != null && t.productionProgress.batchHeaderId == existingBatch!.batchHeader.id;
       final isAssignedToOtherLot = hasBatchHeader && !isCurrentBatchHeader;
 
+      final qtys = getTrayQuantities(t);
+      final remaining = qtys['remaining'] ?? 0.0;
+
       return t.productionProgress.locatorId == 3 &&
           t.productionProgress.gbsFlag == true &&
           t.workOrderHeader != null &&
           !isAssignedToOtherLot &&
+          remaining > 0 &&
           (progressId == null || !_state.lotProgressIds.contains(progressId) || isCurrentBatchDbTray);
     }).toList();
 
@@ -113,7 +180,19 @@ class LotMakingController extends ChangeNotifier {
 
     return wos.where((wo) {
       final validColors = _state.workOrderValidColors[wo.id];
-      return validColors != null && validColors.contains(selectedColorDesc);
+      if (validColors == null || !validColors.contains(selectedColorDesc)) return false;
+
+      final trays = _state.productionProgressTrays.where((t) {
+        if (t.workOrderHeader?.id != wo.id) return false;
+        final lineId = t.productionProgress.workOrderLineId ?? t.workOrderLine?.id;
+        if (lineId == null) return false;
+        final planQty = _state.colorPlanQuantities["${lineId}_$selectedColorDesc"] ?? 0.0;
+        final qtys = getTrayQuantities(t);
+        final remaining = qtys['remaining'] ?? 0.0;
+        return planQty > 0.0 && remaining > 0;
+      }).toList();
+
+      return trays.isNotEmpty;
     }).toList();
   }
 
@@ -137,10 +216,14 @@ class LotMakingController extends ChangeNotifier {
       final isCurrentBatchHeader = existingBatch?.batchHeader.id != null && t.productionProgress.batchHeaderId == existingBatch!.batchHeader.id;
       final isAssignedToOtherLot = hasBatchHeader && !isCurrentBatchHeader;
 
+      final qtys = getTrayQuantities(t);
+      final remaining = qtys['remaining'] ?? 0.0;
+
       return t.productionProgress.locatorId == 3 &&
           t.productionProgress.gbsFlag == true &&
           t.workOrderHeader?.id == _state.selectedWorkOrder!.id &&
           !isAssignedToOtherLot &&
+          remaining > 0 &&
           (progressId == null || !_state.lotProgressIds.contains(progressId) || isCurrentBatchDbTray);
     }).toList();
   }
@@ -600,10 +683,20 @@ class LotMakingController extends ChangeNotifier {
           final Set<int?> currentScannedTrayIds = _state.scannedTrays.map((t) => t.primaryTrayModel.id).toSet();
 
           for (final line in rawList) {
-            final lineMap = Map<String, dynamic>.from(line as Map);
-            final int? lineId = lineMap['id'] != null ? int.tryParse(lineMap['id'].toString()) : null;
-            final int? trayId = lineMap['trayId'] != null ? int.tryParse(lineMap['trayId'].toString()) : null;
-            final int? progressId = lineMap['progressId'] != null ? int.tryParse(lineMap['progressId'].toString()) : null;
+            final rawLineMap = Map<String, dynamic>.from(line as Map);
+            final lineMap = rawLineMap.containsKey('batchLines') && rawLineMap['batchLines'] is Map
+                ? Map<String, dynamic>.from(rawLineMap['batchLines'] as Map)
+                : rawLineMap;
+
+            final int? lineId = (lineMap['id'] ?? rawLineMap['id']) != null
+                ? int.tryParse((lineMap['id'] ?? rawLineMap['id']).toString())
+                : null;
+            final int? trayId = (lineMap['trayId'] ?? rawLineMap['trayId']) != null
+                ? int.tryParse((lineMap['trayId'] ?? rawLineMap['trayId']).toString())
+                : null;
+            final int? progressId = (lineMap['progressId'] ?? rawLineMap['progressId']) != null
+                ? int.tryParse((lineMap['progressId'] ?? rawLineMap['progressId']).toString())
+                : null;
 
             if (lineId != null && lineId > 0) {
               await _lotRepo.deleteLotLine(lineId);

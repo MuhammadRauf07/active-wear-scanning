@@ -9,6 +9,7 @@ class TrayTableHeader extends StatelessWidget {
   final bool showBatchTubes;
   final bool showDetailedTubes;
   final bool showHoldColumn;
+  final double fontSize;
 
   const TrayTableHeader({
     super.key,
@@ -19,12 +20,13 @@ class TrayTableHeader extends StatelessWidget {
     this.showBatchTubes = false,
     this.showDetailedTubes = false,
     this.showHoldColumn = false,
+    this.fontSize = 10.0,
   });
 
-  static const _headerStyle = TextStyle(
-    fontSize: 10,
+  TextStyle get _headerStyle => TextStyle(
+    fontSize: fontSize,
     fontWeight: FontWeight.w700,
-    color: Color(0xFF455A64), // Slate Grey
+    color: const Color(0xFF455A64), // Slate Grey
     letterSpacing: 0.2,
   );
 
