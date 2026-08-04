@@ -1,10 +1,16 @@
 import 'package:active_wear_scanning/core/config/app_config.dart';
 import 'package:active_wear_scanning/features/gbs/repo/gbs_receiving_repo.dart';
+import 'package:active_wear_scanning/features/induction/repo/induction_repo.dart';
 import 'package:active_wear_scanning/features/scanning_sections/presentation/scanning_sections_screen.dart';
-import 'package:active_wear_scanning/features/tray/repo/tray_scanning_repo.dart';
+import 'package:active_wear_scanning/features/knitting_production/repo/knitting_production_repo.dart';
+import 'package:active_wear_scanning/features/carton_packing/repo/carton_packing_repo.dart';
+import 'package:active_wear_scanning/features/md_receiving/repo/md_receiving_repo.dart';
+import 'package:active_wear_scanning/features/stitching_line_schedule/repo/stitching_line_schedule_repo.dart';
+import 'package:active_wear_scanning/features/processing_waste_receiving/repo/processing_waste_repo.dart';
 import 'package:active_wear_scanning/features/user/model/active_wear_user.dart';
 import 'package:active_wear_scanning/features/user/repo/active_wear_user.dart';
 import 'package:active_wear_scanning/features/user/repo/profile.dart';
+import 'package:active_wear_scanning/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:active_wear_scanning/features/user/repo/user_repo.dart';
 import 'package:flutter/material.dart';
 import 'package:plex/plex_di/plex_dependency_injection.dart';
@@ -16,17 +22,38 @@ import 'package:plex/plex_utils/plex_messages.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  PlexNetworking.instance.allowBadCertificateForHTTPS();
 
   AppConfig.tenant = 'ActiveWare';
 
   injectSingleton(UserRepo());
-  injectSingleton(TrayScanningRepo());
+  injectSingleton(KnittingProductionRepo());
   injectSingleton(GBSReceivingRepo());
+  injectSingleton(InductionRepo());
+  injectSingleton(CartonPackingRepo());
+  injectSingleton(MdReceivingRepo());
+  injectSingleton(StitchingLineScheduleRepo());
+  injectSingleton(ProcessingWasteRepo());
 
   runApp(
     PlexApp(
-      appInfo: PlexAppInfo(title: 'Active Wear Scanning', appLogo: const Icon(Icons.qr_code_scanner), initialRoute: '/scanning'),
+      generateDrawerNavigationButton: (route) {
+        String labelText = route.title;
+        if (route.route == '/scanning') {
+          labelText = 'Operations';
+        } else if (route.route == '/dashboard') {
+          labelText = 'Dashboard';
+        }
+        return NavigationDrawerDestination(
+          icon: route.logo ?? const Icon(Icons.circle),
+          label: Text(labelText),
+        );
+      },
+      appInfo: PlexAppInfo(title: 'Active Wear Scanning', appLogo: const Icon(Icons.qr_code_scanner), initialRoute: '/'),
       onInitializationComplete: () {
+        // // Force the app to clear memory and demand a login every single time it boots
+        // PlexApp.app.logout();
+        
         PlexNetworking.instance.allowBadCertificateForHTTPS();
         PlexNetworking.instance.setBasePath(AppConfig.baseUrl);
         PlexNetworking.instance.addHeaders = () async {
@@ -68,19 +95,37 @@ void main() {
         showBrightnessSwitch: false,
         showThemeSwitch: false,
         showAnimationSwitch: false,
-        disableExpandNavigationRail: true,
+        disableExpandNavigationRail: false,
         disableBottomNavigation: true,
         dashboardScreens: [
           PlexRoute(
             route: '/scanning',
-            title: 'Active Wear',
-            logo: const Icon(Icons.home_outlined),
-            selectedLogo: const Icon(Icons.home),
+            title: 'FOGLIGHT ACTIVEWEAR',
+            logo: const Icon(Icons.apps_outlined),
+            selectedLogo: const Icon(Icons.apps),
             screen: (context, {data}) => const ScanningSectionsScreen(),
+          ),
+          PlexRoute(
+            route: '/dashboard',
+            title: 'FOGLIGHT ACTIVEWEAR',
+            logo: const Icon(Icons.dashboard_outlined),
+            selectedLogo: const Icon(Icons.dashboard),
+            screen: (context, {data}) => const DashboardScreen(),
           ),
         ],
       ),
-      pages: [PlexRoute(route: '/scanning', title: 'Active Wear', screen: (context, {data}) => const ScanningSectionsScreen())],
+      pages: [
+        PlexRoute(
+          route: '/scanning',
+          title: 'FOGLIGHT ACTIVEWEAR',
+          screen: (context, {data}) => const ScanningSectionsScreen(),
+        ),
+        PlexRoute(
+          route: '/dashboard',
+          title: 'FOGLIGHT ACTIVEWEAR',
+          screen: (context, {data}) => const DashboardScreen(),
+        ),
+      ],
     ),
   );
 }

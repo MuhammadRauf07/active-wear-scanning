@@ -1,0 +1,79 @@
+import 'package:active_wear_scanning/features/common-models/common_models.dart';
+import 'package:active_wear_scanning/features/lot_making/model/lot_color_model.dart';
+
+class LotHeaderResponseModel {
+  final LotHeaderModel batchHeader;
+  final MachineModel? machine;
+  final SegmentCode? colorCode;
+  final Shift? shift;
+
+  LotHeaderResponseModel({required this.batchHeader, this.machine, this.colorCode, this.shift});
+
+  factory LotHeaderResponseModel.fromJson(Map<String, dynamic> json) {
+    return LotHeaderResponseModel(
+      batchHeader: LotHeaderModel.fromJson(json['batchHeader'] ?? json),
+      machine: (json['machine'] != null) 
+          ? MachineModel.fromJson(json['machine']) 
+          : (json['resourceCode'] != null || json['brand'] != null) 
+            ? MachineModel.fromJson(json)
+            : null,
+      colorCode: (json['colorCode'] != null && json['colorCode'] is Map<String, dynamic>) 
+          ? SegmentCode.fromJson(json['colorCode']) 
+          : null,
+      shift: json['shift'] != null ? Shift.fromJson(json['shift']) : null,
+    );
+  }
+}
+
+class LotHeaderModel {
+  final int? id;
+  final String? creationTime;
+  final String? creatorId;
+  final String? lastModificationTime;
+  final String? lastModifierId;
+  final String? planDate;
+  final String? colorDescription;
+  final bool? lockFlag;
+  final String? batchHeaderCode;
+  final int? machineId;
+  final int? colorCodeId;
+  final int? shiftId;
+  final int? trayDetailId;
+  final String? concurrencyStamp;
+
+  LotHeaderModel({
+    this.id,
+    this.creationTime,
+    this.creatorId,
+    this.lastModificationTime,
+    this.lastModifierId,
+    this.planDate,
+    this.colorDescription,
+    this.lockFlag,
+    this.batchHeaderCode,
+    this.machineId,
+    this.colorCodeId,
+    this.shiftId,
+    this.trayDetailId,
+    this.concurrencyStamp,
+  });
+
+  factory LotHeaderModel.fromJson(Map<String, dynamic> json) {
+    return LotHeaderModel(
+      id: json['id'],
+      creationTime: json['creationTime'],
+      creatorId: json['creatorId'],
+      lastModificationTime: json['lastModificationTime'],
+      lastModifierId: json['lastModifierId'],
+      planDate: json['planDate'],
+      colorDescription: json['colorDescription'],
+      lockFlag: json['lockFlag'],
+      batchHeaderCode: json['batchHeaderCode'],
+      machineId: json['machineId'],
+      colorCodeId: json['colorCode'], // Mapping field correctly based on API
+      shiftId: json['shiftId'],
+      trayDetailId: json['trayDetailId'] as int?,
+      concurrencyStamp: json['concurrencyStamp'],
+    );
+  }
+}

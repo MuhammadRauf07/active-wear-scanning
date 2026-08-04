@@ -8,32 +8,66 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 class ScannerAlwaysOpen extends StatefulWidget {
   final String title;
-  final String? Function(String code) onResult; /// Changed to return bool (true if added, false if duplicate)
+  final FutureOr<String?> Function(String code) onResult;
+  final Widget Function(BuildContext context)? scannedItemsBuilder;
+  final bool showDoneButton;
 
-  const ScannerAlwaysOpen({super.key, required this.title, required this.onResult});
+  const ScannerAlwaysOpen({
+    super.key,
+    required this.title,
+    required this.onResult,
+    this.scannedItemsBuilder,
+    this.showDoneButton = true,
+  });
 
-  static Future<void> show(BuildContext context, {required String title, required String? Function(String) onResult}) {
+  static Future<void> show(
+    BuildContext context, {
+    required String title,
+    required FutureOr<String?> Function(String) onResult,
+    Widget Function(BuildContext context)? scannedItemsBuilder,
+    bool showDoneButton = true,
+  }) {
     return showGeneralDialog<void>(
       context: context,
-      barrierDismissible: true,
+      barrierDismissible: false,
       barrierLabel: 'Dismiss',
       barrierColor: Colors.black54,
-      pageBuilder: (context, animation, secondaryAnimation) => Center(
+      pageBuilder: (context, animation, secondaryAnimation) => Align(
+        alignment: Alignment.bottomCenter,
         child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 24, offset: const Offset(0, 12))],
+          height: MediaQuery.of(context).size.height * 0.9,
+          width: double.infinity,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
+            ),
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: SizedBox(
-              width: 400,
-              height: 600,
-              child: ScannerAlwaysOpen(title: title, onResult: onResult),
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
+            ),
+            child: ScannerAlwaysOpen(
+              title: title,
+              onResult: onResult,
+              scannedItemsBuilder: scannedItemsBuilder,
+              showDoneButton: showDoneButton,
             ),
           ),
         ),
       ),
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        const begin = Offset(0.0, 1.0);
+        const end = Offset.zero;
+        const curve = Curves.easeInOutCubic;
+        var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+        return SlideTransition(
+          position: animation.drive(tween),
+          child: child,
+        );
+      },
     );
   }
 
@@ -42,17 +76,33 @@ class ScannerAlwaysOpen extends StatefulWidget {
 }
 
 class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
-  final _controller = MobileScannerController();
+  late final MobileScannerController _controller = MobileScannerController(
+    autoStart: false,
+    detectionSpeed: DetectionSpeed.unrestricted,
+    formats: [BarcodeFormat.qrCode, BarcodeFormat.code128],
+  );
   final _manualController = TextEditingController();
   bool _showSubmit = false;
   Timer? _duplicateAlertTimer;
   bool _isProcessing = false;
   String? _errorOverlayText;
 
+  String? _lastProcessedCode;
+  DateTime? _lastProcessedTime;
+  bool _lastScanWasSuccess = false;
+
   @override
   void initState() {
     super.initState();
     _manualController.addListener(_onManualChange);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(milliseconds: 800), () {
+        if (mounted) {
+          _controller.start();
+          debugPrint("SCANNER: Camera Started Manually");
+        }
+      });
+    });
   }
 
   void _onManualChange() {
@@ -67,21 +117,29 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
     _isProcessing = true;
     _manualController.clear();
 
-    final String? errorMessage = widget.onResult(text);
+    String? errorMessage;
+    try {
+      errorMessage = await widget.onResult(text);
+    } catch (e) {
+      debugPrint("SCANNER ERROR: $e");
+      errorMessage = 'An unexpected error occurred';
+    }
 
     if (errorMessage == null) {
       HapticFeedback.lightImpact();
+      _lastScanWasSuccess = true;
       if (mounted) setState(() => _errorOverlayText = null);
     } else {
       HapticFeedback.heavyImpact();
+      _lastScanWasSuccess = false;
       if (mounted) setState(() => _errorOverlayText = errorMessage);
       _duplicateAlertTimer?.cancel();
-      _duplicateAlertTimer = Timer(const Duration(seconds: 1), () {
+      _duplicateAlertTimer = Timer(const Duration(seconds: 3), () {
         if (mounted) setState(() => _errorOverlayText = null);
       });
     }
 
-    await Future.delayed(const Duration(milliseconds: 1500));
+    await Future.delayed(const Duration(milliseconds: 150));
     if (mounted) _isProcessing = false;
   }
 
@@ -89,34 +147,70 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
     if (_isProcessing) return;
 
     for (final barcode in capture.barcodes) {
-      final raw = barcode.rawValue;
-      if (raw != null && raw.isNotEmpty) {
-        _isProcessing = true;
+      final raw = barcode.rawValue?.trim();
+      if (raw == null || raw.isEmpty) continue;
 
-        // Call the parent validation logic
-        final String? errorMessage = widget.onResult(raw.trim());
+      final now = DateTime.now();
 
-        if (errorMessage == null) {
-          // SUCCESS
-          HapticFeedback.lightImpact();
-          setState(() => _errorOverlayText = null);
-        } else {
-          // ERROR (Any of your 4 conditions)
-          HapticFeedback.heavyImpact();
-          setState(() => _errorOverlayText = errorMessage); // Set the specific message
+      // Check if we are scanning the exact same code
+      if (raw == _lastProcessedCode) {
+        // Enforce a 2-second cooldown ONLY if the last scan of this code was a failure.
+        // If the last scan was a success (e.g. just added), we allow it to scan again
+        // immediately to show the "Already assigned" exception overlay.
+        if (!_lastScanWasSuccess &&
+            _lastProcessedTime != null &&
+            now.difference(_lastProcessedTime!).inMilliseconds < 2000) {
+          continue;
+        }
+      }
 
-          _duplicateAlertTimer?.cancel();
-          _duplicateAlertTimer = Timer(const Duration(seconds: 1), () {
-            if (mounted) setState(() => _errorOverlayText = null);
+      _isProcessing = true;
+      _lastProcessedCode = raw;
+      _lastProcessedTime = now;
+
+      String? errorMessage;
+      try {
+        errorMessage = await widget.onResult(raw);
+      } catch (e) {
+        debugPrint("SCANNER ERROR: $e");
+        errorMessage = 'An unexpected error occurred';
+      }
+
+      if (errorMessage == null) {
+        HapticFeedback.lightImpact();
+        _lastScanWasSuccess = true;
+        _duplicateAlertTimer?.cancel();
+        if (mounted) {
+          setState(() {
+            _errorOverlayText = null;
           });
         }
-
-        // Wait a bit before allowing the next scan to prevent rapid-fire triggers
-        await Future.delayed(const Duration(milliseconds: 1500));
-        if (mounted) _isProcessing = false;
+      } else {
+        HapticFeedback.heavyImpact();
+        _lastScanWasSuccess = false;
+        _duplicateAlertTimer?.cancel();
+        if (mounted) {
+          setState(() {
+            _errorOverlayText = errorMessage;
+          });
+        }
+        _duplicateAlertTimer = Timer(const Duration(seconds: 3), () {
+          if (mounted) {
+            setState(() {
+              _errorOverlayText = null;
+            });
+          }
+        });
       }
+
+      // Briefly wait to prevent double-triggering in the same instant frame
+      await Future.delayed(const Duration(milliseconds: 150));
+      if (mounted) _isProcessing = false;
+      break; // Process one barcode per event
     }
   }
+
+  void _close() => Navigator.pop(context);
 
   @override
   void dispose() {
@@ -132,15 +226,26 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
     return Material(
       color: Colors.white,
       child: SafeArea(
+        top: false,
         child: Column(
           children: [
             CustomInspectionHeader(
               heading: widget.title,
               subtitle: 'Scan or enter manually',
               isShowBackIcon: true,
-              onBackPress: () => Navigator.pop(context),
+              onBackPress: _close,
               topPadding: 0,
               horizontalPadding: 12,
+              widget: widget.showDoneButton
+                  ? CustomOutlinedButton(
+                      borderColor: Colors.blue,
+                      label: 'Done',
+                      fillColor: Colors.blue,
+                      textColor: Colors.white,
+                      buttonHeight: 36.0,
+                      onPressed: _close,
+                    )
+                  : null,
             ),
             Padding(
               padding: const EdgeInsets.all(12),
@@ -155,57 +260,152 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
                           borderRadius: BorderRadius.circular(6),
                           borderSide: BorderSide(color: Colors.grey.shade300),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(width: 10),
-                  if (_showSubmit) CustomOutlinedButton(label: 'Submit', borderColor: Colors.blue, fillColor: Colors.blue, textColor: Colors.white, onPressed: _submitManual),
+                  if (_showSubmit)
+                    CustomOutlinedButton(
+                      label: 'Submit',
+                      borderColor: Colors.blue,
+                      fillColor: Colors.blue,
+                      textColor: Colors.white,
+                      onPressed: _submitManual,
+                    ),
                 ],
               ),
             ),
-            Expanded(
-              child: Stack(
-                children: [
-                  MobileScanner(controller: _controller, onDetect: _onDetect),
+            if (widget.scannedItemsBuilder == null)
+              Expanded(
+                child: Stack(
+                  children: [
+                    MobileScanner(controller: _controller, onDetect: _onDetect),
 
-                  // DYNAMIC ERROR OVERLAY
-                  if (_errorOverlayText != null)
-                    Container(
-                      color: Colors.red.withValues(alpha: 0.4),
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.error_outline, color: Colors.white, size: 80),
-                            const SizedBox(height: 16),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 20),
-                              child: Text(
-                                _errorOverlayText!, // Shows specific validation message
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                    // DYNAMIC ERROR OVERLAY
+                    if (_errorOverlayText != null)
+                      Container(
+                        color: Colors.red.withValues(alpha: 0.4),
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.error_outline,
+                                color: Colors.white,
+                                size: 80,
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 16),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                ),
+                                child: Text(
+                                  _errorOverlayText!, // Shows specific validation message
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                    // SCANNER BORDER (Turns Red on any error)
+                    Center(
+                      child: Container(
+                        width: 250,
+                        height: 250,
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: _errorOverlayText != null
+                                ? Colors.red
+                                : Colors.blue.withValues(alpha: 0.5),
+                            width: 4,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
                     ),
+                  ],
+                ),
+              )
+            else ...[
+              // Scanner container with fixed height
+              SizedBox(
+                height: 220,
+                child: Stack(
+                  children: [
+                    MobileScanner(controller: _controller, onDetect: _onDetect),
 
-                  // SCANNER BORDER (Turns Red on any error)
-                  Center(
-                    child: Container(
-                      width: 250,
-                      height: 250,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: _errorOverlayText != null ? Colors.red : Colors.blue.withOpacity(0.5), width: 4),
-                        borderRadius: BorderRadius.circular(12),
+                    // DYNAMIC ERROR OVERLAY (Smaller overlay for compact layout)
+                    if (_errorOverlayText != null)
+                      Container(
+                        color: Colors.red.withValues(alpha: 0.4),
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.error_outline,
+                                color: Colors.white,
+                                size: 40,
+                              ),
+                              const SizedBox(height: 8),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                ),
+                                child: Text(
+                                  _errorOverlayText!,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                    // SCANNER BORDER (Smaller for the shorter height view)
+                    Center(
+                      child: Container(
+                        width: 220,
+                        height: 140,
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: _errorOverlayText != null
+                                ? Colors.red
+                                : Colors.blue.withValues(alpha: 0.5),
+                            width: 3,
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+              const Divider(height: 1, color: Color(0xFFCFD8DC)),
+              // Scanned items view
+              Expanded(
+                child: Container(
+                  color: const Color(0xFFF8FAFC), // Slate-grey background tint for list section
+                  child: widget.scannedItemsBuilder!(context),
+                ),
+              ),
+            ],
           ],
         ),
       ),

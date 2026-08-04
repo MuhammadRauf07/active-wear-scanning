@@ -36,14 +36,14 @@ class MachineModel {
       model: json['model'],
       serialNumber: json['serialNumber'],
       installationDate: json['installationDate'] != null ? DateTime.parse(json['installationDate']) : null,
-      capacity: (json['capacity'] as num?)?.toDouble(),
-      status: json['status'],
+      capacity: json['capacity'] != null ? double.tryParse(json['capacity'].toString()) : null,
+      status: int.tryParse(json['status']?.toString() ?? ''),
       isActive: json['isActive'],
       resourceCode: json['resourceCode'],
-      costCenterLineId: json['costCenterLineId'],
-      resourceTypeId: json['resourceTypeId'],
+      costCenterLineId: int.tryParse(json['costCenterLineId']?.toString() ?? ''),
+      resourceTypeId: int.tryParse(json['resourceTypeId']?.toString() ?? ''),
       concurrencyStamp: json['concurrencyStamp'],
-      id: json['id'],
+      id: int.tryParse(json['id']?.toString() ?? ''),
     );
   }
 }
@@ -60,6 +60,11 @@ class ProductionProgress {
   final int? wipStatus;
   final bool? gbsFlag;
   final bool? pbsFlag;
+  final bool? isLastProcess;
+  final bool? reworkFlag;
+  final bool? isStarted;
+  final bool? draftFlag;
+  final DateTime? startDate;
   final String? progressCode;
   final int? productGrade;
   final int? productNature;
@@ -74,12 +79,22 @@ class ProductionProgress {
   final int? machineId;
   final int? planHeaderId;
   final int? locatorId;
+  final int? batchHeaderId;
   final String? concurrencyStamp;
   final DateTime? lastModificationTime;
   final String? lastModifierId;
   final DateTime? creationTime;
   final String? creatorId;
   final int? id;
+  final String? remarks;
+  final double? waste;
+  final double? requiredQty;
+
+  final bool? holdFlag;
+  final DateTime? holdDate;
+  final DateTime? unHoldDate;
+
+  var batchLinesId;
 
   ProductionProgress({
     this.subOperation,
@@ -93,6 +108,11 @@ class ProductionProgress {
     this.wipStatus,
     this.gbsFlag,
     this.pbsFlag,
+    this.isLastProcess,
+    this.reworkFlag,
+    this.isStarted,
+    this.draftFlag,
+    this.startDate,
     this.progressCode,
     this.productGrade,
     this.productNature,
@@ -107,47 +127,210 @@ class ProductionProgress {
     this.machineId,
     this.planHeaderId,
     this.locatorId,
+    this.batchHeaderId,
+    this.batchLinesId, // ✅ Added
     this.concurrencyStamp,
     this.lastModificationTime,
     this.lastModifierId,
     this.creationTime,
     this.creatorId,
     this.id,
+    this.remarks,
+    this.waste,
+    this.requiredQty,
+    this.holdFlag,
+    this.holdDate,
+    this.unHoldDate,
   });
 
   factory ProductionProgress.fromJson(Map<String, dynamic> json) {
     return ProductionProgress(
       subOperation: json['subOperation'],
       date: json['date'] != null ? DateTime.parse(json['date']) : null,
-      transactionType: json['transactionType'],
+      transactionType: int.tryParse(json['transactionType']?.toString() ?? ''),
       operatorDescription: json['operatorDescription'],
-      primaryQuantity: (json['primaryQuantity'] as num?)?.toDouble(),
-      primaryUOM: json['primaryUOM'],
-      secondaryQuantity: (json['secondaryQuantity'] as num?)?.toDouble(),
-      secondaryUOM: json['secondaryUOM'],
-      wipStatus: json['wipStatus'],
+      primaryQuantity: json['primaryQuantity'] != null ? double.tryParse(json['primaryQuantity'].toString()) : null,
+      primaryUOM: int.tryParse(json['primaryUOM']?.toString() ?? ''),
+      secondaryQuantity: json['secondaryQuantity'] != null ? double.tryParse(json['secondaryQuantity'].toString()) : null,
+      secondaryUOM: int.tryParse(json['secondaryUOM']?.toString() ?? ''),
+      wipStatus: int.tryParse(json['wipStatus']?.toString() ?? ''),
       gbsFlag: json['gbsFlag'],
       pbsFlag: json['pbsFlag'],
+      isLastProcess: json['isLastProcess'],
+      reworkFlag: json['reworkFlag'],
+      isStarted: json['isStarted'] as bool?,
+      draftFlag: (json['draftFlag'] is bool ? json['draftFlag'] as bool : (json['draftFlag'] == 1 || json['draftFlag'] == 'true')) ||
+          (json['draftStatus'] is bool ? json['draftStatus'] as bool : (json['draftStatus'] == 1 || json['draftStatus'] == 'true')),
+      startDate: json['startDate'] != null ? DateTime.parse(json['startDate']) : null,
       progressCode: json['progressCode'],
-      productGrade: json['productGrade'],
-      productNature: json['productNature'],
-      operationId: json['operationId'],
-      workOrderHeaderId: json['workOrderHeaderId'],
-      workOrderLineId: json['workOrderLineId'],
-      processedItemId: json['processedItemId'],
-      itemId: json['itemId'],
-      shiftId: json['shiftId'],
-      primaryTrayId: json['primaryTrayId'],
-      secondaryTrayId: json['secondaryTrayId'],
-      machineId: json['machineId'],
-      planHeaderId: json['planHeaderId'],
-      locatorId: json['locatorId'],
+      productGrade: int.tryParse(json['productGrade']?.toString() ?? ''),
+      productNature: int.tryParse(json['productNature']?.toString() ?? ''),
+      operationId: int.tryParse(json['operationId']?.toString() ?? ''),
+      workOrderHeaderId: int.tryParse(json['workOrderHeaderId']?.toString() ?? ''),
+      workOrderLineId: int.tryParse(json['workOrderLineId']?.toString() ?? ''),
+      processedItemId: int.tryParse(json['processedItemId']?.toString() ?? ''),
+      itemId: int.tryParse(json['itemId']?.toString() ?? ''),
+      shiftId: int.tryParse(json['shiftId']?.toString() ?? ''),
+      primaryTrayId: int.tryParse(json['primaryTrayId']?.toString() ?? ''),
+      secondaryTrayId: int.tryParse(json['secondaryTrayId']?.toString() ?? ''),
+      machineId: int.tryParse(json['machineId']?.toString() ?? ''),
+      planHeaderId: int.tryParse(json['planHeaderId']?.toString() ?? ''),
+      locatorId: int.tryParse(json['locatorId']?.toString() ?? ''),
+      batchHeaderId: int.tryParse(json['batchHeaderId']?.toString() ?? ''),
+      batchLinesId: int.tryParse(json['batchLineId']?.toString() ?? json['batchLinesId']?.toString() ?? ''),
       concurrencyStamp: json['concurrencyStamp'],
       lastModificationTime: json['lastModificationTime'] != null ? DateTime.parse(json['lastModificationTime']) : null,
       lastModifierId: json['lastModifierId'],
       creationTime: json['creationTime'] != null ? DateTime.parse(json['creationTime']) : null,
       creatorId: json['creatorId'],
-      id: json['id'],
+      id: int.tryParse(json['id']?.toString() ?? ''),
+      remarks: json['remarks'],
+      waste: json['waste'] != null ? double.tryParse(json['waste'].toString()) : null,
+      requiredQty: json['requiredQty'] != null ? double.tryParse(json['requiredQty'].toString()) : null,
+      holdFlag: (json['holdFlag'] is bool ? json['holdFlag'] as bool : (json['holdFlag'] == 1 || json['holdFlag'] == 'true')),
+      holdDate: json['holdDate'] != null ? DateTime.parse(json['holdDate']) : null,
+      unHoldDate: json['unHoldDate'] != null ? DateTime.parse(json['unHoldDate']) : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'subOperation': subOperation,
+      'date': date?.toIso8601String(),
+      'transactionType': transactionType,
+      'operatorDescription': operatorDescription,
+      'primaryQuantity': primaryQuantity,
+      'primaryUOM': primaryUOM,
+      'secondaryQuantity': secondaryQuantity,
+      'secondaryUOM': secondaryUOM,
+      'wipStatus': wipStatus,
+      'gbsFlag': gbsFlag ?? false,
+      'pbsFlag': pbsFlag ?? false,
+      'isLastProcess': isLastProcess ?? false,
+      'reworkFlag': reworkFlag ?? false,
+      'isStarted': isStarted ?? false,
+      'draftFlag': draftFlag ?? false,
+      'draftStatus': draftFlag ?? false,
+      'startDate': startDate?.toIso8601String(),
+      'progressCode': progressCode,
+      'productGrade': productGrade,
+      'productNature': productNature,
+      'operationId': operationId,
+      'workOrderHeaderId': workOrderHeaderId,
+      'workOrderLineId': workOrderLineId,
+      'processedItemId': processedItemId,
+      'itemId': itemId,
+      'shiftId': shiftId,
+      'primaryTrayId': primaryTrayId,
+      'secondaryTrayId': secondaryTrayId,
+      'machineId': machineId,
+      'planHeaderId': planHeaderId,
+      'locatorId': locatorId,
+      'batchHeaderId': batchHeaderId,
+      'batchLineId': batchLinesId,
+      'batchLinesId': batchLinesId,
+      'concurrencyStamp': concurrencyStamp,
+      'id': id,
+      'remarks': remarks,
+      'waste': waste?.round(),
+      'requiredQty': requiredQty?.round(),
+      'holdFlag': holdFlag ?? false,
+      'holdDate': holdDate?.toIso8601String(),
+      'unHoldDate': unHoldDate?.toIso8601String(),
+    };
+  }
+
+  ProductionProgress copyWith({
+    String? subOperation,
+    DateTime? date,
+    int? transactionType,
+    String? operatorDescription,
+    double? primaryQuantity,
+    int? primaryUOM,
+    double? secondaryQuantity,
+    int? secondaryUOM,
+    int? wipStatus,
+    bool? gbsFlag,
+    bool? pbsFlag,
+    bool? isLastProcess,
+    bool? reworkFlag,
+    bool? isStarted,
+    bool? draftFlag,
+    DateTime? startDate,
+    String? progressCode,
+    int? productGrade,
+    int? productNature,
+    int? operationId,
+    int? workOrderHeaderId,
+    int? workOrderLineId,
+    int? processedItemId,
+    int? itemId,
+    int? shiftId,
+    int? primaryTrayId,
+    int? secondaryTrayId,
+    int? machineId,
+    int? planHeaderId,
+    int? locatorId,
+    int? batchHeaderId,
+    dynamic batchLinesId,
+    String? concurrencyStamp,
+    DateTime? lastModificationTime,
+    String? lastModifierId,
+    DateTime? creationTime,
+    String? creatorId,
+    int? id,
+    String? remarks,
+    double? waste,
+    double? requiredQty,
+    bool? holdFlag,
+    DateTime? holdDate,
+    DateTime? unHoldDate,
+  }) {
+    return ProductionProgress(
+      subOperation: subOperation ?? this.subOperation,
+      date: date ?? this.date,
+      transactionType: transactionType ?? this.transactionType,
+      operatorDescription: operatorDescription ?? this.operatorDescription,
+      primaryQuantity: primaryQuantity ?? this.primaryQuantity,
+      primaryUOM: primaryUOM ?? this.primaryUOM,
+      secondaryQuantity: secondaryQuantity ?? this.secondaryQuantity,
+      secondaryUOM: secondaryUOM ?? this.secondaryUOM,
+      wipStatus: wipStatus ?? this.wipStatus,
+      gbsFlag: gbsFlag ?? this.gbsFlag,
+      pbsFlag: pbsFlag ?? this.pbsFlag,
+      isLastProcess: isLastProcess ?? this.isLastProcess,
+      reworkFlag: reworkFlag ?? this.reworkFlag,
+      isStarted: isStarted ?? this.isStarted,
+      draftFlag: draftFlag ?? this.draftFlag,
+      startDate: startDate ?? this.startDate,
+      progressCode: progressCode ?? this.progressCode,
+      productGrade: productGrade ?? this.productGrade,
+      productNature: productNature ?? this.productNature,
+      operationId: operationId ?? this.operationId,
+      workOrderHeaderId: workOrderHeaderId ?? this.workOrderHeaderId,
+      workOrderLineId: workOrderLineId ?? this.workOrderLineId,
+      processedItemId: processedItemId ?? this.processedItemId,
+      itemId: itemId ?? this.itemId,
+      shiftId: shiftId ?? this.shiftId,
+      primaryTrayId: primaryTrayId ?? this.primaryTrayId,
+      secondaryTrayId: secondaryTrayId ?? this.secondaryTrayId,
+      machineId: machineId ?? this.machineId,
+      planHeaderId: planHeaderId ?? this.planHeaderId,
+      locatorId: locatorId ?? this.locatorId,
+      batchHeaderId: batchHeaderId ?? this.batchHeaderId,
+      batchLinesId: batchLinesId ?? this.batchLinesId,
+      concurrencyStamp: concurrencyStamp ?? this.concurrencyStamp,
+      lastModificationTime: lastModificationTime ?? this.lastModificationTime,
+      lastModifierId: lastModifierId ?? this.lastModifierId,
+      creationTime: creationTime ?? this.creationTime,
+      creatorId: creatorId ?? this.creatorId,
+      id: id ?? this.id,
+      remarks: remarks ?? this.remarks,
+      waste: waste ?? this.waste,
+      requiredQty: requiredQty ?? this.requiredQty,
+      holdFlag: holdFlag ?? this.holdFlag,
+      holdDate: holdDate ?? this.holdDate,
+      unHoldDate: unHoldDate ?? this.unHoldDate,
     );
   }
 }
@@ -162,6 +345,8 @@ class Operation {
   final String? lastModificationTime;
   final String? creatorId;
   final String? lastModifierId;
+  final bool? isLastProcess;
+  final int? processNature;
   final int id;
 
   Operation({
@@ -174,21 +359,25 @@ class Operation {
     required this.lastModificationTime,
     required this.creatorId,
     required this.lastModifierId,
+    this.isLastProcess,
+    this.processNature,
     required this.id,
   });
 
   factory Operation.fromJson(Map<String, dynamic> json) {
     return Operation(
-      code: json['code'],
-      name: json['name'],
+      code: json['code'] ?? '',
+      name: json['name'] ?? '',
       description: json['description'],
-      identifierRef: json['identifierRef'],
-      concurrencyStamp: json['concurrencyStamp'],
-      creationTime: json['creationTime'],
+      identifierRef: json['identifierRef']?.toString(),
+      concurrencyStamp: json['concurrencyStamp'] ?? '',
+      creationTime: json['creationTime'] ?? '',
       lastModificationTime: json['lastModificationTime'],
       creatorId: json['creatorId'],
       lastModifierId: json['lastModifierId'],
-      id: (json['id'] as num?)?.toInt() ?? 0,
+      isLastProcess: json['isLastProcess'],
+      processNature: json['processNature'] != null ? int.tryParse(json['processNature'].toString()) : null,
+      id: json['id'] != null ? int.tryParse(json['id'].toString()) ?? 0 : 0,
     );
   }
 }
@@ -222,13 +411,13 @@ class Shift {
 
   factory Shift.fromJson(Map<String, dynamic> json) {
     return Shift(
-      code: json['code'],
+      code: json['code'] ?? '',
       description: json['description'],
-      startTime: json['startTime'],
-      endTime: json['endTIme'],
+      startTime: json['startTime'] ?? '',
+      endTime: json['endTIme'] ?? '',
       department: json['department'],
-      concurrencyStamp: json['concurrencyStamp'],
-      creationTime: json['creationTime'],
+      concurrencyStamp: json['concurrencyStamp'] ?? '',
+      creationTime: json['creationTime'] ?? '',
       lastModificationTime: json['lastModificationTime'],
       creatorId: json['creatorId'],
       lastModifierId: json['lastModifierId'],
@@ -242,6 +431,7 @@ class Resource {
   final String? brand;
   final String? model;
   final String? serialNumber;
+  final String? capacity;
   final bool isActive;
   final int costCenterLineId;
   final int resourceTypeId;
@@ -253,6 +443,7 @@ class Resource {
     required this.brand,
     required this.model,
     required this.serialNumber,
+    this.capacity,
     required this.isActive,
     required this.costCenterLineId,
     required this.resourceTypeId,
@@ -266,6 +457,7 @@ class Resource {
       brand: json['brand'],
       model: json['model'],
       serialNumber: json['serialNumber'],
+      capacity: json['capacity']?.toString(),
       isActive: json['isActive'],
       costCenterLineId: (json['costCenterLineId'] as num?)?.toInt() ?? 0,
       resourceTypeId: (json['resourceTypeId'] as num?)?.toInt() ?? 0,
@@ -287,12 +479,12 @@ class ResourceType {
 
   factory ResourceType.fromJson(Map<String, dynamic> json) {
     return ResourceType(
-      code: json['code'] as String,
-      name: json['name'] as String,
-      description: json['description'] as String?,
-      costCenterLineId: json['costCenterLineId'] as int,
-      concurrencyStamp: json['concurrencyStamp'] as String,
-      id: json['id'] as int,
+      code: json['code']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      description: json['description']?.toString(),
+      costCenterLineId: (json['costCenterLineId'] as num?)?.toInt() ?? 0,
+      concurrencyStamp: json['concurrencyStamp']?.toString() ?? '',
+      id: (json['id'] as num?)?.toInt() ?? 0,
     );
   }
 }
@@ -336,21 +528,21 @@ class WorkOrderHeader {
 
   factory WorkOrderHeader.fromJson(Map<String, dynamic> json) {
     return WorkOrderHeader(
-      description: json['description'],
-      workOrderDate: json['workOrderDate'],
-      status: json['status'],
-      lockFlag: json['lockFlag'],
-      provisionalLock: json['provisionalLock'],
-      workOrderCode: json['workOrderCode'],
-      customerPo: json['customerPo'],
+      description: json['description']?.toString() ?? '',
+      workOrderDate: json['workOrderDate']?.toString() ?? '',
+      status: json['status'] == true,
+      lockFlag: json['lockFlag'] == true,
+      provisionalLock: json['provisionalLock'] == true,
+      workOrderCode: json['workOrderCode']?.toString() ?? '',
+      customerPo: json['customerPo']?.toString(),
       customerId: (json['customerId'] as num?)?.toInt() ?? 0,
       brandId: (json['brandId'] as num?)?.toInt() ?? 0,
       styleId: (json['styleId'] as num?)?.toInt() ?? 0,
-      concurrencyStamp: json['concurrencyStamp'],
-      creationTime: json['creationTime'],
-      lastModificationTime: json['lastModificationTime'],
-      creatorId: json['creatorId'],
-      lastModifierId: json['lastModifierId'],
+      concurrencyStamp: json['concurrencyStamp']?.toString() ?? '',
+      creationTime: json['creationTime']?.toString() ?? '',
+      lastModificationTime: json['lastModificationTime']?.toString(),
+      creatorId: json['creatorId']?.toString(),
+      lastModifierId: json['lastModifierId']?.toString(),
       id: (json['id'] as num?)?.toInt() ?? 0,
     );
   }
@@ -445,7 +637,9 @@ class Item {
   final bool active;
   final double sam;
   final double perGarmentTube;
+  final double? pieceWeight;
   final String? sizeDescription;
+  final String? colorDescription;
   final String? componentDescription;
   final int itemCategoryId;
   final String concurrencyStamp;
@@ -461,7 +655,9 @@ class Item {
     required this.active,
     required this.sam,
     required this.perGarmentTube,
+    this.pieceWeight,
     required this.sizeDescription,
+    this.colorDescription,
     required this.componentDescription,
     required this.itemCategoryId,
     required this.concurrencyStamp,
@@ -474,20 +670,60 @@ class Item {
 
   factory Item.fromJson(Map<String, dynamic> json) {
     return Item(
-      code: json['code'],
-      description: json['description'],
-      active: json['active'],
+      code: json['code']?.toString() ?? '',
+      description: json['description']?.toString() ?? '',
+      active: json['active'] == true,
       sam: (json['sam'] as num?)?.toDouble() ?? 0,
       perGarmentTube: (json['perGarmentTube'] as num?)?.toDouble() ?? 0,
-      sizeDescription: json['sizeDescription'],
-      componentDescription: json['componentDescription'],
+      pieceWeight: (json['pieceWeight'] as num?)?.toDouble(),
+      sizeDescription: json['sizeDescription']?.toString() ?? '',
+      colorDescription: json['colorDescription']?.toString() ?? '',
+      componentDescription: json['componentDescription']?.toString() ?? '',
       itemCategoryId: (json['itemCategoryId'] as num?)?.toInt() ?? 0,
-      concurrencyStamp: json['concurrencyStamp'],
-      isDeleted: json['isDeleted'],
-      creationTime: json['creationTime'],
-      lastModificationTime: json['lastModificationTime'],
-      creatorId: json['creatorId'],
+      concurrencyStamp: json['concurrencyStamp']?.toString() ?? '',
+      isDeleted: json['isDeleted'] == true,
+      creationTime: json['creationTime']?.toString() ?? '',
+      lastModificationTime: json['lastModificationTime']?.toString(),
+      creatorId: json['creatorId']?.toString(),
       id: (json['id'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  Item copyWith({
+    String? code,
+    String? description,
+    bool? active,
+    double? sam,
+    double? perGarmentTube,
+    double? pieceWeight,
+    String? sizeDescription,
+    String? colorDescription,
+    String? componentDescription,
+    int? itemCategoryId,
+    String? concurrencyStamp,
+    bool? isDeleted,
+    String? creationTime,
+    String? lastModificationTime,
+    String? creatorId,
+    int? id,
+  }) {
+    return Item(
+      code: code ?? this.code,
+      description: description ?? this.description,
+      active: active ?? this.active,
+      sam: sam ?? this.sam,
+      perGarmentTube: perGarmentTube ?? this.perGarmentTube,
+      pieceWeight: pieceWeight ?? this.pieceWeight,
+      sizeDescription: sizeDescription ?? this.sizeDescription,
+      colorDescription: colorDescription ?? this.colorDescription,
+      componentDescription: componentDescription ?? this.componentDescription,
+      itemCategoryId: itemCategoryId ?? this.itemCategoryId,
+      concurrencyStamp: concurrencyStamp ?? this.concurrencyStamp,
+      isDeleted: isDeleted ?? this.isDeleted,
+      creationTime: creationTime ?? this.creationTime,
+      lastModificationTime: lastModificationTime ?? this.lastModificationTime,
+      creatorId: creatorId ?? this.creatorId,
+      id: id ?? this.id,
     );
   }
 }
@@ -519,12 +755,12 @@ class CostCenterLine {
 
   factory CostCenterLine.fromJson(Map<String, dynamic> json) {
     return CostCenterLine(
-      code: json['code'],
-      name: json['name'],
+      code: json['code'] ?? '',
+      name: json['name'] ?? '',
       description: json['description'],
-      costCenterId: json['costCenterId'],
-      concurrencyStamp: json['concurrencyStamp'],
-      creationTime: json['creationTime'],
+      costCenterId: (json['costCenterId'] as num?)?.toInt() ?? 0,
+      concurrencyStamp: json['concurrencyStamp'] ?? '',
+      creationTime: json['creationTime'] ?? '',
       lastModificationTime: json['lastModificationTime'],
       creatorId: json['creatorId'],
       lastModifierId: json['lastModifierId'],
@@ -566,18 +802,18 @@ class PlanHeader {
 
   factory PlanHeader.fromJson(Map<String, dynamic> json) {
     return PlanHeader(
-      date: json['date'],
-      lockFlag: json['lockFlag'],
+      date: json['date']?.toString() ?? '',
+      lockFlag: json['lockFlag'] == true,
       shiftId: (json['shiftId'] as num?)?.toInt() ?? 0,
       departmentId: (json['departmentId'] as num?)?.toInt() ?? 0,
       costCenterId: (json['costCenterId'] as num?)?.toInt() ?? 0,
       costCenterLineId: (json['costCenterLineId'] as num?)?.toInt() ?? 0,
       operationId: (json['operationId'] as num?)?.toInt() ?? 0,
-      concurrencyStamp: json['concurrencyStamp'],
-      creationTime: json['creationTime'],
-      lastModificationTime: json['lastModificationTime'],
-      creatorId: json['creatorId'],
-      lastModifierId: json['lastModifierId'],
+      concurrencyStamp: json['concurrencyStamp']?.toString() ?? '',
+      creationTime: json['creationTime']?.toString() ?? '',
+      lastModificationTime: json['lastModificationTime']?.toString(),
+      creatorId: json['creatorId']?.toString(),
+      lastModifierId: json['lastModifierId']?.toString(),
       id: (json['id'] as num?)?.toInt() ?? 0,
     );
   }
@@ -614,14 +850,14 @@ class Locator {
 
   factory Locator.fromJson(Map<String, dynamic> json) {
     return Locator(
-      id: json['id'],
+      id: int.tryParse(json['id']?.toString() ?? ''),
       creatorId: json['creatorId'],
       description: json['description'],
       logicalWH: json['logicalWH'],
       location: json['location'],
       active: json['active'],
       locatorCode: json['locatorCode'],
-      departmentId: json['departmentId'],
+      departmentId: int.tryParse(json['departmentId']?.toString() ?? ''),
       lastModifierId: json['lastModifierId'],
       concurrencyStamp: json['concurrencyStamp'],
       creationTime: json['creationTime'] != null ? DateTime.parse(json['creationTime']) : null,
@@ -652,6 +888,7 @@ class TrayDetail {
   final String? lastModifierId;
   final DateTime? creationTime;
   final String? creatorId;
+  final bool? isReAssigned;
   final int? id;
 
   TrayDetail({
@@ -676,6 +913,7 @@ class TrayDetail {
     this.lastModifierId,
     this.creationTime,
     this.creatorId,
+    this.isReAssigned,
     this.id,
   });
 
@@ -684,25 +922,26 @@ class TrayDetail {
       description: json['description'],
       active: json['active'],
       trayCode: json['trayCode'],
-      trayQuantity: json['trayQuantity'],
-      productGrade: json['productGrade'],
-      productNature: json['productNature'],
-      trayType: json['trayType'],
-      shiftId: json['shiftId'],
-      planLineId: json['planLineId'],
-      resourceId: json['resourceId'],
-      workOrderHeaderId: json['workOrderHeaderId'],
-      workOrderLineId: json['workOrderLineId'],
-      knitItemId: json['knitItemId'],
-      locatorId: json['locatorId'],
-      batchHeaderId: json['batchHeaderId'],
-      batchLinesId: json['batchLinesId'],
+      trayQuantity: int.tryParse(json['trayQuantity']?.toString() ?? ''),
+      productGrade: int.tryParse(json['productGrade']?.toString() ?? ''),
+      productNature: int.tryParse(json['productNature']?.toString() ?? ''),
+      trayType: int.tryParse(json['trayType']?.toString() ?? ''),
+      shiftId: int.tryParse(json['shiftId']?.toString() ?? ''),
+      planLineId: int.tryParse(json['planLineId']?.toString() ?? ''),
+      resourceId: int.tryParse(json['resourceId']?.toString() ?? ''),
+      workOrderHeaderId: int.tryParse(json['workOrderHeaderId']?.toString() ?? ''),
+      workOrderLineId: int.tryParse(json['workOrderLineId']?.toString() ?? ''),
+      knitItemId: int.tryParse(json['knitItemId']?.toString() ?? ''),
+      locatorId: int.tryParse(json['locatorId']?.toString() ?? ''),
+      batchHeaderId: int.tryParse(json['batchHeaderId']?.toString() ?? ''),
+      batchLinesId: int.tryParse(json['batchLinesId']?.toString() ?? ''),
       concurrencyStamp: json['concurrencyStamp'],
       lastModificationTime: json['lastModificationTime'] != null ? DateTime.parse(json['lastModificationTime']) : null,
       lastModifierId: json['lastModifierId'],
       creationTime: json['creationTime'] != null ? DateTime.parse(json['creationTime']) : null,
       creatorId: json['creatorId'],
-      id: json['id'],
+      isReAssigned: json['isReAssigned'] == true,
+      id: int.tryParse(json['id']?.toString() ?? ''),
     );
   }
 }
@@ -722,6 +961,9 @@ class PlanLine {
   final double secondaryQuantity;
   final String? cutsomerPO;
   final double cycleTime;
+  final String? planLineCode;
+  final double sampleQty;
+  final double cGradeQty;
   final int operationId;
   final int shiftId;
   final int resourceId;
@@ -731,7 +973,7 @@ class PlanLine {
   final int costCenterLineId;
   final int? saleOrderMstId;
   final int? saleOrderLineId;
-  final int planHeaderId;
+  final int? planHeaderId;
   final String concurrencyStamp;
   final String creationTime;
   final String? lastModificationTime;
@@ -754,6 +996,9 @@ class PlanLine {
     required this.secondaryQuantity,
     required this.cutsomerPO,
     required this.cycleTime,
+    this.planLineCode,
+    required this.sampleQty,
+    required this.cGradeQty,
     required this.operationId,
     required this.shiftId,
     required this.resourceId,
@@ -788,6 +1033,9 @@ class PlanLine {
       secondaryQuantity: (json['secondaryQuantity'] as num?)?.toDouble() ?? 0,
       cutsomerPO: json['cutsomerPO'],
       cycleTime: (json['cycleTime'] as num?)?.toDouble() ?? 0,
+      planLineCode: json['planLineCode']?.toString(),
+      sampleQty: (json['sampleQty'] as num?)?.toDouble() ?? 0,
+      cGradeQty: (json['cGradeQty'] as num?)?.toDouble() ?? 0,
       operationId: (json['operationId'] as num?)?.toInt() ?? 0,
       shiftId: (json['shiftId'] as num?)?.toInt() ?? 0,
       resourceId: (json['resourceId'] as num?)?.toInt() ?? 0,
@@ -797,7 +1045,7 @@ class PlanLine {
       costCenterLineId: (json['costCenterLineId'] as num?)?.toInt() ?? 0,
       saleOrderMstId: (json['saleOrderMstId'] as num?)?.toInt(),
       saleOrderLineId: (json['saleOrderLineId'] as num?)?.toInt(),
-      planHeaderId: (json['planHeaderId'] as num?)?.toInt() ?? 0,
+      planHeaderId: (json['planHeaderId'] as num?)?.toInt(),
       concurrencyStamp: json['concurrencyStamp']?.toString() ?? '',
       creationTime: json['creationTime']?.toString() ?? '',
       lastModificationTime: json['lastModificationTime']?.toString(),
@@ -830,6 +1078,7 @@ class PrimaryTrayModel {
   final String? lastModifierId;
   final DateTime? creationTime;
   final String? creatorId;
+  final bool? isReAssigned;
   final int? id;
 
   PrimaryTrayModel({
@@ -854,6 +1103,7 @@ class PrimaryTrayModel {
     this.lastModifierId,
     this.creationTime,
     this.creatorId,
+    this.isReAssigned,
     this.id,
   });
 
@@ -863,24 +1113,77 @@ class PrimaryTrayModel {
       active: json['active'],
       trayCode: json['trayCode'],
       trayQuantity: (json['trayQuantity'] as num?)?.toDouble(),
-      productGrade: json['productGrade'],
-      productNature: json['productNature'],
-      trayType: json['trayType'],
-      shiftId: json['shiftId'],
-      planLineId: json['planLineId'],
-      resourceId: json['resourceId'],
-      workOrderHeaderId: json['workOrderHeaderId'],
-      workOrderLineId: json['workOrderLineId'],
-      knitItemId: json['knitItemId'],
-      locatorId: json['locatorId'],
-      batchHeaderId: json['batchHeaderId'],
-      batchLinesId: json['batchLinesId'],
+      productGrade: (json['productGrade'] as num?)?.toInt(),
+      productNature: (json['productNature'] as num?)?.toInt(),
+      trayType: (json['trayType'] as num?)?.toInt(),
+      shiftId: (json['shiftId'] as num?)?.toInt(),
+      planLineId: (json['planLineId'] as num?)?.toInt(),
+      resourceId: (json['resourceId'] as num?)?.toInt(),
+      workOrderHeaderId: (json['workOrderHeaderId'] as num?)?.toInt(),
+      workOrderLineId: (json['workOrderLineId'] as num?)?.toInt(),
+      knitItemId: (json['knitItemId'] as num?)?.toInt(),
+      locatorId: (json['locatorId'] as num?)?.toInt(),
+      batchHeaderId: (json['batchHeaderId'] as num?)?.toInt(),
+      batchLinesId: (json['batchLinesId'] as num?)?.toInt(),
       concurrencyStamp: json['concurrencyStamp'],
       lastModificationTime: json['lastModificationTime'] != null ? DateTime.parse(json['lastModificationTime']) : null,
       lastModifierId: json['lastModifierId'],
       creationTime: json['creationTime'] != null ? DateTime.parse(json['creationTime']) : null,
       creatorId: json['creatorId'],
-      id: json['id'],
+      isReAssigned: json['isReAssigned'] == true,
+      id: (json['id'] as num?)?.toInt(),
+    );
+  }
+
+  PrimaryTrayModel copyWith({
+    String? description,
+    bool? active,
+    String? trayCode,
+    double? trayQuantity,
+    int? productGrade,
+    int? productNature,
+    int? trayType,
+    int? shiftId,
+    int? planLineId,
+    int? resourceId,
+    int? workOrderHeaderId,
+    int? workOrderLineId,
+    int? knitItemId,
+    int? locatorId,
+    int? batchHeaderId,
+    int? batchLinesId,
+    String? concurrencyStamp,
+    DateTime? lastModificationTime,
+    String? lastModifierId,
+    DateTime? creationTime,
+    String? creatorId,
+    bool? isReAssigned,
+    int? id,
+  }) {
+    return PrimaryTrayModel(
+      description: description ?? this.description,
+      active: active ?? this.active,
+      trayCode: trayCode ?? this.trayCode,
+      trayQuantity: trayQuantity ?? this.trayQuantity,
+      productGrade: productGrade ?? this.productGrade,
+      productNature: productNature ?? this.productNature,
+      trayType: trayType ?? this.trayType,
+      shiftId: shiftId ?? this.shiftId,
+      planLineId: planLineId ?? this.planLineId,
+      resourceId: resourceId ?? this.resourceId,
+      workOrderHeaderId: workOrderHeaderId ?? this.workOrderHeaderId,
+      workOrderLineId: workOrderLineId ?? this.workOrderLineId,
+      knitItemId: knitItemId ?? this.knitItemId,
+      locatorId: locatorId ?? this.locatorId,
+      batchHeaderId: batchHeaderId ?? this.batchHeaderId,
+      batchLinesId: batchLinesId ?? this.batchLinesId,
+      concurrencyStamp: concurrencyStamp ?? this.concurrencyStamp,
+      lastModificationTime: lastModificationTime ?? this.lastModificationTime,
+      lastModifierId: lastModifierId ?? this.lastModifierId,
+      creationTime: creationTime ?? this.creationTime,
+      creatorId: creatorId ?? this.creatorId,
+      isReAssigned: isReAssigned ?? this.isReAssigned,
+      id: id ?? this.id,
     );
   }
 }

@@ -77,15 +77,18 @@ class _CustomExpandedAsyncDropdownState<T> extends State<CustomExpandedAsyncDrop
     super.didUpdateWidget(oldWidget);
 
     final parentChanged = widget.key != oldWidget.key;
+    final itemsChanged = widget.items != oldWidget.items;
 
-    if (parentChanged) {
+    if (parentChanged || itemsChanged) {
       setState(() {
-        isLoading = true;
-        _items = [];
-        _filteredItems = [];
+        isLoading = widget.dropdownAsyncItems != null && _items.isEmpty;
+        _items = widget.items ?? [];
+        final seen = <String>{};
+        _items = _items.where((item) => seen.add(widget.itemAsString(item))).toList();
+        _filteredItems = _items;
       });
 
-      if (widget.dropdownAsyncItems != null) {
+      if (widget.dropdownAsyncItems != null && parentChanged) {
         _initializeItems();
       }
 

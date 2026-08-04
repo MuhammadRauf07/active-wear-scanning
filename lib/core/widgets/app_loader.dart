@@ -1,95 +1,144 @@
+import 'dart:async';
 import 'dart:ui';
-
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-
-class AppLoaderContextAttach extends StatelessWidget {
-  final Widget child;
-
-  const AppLoaderContextAttach({required this.child, super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      AppLoader.attachContext(context);
-    });
-    return child;
-  }
-}
 
 class AppLoader {
   static final AppLoader _instance = AppLoader._internal();
-  static BuildContext? _context;
-  static bool _isDialogVisible = false;
+  static OverlayEntry? _overlayEntry;
+  static bool _isVisible = false;
+
+  static bool get isVisible => _isVisible;
 
   AppLoader._internal();
-
   factory AppLoader() => _instance;
 
-  static void attachContext(BuildContext context) {
-    _context = context;
-  }
-
-  static void show({
+  static void show(
+    BuildContext context, {
     String message = 'Please wait...',
-    Widget? customIndicator,
-    Color backgroundColor = Colors.white,
-    double width = 200,
-    double elevation = 20,
-    double blurSigma = 4.0,
-    TextStyle? textStyle,
-    BorderRadiusGeometry borderRadius = const BorderRadius.all(Radius.circular(12)),
+    double width = 240,
   }) {
-    if (_context == null || _isDialogVisible) return;
-    _isDialogVisible = true;
+    if (_isVisible) return;
+    _isVisible = true;
 
-    showGeneralDialog(
-      context: _context!,
-      barrierDismissible: false,
-      barrierLabel: "Loader",
-      barrierColor: Colors.black.withValues(alpha: 0.25),
-      transitionDuration: const Duration(milliseconds: 200),
-      pageBuilder: (_, __, ___) => const SizedBox.shrink(),
-      transitionBuilder: (_, anim, __, ___) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
-        child: Opacity(
-          opacity: anim.value,
-          child: Center(
-            child: Material(
-              elevation: elevation,
-              color: Colors.transparent,
-              child: Container(
-                padding: const EdgeInsets.all(24),
-                width: width,
-                decoration: BoxDecoration(
-                  color: backgroundColor,
-                  borderRadius: borderRadius,
-                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 16, offset: const Offset(0, 6))],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    customIndicator ?? const CupertinoActivityIndicator(radius: 16),
-                    const SizedBox(height: 16),
-                    Text(
-                      message,
-                      textAlign: TextAlign.center,
-                      style: textStyle ?? const TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black87),
+    Timer.run(() {
+      if (!_isVisible || _overlayEntry != null) return;
+
+      final overlay = Overlay.of(context, rootOverlay: true);
+      
+      _overlayEntry = OverlayEntry(
+        builder: (context) => Material(
+          type: MaterialType.transparency,
+          child: ExcludeSemantics(
+            child: Stack(
+              children: [
+                // 1. Soft blurred premium backdrop
+                Positioned.fill(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+                    child: GestureDetector(
+                      onTap: () {},
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        color: Colors.black.withValues(alpha: 0.35),
+                      ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
+                
+                // 2. Centered Premium Card
+                Center(
+                  child: TweenAnimationBuilder<double>(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOutBack,
+                    tween: Tween<double>(begin: 0.85, end: 1.0),
+                    builder: (context, scale, child) {
+                      return Transform.scale(
+                        scale: scale,
+                        child: child,
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+                      width: width,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: const BorderRadius.all(Radius.circular(16)),
+                        border: Border.all(
+                          color: const Color(0xFFE2E8F0), 
+                          width: 1.5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.12),
+                            blurRadius: 24,
+                            offset: const Offset(0, 10),
+                          ),
+                          BoxShadow(
+                            color: const Color(0xFF1B64A3).withValues(alpha: 0.05),
+                            blurRadius: 16,
+                            offset: const Offset(0, 4),
+                          )
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Modern glowing progressive spinner
+                          const SizedBox(
+                            width: 36,
+                            height: 36,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 3.5,
+                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1B64A3)),
+                              backgroundColor: Color(0xFFE2E8F0),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          Text(
+                            message,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 13, 
+                              fontWeight: FontWeight.w900, 
+                              color: Color(0xFF1E293B),
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
-      ),
-    );
+      );
+
+      overlay.insert(_overlayEntry!);
+    });
   }
 
-  static void hide() {
-    if (_isDialogVisible && Navigator.of(_context!).canPop()) {
-      Navigator.of(_context!).pop();
-      _isDialogVisible = false;
+  static void hide(BuildContext context) {
+    _isVisible = false;
+    Timer.run(() {
+      if (_overlayEntry != null) {
+        _overlayEntry?.remove();
+        _overlayEntry = null;
+      }
+    });
+  }
+
+  static Future<T> runWithLoader<T>(
+    BuildContext context, {
+    required Future<T> Function() action,
+    String message = 'Please wait...',
+  }) async {
+    show(context, message: message);
+    try {
+      return await action();
+    } finally {
+      hide(context);
     }
   }
 }
