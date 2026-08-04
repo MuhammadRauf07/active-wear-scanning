@@ -24,6 +24,7 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
   PlexNetworking.instance.allowBadCertificateForHTTPS();
 
+
   AppConfig.tenant = 'ActiveWare';
 
   injectSingleton(UserRepo());
