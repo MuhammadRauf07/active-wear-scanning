@@ -84,6 +84,7 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
   bool _showSubmit = false;
   Timer? _duplicateAlertTimer;
   bool _isProcessing = false;
+  bool _isValidating = false;
   String? _errorOverlayText;
 
   String? _lastProcessedCode;
@@ -113,7 +114,12 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
     final text = _manualController.text.trim();
     if (text.isEmpty || _isProcessing) return;
 
-    _isProcessing = true;
+    if (mounted) {
+      setState(() {
+        _isProcessing = true;
+        _isValidating = true;
+      });
+    }
     _manualController.clear();
 
     String? errorMessage;
@@ -139,7 +145,12 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
     }
 
     await Future.delayed(const Duration(milliseconds: 150));
-    if (mounted) _isProcessing = false;
+    if (mounted) {
+      setState(() {
+        _isProcessing = false;
+        _isValidating = false;
+      });
+    }
   }
 
   void _onDetect(BarcodeCapture capture) async {
@@ -163,7 +174,12 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
         }
       }
 
-      _isProcessing = true;
+      if (mounted) {
+        setState(() {
+          _isProcessing = true;
+          _isValidating = true;
+        });
+      }
       _lastProcessedCode = raw;
       _lastProcessedTime = now;
 
@@ -204,7 +220,12 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
 
       // Briefly wait to prevent double-triggering in the same instant frame
       await Future.delayed(const Duration(milliseconds: 150));
-      if (mounted) _isProcessing = false;
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+          _isValidating = false;
+        });
+      }
       break; // Process one barcode per event
     }
   }
@@ -339,6 +360,44 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
                         ),
                       ),
                     ),
+
+                    // INLINE VALIDATION LOADER
+                    if (_isValidating)
+                      Positioned.fill(
+                        child: Container(
+                          color: Colors.black.withValues(alpha: 0.45),
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 10),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: const [
+                                  SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0D47A1)),
+                                    ),
+                                  ),
+                                  SizedBox(width: 12),
+                                  Text(
+                                    'Validating code...',
+                                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               )
@@ -399,6 +458,44 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
                         ),
                       ),
                     ),
+
+                    // INLINE VALIDATION LOADER (COMPACT)
+                    if (_isValidating)
+                      Positioned.fill(
+                        child: Container(
+                          color: Colors.black.withValues(alpha: 0.45),
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(10),
+                                boxShadow: [
+                                  BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 8),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: const [
+                                  SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0D47A1)),
+                                    ),
+                                  ),
+                                  SizedBox(width: 10),
+                                  Text(
+                                    'Validating code...',
+                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
