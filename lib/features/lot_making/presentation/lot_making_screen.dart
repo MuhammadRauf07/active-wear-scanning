@@ -194,7 +194,7 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
                 clipBehavior: Clip.antiAlias,
                 child: Column(
                   children: [
-                    const TrayTableHeader(actionColumnWidth: 44, showBatchTubes: true, showDetailedTubes: true),
+                    const TrayTableHeader(actionColumnWidth: 44, showBatchTubes: true, showDetailedTubes: true, hidePcsColumns: true),
                     Expanded(
                       child: ListView.builder(
                         padding: EdgeInsets.zero,
@@ -206,8 +206,6 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
                           final alreadyScannedVal = qtys['alreadyScanned']!;
                           final remainingVal = qtys['remaining']!;
                           final qty = double.tryParse(_quantityControllers[index].text) ?? 0;
-                          final perTube = tray.item.perGarmentTube;
-                          final pcs = qty * perTube;
                           final weight = qty * (tray.item.pieceWeight ?? 0);
 
                           const cellStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238));
@@ -221,14 +219,12 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
                             ),
                             child: Row(
                               children: [
-                                Expanded(flex: 6, child: Text(tray.primaryTrayModel.trayCode ?? 'N/A', textAlign: TextAlign.center, style: blueCellStyle)),
+                                Expanded(flex: 8, child: Text(tray.primaryTrayModel.trayCode ?? 'N/A', textAlign: TextAlign.center, style: blueCellStyle)),
                                 Expanded(flex: 4, child: Text(tray.workOrderHeader.workOrderCode ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
-                                Expanded(flex: 4, child: Text(tray.item.sizeDescription ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
-                                Expanded(flex: 4, child: Text(perTube.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
+                                Expanded(flex: 3, child: Text(tray.item.sizeDescription ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
                                 Expanded(flex: 3, child: Text(actualVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
                                 Expanded(flex: 3, child: Text(alreadyScannedVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle.copyWith(color: Colors.orange.shade800))),
                                 Expanded(flex: 3, child: Text(remainingVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle.copyWith(color: const Color(0xFF2E7D32)))),
-                                Expanded(flex: 4, child: Text(pcs.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
                                 Expanded(flex: 4, child: Text('${weight.toStringAsFixed(0)}g', textAlign: TextAlign.center, style: cellStyle)),
                                 Expanded(
                                   flex: 4,
@@ -259,45 +255,49 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 8),
-                                Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
-                                    onTap: () async {
-                                      final confirm = await showDialog<bool>(
-                                        context: screenContext,
-                                        builder: (context) => AlertDialog(
-                                          title: const Text('Confirm Delete'),
-                                          content: const Text('Are you sure you want to delete this tray?'),
-                                          actions: [
-                                            TextButton(
-                                              onPressed: () => Navigator.pop(context, false),
-                                              child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                                SizedBox(
+                                  width: 44,
+                                  child: Center(
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      child: InkWell(
+                                        onTap: () async {
+                                          final confirm = await showDialog<bool>(
+                                            context: screenContext,
+                                            builder: (context) => AlertDialog(
+                                              title: const Text('Confirm Delete'),
+                                              content: const Text('Are you sure you want to delete this tray?'),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () => Navigator.pop(context, false),
+                                                  child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                                                ),
+                                                ElevatedButton(
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: const Color(0xFFEF4444),
+                                                    foregroundColor: Colors.white,
+                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                  ),
+                                                  onPressed: () => Navigator.pop(context, true),
+                                                  child: const Text('Delete'),
+                                                ),
+                                              ],
                                             ),
-                                            ElevatedButton(
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: const Color(0xFFEF4444),
-                                                foregroundColor: Colors.white,
-                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                              ),
-                                              onPressed: () => Navigator.pop(context, true),
-                                              child: const Text('Delete'),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                      if (confirm == true) {
-                                        latestController.removeScannedTray(index);
-                                      }
-                                    },
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(6),
-                                      decoration: BoxDecoration(
-                                        color: Colors.red.withValues(alpha: 0.05),
+                                          );
+                                          if (confirm == true) {
+                                            latestController.removeScannedTray(index);
+                                          }
+                                        },
                                         borderRadius: BorderRadius.circular(8),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
+                                            color: Colors.red.withValues(alpha: 0.05),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.redAccent),
+                                        ),
                                       ),
-                                      child: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.redAccent),
                                     ),
                                   ),
                                 ),
@@ -326,6 +326,7 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             final availableTrays = controller.getTraysForSelectedWorkOrder();
+            final woCode = state.selectedWorkOrder?.workOrderCode ?? '';
 
             return Dialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -338,10 +339,21 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Text(
-                          'AVAILABLE GBS TRAYS (${availableTrays.length})',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFFE67E22)),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'AVAILABLE TRAYS COUNT - ${availableTrays.length}',
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFFE67E22)),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'WORK ORDER - ${woCode.isNotEmpty ? woCode : 'N/A'}',
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF1B64A3)),
+                            ),
+                          ],
                         ),
                         IconButton(
                           icon: const Icon(Icons.close_rounded),
@@ -350,7 +362,7 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    const TrayTableHeader(actionColumnWidth: 0, showLotColumn: true, showDetailedTubes: true),
+                    const TrayTableHeader(actionColumnWidth: 0, showLotColumn: true, showDetailedTubes: true, hidePcsColumns: true),
                     Expanded(
                       child: availableTrays.isEmpty
                           ? const Center(
@@ -368,8 +380,6 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
                           final alreadyScannedVal = qtys['alreadyScanned']!;
                           final remainingVal = qtys['remaining']!;
                           final qty = remainingVal;
-                          final perTube = tray.item.perGarmentTube;
-                          final pcs = qty * perTube;
                           final weight = qty * (tray.item.pieceWeight ?? 0);
 
                           const cellStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238));
@@ -387,14 +397,12 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
                             ),
                             child: Row(
                               children: [
-                                Expanded(flex: 6, child: Text(tray.primaryTrayModel.trayCode ?? 'N/A', textAlign: TextAlign.center, style: blueCellStyle)),
+                                Expanded(flex: 8, child: Text(tray.primaryTrayModel.trayCode ?? 'N/A', textAlign: TextAlign.center, style: blueCellStyle)),
                                 Expanded(flex: 4, child: Text(tray.workOrderHeader.workOrderCode ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
-                                Expanded(flex: 4, child: Text(tray.item.sizeDescription ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
-                                Expanded(flex: 4, child: Text(perTube.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
+                                Expanded(flex: 3, child: Text(tray.item.sizeDescription ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
                                 Expanded(flex: 3, child: Text(actualVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
                                 Expanded(flex: 3, child: Text(alreadyScannedVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle.copyWith(color: Colors.orange.shade800))),
                                 Expanded(flex: 3, child: Text(remainingVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle.copyWith(color: const Color(0xFF2E7D32)))),
-                                Expanded(flex: 4, child: Text(pcs.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
                                 Expanded(flex: 4, child: Text('${weight.toStringAsFixed(0)}g', textAlign: TextAlign.center, style: cellStyle)),
                                 Expanded(
                                   flex: 6,
@@ -559,11 +567,24 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
     }
   }
 
+  void _updateLoaderState(LotMakingState state) {
+    final bool shouldLoad = state.isLoading || state.isCachingColors || state.isLoadingColors;
+    if (shouldLoad && !AppLoader.isVisible) {
+      AppLoader.show(context, message: 'Loading lot data...');
+    } else if (!shouldLoad && AppLoader.isVisible) {
+      AppLoader.hide(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<LotMakingController>();
     final state = controller.state;
     _syncControllers(state.scannedTrays);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _updateLoaderState(state);
+    });
 
     return PopScope(
       canPop: !AppLoader.isVisible,
@@ -579,24 +600,31 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
               children: [
                 _buildPremiumHeader(controller, state),
                 Expanded(
-                  child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
+                  child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildConfigurationPanel(controller, state),
-                        if (state.selectedColor != null) ...[
-                          const SizedBox(height: 10),
-                          _buildLiveDashboard(controller, state),
-                          const SizedBox(height: 10),
-                          _buildWOSummary(controller, state),
-                          const SizedBox(height: 10),
-                          SizedBox(
-                            height: 380,
+                    child: CustomScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      slivers: [
+                        SliverToBoxAdapter(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _buildConfigurationPanel(controller, state),
+                              if (state.selectedColor != null) ...[
+                                const SizedBox(height: 10),
+                                _buildLiveDashboard(controller, state),
+                                const SizedBox(height: 10),
+                                _buildWOSummary(controller, state),
+                                const SizedBox(height: 10),
+                              ],
+                            ],
+                          ),
+                        ),
+                        if (state.selectedColor != null)
+                          SliverFillRemaining(
+                            hasScrollBody: true,
                             child: _buildScannedSection(controller, state),
                           ),
-                        ],
                       ],
                     ),
                   ),
@@ -979,7 +1007,7 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
                       const SizedBox(height: 10),
                       _buildCapacityProgress(state),
                       const SizedBox(height: 10),
-                      const TrayTableHeader(actionColumnWidth: 44, showBatchTubes: true, showDetailedTubes: true),
+                      const TrayTableHeader(actionColumnWidth: 44, showBatchTubes: true, showDetailedTubes: true, hidePcsColumns: true),
                       Expanded(
                         child: state.scannedTrays.isEmpty
                             ? const EmptyScanState(hasBorder: false)
@@ -1056,8 +1084,6 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
     final alreadyScannedVal = qtys['alreadyScanned']!;
     final remainingVal = qtys['remaining']!;
     final qty = double.tryParse(_quantityControllers[index].text) ?? 0;
-    final perTube = tray.item.perGarmentTube;
-    final pcs = qty * perTube;
     final weight = qty * (tray.item.pieceWeight ?? 0);
 
     const cellStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238));
@@ -1071,14 +1097,12 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
       ),
       child: Row(
         children: [
-          Expanded(flex: 6, child: Text(tray.primaryTrayModel.trayCode ?? 'N/A', textAlign: TextAlign.center, style: blueCellStyle)),
+          Expanded(flex: 8, child: Text(tray.primaryTrayModel.trayCode ?? 'N/A', textAlign: TextAlign.center, style: blueCellStyle)),
           Expanded(flex: 4, child: Text(tray.workOrderHeader.workOrderCode ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
-          Expanded(flex: 4, child: Text(tray.item.sizeDescription ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
-          Expanded(flex: 4, child: Text(perTube.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
+          Expanded(flex: 3, child: Text(tray.item.sizeDescription ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
           Expanded(flex: 3, child: Text(actualVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
           Expanded(flex: 3, child: Text(alreadyScannedVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle.copyWith(color: Colors.orange.shade800))),
           Expanded(flex: 3, child: Text(remainingVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle.copyWith(color: const Color(0xFF2E7D32)))),
-          Expanded(flex: 4, child: Text(pcs.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
           Expanded(flex: 4, child: Text('${weight.toStringAsFixed(0)}g', textAlign: TextAlign.center, style: cellStyle)),
           Expanded(
             flex: 4,
@@ -1107,45 +1131,49 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
               ),
             ),
           ),
-          const SizedBox(width: 8),
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () async {
-                final confirm = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Confirm Delete'),
-                    content: const Text('Are you sure you want to delete this tray?'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+          SizedBox(
+            width: 44,
+            child: Center(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Confirm Delete'),
+                        content: const Text('Are you sure you want to delete this tray?'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                          ),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFEF4444),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Delete'),
+                          ),
+                        ],
                       ),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFEF4444),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        onPressed: () => Navigator.pop(context, true),
-                        child: const Text('Delete'),
-                      ),
-                    ],
-                  ),
-                );
-                if (confirm == true) {
-                  controller.removeScannedTray(index);
-                }
-              },
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.05),
+                    );
+                    if (confirm == true) {
+                      controller.removeScannedTray(index);
+                    }
+                  },
                   borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red.shade400),
+                  ),
                 ),
-                child: Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red.shade400),
               ),
             ),
           ),
@@ -1259,21 +1287,29 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
                 child: Table(
                   columnWidths: const {
                     0: FlexColumnWidth(2.5),
-                    1: FlexColumnWidth(1.8),
-                    2: FlexColumnWidth(3.8),
-                    3: FlexColumnWidth(1.5),
-                    4: FlexColumnWidth(2.6),
+                    1: FlexColumnWidth(1.5),
+                    2: FlexColumnWidth(6.0),
+                    3: FlexColumnWidth(1.8),
+                    4: FlexColumnWidth(2.0),
                     5: FlexColumnWidth(1.8),
+                    6: FlexColumnWidth(1.8),
+                    7: FlexColumnWidth(2.0),
+                    8: FlexColumnWidth(2.2),
+                    9: FlexColumnWidth(1.8),
                   },
                   children: [
                     TableRow(
                       decoration: const BoxDecoration(color: Color(0xFFF1F5F9)),
                       children: [
-                        _buildTableHeaderCell('WO CODE'),
+                        _buildTableHeaderCell('WORK ORDER'),
                         _buildTableHeaderCell('SIZE'),
-                        _buildTableHeaderCell('ITEM'),
-                        _buildTableHeaderCell('TRAYS'),
-                        _buildTableHeaderCell('TUBES / PLAN'),
+                        _buildTableHeaderCell('ITEM DESCRIPTION'),
+                        _buildTableHeaderCell('SCANNED TRAYS'),
+                        _buildTableHeaderCell('SCANNED TUBES'),
+                        _buildTableHeaderCell('PLAN TUBES'),
+                        _buildTableHeaderCell('MAX TUBES'),
+                        _buildTableHeaderCell('ASSIGNED TUBES'),
+                        _buildTableHeaderCell('REMAINING TUBES'),
                         _buildTableHeaderCell('WEIGHT'),
                       ],
                     ),
@@ -1282,16 +1318,15 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
                       final planStr = planVal > 0.0 ? planVal.toStringAsFixed(0) : '-';
                       final int extraAllowed = (planVal * 0.1).ceil();
                       final double maxAllowed = planVal + extraAllowed;
-                      final maxStr = planVal > 0.0 ? " (Max ${maxAllowed.toStringAsFixed(0)})" : "";
+                      final maxStr = planVal > 0.0 ? maxAllowed.toStringAsFixed(0) : '-';
 
                       final lineId = data['lineId'] as int?;
                       final double assigned = lineId != null ? controller.getAlreadyAssignedTubesForWorkOrderLine(lineId) : 0.0;
                       final currentTubes = data['tubes'] as double;
-                      final totalTubes = currentTubes + assigned;
-
-                      final displayTubes = assigned > 0.0
-                          ? "${currentTubes.toStringAsFixed(0)} (Total: ${totalTubes.toStringAsFixed(0)})"
-                          : currentTubes.toStringAsFixed(0);
+                      final double totalScanned = currentTubes + assigned;
+                      final double remTubes = planVal > 0.0 ? (planVal - totalScanned) : 0.0;
+                      final remStr = planVal > 0.0 ? remTubes.toStringAsFixed(0) : '-';
+                      final weightVal = (data['weight'] as double);
 
                       return TableRow(
                         decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFECEFF1), width: 1))),
@@ -1300,8 +1335,12 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
                           _buildTableCell(data['size'].toString()),
                           _buildTableCell(data['item'].toString()),
                           _buildTableCell(data['trays'].toString()),
-                          _buildTableCell("$displayTubes / $planStr$maxStr"),
-                          _buildTableCell("${(data['weight'] as double).toStringAsFixed(0)}g"),
+                          _buildTableCell(currentTubes.toStringAsFixed(0)),
+                          _buildTableCell(planStr),
+                          _buildTableCell(maxStr),
+                          _buildTableCell(assigned > 0.0 ? assigned.toStringAsFixed(0) : '0'),
+                          _buildTableCell(remStr),
+                          _buildTableCell("${weightVal.toStringAsFixed(0)}g"),
                         ],
                       );
                     }),

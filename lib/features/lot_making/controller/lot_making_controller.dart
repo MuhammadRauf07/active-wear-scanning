@@ -30,10 +30,17 @@ class LotMakingController extends ChangeNotifier {
   }
 
   Future<void> initData() async {
-    await fetchMachines();
-    await fetchColors();
-    await fetchProductionProgresses();
-    await fetchLotProgressIds();
+    _state = _state.copyWith(isLoading: true, clearError: true);
+    notifyListeners();
+    try {
+      await fetchMachines();
+      await fetchColors();
+      await fetchProductionProgresses();
+      await fetchLotProgressIds();
+    } finally {
+      _state = _state.copyWith(isLoading: false);
+      notifyListeners();
+    }
   }
 
   void selectMachine(LotMachineModel? machine) {
@@ -294,14 +301,12 @@ class LotMakingController extends ChangeNotifier {
     final result = await _lotRepo.fetchProductionProgress();
     if (result.success && result.data != null) {
       final progresses = result.data as List<ProductionProgressResponseModel>;
-      _state = _state.copyWith(
-        productionProgressTrays: progresses,
-        isLoading: false,
-      );
+      _state = _state.copyWith(productionProgressTrays: progresses);
       await _cacheColorsForGbsWorkOrders();
       if (existingBatch != null) {
         await _loadExistingLotTrays(progresses);
       }
+      _state = _state.copyWith(isLoading: false);
     } else {
       _state = _state.copyWith(
         isLoading: false,

@@ -9,6 +9,7 @@ class TrayTableHeader extends StatelessWidget {
   final bool showBatchTubes;
   final bool showDetailedTubes;
   final bool showHoldColumn;
+  final bool hidePcsColumns;
   final double fontSize;
 
   const TrayTableHeader({
@@ -20,6 +21,7 @@ class TrayTableHeader extends StatelessWidget {
     this.showBatchTubes = false,
     this.showDetailedTubes = false,
     this.showHoldColumn = false,
+    this.hidePcsColumns = false,
     this.fontSize = 10.0,
   });
 
@@ -42,22 +44,22 @@ class TrayTableHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Expanded(flex: 5, child: Text('TRAY CODE', textAlign: TextAlign.center, style: _headerStyle)),
+          Expanded(flex: hidePcsColumns ? 8 : 5, child: Text('TRAY CODE', textAlign: TextAlign.center, style: _headerStyle)),
           if (showWorkOrderColumn && !showItemDescriptionColumn)
             Expanded(flex: 4, child: Text('WORK ORDER', textAlign: TextAlign.center, style: _headerStyle)),
           if (showItemDescriptionColumn)
             Expanded(flex: 16, child: Text('ITEM DESCRIPTION', textAlign: TextAlign.center, style: _headerStyle)),
           Expanded(flex: 3, child: Text('SIZE', textAlign: TextAlign.center, style: _headerStyle)),
-          if (!showItemDescriptionColumn)
+          if (!showItemDescriptionColumn && !hidePcsColumns)
             Expanded(flex: 3, child: Text('PCS/TUBE', textAlign: TextAlign.center, style: _headerStyle)),
           if (showDetailedTubes) ...[
             Expanded(flex: 3, child: Text('ACTUAL', textAlign: TextAlign.center, style: _headerStyle)),
-            Expanded(flex: 3, child: Text('ALREADY', textAlign: TextAlign.center, style: _headerStyle)),
+            Expanded(flex: 3, child: Text('ASSIGNED', textAlign: TextAlign.center, style: _headerStyle)),
             Expanded(flex: 3, child: Text('REMAIN', textAlign: TextAlign.center, style: _headerStyle)),
           ] else ...[
             Expanded(flex: 4, child: Text('TUBES', textAlign: TextAlign.center, style: _headerStyle)),
           ],
-          if (!showItemDescriptionColumn)
+          if (!showItemDescriptionColumn && !hidePcsColumns)
             Expanded(flex: 4, child: Text('PCS', textAlign: TextAlign.center, style: _headerStyle)),
           Expanded(flex: 4, child: Text('WEIGHT', textAlign: TextAlign.center, style: _headerStyle)),
           if (showLotColumn)

@@ -47,9 +47,23 @@ class BarcodeScannerDialog extends StatefulWidget {
 
 class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
   final _controller = MobileScannerController(
-    detectionSpeed: DetectionSpeed.normal,
+    detectionSpeed: DetectionSpeed.noDuplicates,
+    detectionTimeoutMs: 800,
+    cameraResolution: const Size(1920, 1080),
     facing: CameraFacing.back,
-    formats: [BarcodeFormat.all, BarcodeFormat.code128, BarcodeFormat.code39, BarcodeFormat.ean13, BarcodeFormat.ean8, BarcodeFormat.qrCode],
+    formats: const [
+      BarcodeFormat.qrCode,
+      BarcodeFormat.code128,
+      BarcodeFormat.code39,
+      BarcodeFormat.code93,
+      BarcodeFormat.ean13,
+      BarcodeFormat.ean8,
+      BarcodeFormat.itf,
+      BarcodeFormat.upcA,
+      BarcodeFormat.upcE,
+      BarcodeFormat.codabar,
+      BarcodeFormat.dataMatrix,
+    ],
   );
 
   final _manualController = TextEditingController();
@@ -119,7 +133,12 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
               onBackPress: _close,
               topPadding: 0,
               horizontalPadding: 12,
-              widget: const SizedBox.shrink(),
+              widget: (!kIsWeb && !Platform.isWindows)
+                  ? IconButton(
+                      icon: const Icon(Icons.flash_on, color: Colors.blue),
+                      onPressed: () => _controller.toggleTorch(),
+                    )
+                  : const SizedBox.shrink(),
             ),
             Padding(
               padding: const EdgeInsets.all(12),
@@ -156,7 +175,21 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
                         ],
                       ),
                     )
-                  : MobileScanner(controller: _controller, onDetect: _onDetect),
+                  : Stack(
+                      children: [
+                        MobileScanner(controller: _controller, onDetect: _onDetect),
+                        Center(
+                          child: Container(
+                            width: 320,
+                            height: 160,
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.blue.withValues(alpha: 0.6), width: 3),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
             ),
           ],
         ),

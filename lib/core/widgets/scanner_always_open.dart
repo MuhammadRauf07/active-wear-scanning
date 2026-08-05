@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -20,52 +22,35 @@ class ScannerAlwaysOpen extends StatefulWidget {
     this.showDoneButton = true,
   });
 
-  static Future<void> show(
+  static Future<T?> show<T>(
     BuildContext context, {
     required String title,
-    required FutureOr<String?> Function(String) onResult,
+    required FutureOr<String?> Function(String code) onResult,
     Widget Function(BuildContext context)? scannedItemsBuilder,
     bool showDoneButton = true,
   }) {
-    return showGeneralDialog<void>(
+    return showGeneralDialog<T>(
       context: context,
       barrierDismissible: false,
-      barrierLabel: 'Dismiss',
-      barrierColor: Colors.black54,
-      pageBuilder: (context, animation, secondaryAnimation) => Align(
-        alignment: Alignment.bottomCenter,
-        child: Container(
-          height: MediaQuery.of(context).size.height * 0.9,
-          width: double.infinity,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(24),
-              topRight: Radius.circular(24),
-            ),
-          ),
-          child: ClipRRect(
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(24),
-              topRight: Radius.circular(24),
-            ),
-            child: ScannerAlwaysOpen(
-              title: title,
-              onResult: onResult,
-              scannedItemsBuilder: scannedItemsBuilder,
-              showDoneButton: showDoneButton,
-            ),
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      transitionDuration: const Duration(milliseconds: 250),
+      pageBuilder: (ctx, anim1, anim2) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        backgroundColor: Colors.transparent,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: ScannerAlwaysOpen(
+            title: title,
+            onResult: onResult,
+            scannedItemsBuilder: scannedItemsBuilder,
+            showDoneButton: showDoneButton,
           ),
         ),
       ),
-      transitionBuilder: (context, animation, secondaryAnimation, child) {
-        const begin = Offset(0.0, 1.0);
-        const end = Offset.zero;
-        const curve = Curves.easeInOutCubic;
-        var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-        return SlideTransition(
-          position: animation.drive(tween),
-          child: child,
+      transitionBuilder: (ctx, anim1, anim2, child) {
+        return ScaleTransition(
+          scale: CurvedAnimation(parent: anim1, curve: Curves.easeOutCubic),
+          child: FadeTransition(opacity: anim1, child: child),
         );
       },
     );
@@ -78,8 +63,22 @@ class ScannerAlwaysOpen extends StatefulWidget {
 class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
   late final MobileScannerController _controller = MobileScannerController(
     autoStart: false,
-    detectionSpeed: DetectionSpeed.unrestricted,
-    formats: [BarcodeFormat.qrCode, BarcodeFormat.code128],
+    detectionSpeed: DetectionSpeed.noDuplicates,
+    detectionTimeoutMs: 800,
+    cameraResolution: const Size(1920, 1080),
+    formats: const [
+      BarcodeFormat.qrCode,
+      BarcodeFormat.code128,
+      BarcodeFormat.code39,
+      BarcodeFormat.code93,
+      BarcodeFormat.ean13,
+      BarcodeFormat.ean8,
+      BarcodeFormat.itf,
+      BarcodeFormat.upcA,
+      BarcodeFormat.upcE,
+      BarcodeFormat.codabar,
+      BarcodeFormat.dataMatrix,
+    ],
   );
   final _manualController = TextEditingController();
   bool _showSubmit = false;
@@ -236,16 +235,25 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
               onBackPress: _close,
               topPadding: 0,
               horizontalPadding: 12,
-              widget: widget.showDoneButton
-                  ? CustomOutlinedButton(
+              widget: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!kIsWeb && !Platform.isWindows)
+                    IconButton(
+                      icon: const Icon(Icons.flash_on, color: Colors.blue),
+                      onPressed: () => _controller.toggleTorch(),
+                    ),
+                  if (widget.showDoneButton)
+                    CustomOutlinedButton(
                       borderColor: Colors.blue,
                       label: 'Done',
                       fillColor: Colors.blue,
                       textColor: Colors.white,
                       buttonHeight: 36.0,
                       onPressed: _close,
-                    )
-                  : null,
+                    ),
+                ],
+              ),
             ),
             Padding(
               padding: const EdgeInsets.all(12),
@@ -260,10 +268,7 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
                           borderRadius: BorderRadius.circular(6),
                           borderSide: BorderSide(color: Colors.grey.shade300),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                       ),
                     ),
                   ),
@@ -321,8 +326,8 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
                     // SCANNER BORDER (Turns Red on any error)
                     Center(
                       child: Container(
-                        width: 250,
-                        height: 250,
+                        width: 320,
+                        height: 160,
                         decoration: BoxDecoration(
                           border: Border.all(
                             color: _errorOverlayText != null
@@ -330,7 +335,7 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
                                 : Colors.blue.withValues(alpha: 0.5),
                             width: 4,
                           ),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(16),
                         ),
                       ),
                     ),
