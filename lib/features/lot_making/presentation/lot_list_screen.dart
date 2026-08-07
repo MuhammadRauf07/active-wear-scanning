@@ -26,8 +26,16 @@ class _LotListScreenState extends State<LotListScreen>
   final _trayRepo = KnittingProductionRepo();
   bool _isLoading = true;
 
+  // Pagination & List state for Draft (unlocked) and Issued (locked) lots
   List<LotHeaderResponseModel> _unlockedLots = [];
+  bool _hasMoreUnlocked = true;
+  bool _isLoadingMoreUnlocked = false;
+  final ScrollController _unlockedScrollController = ScrollController();
+
   List<LotHeaderResponseModel> _lockedLots = [];
+  bool _hasMoreLocked = true;
+  bool _isLoadingMoreLocked = false;
+  final ScrollController _lockedScrollController = ScrollController();
 
   // Maps batchHeaderId → raw batch-line records linked to that lot
   Map<int, List<Map<String, dynamic>>> _groupedLotLinesByHeader = {};
@@ -74,6 +82,21 @@ class _LotListScreenState extends State<LotListScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+
+    _unlockedScrollController.addListener(() {
+      if (_unlockedScrollController.position.pixels >=
+          _unlockedScrollController.position.maxScrollExtent - 200) {
+        _loadMoreUnlockedLots();
+      }
+    });
+
+    _lockedScrollController.addListener(() {
+      if (_lockedScrollController.position.pixels >=
+          _lockedScrollController.position.maxScrollExtent - 200) {
+        _loadMoreLockedLots();
+      }
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _fetchAndGroupLots();
       _keyboardFocusNode.requestFocus();
@@ -83,33 +106,66 @@ class _LotListScreenState extends State<LotListScreen>
   @override
   void dispose() {
     _tabController.dispose();
+    _unlockedScrollController.dispose();
+    _lockedScrollController.dispose();
     _keyboardFocusNode.dispose();
     super.dispose();
   }
 
   Future<void> _fetchAndGroupLots() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _unlockedLots = [];
+      _lockedLots = [];
+      _hasMoreUnlocked = true;
+      _hasMoreLocked = true;
+      _isLoadingMoreUnlocked = false;
+      _isLoadingMoreLocked = false;
+    });
     AppLoader.show(context, message: 'Loading Lot History...');
 
-    final headerResult = await _lotRepo.fetchLotHeaders();
+    final unlockedResult = await _lotRepo.fetchLotHeaders(
+      lockFlag: false,
+      maxResultCount: 30,
+      skipCount: 0,
+    );
+
+    final lockedResult = await _lotRepo.fetchLotHeaders(
+      lockFlag: true,
+      maxResultCount: 30,
+      skipCount: 0,
+    );
+
     final batchLinesResult = await _lotRepo.fetchLotLines();
-    // Startup pre-fetching of all tray details has been removed to load list instantly.
     _primaryTrayIdToCode = {};
 
-    if (mounted && headerResult.success) {
-      final headerData = headerResult.data as List<Map<String, dynamic>>? ?? [];
-      final headers = headerData
-          .map((e) => LotHeaderResponseModel.fromJson(e))
-          .toList();
-      _unlockedLots = headers
-          .where((h) => h.batchHeader.lockFlag == false)
-          .toList();
-      _lockedLots = headers
-          .where((h) => h.batchHeader.lockFlag == true)
+    if (mounted) {
+      final unlockedData =
+          unlockedResult.success && unlockedResult.data is List
+              ? (unlockedResult.data as List)
+              : (unlockedResult.data is Map ? (unlockedResult.data['items'] ?? []) : []);
+
+      final lockedData =
+          lockedResult.success && lockedResult.data is List
+              ? (lockedResult.data as List)
+              : (lockedResult.data is Map ? (lockedResult.data['items'] ?? []) : []);
+
+      final List<LotHeaderResponseModel> unlockedList = (unlockedData as List)
+          .map((e) => LotHeaderResponseModel.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList();
 
+      final List<LotHeaderResponseModel> lockedList = (lockedData as List)
+          .map((e) => LotHeaderResponseModel.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+
+      _unlockedLots = unlockedList;
+      _lockedLots = lockedList;
+
+      _hasMoreUnlocked = unlockedList.length >= 30;
+      _hasMoreLocked = lockedList.length >= 30;
+
       // Pre-populate trolley maps from persisted trayDetailId on all lots
-      for (final lot in headers) {
+      for (final lot in [..._unlockedLots, ..._lockedLots]) {
         final batchId = lot.batchHeader.id;
         final trayDetailId = lot.batchHeader.trayDetailId;
         if (batchId != null && trayDetailId != null) {
@@ -127,27 +183,95 @@ class _LotListScreenState extends State<LotListScreen>
       final Map<int, List<Map<String, dynamic>>> grouped = {};
       if (batchLinesResult.success && batchLinesResult.data != null) {
         final rawLines = batchLinesResult.data as List<Map<String, dynamic>>;
-        debugPrint('📦 Total lot-lines fetched: ${rawLines.length}');
         for (var line in rawLines) {
           final id = line['batchLines']?['batchHeaderId'] as int?;
           if (id != null) grouped.putIfAbsent(id, () => []).add(line);
         }
       }
-      debugPrint(
-        '📊 Grouped lot-lines: ${grouped.map((k, v) => MapEntry(k, v.length))}',
-      );
 
       setState(() {
         _groupedLotLinesByHeader = grouped;
         _isLoading = false;
       });
       AppLoader.hide(context);
-    } else {
-      if (mounted) {
-        AppLoader.hide(context);
-        setState(() => _isLoading = false);
-        AppSnackBar.showError(context, message: 'Failed to fetch lots');
+    }
+  }
+
+  Future<void> _loadMoreUnlockedLots() async {
+    if (_isLoadingMoreUnlocked || !_hasMoreUnlocked) return;
+
+    setState(() => _isLoadingMoreUnlocked = true);
+
+    final res = await _lotRepo.fetchLotHeaders(
+      lockFlag: false,
+      maxResultCount: 30,
+      skipCount: _unlockedLots.length,
+    );
+
+    if (mounted && res.success && res.data != null) {
+      final rawList = res.data is List
+          ? (res.data as List)
+          : (res.data is Map ? (res.data['items'] ?? []) : []);
+
+      final newLots = (rawList as List)
+          .map((e) => LotHeaderResponseModel.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+
+      for (final lot in newLots) {
+        final batchId = lot.batchHeader.id;
+        final trayDetailId = lot.batchHeader.trayDetailId;
+        if (batchId != null && trayDetailId != null) {
+          _trolleyDetailIdByLot[batchId] = trayDetailId;
+          _fetchTrolleyCodeDynamically(batchId, trayDetailId);
+        }
       }
+
+      setState(() {
+        _unlockedLots.addAll(newLots);
+        _hasMoreUnlocked = newLots.length >= 30;
+        _isLoadingMoreUnlocked = false;
+      });
+    } else {
+      if (mounted) setState(() => _isLoadingMoreUnlocked = false);
+    }
+  }
+
+  Future<void> _loadMoreLockedLots() async {
+    if (_isLoadingMoreLocked || !_hasMoreLocked) return;
+
+    setState(() => _isLoadingMoreLocked = true);
+
+    final res = await _lotRepo.fetchLotHeaders(
+      lockFlag: true,
+      maxResultCount: 30,
+      skipCount: _lockedLots.length,
+    );
+
+    if (mounted && res.success && res.data != null) {
+      final rawList = res.data is List
+          ? (res.data as List)
+          : (res.data is Map ? (res.data['items'] ?? []) : []);
+
+      final newLots = (rawList as List)
+          .map((e) => LotHeaderResponseModel.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+
+      for (final lot in newLots) {
+        final batchId = lot.batchHeader.id;
+        final trayDetailId = lot.batchHeader.trayDetailId;
+        if (batchId != null && trayDetailId != null) {
+          _trolleyDetailIdByLot[batchId] = trayDetailId;
+          _fetchTrolleyCodeDynamically(batchId, trayDetailId);
+        }
+      }
+
+      setState(() {
+        _lockedLots.addAll(newLots);
+        _hasMoreLocked = newLots.length >= 30;
+        _isLoadingMoreLocked = false;
+      });
+    } else {
+      if (mounted) setState(() => _isLoadingMoreLocked = false);
     }
   }
 
@@ -810,8 +934,18 @@ class _LotListScreenState extends State<LotListScreen>
                     child: TabBarView(
                       controller: _tabController,
                       children: [
-                        _buildLotList(_unlockedLots, isLocked: false),
-                        _buildLotList(_lockedLots, isLocked: true),
+                        _buildLotList(
+                          _unlockedLots,
+                          isLocked: false,
+                          scrollController: _unlockedScrollController,
+                          isLoadingMore: _isLoadingMoreUnlocked,
+                        ),
+                        _buildLotList(
+                          _lockedLots,
+                          isLocked: true,
+                          scrollController: _lockedScrollController,
+                          isLoadingMore: _isLoadingMoreLocked,
+                        ),
                       ],
                     ),
                   ),
@@ -860,8 +994,12 @@ class _LotListScreenState extends State<LotListScreen>
     );
   }
 
-  Widget _buildLotList(List<LotHeaderResponseModel> lots,
-      {required bool isLocked}) {
+  Widget _buildLotList(
+    List<LotHeaderResponseModel> lots, {
+    required bool isLocked,
+    required ScrollController scrollController,
+    required bool isLoadingMore,
+  }) {
     if (lots.isEmpty) {
       return Center(
         child: Column(
@@ -891,10 +1029,27 @@ class _LotListScreenState extends State<LotListScreen>
         _buildListHeader(isLocked),
         Expanded(
           child: ListView.builder(
+            controller: scrollController,
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            itemCount: lots.length,
-            itemBuilder: (context, index) =>
-                _buildLotCard(lots[index], isLocked: isLocked),
+            itemCount: lots.length + (isLoadingMore ? 1 : 0),
+            itemBuilder: (context, index) {
+              if (index == lots.length) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Center(
+                    child: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1B64A3)),
+                      ),
+                    ),
+                  ),
+                );
+              }
+              return _buildLotCard(lots[index], isLocked: isLocked);
+            },
           ),
         ),
       ],
@@ -1071,6 +1226,7 @@ class _LotListScreenState extends State<LotListScreen>
                       if (isExpanded) {
                         _expandedLockedLotIds.remove(headerId);
                       } else {
+                        _expandedLockedLotIds.clear();
                         _expandedLockedLotIds.add(headerId);
                       }
                     }),

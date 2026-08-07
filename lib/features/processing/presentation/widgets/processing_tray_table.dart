@@ -334,13 +334,20 @@ class _ProcessingTrayTableState extends State<ProcessingTrayTable> {
                                           ),
                                           padding: EdgeInsets.zero,
                                           constraints: const BoxConstraints(),
-                                          onPressed: () => _showEditQtyDialog(
-                                            context,
-                                            id,
-                                            t.primaryTrayModel.trayCode ?? '-',
-                                            tubes,
-                                            t.productionProgress.requiredQty ?? initialQty,
-                                          ),
+                                          onPressed: () {
+                                            final bool hasCurrentWaste = (t.productionProgress.waste ?? 0) > 0;
+                                            final double effectiveRequiredQty = hasCurrentWaste
+                                                ? (t.productionProgress.requiredQty?.toDouble() ?? tubes)
+                                                : tubes;
+                                            _showEditQtyDialog(
+                                              context,
+                                              id,
+                                              t.primaryTrayModel.trayCode ?? '-',
+                                              tubes,
+                                              effectiveRequiredQty,
+                                              hasCurrentWaste: hasCurrentWaste,
+                                            );
+                                          },
                                         ),
                                 )
                               : const SizedBox.shrink(),
@@ -386,7 +393,14 @@ class _ProcessingTrayTableState extends State<ProcessingTrayTable> {
     );
   }
 
-  void _showEditQtyDialog(BuildContext context, int progressId, String trayCode, double currentQty, double requiredQty) {
+  void _showEditQtyDialog(
+    BuildContext context,
+    int progressId,
+    String trayCode,
+    double currentQty,
+    double requiredQty, {
+    bool hasCurrentWaste = false,
+  }) {
     showDialog(
       context: context,
       builder: (context) => _EditTrayQuantityDialog(
@@ -408,20 +422,22 @@ class _ProcessingTrayTableState extends State<ProcessingTrayTable> {
             }
           }
         },
-        onDelete: () async {
-          setState(() {
-            _loadingRows[progressId] = true;
-          });
-          try {
-            await widget.onDeleteWastage?.call(progressId);
-          } finally {
-            if (mounted) {
-              setState(() {
-                _loadingRows[progressId] = false;
-              });
-            }
-          }
-        },
+        onDelete: (hasCurrentWaste && widget.onDeleteWastage != null)
+            ? () async {
+                setState(() {
+                  _loadingRows[progressId] = true;
+                });
+                try {
+                  await widget.onDeleteWastage?.call(progressId);
+                } finally {
+                  if (mounted) {
+                    setState(() {
+                      _loadingRows[progressId] = false;
+                    });
+                  }
+                }
+              }
+            : null,
       ),
     );
   }

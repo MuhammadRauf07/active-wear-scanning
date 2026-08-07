@@ -143,13 +143,15 @@ class ProcessingBatchController extends ChangeNotifier {
         final list = res.data as List<ProductionProgressResponseModel>;
 
         final wastageIds = list
-            .where((t) => t.productionProgress.locatorId == 18 || (t.productionProgress.waste ?? 0) > 0)
+            .where((t) => t.productionProgress.operationId == currentOperationId &&
+                         (t.productionProgress.locatorId == 18 || (t.productionProgress.waste ?? 0) > 0))
             .map((t) => t.productionProgress.primaryTrayId)
             .whereType<int>()
             .toSet();
 
         final Map<int, ProductionProgressResponseModel> wastageByOriginalId = {};
         for (final t in list) {
+          if (t.productionProgress.operationId != currentOperationId) continue;
           final subOp = t.productionProgress.subOperation;
           if (subOp != null) {
             final origId = int.tryParse(subOp);
@@ -741,6 +743,8 @@ class ProcessingBatchController extends ChangeNotifier {
               'operationId': _state.reworkTargetOpId,
               'locatorId': rewLoc,
               'date': DateTime.now().toIso8601String(),
+              'waste': null,
+              'requiredQty': null,
             });
             final crRes = await _processingRepo.createProductionProgress(newJ);
             if (!crRes.success) throw Exception('Create failed: ${crRes.message}');
@@ -830,6 +834,8 @@ class ProcessingBatchController extends ChangeNotifier {
                   'locatorId': nextLocatorId,
                   'date': DateTime.now().toIso8601String(),
                   'holdFlag': false,
+                  'waste': null,
+                  'requiredQty': null,
                 });
                 final crRes = await _processingRepo.createProductionProgress(newJ);
                 if (!crRes.success) throw Exception('Create failed: ${crRes.message}');

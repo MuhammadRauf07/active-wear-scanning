@@ -119,8 +119,16 @@ class LotRepo {
     return result;
   }
 
-  Future<PlexApiResult> fetchLotHeaders() async {
-    final result = await _api.getList('/api/app/batch-headers');
+  Future<PlexApiResult> fetchLotHeaders({bool? lockFlag, int maxResultCount = 30, int skipCount = 0}) async {
+    final query = {
+      'MaxResultCount': maxResultCount.toString(),
+      'maxResultCount': maxResultCount.toString(),
+      'SkipCount': skipCount.toString(),
+      'skipCount': skipCount.toString(),
+      if (lockFlag != null) 'LockFlag': lockFlag.toString(),
+      if (lockFlag != null) 'lockFlag': lockFlag.toString(),
+    };
+    final result = await _api.getList('/api/app/batch-headers', query: query);
     return result;
   }
 
