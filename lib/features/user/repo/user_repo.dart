@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:active_wear_scanning/core/config/app_config.dart';
 import 'package:active_wear_scanning/features/user/model/active_wear_user.dart';
 import 'package:active_wear_scanning/features/user/repo/profile.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:plex/plex_networking/plex_networking.dart';
 import 'package:plex/plex_package.dart';
 import 'package:plex/plex_sp.dart';
@@ -24,6 +25,7 @@ class UserRepo {
       return PlexApiResult(true, 200, "Success", token);
     } else {
       var error = response as PlexError;
+      debugPrint("❌ LOGIN ERROR 400 RESPONSE: Code ${error.code} | Message: ${error.message}");
       if (error.code == HttpStatus.unauthorized) {
         PlexApp.app.logout();
       }

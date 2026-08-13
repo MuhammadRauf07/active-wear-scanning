@@ -58,13 +58,13 @@ void main() {
         PlexNetworking.instance.setBasePath(AppConfig.baseUrl);
         PlexNetworking.instance.addHeaders = () async {
           final user = PlexApp.app.getUser() as TasdeeqUser?;
-          return <String, String>{if (user != null) 'Authorization': 'Bearer ${user.accessToken}', '__tenant': "ActiveWear"};
+          return <String, String>{if (user != null) 'Authorization': 'Bearer ${user.accessToken}', '__tenant': "Activewear"};
         };
       },
       useAuthorization: true,
       loginConfig: PlexLoginConfig(
-        debugUsername: 'admin',
-        debugPassword: 'AW123',
+        debugUsername: 'Admin',
+        debugPassword: '1q2w3E*',
         onLogin: (context, email, password) async {
           var resultToken = await fromPlex<UserRepo>().login(email, password);
           if (!resultToken.success) {
