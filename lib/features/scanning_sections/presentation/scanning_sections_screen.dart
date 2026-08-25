@@ -11,6 +11,7 @@ import 'package:active_wear_scanning/features/md_receiving/presentation/md_recei
 import 'package:active_wear_scanning/features/stitching_line_schedule/presentation/stitching_line_schedule_screen.dart';
 import 'package:active_wear_scanning/features/processing_waste_receiving/presentation/processing_waste_receiving_screen.dart';
 import 'package:active_wear_scanning/features/unhold_trays/presentation/unhold_trays_screen.dart';
+import 'package:active_wear_scanning/core/widgets/environment_switcher_button.dart';
 import 'package:flutter/material.dart';
 
 class ScanningSectionsScreen extends StatelessWidget {
@@ -27,27 +28,34 @@ class ScanningSectionsScreen extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
-              child: Column(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Operations Modules',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF0D47A1), // Deep Blue to match cards
-                      letterSpacing: -1.0,
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text(
+                        'Operations Modules',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF0D47A1), // Deep Blue to match cards
+                          letterSpacing: -1.0,
+                        ),
+                      ),
+                      SizedBox(height: 6),
+                      Text(
+                        'Select a module to begin production tasks',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: Color(0xFF1976D2), // Medium Blue
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Select a module to begin production tasks',
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: Color(0xFF1976D2), // Medium Blue
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  const EnvironmentSwitcherButton(),
                 ],
               ),
             ),

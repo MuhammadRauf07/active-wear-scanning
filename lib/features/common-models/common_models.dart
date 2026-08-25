@@ -335,6 +335,54 @@ class ProductionProgress {
   }
 }
 
+class LocatorModel {
+  final int id;
+  final String? description;
+  final String? locatorCode;
+  final String? logicalWH;
+  final String? location;
+  final bool? active;
+  final int? departmentId;
+  final int? operationId;
+
+  LocatorModel({
+    required this.id,
+    this.description,
+    this.locatorCode,
+    this.logicalWH,
+    this.location,
+    this.active,
+    this.departmentId,
+    this.operationId,
+  });
+
+  factory LocatorModel.fromJson(Map<String, dynamic> json) {
+    return LocatorModel(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      description: json['description']?.toString(),
+      locatorCode: json['locatorCode']?.toString(),
+      logicalWH: json['logicalWH']?.toString(),
+      location: json['location']?.toString(),
+      active: json['active'] as bool?,
+      departmentId: (json['departmentId'] as num?)?.toInt(),
+      operationId: (json['operationId'] as num?)?.toInt(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'description': description,
+      'locatorCode': locatorCode,
+      'logicalWH': logicalWH,
+      'location': location,
+      'active': active,
+      'departmentId': departmentId,
+      'operationId': operationId,
+    };
+  }
+}
+
 class Operation {
   final String code;
   final String name;
@@ -347,6 +395,9 @@ class Operation {
   final String? lastModifierId;
   final bool? isLastProcess;
   final int? processNature;
+  final int? seqNo;
+  final int? locatorId;
+  final LocatorModel? locator;
   final int id;
 
   Operation({
@@ -361,6 +412,9 @@ class Operation {
     required this.lastModifierId,
     this.isLastProcess,
     this.processNature,
+    this.seqNo,
+    this.locatorId,
+    this.locator,
     required this.id,
   });
 
@@ -377,6 +431,11 @@ class Operation {
       lastModifierId: json['lastModifierId'],
       isLastProcess: json['isLastProcess'],
       processNature: json['processNature'] != null ? int.tryParse(json['processNature'].toString()) : null,
+      seqNo: json['seqNo'] != null ? int.tryParse(json['seqNo'].toString()) : null,
+      locatorId: json['locatorId'] != null ? int.tryParse(json['locatorId'].toString()) : null,
+      locator: json['locator'] != null && json['locator'] is Map
+          ? LocatorModel.fromJson(Map<String, dynamic>.from(json['locator'] as Map))
+          : null,
       id: json['id'] != null ? int.tryParse(json['id'].toString()) ?? 0 : 0,
     );
   }

@@ -55,6 +55,7 @@ void main() {
         // PlexApp.app.logout();
         
         PlexNetworking.instance.allowBadCertificateForHTTPS();
+        AppConfig.init();
         PlexNetworking.instance.setBasePath(AppConfig.baseUrl);
         PlexNetworking.instance.addHeaders = () async {
           final user = PlexApp.app.getUser() as TasdeeqUser?;

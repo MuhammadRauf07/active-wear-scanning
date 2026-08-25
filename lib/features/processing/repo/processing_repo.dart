@@ -15,8 +15,14 @@ class ProcessingRepo {
     try {
       final List rawData = result.data is Map ? (result.data['items'] ?? []) : result.data;
       final list = rawData.map((item) {
-        final Map<String, dynamic> opMap = Map<String, dynamic>.from(item as Map);
-        final opJson = opMap.containsKey('operation') ? (opMap['operation'] as Map<String, dynamic>) : opMap;
+        final Map<String, dynamic> itemMap = Map<String, dynamic>.from(item as Map);
+        final Map<String, dynamic> opJson = itemMap.containsKey('operation') && itemMap['operation'] != null
+            ? Map<String, dynamic>.from(itemMap['operation'] as Map)
+            : itemMap;
+        
+        if (itemMap.containsKey('locator') && itemMap['locator'] != null && !opJson.containsKey('locator')) {
+          opJson['locator'] = itemMap['locator'];
+        }
         return Operation.fromJson(opJson);
       }).toList();
       return PlexApiResult(true, 200, "Success", list);

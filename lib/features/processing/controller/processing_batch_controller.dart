@@ -6,6 +6,8 @@ import 'package:active_wear_scanning/features/lot_making/model/lot_header_model.
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:active_wear_scanning/features/processing/model/processing_batch_state.dart';
 
+import '../../common-models/common_models.dart';
+
 class ProcessingBatchController extends ChangeNotifier {
   final int batchHeaderId;
   final int currentOperationId;
@@ -673,15 +675,32 @@ class ProcessingBatchController extends ChangeNotifier {
       final targetOpId = nextOperationId ?? currentOperationId;
       int nextLocatorId = baseProgress?.locatorId ?? 10;
 
-      final locRes = await _processingRepo.fetchLocators(operationId: targetOpId);
-      if (locRes.success && locRes.data != null) {
-        final List locList = locRes.data is Map ? (locRes.data['items'] ?? []) : locRes.data;
-        final match = locList.cast<Map>().firstWhere(
-          (e) => (e['operation']?['id'] ?? e['locator']?['operationId'])?.toString() == targetOpId.toString(),
-          orElse: () => {},
+      final opsRes = await _processingRepo.fetchProcessingOperations();
+      if (opsRes.success && opsRes.data != null) {
+        final List<Operation> opsList = List<Operation>.from(opsRes.data);
+        final matchOp = opsList.firstWhere(
+          (o) => o.id == targetOpId,
+          orElse: () => Operation(code: '', name: '', description: null, identifierRef: null, concurrencyStamp: '', creationTime: '', lastModificationTime: null, creatorId: null, lastModifierId: null, id: 0),
         );
-        if (match.isNotEmpty) {
-          nextLocatorId = match['locator']?['id'] as int? ?? (baseProgress?.locatorId ?? 10);
+        if (matchOp.id != 0) {
+          final resolvedLocId = matchOp.locatorId ?? matchOp.locator?.id;
+          if (resolvedLocId != null && resolvedLocId > 0) {
+            nextLocatorId = resolvedLocId;
+          }
+        }
+      }
+
+      if (nextLocatorId == (baseProgress?.locatorId ?? 10)) {
+        final locRes = await _processingRepo.fetchLocators(operationId: targetOpId);
+        if (locRes.success && locRes.data != null) {
+          final List locList = locRes.data is Map ? (locRes.data['items'] ?? []) : locRes.data;
+          final match = locList.cast<Map>().firstWhere(
+            (e) => (e['operation']?['id'] ?? e['locator']?['operationId'])?.toString() == targetOpId.toString(),
+            orElse: () => {},
+          );
+          if (match.isNotEmpty) {
+            nextLocatorId = match['locator']?['id'] as int? ?? nextLocatorId;
+          }
         }
       }
 
@@ -717,14 +736,21 @@ class ProcessingBatchController extends ChangeNotifier {
             if (!updRes.success) throw Exception('Update failed: ${updRes.message}');
 
             int rewLoc = pp.locatorId ?? 10;
-            final rewRes = await _processingRepo.fetchLocators(operationId: _state.reworkTargetOpId!);
-            if (rewRes.success && rewRes.data != null) {
-              final List rl = rewRes.data is Map ? (rewRes.data['items'] ?? []) : rewRes.data;
-              final rm = rl.cast<Map>().firstWhere(
-                (e) => (e['operation']?['id'] ?? e['locator']?['operationId'])?.toString() == _state.reworkTargetOpId.toString(),
-                orElse: () => {},
-              );
-              if (rm.isNotEmpty) rewLoc = rm['locator']?['id'] as int? ?? (pp.locatorId ?? 10);
+            if (_state.reworkTargetOpId != null) {
+              final opsRes = await _processingRepo.fetchProcessingOperations();
+              if (opsRes.success && opsRes.data != null) {
+                final List<Operation> opsList = List<Operation>.from(opsRes.data);
+                final matchOp = opsList.firstWhere(
+                  (o) => o.id == _state.reworkTargetOpId,
+                  orElse: () => Operation(code: '', name: '', description: null, identifierRef: null, concurrencyStamp: '', creationTime: '', lastModificationTime: null, creatorId: null, lastModifierId: null, id: 0),
+                );
+                if (matchOp.id != 0) {
+                  final resolvedLocId = matchOp.locatorId ?? matchOp.locator?.id;
+                  if (resolvedLocId != null && resolvedLocId > 0) {
+                    rewLoc = resolvedLocId;
+                  }
+                }
+              }
             }
 
             final newJ = pp.toJson();

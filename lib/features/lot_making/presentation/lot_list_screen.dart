@@ -12,6 +12,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../gbs/model/production_progress.dart';
+import 'package:active_wear_scanning/features/processing/repo/processing_repo.dart';
+import 'package:active_wear_scanning/features/common-models/common_models.dart';
 
 class LotListScreen extends StatefulWidget {
   const LotListScreen({super.key});
@@ -659,26 +661,42 @@ class _LotListScreenState extends State<LotListScreen>
       int dynamicLocatorId = 10; // Default fallback
       final targetOpId = minOpId ?? progress?['operationId'];
       if (targetOpId != null) {
-        final locRes = await _lotRepo.fetchLocators(operationId: targetOpId);
-        if (locRes.success && locRes.data != null) {
-          final locList = locRes.data as List;
-          // Use .toString() comparison to avoid int vs String mismatch
-          final matchingEntry = locList.cast<Map>().firstWhere(
-            (entry) => (entry['operation']?['id'] ?? entry['locator']?['operationId'])?.toString() == targetOpId.toString(),
-            orElse: () => {},
+        final opsRes = await ProcessingRepo().fetchProcessingOperations();
+        if (opsRes.success && opsRes.data != null) {
+          final List<Operation> opsList = List<Operation>.from(opsRes.data);
+          final matchOp = opsList.firstWhere(
+            (o) => o.id == targetOpId,
+            orElse: () => Operation(code: '', name: '', description: null, identifierRef: null, concurrencyStamp: '', creationTime: '', lastModificationTime: null, creatorId: null, lastModifierId: null, id: 0),
           );
-          
-          if (matchingEntry.isNotEmpty) {
-            final locId = matchingEntry['locator']?['id'];
-            if (locId != null) {
-              dynamicLocatorId = locId as int;
-              debugPrint('✅ Found Dynamic Locator: Op=$targetOpId -> Loc=$dynamicLocatorId');
+          if (matchOp.id != 0) {
+            final resolvedLocId = matchOp.locatorId ?? matchOp.locator?.id;
+            if (resolvedLocId != null && resolvedLocId > 0) {
+              dynamicLocatorId = resolvedLocId;
+            }
+          }
+        }
+
+        if (dynamicLocatorId == 10) {
+          final locRes = await _lotRepo.fetchLocators(operationId: targetOpId);
+          if (locRes.success && locRes.data != null) {
+            final locList = locRes.data as List;
+            final matchingEntry = locList.cast<Map>().firstWhere(
+              (entry) => (entry['operation']?['id'] ?? entry['locator']?['operationId'])?.toString() == targetOpId.toString(),
+              orElse: () => {},
+            );
+            
+            if (matchingEntry.isNotEmpty) {
+              final locId = matchingEntry['locator']?['id'];
+              if (locId != null) {
+                dynamicLocatorId = locId as int;
+                debugPrint('✅ Found Dynamic Locator: Op=$targetOpId -> Loc=$dynamicLocatorId');
+              }
+            } else {
+              debugPrint('⚠️ No matching locator found in list for Op=$targetOpId. Using default 10.');
             }
           } else {
-            debugPrint('⚠️ No matching locator found in list for Op=$targetOpId. Using default 10.');
+            debugPrint('❌ Fetch Locators Failed: ${locRes.message}. Using default 10.');
           }
-        } else {
-          debugPrint('❌ Fetch Locators Failed: ${locRes.message}. Using default 10.');
         }
       }
 
@@ -706,7 +724,7 @@ class _LotListScreenState extends State<LotListScreen>
         'machineId': progress?['machineId'] ?? bh.machineId,
         'planHeaderId': progress?['planHeaderId'],
         'locatorId': 3,
-        'toLocatorId': 6,
+        'toLocatorId': dynamicLocatorId,
         'batchHeaderId': headerId,
         'batchLinesId': bl['id'],
         'processedItemId': processedItemId,
@@ -747,7 +765,7 @@ class _LotListScreenState extends State<LotListScreen>
         'secondaryTrayId': _trolleyDetailIdByLot[headerId],
         'machineId': progress?['machineId'] ?? bh.machineId,
         'planHeaderId': progress?['planHeaderId'],
-        'locatorId': 6,
+        'locatorId': dynamicLocatorId,
         'batchHeaderId': headerId,
         'batchLineId': bl['id'],
         'batchLinesId': bl['id'],
