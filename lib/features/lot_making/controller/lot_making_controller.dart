@@ -8,7 +8,6 @@ import 'package:active_wear_scanning/features/lot_making/model/lot_header_model.
 import 'package:active_wear_scanning/features/lot_making/model/lot_machine_model.dart';
 import 'package:active_wear_scanning/features/lot_making/model/lot_making_state.dart';
 import 'package:active_wear_scanning/features/lot_making/repo/lot_repo.dart';
-import 'package:active_wear_scanning/features/processing/repo/processing_repo.dart';
 
 class LotMakingController extends ChangeNotifier {
   final _lotRepo = LotRepo();
@@ -742,21 +741,6 @@ class LotMakingController extends ChangeNotifier {
         }
       }
 
-      int? targetLocatorId;
-      if (_state.referenceMinOperationId != null) {
-        final opsRes = await ProcessingRepo().fetchProcessingOperations();
-        if (opsRes.success && opsRes.data != null) {
-          final List<Operation> opsList = List<Operation>.from(opsRes.data);
-          final matchOp = opsList.firstWhere(
-            (o) => o.id == _state.referenceMinOperationId,
-            orElse: () => Operation(code: '', name: '', description: null, identifierRef: null, concurrencyStamp: '', creationTime: '', lastModificationTime: null, creatorId: null, lastModifierId: null, id: 0),
-          );
-          if (matchOp.id != 0) {
-            targetLocatorId = matchOp.locatorId ?? matchOp.locator?.id;
-          }
-        }
-      }
-
       for (int i = 0; i < _state.scannedTrays.length; i++) {
         final tray = _state.scannedTrays[i];
         final qty = finalQuantities[i];
@@ -777,12 +761,6 @@ class LotMakingController extends ChangeNotifier {
 
           newPPPayload['batchHeaderId'] = batchHeaderId;
           newPPPayload['transactionType'] = 6;
-          if (_state.referenceMinOperationId != null) {
-            newPPPayload['operationId'] = _state.referenceMinOperationId;
-            if (targetLocatorId != null && targetLocatorId > 0) {
-              newPPPayload['locatorId'] = targetLocatorId;
-            }
-          }
 
           newPPPayload.remove('id');
           newPPPayload.remove('progressCode');
@@ -840,12 +818,6 @@ class LotMakingController extends ChangeNotifier {
           final ppPayload = pp.toJson();
           ppPayload['batchHeaderId'] = batchHeaderId;
           ppPayload['transactionType'] = 6;
-          if (_state.referenceMinOperationId != null) {
-            ppPayload['operationId'] = _state.referenceMinOperationId;
-            if (targetLocatorId != null && targetLocatorId > 0) {
-              ppPayload['locatorId'] = targetLocatorId;
-            }
-          }
 
           ppPayload.remove('id');
           ppPayload.remove('progressCode');
@@ -891,7 +863,7 @@ class LotMakingController extends ChangeNotifier {
           "workOrderLineId": tray.workOrderLine?.id ?? tray.productionProgress.workOrderLineId,
           "itemId": tray.item.id,
           "trayId": tray.primaryTrayModel.id,
-          "locatorId": targetLocatorId ?? tray.productionProgress.locatorId,
+          "locatorId": tray.productionProgress.locatorId,
           "processItemId": _state.trayProcessedItemId[tray.primaryTrayModel.id],
         };
 

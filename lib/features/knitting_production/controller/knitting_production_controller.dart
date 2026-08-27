@@ -229,10 +229,12 @@ class KnittingProductionController extends ChangeNotifier {
         final int targetShiftId = targetInfo['shiftId'];
 
         final filteredLines = rawLines.where((element) {
-          final planDate = element.planLine.planDate;
+          if (element.planHeader?.lockFlag != true) return false;
+          final planDate = element.planHeader?.date ?? element.planLine.planDate;
+          final shiftId = element.planHeader?.shiftId ?? element.planLine.shiftId;
           final dateMatches = planDate.startsWith(targetDateStr);
           if (_state.shifts.isEmpty) return dateMatches;
-          final shiftMatches = element.planLine.shiftId == targetShiftId;
+          final shiftMatches = shiftId == targetShiftId;
           return dateMatches && shiftMatches;
         }).toList();
 
@@ -309,10 +311,12 @@ class KnittingProductionController extends ChangeNotifier {
       final int targetShiftId = targetInfo['shiftId'];
 
       final filteredLines = _state.allRawPlanLines.where((element) {
-        final planDate = element.planLine.planDate;
+        if (element.planHeader?.lockFlag != true) return false;
+        final planDate = element.planHeader?.date ?? element.planLine.planDate;
+        final shiftId = element.planHeader?.shiftId ?? element.planLine.shiftId;
         final dateMatches = planDate.startsWith(targetDateStr);
         if (_state.shifts.isEmpty) return dateMatches;
-        final shiftMatches = element.planLine.shiftId == targetShiftId;
+        final shiftMatches = shiftId == targetShiftId;
         return dateMatches && shiftMatches;
       }).toList();
 

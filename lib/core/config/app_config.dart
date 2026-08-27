@@ -14,7 +14,7 @@ class AppConfig {
   AppConfig._();
 
   /// Set to false to disable/hide environment switcher across the app in the future
-  static const bool enableEnvironmentSwitcher = true;
+  static const bool enableEnvironmentSwitcher = false;
 
   static const String _envKey = 'app_selected_environment';
 
