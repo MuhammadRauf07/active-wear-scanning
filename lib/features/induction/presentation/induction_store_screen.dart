@@ -81,11 +81,7 @@ class _InductionStoreScreenViewState extends State<_InductionStoreScreenView> {
   }
 
   Future<void> _onScanTray(InductionController controller, InductionState state) async {
-    AppLoader.show(context);
-    await controller.fetchAvailableTrays();
-    if (!mounted) return;
-    AppLoader.hide(context);
-
+    controller.fetchAvailableTrays();
     setState(() => _isScannerOpen = true);
     await ScannerAlwaysOpen.show(
       context,

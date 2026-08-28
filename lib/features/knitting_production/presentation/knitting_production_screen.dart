@@ -1252,9 +1252,7 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
         final code = scannedCode.trim();
         if (code.isEmpty) return 'Invalid machine code';
         
-        AppLoader.show(context, message: 'Loading Machine Data...');
         await controller.fetchMachineData(code);
-        AppLoader.hide(context);
 
         if (controller.state.errorMessage != null) {
           final err = controller.state.errorMessage!;

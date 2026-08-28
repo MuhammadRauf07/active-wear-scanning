@@ -357,9 +357,7 @@ class _LotListScreenState extends State<LotListScreen>
       context,
       title: 'Scan Trolley',
       onResult: (scannedCode) async {
-        AppLoader.show(context, message: 'Validating trolley...');
         final errorMsg = await _validateAndAttachTrolley(lotHeaderId, scannedCode);
-        AppLoader.hide(context);
 
         if (errorMsg == null) {
           Navigator.of(context).pop(); // close scanner after success

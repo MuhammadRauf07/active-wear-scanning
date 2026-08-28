@@ -384,7 +384,8 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
                                     height: 20,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2.5,
-                                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0D47A1)),
+                                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1B64A3)),
+                                      backgroundColor: Color(0xFFE2E8F0),
                                     ),
                                   ),
                                   SizedBox(width: 12),
@@ -482,7 +483,8 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
                                     height: 18,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2.2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0D47A1)),
+                                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1B64A3)),
+                                      backgroundColor: Color(0xFFE2E8F0),
                                     ),
                                   ),
                                   SizedBox(width: 10),

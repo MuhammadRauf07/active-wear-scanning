@@ -68,11 +68,7 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
   }
 
   Future<void> _onScanTray(GbsController controller, GbsState state) async {
-    AppLoader.show(context);
-    await controller.fetchLatestTraysSilently();
-    if (!mounted) return;
-    AppLoader.hide(context);
-
+    controller.fetchLatestTraysSilently();
     setState(() => _isScannerOpen = true);
     await ScannerAlwaysOpen.show(
       context,
