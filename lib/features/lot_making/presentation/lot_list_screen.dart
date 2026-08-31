@@ -591,6 +591,70 @@ class _LotListScreenState extends State<LotListScreen>
       }
     }
 
+    // ── Batch-level single Target Operation & Locator Resolution ──────────────
+    int? batchTargetOpId;
+    if (routingItemId != null) {
+      final routingRes = await _lotRepo.fetchItemRoutings(routingItemId);
+      if (routingRes.success && routingRes.data != null) {
+        final routingItems = routingRes.data as List;
+        int? minSeq;
+        for (final r in routingItems) {
+          final rMap = r as Map;
+          final seq = rMap['itemRouting']?['seq'] as int?;
+          final opId = rMap['itemRouting']?['operationId'] as int?;
+          if (seq != null && opId != null) {
+            if (minSeq == null || seq < minSeq) {
+              minSeq = seq;
+              batchTargetOpId = opId;
+            }
+          }
+        }
+      }
+    }
+
+    if (batchTargetOpId == null && firstLine != null) {
+      final progress = firstLine['progress'] as Map<String, dynamic>?;
+      batchTargetOpId = progress?['operationId'] as int?;
+    }
+
+    int batchTargetLocatorId = 10; // Default fallback
+    if (batchTargetOpId != null) {
+      final opsRes = await ProcessingRepo().fetchProcessingOperations();
+      if (opsRes.success && opsRes.data != null) {
+        final List<Operation> opsList = List<Operation>.from(opsRes.data);
+        final matchOp = opsList.firstWhere(
+          (o) => o.id == batchTargetOpId,
+          orElse: () => Operation(code: '', name: '', description: null, identifierRef: null, concurrencyStamp: '', creationTime: '', lastModificationTime: null, creatorId: null, lastModifierId: null, id: 0),
+        );
+        if (matchOp.id != 0) {
+          final resolvedLocId = matchOp.locatorId ?? matchOp.locator?.id;
+          if (resolvedLocId != null && resolvedLocId > 0) {
+            batchTargetLocatorId = resolvedLocId;
+          }
+        }
+      }
+
+      if (batchTargetLocatorId == 10) {
+        final locRes = await _lotRepo.fetchLocators(operationId: batchTargetOpId);
+        if (locRes.success && locRes.data != null) {
+          final locList = locRes.data as List;
+          final matchingEntry = locList.cast<Map>().firstWhere(
+            (entry) => (entry['operation']?['id'] ?? entry['locator']?['operationId'])?.toString() == batchTargetOpId.toString(),
+            orElse: () => {},
+          );
+          
+          if (matchingEntry.isNotEmpty) {
+            final locId = matchingEntry['locator']?['id'];
+            if (locId != null) {
+              batchTargetLocatorId = locId as int;
+            }
+          }
+        }
+      }
+    }
+
+    debugPrint('🚀 Single Batch Lock Target: Op=$batchTargetOpId -> Loc=$batchTargetLocatorId');
+
     // ── Step 2: POST WIP transaction & production-progress for each lot-line ─
     int successCount = 0;
 
@@ -622,81 +686,13 @@ class _LotListScreenState extends State<LotListScreen>
             }
           }
         }
-        debugPrint(
-          '📦 Lock: workOrderLineId=$workOrderLineId processedItemId=$processedItemId',
-        );
-      }
-
-      // ── Compute min operationId from item routings based on sequence ──────
-      int? minOpId;
-      final int? targetItemId = processedItemId ?? bl['itemId'] as int?;
-      if (targetItemId != null) {
-        final routingRes = await _lotRepo.fetchItemRoutings(targetItemId);
-        if (routingRes.success && routingRes.data != null) {
-          final routingItems = routingRes.data as List;
-          int? minSeq;
-          int? resolvedOpId;
-          for (final r in routingItems) {
-            final rMap = r as Map;
-            final seq = rMap['itemRouting']?['seq'] as int?;
-            final opId = rMap['itemRouting']?['operationId'] as int?;
-            if (seq != null && opId != null) {
-              if (minSeq == null || seq < minSeq) {
-                minSeq = seq;
-                resolvedOpId = opId;
-              }
-            }
-          }
-          minOpId = resolvedOpId;
-        }
-        debugPrint('🔑 Lock: item=$targetItemId minOpId=$minOpId');
       }
 
       final primaryQty = (bl['primaryQuantity'] as num?)?.toDouble() ?? 0;
       final secondaryQty = (bl['secondaryQuantity'] as num?)?.toDouble() ?? 0;
 
-      // ── Fetch dynamic locatorId based on operationId ─────────────────────
-      int dynamicLocatorId = 10; // Default fallback
-      final targetOpId = minOpId ?? progress?['operationId'];
-      if (targetOpId != null) {
-        final opsRes = await ProcessingRepo().fetchProcessingOperations();
-        if (opsRes.success && opsRes.data != null) {
-          final List<Operation> opsList = List<Operation>.from(opsRes.data);
-          final matchOp = opsList.firstWhere(
-            (o) => o.id == targetOpId,
-            orElse: () => Operation(code: '', name: '', description: null, identifierRef: null, concurrencyStamp: '', creationTime: '', lastModificationTime: null, creatorId: null, lastModifierId: null, id: 0),
-          );
-          if (matchOp.id != 0) {
-            final resolvedLocId = matchOp.locatorId ?? matchOp.locator?.id;
-            if (resolvedLocId != null && resolvedLocId > 0) {
-              dynamicLocatorId = resolvedLocId;
-            }
-          }
-        }
-
-        if (dynamicLocatorId == 10) {
-          final locRes = await _lotRepo.fetchLocators(operationId: targetOpId);
-          if (locRes.success && locRes.data != null) {
-            final locList = locRes.data as List;
-            final matchingEntry = locList.cast<Map>().firstWhere(
-              (entry) => (entry['operation']?['id'] ?? entry['locator']?['operationId'])?.toString() == targetOpId.toString(),
-              orElse: () => {},
-            );
-            
-            if (matchingEntry.isNotEmpty) {
-              final locId = matchingEntry['locator']?['id'];
-              if (locId != null) {
-                dynamicLocatorId = locId as int;
-                debugPrint('✅ Found Dynamic Locator: Op=$targetOpId -> Loc=$dynamicLocatorId');
-              }
-            } else {
-              debugPrint('⚠️ No matching locator found in list for Op=$targetOpId. Using default 10.');
-            }
-          } else {
-            debugPrint('❌ Fetch Locators Failed: ${locRes.message}. Using default 10.');
-          }
-        }
-      }
+      final targetOpId = batchTargetOpId ?? progress?['operationId'];
+      final dynamicLocatorId = batchTargetLocatorId;
 
       final wipData = {
         'subOperation': 'Batch Issue',
@@ -712,7 +708,7 @@ class _LotListScreenState extends State<LotListScreen>
         'productGrade': progress?['productGrade'],
         'productNature': progress?['productNature'],
         'progressId': bl['progressId'],
-        'operationId': minOpId ?? progress?['operationId'],
+        'operationId': targetOpId,
         'workOrderHeaderId': bl['workOrderHeaderId'],
         'workOrderLineId': bl['workOrderLineId'],
         'itemId': bl['itemId'],
@@ -754,7 +750,7 @@ class _LotListScreenState extends State<LotListScreen>
         'progressCode': progress?['progressCode'],
         'productGrade': progress?['productGrade'],
         'productNature': progress?['productNature'],
-        'operationId': minOpId ?? progress?['operationId'],
+        'operationId': targetOpId,
         'workOrderHeaderId': bl['workOrderHeaderId'],
         'workOrderLineId': bl['workOrderLineId'],
         'itemId': bl['itemId'],

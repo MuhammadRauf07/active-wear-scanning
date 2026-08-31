@@ -129,6 +129,7 @@ class ProcessingBatchController extends ChangeNotifier {
         'BatchHeaderId': batchHeaderId.toString(),
         'OperationId': currentOperationId.toString(),
         'TransactionType': '2',
+        'MaxResultCount': '1000',
       });
 
       bool isReassignedFromLines = false;

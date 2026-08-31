@@ -268,6 +268,26 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
             final bhId = entry.key;
             final groupRecords = entry.value;
 
+            // ── Verify active operation: Ensure batch has not moved to a newer operation ──
+            final bhProgRes = await _processingRepo.fetchProductionProgress({
+              'BatchHeaderId': bhId.toString(),
+              'TransactionType': '2',
+              'MaxResultCount': '1000',
+            });
+            if (bhProgRes.success && bhProgRes.data != null) {
+              final bhProgs = (bhProgRes.data as List<ProductionProgressResponseModel>)
+                  .where((p) => p.productionProgress.transactionType == 2 && p.productionProgress.wipStatus == 0)
+                  .toList();
+              if (bhProgs.isNotEmpty) {
+                bhProgs.sort((a, b) => (b.productionProgress.id ?? 0).compareTo(a.productionProgress.id ?? 0));
+                final latestOpId = bhProgs.first.productionProgress.operationId;
+                if (latestOpId != null && latestOpId != operationId) {
+                  // Batch has progressed to a newer operation (e.g. 14 instead of 5); skip in current lane
+                  continue;
+                }
+              }
+            }
+
             final bhRes = await _lotRepo.fetchLotHeaderById(bhId);
             if (bhRes.success && bhRes.data != null) {
               final bhFull = LotHeaderResponseModel.fromJson(bhRes.data);
@@ -280,7 +300,13 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                 );
                 if (mRes.success && mRes.data != null) {
                   final mData = mRes.data as Map<String, dynamic>;
-                  machineCode = mData['resourceCode']?.toString() ?? mData['brand']?.toString();
+                  final mJson = (mData['resource'] is Map)
+                      ? Map<String, dynamic>.from(mData['resource'] as Map)
+                      : mData;
+                  machineCode = mJson['brand']?.toString() ??
+                      mJson['resourceCode']?.toString() ??
+                      mJson['code']?.toString() ??
+                      mJson['model']?.toString();
                 }
               }
               machineCode ??=
@@ -292,8 +318,9 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
               double totalWeight = 0.0;
               for (final gr in groupRecords) {
                 final qty = gr.productionProgress.primaryQuantity ?? 0;
+                final tubes = (gr.productionProgress.secondaryQuantity ?? qty).toDouble();
                 final pw = gr.item.pieceWeight ?? 0;
-                totalTubes += qty;
+                totalTubes += tubes;
                 totalWeight += qty * pw;
               }
 

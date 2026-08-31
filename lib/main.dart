@@ -64,8 +64,8 @@ void main() {
       },
       useAuthorization: true,
       loginConfig: PlexLoginConfig(
-        debugUsername: 'Admin',
-        debugPassword: '1q2w3E*',
+        // debugUsername: 'AwFlDev',
+        // debugPassword: 'AwlfDev@8855$$',
         onLogin: (context, email, password) async {
           var resultToken = await fromPlex<UserRepo>().login(email, password);
           if (!resultToken.success) {

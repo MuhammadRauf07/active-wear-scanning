@@ -70,12 +70,12 @@ class _ProcessingTrayTableState extends State<ProcessingTrayTable> {
     for (final t in widget.trays) {
       final id = t.productionProgress.id;
       if (id != null) {
-        // Keep the original quantity as the upper limit
-        _initialQuantities.putIfAbsent(id, () => t.productionProgress.primaryQuantity ?? 0);
+        final tubeQty = (t.productionProgress.secondaryQuantity ?? t.productionProgress.primaryQuantity ?? 0).toDouble();
+        _initialQuantities.putIfAbsent(id, () => tubeQty);
         _controllers.putIfAbsent(
           id,
           () => TextEditingController(
-            text: (t.productionProgress.primaryQuantity ?? 0).toStringAsFixed(0),
+            text: tubeQty.toStringAsFixed(0),
           ),
         );
       }
@@ -199,7 +199,7 @@ class _ProcessingTrayTableState extends State<ProcessingTrayTable> {
                 final t = widget.trays[idx];
                 final id = t.productionProgress.id;
                 final isSel = widget.selectedReworkTrayIds.contains(id);
-                final tubes = t.productionProgress.primaryQuantity ?? 0;
+                final tubes = (t.productionProgress.secondaryQuantity ?? t.productionProgress.primaryQuantity ?? 0).toDouble();
                 final pgt = t.item.perGarmentTube;
                 final garmentPcs = pgt > 0 ? tubes * pgt : 0;
 
