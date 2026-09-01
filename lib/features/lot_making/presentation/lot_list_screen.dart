@@ -181,12 +181,14 @@ class _LotListScreenState extends State<LotListScreen>
         }
       }
 
-      // Group batch-lines by batchHeaderId
+      // Group batch-lines by batchHeaderId (excluding reassigned trays from downstream operations)
       final Map<int, List<Map<String, dynamic>>> grouped = {};
       if (batchLinesResult.success && batchLinesResult.data != null) {
         final rawLines = batchLinesResult.data as List<Map<String, dynamic>>;
         for (var line in rawLines) {
-          final id = line['batchLines']?['batchHeaderId'] as int?;
+          final bl = line['batchLines'] as Map<String, dynamic>? ?? line;
+          if (bl['isReAssigned'] == true) continue; // Exclude reassigned trays from lot making history
+          final id = bl['batchHeaderId'] as int?;
           if (id != null) grouped.putIfAbsent(id, () => []).add(line);
         }
       }

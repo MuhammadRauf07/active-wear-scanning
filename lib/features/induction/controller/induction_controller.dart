@@ -1,3 +1,4 @@
+import 'package:active_wear_scanning/features/lot_making/repo/lot_repo.dart';
 import 'package:flutter/foundation.dart';
 import 'package:plex/plex_di/plex_dependency_injection.dart';
 import 'package:active_wear_scanning/features/gbs/model/gbs_scanned_tray.dart';
@@ -8,6 +9,7 @@ import 'package:active_wear_scanning/features/lot_making/model/lot_header_model.
 
 class InductionController extends ChangeNotifier {
   final _inductionRepo = fromPlex<InductionRepo>();
+  final _lotRepo = LotRepo();
 
   InductionState _state = const InductionState();
   InductionState get state => _state;
@@ -42,6 +44,25 @@ class InductionController extends ChangeNotifier {
     _state = _state.copyWith(isLoading: true, clearError: true);
     notifyListeners();
 
+    // Fetch lot lines to identify all officially reassigned trays
+    final blRes = await _lotRepo.fetchLotLines();
+    final Set<int> reassignedTrayIds = {};
+    final Map<int, int> reassignedTrayToBatchId = {};
+    if (blRes.success && blRes.data != null) {
+      final rawLines = blRes.data is List ? blRes.data as List : [];
+      for (final l in rawLines) {
+        final bl = l['batchLines'] as Map<String, dynamic>? ?? (l is Map<String, dynamic> ? l : {});
+        if (bl['isReAssigned'] == true) {
+          final trayId = bl['trayId'] as int?;
+          final bhId = bl['batchHeaderId'] as int?;
+          if (trayId != null) {
+            reassignedTrayIds.add(trayId);
+            if (bhId != null) reassignedTrayToBatchId[trayId] = bhId;
+          }
+        }
+      }
+    }
+
     final res = await _inductionRepo.getProductionProgress();
     if (res.success && res.data != null) {
       final allTrays = res.data as List<InductionModel>;
@@ -58,6 +79,13 @@ class InductionController extends ChangeNotifier {
       }
 
       final filtered = latestByTray.values.where((t) {
+        final trayId = t.productionProgress.primaryTrayId ?? t.primaryTrayModel.id;
+        final bool isReassigned = t.primaryTrayModel.isReAssigned == true ||
+            (trayId != null && reassignedTrayIds.contains(trayId)) ||
+            (t.productionProgress.subOperation?.toLowerCase() == 'handover');
+
+        // Only show reassigned trays in Induction Store
+        if (!isReassigned) return false;
         if (t.productionProgress.holdFlag == true) return false;
         if (t.productionProgress.pbsFlag == true) return false;
         return true;
@@ -67,7 +95,9 @@ class InductionController extends ChangeNotifier {
       final enrichedFiltered = <InductionModel>[];
       for (final t in filtered) {
         InductionModel itemToUse = t;
-        final bhId = itemToUse.productionProgress.batchHeaderId;
+        final trayId = itemToUse.productionProgress.primaryTrayId ?? itemToUse.primaryTrayModel.id;
+        final bhId = itemToUse.productionProgress.batchHeaderId ?? (trayId != null ? reassignedTrayToBatchId[trayId] : null);
+        
         if ((itemToUse.batchHeader == null || itemToUse.batchHeader?.batchHeaderCode == null) && bhId != null && bhId > 0) {
           if (batchHeaderCache.containsKey(bhId)) {
             itemToUse = itemToUse.copyWith(batchHeader: batchHeaderCache[bhId]);
@@ -112,6 +142,10 @@ class InductionController extends ChangeNotifier {
     final code = scannedCode.trim().toLowerCase();
     if (code.isEmpty) return 'Invalid tray code';
 
+    if (_state.selectedBatch == null) {
+      return 'Please select a batch/lot number from the dropdown first';
+    }
+
     final alreadyScanned = _state.scannedTrays.any(
       (t) => t.trayCode.trim().toLowerCase() == code,
     );
@@ -141,22 +175,22 @@ class InductionController extends ChangeNotifier {
       }
     }
 
+    final selectedBatchId = _state.selectedBatch?.id;
     final matchIndex = _state.availableTrays.indexWhere((t) {
       final tCode = (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase();
       final pCode = (t.productionProgress.progressCode ?? '').trim().toLowerCase();
-      return tCode == code || pCode == code;
+      final isCodeMatch = tCode == code || pCode == code;
+      final isBatchMatch = t.batchHeader?.id == selectedBatchId ||
+          t.productionProgress.batchHeaderId == selectedBatchId;
+      return isCodeMatch && isBatchMatch;
     });
 
     if (matchIndex == -1) {
-      return 'Tray not eligible for Induction';
+      final batchName = _state.selectedBatch?.batchHeaderCode ?? '#${_state.selectedBatch?.id}';
+      return 'Tray is not a reassigned tray for selected Batch $batchName';
     }
 
     final match = _state.availableTrays[matchIndex];
-
-    if (_state.selectedBatch != null && match.batchHeader?.id != _state.selectedBatch?.id) {
-      final batchCode = match.batchHeader?.batchHeaderCode ?? 'Unknown Batch';
-      return 'Tray belongs to another Batch/Lot ($batchCode)';
-    }
 
     if ((match.primaryTrayModel.trayType ?? 0) != 1) {
       return 'Invalid tray type.';

@@ -1,3 +1,5 @@
+import 'package:active_wear_scanning/features/common-models/common_models.dart';
+import 'package:active_wear_scanning/features/processing/repo/processing_repo.dart';
 import 'package:flutter/foundation.dart';
 import 'package:plex/plex_di/plex_dependency_injection.dart';
 import 'package:active_wear_scanning/features/processing_waste_receiving/model/processing_waste_state.dart';
@@ -6,9 +8,104 @@ import 'package:active_wear_scanning/features/gbs/model/production_progress.dart
 
 class ProcessingWasteController extends ChangeNotifier {
   final _repo = fromPlex<ProcessingWasteRepo>();
+  final _processingRepo = ProcessingRepo();
 
   ProcessingWasteState _state = const ProcessingWasteState();
   ProcessingWasteState get state => _state;
+
+  ProcessingWasteController() {
+    fetchInitialData();
+  }
+
+  Future<void> fetchInitialData() async {
+    _state = _state.copyWith(isLoading: true, clearError: true);
+    notifyListeners();
+
+    await fetchOperations();
+    await fetchAvailableWasteTrays();
+  }
+
+  Future<void> fetchOperations() async {
+    final opsRes = await _processingRepo.fetchProcessingOperations();
+    if (opsRes.success && opsRes.data != null) {
+      final List<Operation> ops = List<Operation>.from(opsRes.data);
+      _state = _state.copyWith(operations: ops);
+      notifyListeners();
+    }
+  }
+
+  void setSelectedOperation(int? opId) {
+    if (_state.selectedOperationId != opId) {
+      if (opId == null) {
+        _state = _state.copyWith(clearSelectedOperation: true);
+      } else {
+        _state = _state.copyWith(selectedOperationId: opId);
+      }
+      notifyListeners();
+    }
+  }
+
+  Future<void> fetchAvailableWasteTrays() async {
+    _state = _state.copyWith(isLoading: true, clearError: true);
+    notifyListeners();
+
+    try {
+      final res = await _repo.fetchProductionProgress({
+        'LocatorId': '18',
+        'MaxResultCount': '1000',
+      });
+
+      if (res.success && res.data != null) {
+        final List rawList = res.data is Map ? (res.data['items'] ?? []) : (res.data is List ? res.data : []);
+        final List<ProductionProgressResponseModel> available = [];
+
+        final allOps = _state.operations;
+
+        for (final item in rawList) {
+          if (item is Map) {
+            try {
+              final rawProgress = item.containsKey('productionProgress')
+                  ? Map<String, dynamic>.from(item['productionProgress'] as Map)
+                  : Map<String, dynamic>.from(item);
+
+              final toLocId = rawProgress['toLocatorId'] as int? ?? rawProgress['toLocator']?['id'] as int?;
+              final locId = rawProgress['locatorId'] as int? ?? rawProgress['locator']?['id'] as int?;
+              if (toLocId == 19 || locId == 19) continue; // Already received in waste store
+
+              final model = ProductionProgressResponseModel.fromJson(Map<String, dynamic>.from(item));
+              
+              // Enrich operation name if omitted
+              if (model.operation.name.isEmpty || model.operation.name == 'N/A') {
+                final opId = model.productionProgress.operationId;
+                if (opId != null && allOps.isNotEmpty) {
+                  final match = allOps.where((o) => o.id == opId).firstOrNull;
+                  if (match != null) {
+                    final enrichedModel = model.copyWith(operation: match);
+                    available.add(enrichedModel);
+                    continue;
+                  }
+                }
+              }
+              available.add(model);
+            } catch (e) {
+              debugPrint("⚠️ Skipping unparseable waste item: $e");
+            }
+          }
+        }
+
+        _state = _state.copyWith(
+          availableWasteTrays: available,
+          isLoading: false,
+        );
+      } else {
+        _state = _state.copyWith(isLoading: false, errorMessage: res.message);
+      }
+    } catch (e) {
+      _state = _state.copyWith(isLoading: false, errorMessage: e.toString());
+    } finally {
+      notifyListeners();
+    }
+  }
 
   void removeScannedTray(int index) {
     if (index >= 0 && index < _state.scannedTrays.length) {
@@ -72,10 +169,32 @@ class ProcessingWasteController extends ChangeNotifier {
       return 'Waste has already been received for this tray!';
     }
 
+    // Check operation filter if selected
+    if (_state.selectedOperationId != null) {
+      final opId = model.productionProgress.operationId;
+      if (opId != _state.selectedOperationId) {
+        final selectedOpName = _state.operations.where((o) => o.id == _state.selectedOperationId).firstOrNull?.name ?? '#${_state.selectedOperationId}';
+        final trayOpName = model.operation.name.isNotEmpty ? model.operation.name : 'Operation #${model.productionProgress.operationId}';
+        return 'Tray belongs to $trayOpName (Filtered for $selectedOpName)';
+      }
+    }
+
     final progressId = model.productionProgress.id ?? 0;
     if (progressId == 0) return 'Invalid production progress ID';
 
-    final updatedScanned = List<ProductionProgressResponseModel>.from(_state.scannedTrays)..add(model);
+    // Enrich operation name if needed
+    ProductionProgressResponseModel modelToUse = model;
+    if (modelToUse.operation.name.isEmpty || modelToUse.operation.name == 'N/A') {
+      final opId = modelToUse.productionProgress.operationId;
+      if (opId != null && _state.operations.isNotEmpty) {
+        final match = _state.operations.where((o) => o.id == opId).firstOrNull;
+        if (match != null) {
+          modelToUse = modelToUse.copyWith(operation: match);
+        }
+      }
+    }
+
+    final updatedScanned = List<ProductionProgressResponseModel>.from(_state.scannedTrays)..add(modelToUse);
     final updatedMap = Map<int, Map<String, dynamic>>.from(_state.productionProgressMap)..[progressId] = rawProgress;
 
     _state = _state.copyWith(

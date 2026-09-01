@@ -126,8 +126,9 @@ class _ProcessingWasteReceivingViewState extends State<_ProcessingWasteReceiving
       decoration: const BoxDecoration(color: Color(0xFFF1F5F9), border: Border(bottom: BorderSide(color: Color(0xFFB0BEC5), width: 1.5))),
       child: const Row(
         children: [
-          Expanded(flex: 4, child: Text('TRAY CODE', style: headerStyle)),
-          Expanded(flex: 4, child: Text('WORK ORDER', textAlign: TextAlign.center, style: headerStyle)),
+          Expanded(flex: 3, child: Text('TRAY CODE', style: headerStyle)),
+          Expanded(flex: 3, child: Text('OPERATION', textAlign: TextAlign.center, style: headerStyle)),
+          Expanded(flex: 3, child: Text('WORK ORDER', textAlign: TextAlign.center, style: headerStyle)),
           Expanded(flex: 2, child: Text('SIZE', textAlign: TextAlign.center, style: headerStyle)),
           Expanded(flex: 2, child: Text('QTY', textAlign: TextAlign.center, style: headerStyle)),
           Expanded(flex: 2, child: Text('GRADE', textAlign: TextAlign.center, style: headerStyle)),
@@ -142,9 +143,12 @@ class _ProcessingWasteReceivingViewState extends State<_ProcessingWasteReceiving
     const blueCellStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1B64A3));
 
     final code = tray.primaryTrayModel.trayCode ?? 'N/A';
+    final opName = tray.operation.name.isNotEmpty ? tray.operation.name : (tray.productionProgress.operationId != null ? 'Op #${tray.productionProgress.operationId}' : 'N/A');
     final woCode = tray.workOrderHeader.workOrderCode ?? 'N/A';
     final size = tray.item.sizeDescription ?? 'N/A';
-    final wasteQty = (tray.productionProgress.waste ?? 0.0).toStringAsFixed(0);
+    final wasteQty = ((tray.productionProgress.waste ?? 0.0) > 0 
+        ? tray.productionProgress.waste! 
+        : (tray.productionProgress.secondaryQuantity ?? tray.productionProgress.primaryQuantity ?? 0.0)).toStringAsFixed(0);
     final grade = tray.productionProgress.productGrade == 2 ? 'C' : 'B';
 
     return Container(
@@ -155,8 +159,27 @@ class _ProcessingWasteReceivingViewState extends State<_ProcessingWasteReceiving
       ),
       child: Row(
         children: [
-          Expanded(flex: 4, child: Text(code, style: blueCellStyle)),
-          Expanded(flex: 4, child: Text(woCode, textAlign: TextAlign.center, style: cellStyle)),
+          Expanded(flex: 3, child: Text(code, style: blueCellStyle)),
+          Expanded(
+            flex: 3,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1B64A3).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  opName,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF1B64A3)),
+                ),
+              ),
+            ),
+          ),
+          Expanded(flex: 3, child: Text(woCode, textAlign: TextAlign.center, style: cellStyle)),
           Expanded(flex: 2, child: Text(size, textAlign: TextAlign.center, style: cellStyle)),
           Expanded(flex: 2, child: Text(wasteQty, textAlign: TextAlign.center, style: cellStyle)),
           Expanded(flex: 2, child: Text(grade, textAlign: TextAlign.center, style: cellStyle)),
@@ -176,6 +199,197 @@ class _ProcessingWasteReceivingViewState extends State<_ProcessingWasteReceiving
                   Icons.delete_outline_rounded,
                   size: 18,
                   color: Colors.red.shade400,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAvailableWasteDialog(BuildContext context, ProcessingWasteController controller, ProcessingWasteState state) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final available = state.selectedOperationId == null
+            ? state.availableWasteTrays
+            : state.availableWasteTrays.where((t) => t.productionProgress.operationId == state.selectedOperationId).toList();
+
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.88,
+            height: MediaQuery.of(context).size.height * 0.75,
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'PENDING PROCESSING WASTE (${available.length})',
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFFE67E22)),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded),
+                      onPressed: () => Navigator.of(ctx).pop(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                  decoration: const BoxDecoration(color: Color(0xFFF1F5F9)),
+                  child: const Row(
+                    children: [
+                      Expanded(flex: 3, child: Text('TRAY', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF546E7A)))),
+                      Expanded(flex: 3, child: Text('OPERATION', textAlign: TextAlign.center, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF546E7A)))),
+                      Expanded(flex: 3, child: Text('WORK ORDER', textAlign: TextAlign.center, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF546E7A)))),
+                      Expanded(flex: 2, child: Text('SIZE', textAlign: TextAlign.center, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF546E7A)))),
+                      Expanded(flex: 2, child: Text('TUBES', textAlign: TextAlign.center, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF546E7A)))),
+                      Expanded(flex: 2, child: Text('GRADE', textAlign: TextAlign.center, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF546E7A)))),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: available.isEmpty
+                      ? const Center(
+                          child: Text('No pending waste trays found in Locator 18', style: TextStyle(color: Colors.grey, fontSize: 13, fontStyle: FontStyle.italic)),
+                        )
+                      : ListView.builder(
+                          itemCount: available.length,
+                          itemBuilder: (c, i) {
+                            final item = available[i];
+                            final code = item.primaryTrayModel.trayCode ?? 'N/A';
+                            final op = item.operation.name.isNotEmpty ? item.operation.name : (item.productionProgress.operationId != null ? 'Op #${item.productionProgress.operationId}' : 'N/A');
+                            final wo = item.workOrderHeader.workOrderCode ?? 'N/A';
+                            final size = item.item.sizeDescription ?? 'N/A';
+                            final qty = ((item.productionProgress.waste ?? 0) > 0 ? item.productionProgress.waste! : (item.productionProgress.secondaryQuantity ?? item.productionProgress.primaryQuantity ?? 0)).toStringAsFixed(0);
+                            final grade = item.productionProgress.productGrade == 2 ? 'C' : 'B';
+
+                            return Container(
+                              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: i.isEven ? Colors.white : const Color(0xFFF8FAFC),
+                                border: Border(bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.1), width: 1)),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(flex: 3, child: Text(code, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF0D47A1)))),
+                                  Expanded(
+                                    flex: 3,
+                                    child: Center(
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.orange.shade50,
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(color: Colors.orange.shade200, width: 0.5),
+                                        ),
+                                        child: Text(
+                                          op,
+                                          textAlign: TextAlign.center,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Colors.orange.shade900),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(flex: 3, child: Text(wo, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF263238)))),
+                                  Expanded(flex: 2, child: Text(size, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF263238)))),
+                                  Expanded(flex: 2, child: Text(qty, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF263238)))),
+                                  Expanded(flex: 2, child: Text(grade, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF1B64A3)))),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFilterBar(ProcessingWasteController controller, ProcessingWasteState state) {
+    final availableCount = state.selectedOperationId == null
+        ? state.availableWasteTrays.length
+        : state.availableWasteTrays.where((t) => t.productionProgress.operationId == state.selectedOperationId).length;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF8FAFC),
+        border: Border(bottom: BorderSide(color: Color(0xFFCFD8DC), width: 1)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            flex: 3,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'FILTER BY OPERATION',
+                  style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Color(0xFF78909C), letterSpacing: 0.5),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  height: 40,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFCFD8DC)),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<int?>(
+                      value: state.selectedOperationId,
+                      isExpanded: true,
+                      hint: const Text('All Operations', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238))),
+                      items: [
+                        const DropdownMenuItem<int?>(
+                          value: null,
+                          child: Text('All Operations', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF0D47A1))),
+                        ),
+                        ...state.operations.map(
+                          (op) => DropdownMenuItem<int?>(
+                            value: op.id,
+                            child: Text(op.name, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238))),
+                          ),
+                        ),
+                      ],
+                      onChanged: (val) => controller.setSelectedOperation(val),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 2,
+            child: SizedBox(
+              height: 40,
+              child: ElevatedButton.icon(
+                onPressed: () => _showAvailableWasteDialog(context, controller, state),
+                icon: const Icon(Icons.layers_outlined, size: 16),
+                label: Text(
+                  'SHOW WASTE ($availableCount)',
+                  style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w900),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFE67E22),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  elevation: 0,
                 ),
               ),
             ),
@@ -256,6 +470,7 @@ class _ProcessingWasteReceivingViewState extends State<_ProcessingWasteReceiving
                   ],
                 ),
               ),
+            _buildFilterBar(controller, state),
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(12),
