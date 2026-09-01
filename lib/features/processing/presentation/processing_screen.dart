@@ -381,35 +381,51 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                       }
                     } catch (_) {}
                   }
-                  final effectiveItemId = firstProcessedItemId ?? itemId;
-
-                  if (effectiveItemId != null) {
-                    final routingRes = await _lotRepo.fetchItemRoutings(effectiveItemId);
-                    if (routingRes.success && routingRes.data != null) {
-                      final routingItems = routingRes.data as List;
-                      final List<Map<String, dynamic>> parsedRoutings = [];
-                      for (final r in routingItems) {
-                        final map = r is Map<String, dynamic> ? r : {};
-                        final ir = map['itemRouting'] as Map<String, dynamic>? ?? map;
-                        final opId = ir['operationId'] as int?;
-                        final seq = ir['sequence'] as int? ?? ir['seq'] as int?;
-                        if (opId != null && seq != null) {
-                          parsedRoutings.add({
-                            'operationId': opId,
-                            'seq': seq,
-                          });
+                  final List<Map<String, dynamic>> parsedRoutings = [];
+                  final bhrRes = await _lotRepo.fetchBatchHeaderRoutings(bhId);
+                  if (bhrRes.success && bhrRes.data != null && (bhrRes.data as List).isNotEmpty) {
+                    for (final r in bhrRes.data as List) {
+                      final map = r is Map<String, dynamic> ? r : {};
+                      final bhr = map['batchHeaderRouting'] as Map<String, dynamic>? ?? map;
+                      final opId = bhr['operationId'] as int?;
+                      final seq = bhr['seq'] as int? ?? bhr['sequence'] as int?;
+                      if (opId != null && seq != null) {
+                        parsedRoutings.add({
+                          'operationId': opId,
+                          'seq': seq,
+                        });
+                      }
+                    }
+                  } else {
+                    final effectiveItemId = firstProcessedItemId ?? itemId;
+                    if (effectiveItemId != null) {
+                      final routingRes = await _lotRepo.fetchItemRoutings(effectiveItemId);
+                      if (routingRes.success && routingRes.data != null) {
+                        final routingItems = routingRes.data as List;
+                        for (final r in routingItems) {
+                          final map = r is Map<String, dynamic> ? r : {};
+                          final ir = map['itemRouting'] as Map<String, dynamic>? ?? map;
+                          final opId = ir['operationId'] as int?;
+                          final seq = ir['sequence'] as int? ?? ir['seq'] as int?;
+                          if (opId != null && seq != null) {
+                            parsedRoutings.add({
+                              'operationId': opId,
+                              'seq': seq,
+                            });
+                          }
                         }
                       }
-                      parsedRoutings.sort((a, b) => (a['seq'] as int).compareTo(b['seq'] as int));
+                    }
+                  }
 
-                      final currentIdx = parsedRoutings.indexWhere((r) => r['operationId'] == operationId);
-                      if (currentIdx != -1 && currentIdx < parsedRoutings.length - 1) {
-                        nextOpId = parsedRoutings[currentIdx + 1]['operationId'] as int?;
-                        if (nextOpId != null) {
-                          final targetOpIdx = _allOperations.indexWhere((o) => o.id == nextOpId);
-                          nextOpName = targetOpIdx != -1 ? _allOperations[targetOpIdx].name : 'N/A';
-                        }
-                      }
+                  parsedRoutings.sort((a, b) => (a['seq'] as int).compareTo(b['seq'] as int));
+
+                  final currentIdx = parsedRoutings.indexWhere((r) => r['operationId'] == operationId);
+                  if (currentIdx != -1 && currentIdx < parsedRoutings.length - 1) {
+                    nextOpId = parsedRoutings[currentIdx + 1]['operationId'] as int?;
+                    if (nextOpId != null) {
+                      final targetOpIdx = _allOperations.indexWhere((o) => o.id == nextOpId);
+                      nextOpName = targetOpIdx != -1 ? _allOperations[targetOpIdx].name : 'N/A';
                     }
                   }
                 }

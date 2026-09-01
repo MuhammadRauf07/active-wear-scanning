@@ -385,8 +385,12 @@ class LappingController extends ChangeNotifier {
       sizeDescription: sizeDesc,
       perGarmentTube: perGarmentTube,
     );
+    final double primaryPcs = perGarmentTube > 0 ? inputPcs * perGarmentTube : inputPcs;
     matchedTray = LappingModel(
-      productionProgress: matchedTray.productionProgress,
+      productionProgress: matchedTray.productionProgress.copyWith(
+        primaryQuantity: primaryPcs,
+        secondaryQuantity: inputPcs,
+      ),
       operation: matchedTray.operation,
       shift: matchedTray.shift,
       machineModel: matchedTray.machineModel,
@@ -642,6 +646,8 @@ class LappingController extends ChangeNotifier {
 
         try {
           final double trayQty = _state.trayOverrideQuantities[scannedTray.primaryTrayModel.trayCode?.toLowerCase() ?? ''] ?? 0;
+          final double pgt = scannedTray.item.perGarmentTube;
+          final double primaryPcs = pgt > 0 ? trayQty * pgt : trayQty;
 
           if (isDraft) {
             // --- DRAFT PATH ---
@@ -659,9 +665,9 @@ class LappingController extends ChangeNotifier {
             final Map<String, dynamic> lotLinePayload = {
               "planDate": DateTime.now().toIso8601String(),
               "transactionDate": DateTime.now().toIso8601String(),
-              "primaryQuantity": trayQty,
+              "primaryQuantity": primaryPcs,
               "primaryUOM": pp.primaryUOM ?? 4,
-              "secondaryQuantity": 0,
+              "secondaryQuantity": trayQty,
               "secondaryUOM": pp.secondaryUOM ?? 1,
               "batchLineCode": "BL-$batchHeaderId-${scannedTray.primaryTrayModel.id}",
               "batchHeaderId": batchHeaderId,
@@ -747,7 +753,8 @@ class LappingController extends ChangeNotifier {
                 updateLappingJson['draftFlag'] = false;
                 updateLappingJson['draftStatus'] = false;
               }
-              updateLappingJson['primaryQuantity'] = trayQty;
+              updateLappingJson['primaryQuantity'] = primaryPcs;
+              updateLappingJson['secondaryQuantity'] = trayQty;
               updateLappingJson.remove('id');
               updateLappingJson.remove('progressCode');
               updateLappingJson.remove('creationTime');
@@ -779,7 +786,8 @@ class LappingController extends ChangeNotifier {
                     retryJson['draftFlag'] = false;
                     retryJson['draftStatus'] = false;
                   }
-                  retryJson['primaryQuantity'] = trayQty;
+                  retryJson['primaryQuantity'] = primaryPcs;
+                  retryJson['secondaryQuantity'] = trayQty;
                   retryJson.remove('id');
                   retryJson.remove('progressCode');
                   retryJson.remove('creationTime');
@@ -808,9 +816,9 @@ class LappingController extends ChangeNotifier {
             "date": DateTime.now().toIso8601String(),
             "transactionType": 2,
             "operatorDescription": "system",
-            "primaryQuantity": trayQty,
+            "primaryQuantity": primaryPcs,
             "primaryUOM": pp.primaryUOM ?? 4,
-            "secondaryQuantity": (pp.secondaryQuantity ?? 0).toDouble(),
+            "secondaryQuantity": trayQty,
             "secondaryUOM": pp.secondaryUOM ?? 1,
             "wipStatus": nextOperationId != null ? 0 : 1,
             "gbsFlag": false,
@@ -892,9 +900,9 @@ class LappingController extends ChangeNotifier {
           final Map<String, dynamic> lotLinePayload = {
             "planDate": DateTime.now().toIso8601String(),
             "transactionDate": DateTime.now().toIso8601String(),
-            "primaryQuantity": trayQty,
+            "primaryQuantity": primaryPcs,
             "primaryUOM": pp.primaryUOM ?? 4,
-            "secondaryQuantity": 0,
+            "secondaryQuantity": trayQty,
             "secondaryUOM": pp.secondaryUOM ?? 1,
             "batchLineCode": "BL-$batchHeaderId-${scannedTray.primaryTrayModel.id}",
             "batchHeaderId": batchHeaderId,

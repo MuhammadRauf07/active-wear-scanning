@@ -443,15 +443,22 @@ class ProcessingBatchController extends ChangeNotifier {
       if (tIdx == -1) throw Exception('Tray not found');
       final tray = _state.trays[tIdx];
 
-      final double requiredQty = tray.productionProgress.requiredQty?.toDouble() ?? tray.productionProgress.primaryQuantity ?? 0.0;
-      final double wastageQty = requiredQty - newQty;
+      final double requiredTubes = tray.productionProgress.requiredQty?.toDouble() ??
+          tray.productionProgress.secondaryQuantity?.toDouble() ??
+          tray.productionProgress.primaryQuantity?.toDouble() ??
+          0.0;
+      final double wastageTubes = requiredTubes - newQty;
+      final double pgt = tray.item.perGarmentTube;
+      final double newPrimaryQty = pgt > 0 ? newQty * pgt : newQty;
+      final double wastagePrimaryQty = pgt > 0 ? wastageTubes * pgt : wastageTubes;
 
       // 1. Update original production progress record
       final json = tray.productionProgress.toJson();
-      json['primaryQuantity'] = newQty;
-      if (wastageQty > 0) {
-        json['requiredQty'] = requiredQty.toInt();
-        json['waste'] = wastageQty.toInt();
+      json['secondaryQuantity'] = newQty;
+      json['primaryQuantity'] = newPrimaryQty;
+      if (wastageTubes > 0) {
+        json['requiredQty'] = requiredTubes.toInt();
+        json['waste'] = wastageTubes.toInt();
       } else {
         json['requiredQty'] = null;
         json['waste'] = null;
@@ -483,7 +490,8 @@ class ProcessingBatchController extends ChangeNotifier {
             final wipId = match['wipTransaction']?['id'] as int?;
             if (wipId != null) {
               final wipPayload = Map<String, dynamic>.from(match['wipTransaction'] ?? match);
-              wipPayload['primaryQuantity'] = newQty;
+              wipPayload['secondaryQuantity'] = newQty;
+              wipPayload['primaryQuantity'] = newPrimaryQty;
               wipPayload.remove('id');
               wipPayload.remove('concurrencyStamp');
               await _lotRepo.updateWipTransaction(wipId, wipPayload);
@@ -495,14 +503,15 @@ class ProcessingBatchController extends ChangeNotifier {
       }
 
       // 2. Manage the wastage record
-      if (wastageQty > 0) {
+      if (wastageTubes > 0) {
         final wastageRecord = _state.wastageByOriginalId[progressId];
         if (wastageRecord != null && wastageRecord.productionProgress.id != null) {
           // UPDATE existing wastage record
           final wJson = wastageRecord.productionProgress.toJson();
-          wJson['primaryQuantity'] = wastageQty;
+          wJson['secondaryQuantity'] = wastageTubes;
+          wJson['primaryQuantity'] = wastagePrimaryQty;
           wJson['waste'] = 0;
-          wJson['requiredQty'] = requiredQty.toInt();
+          wJson['requiredQty'] = requiredTubes.toInt();
           wJson['locatorId'] = 18;
           wJson['productGrade'] = productGrade;
 
@@ -528,9 +537,10 @@ class ProcessingBatchController extends ChangeNotifier {
           newJson.remove('lastModificationTime');
           newJson.remove('lastModifierId');
 
-          newJson['primaryQuantity'] = wastageQty;
+          newJson['secondaryQuantity'] = wastageTubes;
+          newJson['primaryQuantity'] = wastagePrimaryQty;
           newJson['waste'] = 0;
-          newJson['requiredQty'] = requiredQty.toInt();
+          newJson['requiredQty'] = requiredTubes.toInt();
           newJson['locatorId'] = 18;
           newJson['productGrade'] = productGrade;
           newJson['transactionType'] = tray.productionProgress.transactionType ?? 2;

@@ -258,6 +258,14 @@ class LotRepo {
     return result;
   }
 
+  Future<PlexApiResult> fetchBatchHeaderRoutings(int batchHeaderId) async {
+    final query = {
+      'BatchHeaderId': batchHeaderId.toString(),
+      'MaxResultCount': '1000',
+    };
+    return await _api.getList('/api/app/batch-header-routings', query: query);
+  }
+
   Future<PlexApiResult> postLotHeaderRouting(Map<String, dynamic> data) async {
     final result = await _api.post('/api/app/batch-header-routings', body: data);
     return result;

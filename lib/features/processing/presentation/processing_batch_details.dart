@@ -1,3 +1,5 @@
+import 'package:active_wear_scanning/features/common-models/common_models.dart';
+import 'package:active_wear_scanning/features/processing/repo/processing_repo.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
@@ -86,32 +88,32 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
           child: state.isLoading && state.trays.isEmpty
               ? const Center(child: CircularProgressIndicator())
               : Column(
-                  children: [
-                    _buildPremiumHeader(context, controller, state),
-                    Expanded(
-                      child: AbsorbPointer(
-                        absorbing: state.isLoading,
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _buildBatchIntelligenceGrid(controller, state),
-                              const SizedBox(height: 12),
-                              _buildActionConsole(controller, state),
-                              if (state.showTrays) ...[
-                                const SizedBox(height: 16),
-                                Expanded(
-                                  child: _buildTrayTableContainer(controller, state),
-                                ),
-                              ],
-                            ],
+            children: [
+              _buildPremiumHeader(context, controller, state),
+              Expanded(
+                child: AbsorbPointer(
+                  absorbing: state.isLoading,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildBatchIntelligenceGrid(controller, state),
+                        const SizedBox(height: 12),
+                        _buildActionConsole(controller, state),
+                        if (state.showTrays) ...[
+                          const SizedBox(height: 16),
+                          Expanded(
+                            child: _buildTrayTableContainer(controller, state),
                           ),
-                        ),
-                      ),
+                        ],
+                      ],
                     ),
-                  ],
+                  ),
                 ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -458,13 +460,13 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
               holdTrayIds: state.holdTrayIds,
               onHoldToggle: (controller.operationName.toUpperCase().contains('PBS') || controller.currentOperationId == 2)
                   ? (trayId) {
-                      controller.toggleHoldTray(trayId);
-                    }
+                controller.toggleHoldTray(trayId);
+              }
                   : null,
               onSelectAllHoldToggle: (controller.operationName.toUpperCase().contains('PBS') || controller.currentOperationId == 2)
                   ? (selected) {
-                      controller.selectAllHoldTrays(selected);
-                    }
+                controller.selectAllHoldTrays(selected);
+              }
                   : null,
             ),
           ),
@@ -480,7 +482,7 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
         title: const Text('Free Trolley'),
         content: Text(
           'Remove trolley "${state.trolleyCode}" from batch ${controller.batchCode}?\n\n'
-          'You will need to re-attach a trolley before submitting.',
+              'You will need to re-attach a trolley before submitting.',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
@@ -534,7 +536,7 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
         title: const Text('Start Batch'),
         content: Text(
           'Are you sure you want to start batch ${controller.batchCode}?\n'
-          '${state.trays.length} tray${state.trays.length != 1 ? 's' : ''} will be marked as started.',
+              '${state.trays.length} tray${state.trays.length != 1 ? 's' : ''} will be marked as started.',
         ),
         actions: [
           TextButton(
@@ -570,44 +572,62 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
   }
 
   void _showReworkDialog(ProcessingBatchController controller, ProcessingBatchState state) async {
-    final firstTray = state.trays.isNotEmpty ? state.trays.first : null;
-    final int? routingItemId = firstTray?.productionProgress.processedItemId ?? firstTray?.item.id;
-
-    if (routingItemId == null) {
-      AppSnackBar.showError(context, message: 'Could not resolve batch item ID.');
-      return;
-    }
-
     AppLoader.show(context, message: 'Fetching routing operations...');
-    final routingRes = await _lotRepo.fetchItemRoutings(routingItemId);
-    AppLoader.hide(context);
 
-    if (!routingRes.success || routingRes.data == null) {
-      if (mounted) {
-        AppSnackBar.showError(context, message: 'Failed to fetch batch routing: ${routingRes.message}');
-      }
-      return;
-    }
-
-    final routingItems = routingRes.data as List;
     final List<Map<String, dynamic>> parsedRoutings = [];
-    for (final r in routingItems) {
-      final rMap = r is Map ? r as Map<String, dynamic> : {};
-      final itemRouting = rMap['itemRouting'] as Map?;
-      final op = rMap['operation'] as Map?;
-      if (itemRouting != null && op != null) {
-        final opId = itemRouting['operationId'] as int?;
-        final seq = itemRouting['seq'] as int?;
-        final opName = op['name'] as String?;
-        if (opId != null && seq != null && opName != null) {
+    final bhrRes = await _lotRepo.fetchBatchHeaderRoutings(controller.batchHeaderId);
+
+    if (bhrRes.success && bhrRes.data != null && (bhrRes.data as List).isNotEmpty) {
+      final opsRes = await ProcessingRepo().fetchProcessingOperations();
+      final List<Operation> allOps = opsRes.success && opsRes.data != null ? List<Operation>.from(opsRes.data) : [];
+
+      for (final r in bhrRes.data as List) {
+        final rMap = r is Map ? r as Map<String, dynamic> : {};
+        final bhr = rMap['batchHeaderRouting'] as Map? ?? rMap;
+        final op = rMap['operation'] as Map?;
+        final opId = bhr['operationId'] as int?;
+        final seq = bhr['seq'] as int? ?? bhr['sequence'] as int?;
+        String? opName = op?['name'] as String?;
+        if (opName == null && opId != null) {
+          final matched = allOps.where((o) => o.id == opId).toList();
+          if (matched.isNotEmpty) opName = matched.first.name;
+        }
+        if (opId != null && seq != null) {
           parsedRoutings.add({
             'operationId': opId,
             'seq': seq,
-            'name': opName,
+            'name': opName ?? 'Op #$opId',
           });
         }
       }
+    } else {
+      final firstTray = state.trays.isNotEmpty ? state.trays.first : null;
+      final int? routingItemId = firstTray?.productionProgress.processedItemId ?? firstTray?.item.id;
+      if (routingItemId != null) {
+        final routingRes = await _lotRepo.fetchItemRoutings(routingItemId);
+        if (routingRes.success && routingRes.data != null) {
+          for (final r in routingRes.data as List) {
+            final rMap = r is Map ? r as Map<String, dynamic> : {};
+            final itemRouting = rMap['itemRouting'] as Map?;
+            final op = rMap['operation'] as Map?;
+            if (itemRouting != null && op != null) {
+              final opId = itemRouting['operationId'] as int?;
+              final seq = itemRouting['seq'] as int?;
+              final opName = op['name'] as String?;
+              if (opId != null && seq != null && opName != null) {
+                parsedRoutings.add({
+                  'operationId': opId,
+                  'seq': seq,
+                  'name': opName,
+                });
+              }
+            }
+          }
+        }
+      }
     }
+
+    AppLoader.hide(context);
 
     parsedRoutings.sort((a, b) => (a['seq'] as int).compareTo(b['seq'] as int));
     final currentIdx = parsedRoutings.indexWhere((r) => r['operationId'] == controller.currentOperationId);
@@ -659,46 +679,69 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
   }
 
   void _showBatchRoutingDialog(ProcessingBatchController controller, ProcessingBatchState state) async {
-    final firstTray = state.trays.isNotEmpty ? state.trays.first : null;
-    final int? routingItemId = firstTray?.productionProgress.processedItemId ?? firstTray?.item.id;
-
-    if (routingItemId == null) {
-      AppSnackBar.showError(context, message: 'Could not resolve batch item ID.');
-      return;
-    }
-
     AppLoader.show(context, message: 'Fetching batch routing...');
-    final routingRes = await _lotRepo.fetchItemRoutings(routingItemId);
-    AppLoader.hide(context);
 
-    if (!routingRes.success || routingRes.data == null) {
-      if (mounted) {
-        AppSnackBar.showError(context, message: 'Failed to fetch batch routing: ${routingRes.message}');
-      }
-      return;
-    }
-
-    final routingItems = routingRes.data as List;
     final List<Map<String, dynamic>> parsedRoutings = [];
-    for (final r in routingItems) {
-      final rMap = r is Map ? r as Map<String, dynamic> : {};
-      final itemRouting = rMap['itemRouting'] as Map?;
-      final op = rMap['operation'] as Map?;
-      if (itemRouting != null && op != null) {
-        final opId = itemRouting['operationId'] as int?;
-        final seq = itemRouting['seq'] as int?;
-        final opName = op['name'] as String?;
-        final opCode = op['code'] as String?;
-        if (opId != null && seq != null && opName != null) {
+    final bhrRes = await _lotRepo.fetchBatchHeaderRoutings(controller.batchHeaderId);
+
+    if (bhrRes.success && bhrRes.data != null && (bhrRes.data as List).isNotEmpty) {
+      final opsRes = await ProcessingRepo().fetchProcessingOperations();
+      final List<Operation> allOps = opsRes.success && opsRes.data != null ? List<Operation>.from(opsRes.data) : [];
+
+      for (final r in bhrRes.data as List) {
+        final rMap = r is Map ? r as Map<String, dynamic> : {};
+        final bhr = rMap['batchHeaderRouting'] as Map? ?? rMap;
+        final op = rMap['operation'] as Map?;
+        final opId = bhr['operationId'] as int?;
+        final seq = bhr['seq'] as int? ?? bhr['sequence'] as int?;
+        String? opName = op?['name'] as String?;
+        String? opCode = op?['code'] as String?;
+        if (opName == null && opId != null) {
+          final matched = allOps.where((o) => o.id == opId).toList();
+          if (matched.isNotEmpty) {
+            opName = matched.first.name;
+            opCode = matched.first.code;
+          }
+        }
+        if (opId != null && seq != null) {
           parsedRoutings.add({
             'operationId': opId,
             'seq': seq,
-            'name': opName,
+            'name': opName ?? 'Op #$opId',
             'code': opCode ?? '',
           });
         }
       }
+    } else {
+      final firstTray = state.trays.isNotEmpty ? state.trays.first : null;
+      final int? routingItemId = firstTray?.productionProgress.processedItemId ?? firstTray?.item.id;
+      if (routingItemId != null) {
+        final routingRes = await _lotRepo.fetchItemRoutings(routingItemId);
+        if (routingRes.success && routingRes.data != null) {
+          for (final r in routingRes.data as List) {
+            final rMap = r is Map ? r as Map<String, dynamic> : {};
+            final itemRouting = rMap['itemRouting'] as Map?;
+            final op = rMap['operation'] as Map?;
+            if (itemRouting != null && op != null) {
+              final opId = itemRouting['operationId'] as int?;
+              final seq = itemRouting['seq'] as int?;
+              final opName = op['name'] as String?;
+              final opCode = op['code'] as String?;
+              if (opId != null && seq != null && opName != null) {
+                parsedRoutings.add({
+                  'operationId': opId,
+                  'seq': seq,
+                  'name': opName,
+                  'code': opCode ?? '',
+                });
+              }
+            }
+          }
+        }
+      }
     }
+
+    AppLoader.hide(context);
 
     parsedRoutings.sort((a, b) => (a['seq'] as int).compareTo(b['seq'] as int));
 
@@ -782,12 +825,12 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
                           border: Border.all(color: borderColor, width: isCurrent ? 2 : 1),
                           boxShadow: isCurrent
                               ? [
-                                  BoxShadow(
-                                    color: const Color(0xFF0D47A1).withValues(alpha: 0.25),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 3),
-                                  )
-                                ]
+                            BoxShadow(
+                              color: const Color(0xFF0D47A1).withValues(alpha: 0.25),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            )
+                          ]
                               : null,
                         ),
                         child: Row(
@@ -805,13 +848,13 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
                                 child: isPassed
                                     ? const Icon(Icons.check, size: 16, color: Colors.white)
                                     : Text(
-                                        '${idx + 1}',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w900,
-                                          fontSize: 12,
-                                          color: Colors.white,
-                                        ),
-                                      ),
+                                  '${idx + 1}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 12,
+                                    color: Colors.white,
+                                  ),
+                                ),
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -970,12 +1013,12 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
                     onPressed: !state.isBatchStarted
                         ? null
                         : () {
-                            if (state.isReworkMode) {
-                              controller.toggleReworkMode(enabled: false);
-                            } else {
-                              _showReworkDialog(controller, state);
-                            }
-                          },
+                      if (state.isReworkMode) {
+                        controller.toggleReworkMode(enabled: false);
+                      } else {
+                        _showReworkDialog(controller, state);
+                      }
+                    },
                   ),
                 ),
                 const SizedBox(width: 6),
@@ -989,32 +1032,32 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
                     onPressed: !state.isBatchStarted
                         ? null
                         : () async {
-                            final result = await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => LappingDetailScreen(
-                                  batchHeaderId: controller.batchHeaderId,
-                                  batchCode: controller.batchCode,
-                                  machineId: controller.machineId,
-                                  machine: controller.machine,
-                                  color: controller.color,
-                                  trayCount: controller.trayCount,
-                                  totalWeight: controller.totalWeight,
-                                  currentOperationId: controller.currentOperationId,
-                                  nextOperationId: controller.nextOperationId,
-                                  nextOperationName: controller.nextOperationName,
-                                ),
-                              ),
-                            );
-                            if (mounted && result == true) {
-                              Navigator.pop(context, {
-                                'submitted': true,
-                                'targetOps': [if (controller.nextOperationId != null) controller.nextOperationId!],
-                                'isReassigned': true,
-                                'isRework': false,
-                              });
-                            }
-                          },
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => LappingDetailScreen(
+                            batchHeaderId: controller.batchHeaderId,
+                            batchCode: controller.batchCode,
+                            machineId: controller.machineId,
+                            machine: controller.machine,
+                            color: controller.color,
+                            trayCount: controller.trayCount,
+                            totalWeight: controller.totalWeight,
+                            currentOperationId: controller.currentOperationId,
+                            nextOperationId: controller.nextOperationId,
+                            nextOperationName: controller.nextOperationName,
+                          ),
+                        ),
+                      );
+                      if (mounted && result == true) {
+                        Navigator.pop(context, {
+                          'submitted': true,
+                          'targetOps': [if (controller.nextOperationId != null) controller.nextOperationId!],
+                          'isReassigned': true,
+                          'isRework': false,
+                        });
+                      }
+                    },
                   ),
                 ),
                 const SizedBox(width: 6),
@@ -1027,10 +1070,10 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
                   onPressed: !state.isBatchStarted
                       ? null
                       : (state.isUpdatingTrolley
-                          ? null
-                          : (state.trolleyCode != null
-                              ? () => _confirmFreeTrolley(controller, state)
-                              : () => _showScanTrolleyDialog(controller))),
+                      ? null
+                      : (state.trolleyCode != null
+                      ? () => _confirmFreeTrolley(controller, state)
+                      : () => _showScanTrolleyDialog(controller))),
                 ),
               ),
             ],
