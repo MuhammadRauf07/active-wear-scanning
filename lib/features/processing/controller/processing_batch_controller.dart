@@ -582,7 +582,12 @@ class ProcessingBatchController extends ChangeNotifier {
       if (tIdx == -1) throw Exception('Tray not found');
       final tray = _state.trays[tIdx];
 
-      final double requiredQty = tray.productionProgress.requiredQty?.toDouble() ?? tray.productionProgress.primaryQuantity ?? 0.0;
+      final double requiredTubes = tray.productionProgress.requiredQty?.toDouble() ??
+          tray.productionProgress.secondaryQuantity?.toDouble() ??
+          tray.productionProgress.primaryQuantity?.toDouble() ??
+          0.0;
+      final double pgt = tray.item.perGarmentTube;
+      final double restoredPrimaryPcs = pgt > 0 ? requiredTubes * pgt : requiredTubes;
 
       // 1. Delete wastage entry
       final wastageRecord = _state.wastageByOriginalId[progressId];
@@ -594,9 +599,10 @@ class ProcessingBatchController extends ChangeNotifier {
         }
       }
 
-      // 2. Restore primary quantity on original progress entry and clear fields
+      // 2. Restore primary & secondary quantities on original progress entry and clear waste fields
       final json = tray.productionProgress.toJson();
-      json['primaryQuantity'] = requiredQty;
+      json['secondaryQuantity'] = requiredTubes;
+      json['primaryQuantity'] = restoredPrimaryPcs;
       json['requiredQty'] = null;
       json['waste'] = null;
 
@@ -626,7 +632,8 @@ class ProcessingBatchController extends ChangeNotifier {
             final wipId = match['wipTransaction']?['id'] as int?;
             if (wipId != null) {
               final wipPayload = Map<String, dynamic>.from(match['wipTransaction'] ?? match);
-              wipPayload['primaryQuantity'] = requiredQty;
+              wipPayload['secondaryQuantity'] = requiredTubes;
+              wipPayload['primaryQuantity'] = restoredPrimaryPcs;
               wipPayload.remove('id');
               wipPayload.remove('concurrencyStamp');
               await _lotRepo.updateWipTransaction(wipId, wipPayload);

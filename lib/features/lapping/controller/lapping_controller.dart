@@ -87,7 +87,9 @@ class LappingController extends ChangeNotifier {
         for (final line in draftLines) {
           final Map bl = line['batchLines'] ?? line;
           final trayId = bl['trayId'] as int?;
-          final double qty = (bl['primaryQuantity'] ?? 0.0).toDouble();
+          final double secondaryQty = (bl['secondaryQuantity'] as num?)?.toDouble() ?? 0.0;
+          final double primaryQty = (bl['primaryQuantity'] as num?)?.toDouble() ?? 0.0;
+          final double tubes = secondaryQty > 0 ? secondaryQty : primaryQty;
           final blId = bl['id'] as int?;
           final woId = bl['workOrderHeaderId'] as int?;
           final woLineId = bl['workOrderLineId'] as int?;
@@ -120,6 +122,9 @@ class LappingController extends ChangeNotifier {
                 ),
               );
 
+              final double pgt = templateTray.item.perGarmentTube;
+              final double effectivePcs = primaryQty > 0 ? primaryQty : (pgt > 0 ? tubes * pgt : tubes);
+
               final lappingModel = LappingModel(
                 productionProgress: templateTray.productionProgress.copyWith(
                   id: bl['progressId'] as int?,
@@ -127,7 +132,8 @@ class LappingController extends ChangeNotifier {
                   operationId: currentOperationId,
                   transactionType: 2,
                   primaryTrayId: trayId,
-                  primaryQuantity: qty,
+                  primaryQuantity: effectivePcs,
+                  secondaryQuantity: tubes,
                 ),
                 operation: templateTray.operation,
                 item: templateTray.item,
@@ -150,7 +156,7 @@ class LappingController extends ChangeNotifier {
                 }
 
                 final code = trayCode.toLowerCase();
-                draftOverrides[code] = qty;
+                draftOverrides[code] = tubes;
                 if (blId != null) {
                   loadedBatchLineIds[code] = blId;
                 }
@@ -165,12 +171,15 @@ class LappingController extends ChangeNotifier {
           // Detect waste records (no trayId, waste > 0, or subOperation = 'waste')
           if ((tray.productionProgress.subOperation ?? '').toLowerCase() == 'waste' ||
               (tray.productionProgress.waste ?? 0) > 0 ||
+              tray.productionProgress.locatorId == 18 ||
               tray.productionProgress.primaryTrayId == null) {
             final woId = tray.workOrderHeader.id;
             final itemDesc = tray.processedItem?.description ?? tray.item.description;
             if (itemDesc.isNotEmpty) {
               final compositeId = '${woId}_$itemDesc';
-              loadedWasteQuantities[compositeId] = (tray.productionProgress.waste ?? tray.productionProgress.primaryQuantity ?? 0.0).toDouble();
+              loadedWasteQuantities[compositeId] = ((tray.productionProgress.waste ?? 0) > 0
+                  ? tray.productionProgress.waste!
+                  : (tray.productionProgress.secondaryQuantity ?? tray.productionProgress.primaryQuantity ?? 0.0)).toDouble();
               loadedWasteProgressIds[compositeId] = tray.productionProgress.id;
             }
             continue;
@@ -200,13 +209,14 @@ class LappingController extends ChangeNotifier {
 
           if (isTargetOp &&
               tray.productionProgress.transactionType == 2 &&
-              (tray.productionProgress.subOperation ?? '').toLowerCase() != 'waste') {
+              (tray.productionProgress.subOperation ?? '').toLowerCase() != 'waste' &&
+              tray.productionProgress.locatorId != 18) {
             final woId = tray.workOrderHeader.id;
             final itemDesc = tray.processedItem?.description ?? tray.item.description;
             if (itemDesc.isNotEmpty) {
               final compositeId = '${woId}_$itemDesc';
-              originalPiecesMap[compositeId] = (originalPiecesMap[compositeId] ?? 0.0) +
-                  (tray.productionProgress.primaryQuantity ?? 0.0);
+              final double trayTubes = (tray.productionProgress.secondaryQuantity ?? tray.productionProgress.primaryQuantity ?? 0.0).toDouble();
+              originalPiecesMap[compositeId] = (originalPiecesMap[compositeId] ?? 0.0) + trayTubes;
             }
           }
         }
@@ -243,12 +253,13 @@ class LappingController extends ChangeNotifier {
 
           if (summaries.containsKey(compositeId)) {
             final existing = summaries[compositeId]!;
+            final double trayTubes = (tray.productionProgress.secondaryQuantity ?? tray.productionProgress.primaryQuantity ?? 0.0).toDouble();
             summaries[compositeId] = WorkOrderSummary(
               id: compositeId,
               description: existing.description,
               componentDescription: existing.componentDescription,
               trayCount: existing.trayCount + 1,
-              cumulativePieces: existing.cumulativePieces + (tray.productionProgress.primaryQuantity ?? 0),
+              cumulativePieces: existing.cumulativePieces + trayTubes,
               originalPieces: existing.originalPieces,
             );
           }
@@ -622,15 +633,39 @@ class LappingController extends ChangeNotifier {
       final assignedTrays = allScannedTrays;
       final baseProgress = assignedTrays.isNotEmpty ? assignedTrays.first.productionProgress : null;
 
-      int targetLocatorId = baseProgress?.locatorId ?? 3;
-      final int targetOpId = isDraft ? currentOperationId : (nextOperationId ?? currentOperationId);
+      int? effectiveNextOpId = nextOperationId;
+      if (!isDraft && effectiveNextOpId == null) {
+        final List<Map<String, dynamic>> parsedRoutings = [];
+        final bhrRes = await _lotRepo.fetchBatchHeaderRoutings(batchHeaderId);
+        if (bhrRes.success && bhrRes.data != null && (bhrRes.data as List).isNotEmpty) {
+          for (final r in bhrRes.data as List) {
+            final map = r is Map<String, dynamic> ? r : {};
+            final bhr = map['batchHeaderRouting'] as Map<String, dynamic>? ?? map;
+            final opId = bhr['operationId'] as int?;
+            final seq = bhr['seq'] as int? ?? bhr['sequence'] as int?;
+            if (opId != null && seq != null) {
+              parsedRoutings.add({'operationId': opId, 'seq': seq});
+            }
+          }
+        }
+        if (parsedRoutings.isNotEmpty) {
+          parsedRoutings.sort((a, b) => (a['seq'] as int).compareTo(b['seq'] as int));
+          final currentIdx = parsedRoutings.indexWhere((r) => r['operationId'] == currentOperationId);
+          if (currentIdx != -1 && currentIdx < parsedRoutings.length - 1) {
+            effectiveNextOpId = parsedRoutings[currentIdx + 1]['operationId'] as int?;
+          }
+        }
+      }
 
-      if (!isDraft && nextOperationId != null) {
-        final locRes = await _lotRepo.fetchLocators(operationId: nextOperationId);
+      int targetLocatorId = baseProgress?.locatorId ?? 3;
+      final int targetOpId = isDraft ? currentOperationId : (effectiveNextOpId ?? currentOperationId);
+
+      if (!isDraft && effectiveNextOpId != null) {
+        final locRes = await _lotRepo.fetchLocators(operationId: effectiveNextOpId);
         if (locRes.success && locRes.data != null) {
           final List locList = locRes.data is Map ? (locRes.data['items'] ?? []) : locRes.data;
           final matchingEntry = locList.cast<Map>().firstWhere(
-                (entry) => (entry['operation']?['id'] ?? entry['locator']?['operationId'])?.toString() == nextOperationId.toString(),
+                (entry) => (entry['operation']?['id'] ?? entry['locator']?['operationId'])?.toString() == effectiveNextOpId.toString(),
             orElse: () => {},
           );
           if (matchingEntry.isNotEmpty) {
@@ -1144,6 +1179,9 @@ class LappingController extends ChangeNotifier {
           ).firstOrNull;
 
           if (match != null) {
+            final double pgt = match.item.perGarmentTube;
+            final double wastePrimaryQty = pgt > 0 ? wasteQty * pgt : wasteQty;
+
             if (existingId != null) {
               final freshRes = await _lotRepo.fetchProductionProgressById(existingId);
               if (freshRes.success && freshRes.data != null) {
@@ -1157,10 +1195,13 @@ class LappingController extends ChangeNotifier {
                   updateWasteJson['concurrencyStamp'] = stamp;
                 }
 
+                updateWasteJson['subOperation'] = 'Waste';
                 updateWasteJson['transactionType'] = 2;
                 updateWasteJson['locatorId'] = 18;
-                updateWasteJson['primaryQuantity'] = wasteQty.round();
+                updateWasteJson['primaryQuantity'] = wastePrimaryQty.round();
+                updateWasteJson['secondaryQuantity'] = wasteQty.round();
                 updateWasteJson['waste'] = wasteQty.round();
+                updateWasteJson['wipStatus'] = 1; // Closed scrap record in locator 18
                 updateWasteJson['draftFlag'] = isDraft;
                 updateWasteJson['draftStatus'] = isDraft;
                 updateWasteJson.remove('id');
@@ -1180,8 +1221,8 @@ class LappingController extends ChangeNotifier {
               final Map<String, dynamic> wasteJson = {
                 "subOperation": "Waste",
                 "transactionType": 2,
-                "primaryQuantity": wasteQty.round(),
-                "secondaryQuantity": 0,
+                "primaryQuantity": wastePrimaryQty.round(),
+                "secondaryQuantity": wasteQty.round(),
                 "primaryUOM": match.productionProgress.primaryUOM ?? 4,
                 "secondaryUOM": match.productionProgress.secondaryUOM ?? 1,
                 "waste": wasteQty.round(),
@@ -1191,7 +1232,7 @@ class LappingController extends ChangeNotifier {
                 "gbsFlag": false,
                 "productGrade": 0,
                 "productNature": 0,
-                "wipStatus": 0,
+                "wipStatus": 1, // Closed scrap record in locator 18
                 "date": DateTime.now().toIso8601String(),
                 "operatorDescription": "system",
                 "operationId": currentOperationId,

@@ -361,37 +361,57 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
                       ),
                     ),
 
-                    // INLINE VALIDATION LOADER
+                    // INLINE VALIDATION LOADER (MATCHING APPLOADER DESIGN)
                     if (_isValidating)
                       Positioned.fill(
                         child: Container(
-                          color: Colors.black.withValues(alpha: 0.45),
+                          color: Colors.black.withValues(alpha: 0.35),
                           child: Center(
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                              width: 200,
                               decoration: BoxDecoration(
                                 color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: const BorderRadius.all(Radius.circular(16)),
+                                border: Border.all(
+                                  color: const Color(0xFFE2E8F0),
+                                  width: 1.5,
+                                ),
                                 boxShadow: [
-                                  BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 10),
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.12),
+                                    blurRadius: 20,
+                                    offset: const Offset(0, 8),
+                                  ),
+                                  BoxShadow(
+                                    color: const Color(0xFF1B64A3).withValues(alpha: 0.05),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 4),
+                                  ),
                                 ],
                               ),
-                              child: Row(
+                              child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: const [
                                   SizedBox(
-                                    width: 20,
-                                    height: 20,
+                                    width: 32,
+                                    height: 32,
                                     child: CircularProgressIndicator(
-                                      strokeWidth: 2.5,
+                                      strokeWidth: 3.0,
                                       valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1B64A3)),
                                       backgroundColor: Color(0xFFE2E8F0),
                                     ),
                                   ),
-                                  SizedBox(width: 12),
+                                  SizedBox(height: 16),
                                   Text(
-                                    'Validating code...',
-                                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                                    'Please wait...',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF1E293B),
+                                      letterSpacing: 0.2,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -460,37 +480,52 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
                       ),
                     ),
 
-                    // INLINE VALIDATION LOADER (COMPACT)
+                    // INLINE VALIDATION LOADER (MATCHING APPLOADER DESIGN)
                     if (_isValidating)
                       Positioned.fill(
                         child: Container(
-                          color: Colors.black.withValues(alpha: 0.45),
+                          color: Colors.black.withValues(alpha: 0.35),
                           child: Center(
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                              width: 180,
                               decoration: BoxDecoration(
                                 color: Colors.white,
-                                borderRadius: BorderRadius.circular(10),
+                                borderRadius: const BorderRadius.all(Radius.circular(14)),
+                                border: Border.all(
+                                  color: const Color(0xFFE2E8F0),
+                                  width: 1.5,
+                                ),
                                 boxShadow: [
-                                  BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 8),
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.12),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 6),
+                                  ),
                                 ],
                               ),
-                              child: Row(
+                              child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: const [
                                   SizedBox(
-                                    width: 18,
-                                    height: 18,
+                                    width: 26,
+                                    height: 26,
                                     child: CircularProgressIndicator(
-                                      strokeWidth: 2.2,
+                                      strokeWidth: 2.8,
                                       valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1B64A3)),
                                       backgroundColor: Color(0xFFE2E8F0),
                                     ),
                                   ),
-                                  SizedBox(width: 10),
+                                  SizedBox(height: 12),
                                   Text(
-                                    'Validating code...',
-                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                                    'Please wait...',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF1E293B),
+                                      letterSpacing: 0.2,
+                                    ),
                                   ),
                                 ],
                               ),

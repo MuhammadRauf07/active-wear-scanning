@@ -241,6 +241,9 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
           if (r.productionProgress.transactionType != 2) continue;
           if (r.productionProgress.wipStatus != 0) continue;
           if (r.productionProgress.operationId != operationId) continue;
+          if (r.productionProgress.locatorId == 18) continue; // Exclude waste/scrap records
+          if ((r.productionProgress.subOperation ?? '').toLowerCase() == 'waste') continue;
+          if (r.primaryTrayModel.trayCode == null || r.primaryTrayModel.trayCode!.trim().isEmpty) continue;
 
           final bhId = r.productionProgress.batchHeaderId;
           if (bhId != null) {
@@ -276,7 +279,12 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
             });
             if (bhProgRes.success && bhProgRes.data != null) {
               final bhProgs = (bhProgRes.data as List<ProductionProgressResponseModel>)
-                  .where((p) => p.productionProgress.transactionType == 2 && p.productionProgress.wipStatus == 0)
+                  .where((p) => p.productionProgress.transactionType == 2 &&
+                                p.productionProgress.wipStatus == 0 &&
+                                p.productionProgress.locatorId != 18 &&
+                                (p.productionProgress.subOperation ?? '').toLowerCase() != 'waste' &&
+                                p.primaryTrayModel.trayCode != null &&
+                                p.primaryTrayModel.trayCode!.trim().isNotEmpty)
                   .toList();
               if (bhProgs.isNotEmpty) {
                 bhProgs.sort((a, b) => (b.productionProgress.id ?? 0).compareTo(a.productionProgress.id ?? 0));
