@@ -2,6 +2,7 @@ import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
 import 'package:active_wear_scanning/core/widgets/scanner_always_open.dart';
+import 'package:active_wear_scanning/features/lot_making/controller/lot_making_controller.dart';
 import 'package:active_wear_scanning/features/lot_making/model/lot_header_model.dart';
 import 'package:active_wear_scanning/features/lot_making/presentation/lot_making_screen.dart';
 import 'package:active_wear_scanning/features/lot_making/presentation/widgets/locked_lot_tray_table.dart';
@@ -280,9 +281,22 @@ class _LotListScreenState extends State<LotListScreen>
   }
 
   void _navigateToAddLot() async {
+    final controller = LotMakingController();
+    AppLoader.show(context, message: 'Loading lot data...');
+    try {
+      await controller.initFuture;
+    } catch (e) {
+      debugPrint("Error initializing lot making controller: $e");
+    } finally {
+      if (mounted) AppLoader.hide(context);
+    }
+    if (!mounted) return;
+
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const LotMakingScreen()),
+      MaterialPageRoute(
+        builder: (context) => LotMakingScreen(controller: controller),
+      ),
     );
     if (result == true) {
       _fetchAndGroupLots();
@@ -290,16 +304,27 @@ class _LotListScreenState extends State<LotListScreen>
   }
 
   void _navigateToEditLot(LotHeaderResponseModel lotHeaderModel) async {
+    final controller = LotMakingController(
+      existingBatch: lotHeaderModel,
+      preloadedTrays: const [],
+    );
     AppLoader.show(context, message: 'Loading Lot...');
-    await Future.delayed(const Duration(milliseconds: 300)); // Allow loader to render
-    AppLoader.hide(context);
+    try {
+      await controller.initFuture;
+    } catch (e) {
+      debugPrint("Error initializing edit lot controller: $e");
+    } finally {
+      if (mounted) AppLoader.hide(context);
+    }
+    if (!mounted) return;
+
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => LotMakingScreen(
+          controller: controller,
           existingBatch: lotHeaderModel,
-          preloadedTrays:
-              const [], // Edit screen loads its own trays from lot-lines
+          preloadedTrays: const [],
         ),
       ),
     );

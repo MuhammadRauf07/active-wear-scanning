@@ -33,16 +33,24 @@ class CustomInspectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: EdgeInsets.only(top: topPadding ?? 16, left: horizontalPadding ?? 16, right: horizontalPadding ?? 16),
-      padding: const EdgeInsets.all(16),
+      margin: EdgeInsets.only(
+        top: topPadding ?? 12,
+        left: horizontalPadding ?? 16,
+        right: horizontalPadding ?? 16,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
         color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFFB0BEC5),
+          width: 1.5,
+          strokeAlign: BorderSide.strokeAlignOutside,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 16,
-            spreadRadius: 0,
+            blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
@@ -54,7 +62,7 @@ class CustomInspectionHeader extends StatelessWidget {
 
           Expanded(
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
@@ -62,18 +70,18 @@ class CustomInspectionHeader extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 18, 
                     fontWeight: FontWeight.w800, 
-                    color: Color(0xFF1A1A1A),
-                    letterSpacing: -0.5,
+                    color: Color(0xFF263238),
                   ),
                 ),
                 if (subtitle != null) ...[
                   const SizedBox(height: 2),
                   Text(
                     subtitle!, 
-                    style: TextStyle(
-                      fontSize: 12, 
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.w400,
+                    style: const TextStyle(
+                      fontSize: 10, 
+                      color: Color(0xFF546E7A),
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.3,
                     ),
                   ),
                 ],
@@ -82,7 +90,7 @@ class CustomInspectionHeader extends StatelessWidget {
           ),
           if (callBack != null)
             SizedBox(
-              height: 40,
+              height: 38,
               child: ElevatedButton(
                 onPressed: callBack,
                 style: ElevatedButton.styleFrom(
@@ -92,7 +100,7 @@ class CustomInspectionHeader extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                child: Text(buttonLabel ?? 'Save', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                child: Text(buttonLabel ?? 'Save', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
               ),
             )
           else

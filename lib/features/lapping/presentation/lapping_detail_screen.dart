@@ -514,6 +514,7 @@ class _LappingDetailScreenViewState extends State<_LappingDetailScreenView> {
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setStateDialog) {
@@ -521,127 +522,264 @@ class _LappingDetailScreenViewState extends State<_LappingDetailScreenView> {
             final double totalQty = reassignedQty + enteredWaste;
             final bool isMatch = totalQty == originalQty;
 
-            return AlertDialog(
+            return Dialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: Row(
-                children: [
-                  const Icon(Icons.delete_sweep_outlined, color: Color(0xFFE67E22)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Manage Waste',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF1E293B),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      wo.componentDescription,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF475569),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-                      ),
-                      child: Column(
-                        children: [
-                          _buildWasteInfoRow('Incoming (Prev. Process):', '${originalQty.toInt()} tubes'),
-                          const SizedBox(height: 6),
-                          _buildWasteInfoRow('Reassigned (Scanned):', '${reassignedQty.toInt()} tubes'),
-                          const Divider(height: 16),
-                          _buildWasteInfoRow(
-                            'Current Sum:',
-                            '${totalQty.toInt()} tubes',
-                            valueColor: isMatch ? Colors.green.shade700 : Colors.red.shade700,
-                            isBold: true,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: txtController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: false),
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: InputDecoration(
-                        labelText: 'Waste Quantity (tubes)',
-                        hintText: 'Enter waste quantity',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        suffixIcon: isMatch
-                            ? const Icon(Icons.check_circle_rounded, color: Colors.green)
-                            : const Icon(Icons.warning_amber_rounded, color: Colors.red),
-                      ),
-                      onChanged: (val) {
-                        setStateDialog(() {});
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    if (!isMatch)
-                      Text(
-                        'Total quantity (${totalQty.toInt()}) must equal incoming (${originalQty.toInt()}). Difference: ${(originalQty - totalQty).toInt()}',
-                        style: TextStyle(
-                          color: Colors.red.shade600,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
+              backgroundColor: Colors.white,
+              clipBehavior: Clip.antiAlias,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Header
+                      Container(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFF1F5F9),
+                          border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1.5)),
                         ),
-                      )
-                    else
-                      Text(
-                        'Quantities match perfectly!',
-                        style: TextStyle(
-                          color: Colors.green.shade600,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE67E22).withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(Icons.delete_sweep_outlined, color: Color(0xFFE67E22), size: 22),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Manage Line Waste',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFF1E293B),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    wo.componentDescription,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF64748B),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+                              onPressed: () => Navigator.pop(ctx),
+                            ),
+                          ],
                         ),
                       ),
-                  ],
+
+                      // Body
+                      Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // Quantity Context Card
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+                              ),
+                              child: Column(
+                                children: [
+                                  _buildWasteInfoRow('Incoming (Prev. Process):', '${originalQty.toInt()} tubes'),
+                                  const SizedBox(height: 8),
+                                  _buildWasteInfoRow('Reassigned (Scanned):', '${reassignedQty.toInt()} tubes'),
+                                  const Divider(height: 18, color: Color(0xFFE2E8F0)),
+                                  _buildWasteInfoRow(
+                                    'Current Sum:',
+                                    '${totalQty.toInt()} tubes',
+                                    valueColor: isMatch ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
+                                    isBold: true,
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            const SizedBox(height: 20),
+
+                            const Text(
+                              'WASTAGE TUBES',
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF64748B), letterSpacing: 0.5),
+                            ),
+                            const SizedBox(height: 8),
+
+                            // Stepper input
+                            Row(
+                              children: [
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: IconButton(
+                                    icon: const Icon(Icons.remove_rounded, color: Color(0xFF1E293B)),
+                                    onPressed: () {
+                                      final cur = int.tryParse(txtController.text) ?? 0;
+                                      if (cur > 0) {
+                                        txtController.text = (cur - 1).toString();
+                                        setStateDialog(() {});
+                                      }
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: TextField(
+                                    controller: txtController,
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF1E293B)),
+                                    decoration: InputDecoration(
+                                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                                      isDense: true,
+                                      filled: true,
+                                      fillColor: const Color(0xFFF8FAFC),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                        borderSide: const BorderSide(color: Color(0xFFCBD5E1), width: 1.5),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                        borderSide: const BorderSide(color: Color(0xFF0D47A1), width: 2),
+                                      ),
+                                    ),
+                                    onChanged: (val) {
+                                      setStateDialog(() {});
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: IconButton(
+                                    icon: const Icon(Icons.add_rounded, color: Color(0xFF1E293B)),
+                                    onPressed: () {
+                                      final cur = int.tryParse(txtController.text) ?? 0;
+                                      txtController.text = (cur + 1).toString();
+                                      setStateDialog(() {});
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            // Validation Status Badge
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isMatch ? const Color(0xFFF0FDF4) : const Color(0xFFFEF2F2),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: isMatch ? const Color(0xFFBBF7D0) : const Color(0xFFFECACA)),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    isMatch ? Icons.check_circle_rounded : Icons.info_outline_rounded,
+                                    size: 16,
+                                    color: isMatch ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      isMatch
+                                          ? 'Total quantity matches incoming (${originalQty.toInt()} tubes).'
+                                          : 'Total (${totalQty.toInt()}) must equal incoming (${originalQty.toInt()}). Diff: ${(originalQty - totalQty).toInt()}',
+                                      style: TextStyle(
+                                        color: isMatch ? const Color(0xFF15803D) : const Color(0xFFB91C1C),
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Footer Actions
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFF8FAFC),
+                          border: Border(top: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
+                        ),
+                        child: Row(
+                          children: [
+                            if (currentWaste > 0 || controller.state.itemWasteProgressIds[compositeId] != null) ...[
+                              OutlinedButton.icon(
+                                onPressed: () {
+                                  controller.setWasteQuantity(compositeId, 0.0);
+                                  Navigator.of(ctx).pop();
+                                },
+                                icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFDC2626), size: 16),
+                                label: const Text('Delete Waste', style: TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.w700, fontSize: 11)),
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: Color(0xFFFCA5A5)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                ),
+                              ),
+                              const Spacer(),
+                            ] else ...[
+                              const Spacer(),
+                            ],
+                            TextButton(
+                              onPressed: () => Navigator.of(ctx).pop(),
+                              child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w700)),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton.icon(
+                              onPressed: () {
+                                final double wasteVal = double.tryParse(txtController.text) ?? 0.0;
+                                controller.setWasteQuantity(compositeId, wasteVal);
+                                Navigator.of(ctx).pop();
+                              },
+                              icon: const Icon(Icons.check_rounded, size: 16),
+                              label: const Text('Save Waste', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF0D47A1),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              actions: [
-                if (currentWaste > 0 || controller.state.itemWasteProgressIds[compositeId] != null)
-                  TextButton.icon(
-                    onPressed: () {
-                      controller.setWasteQuantity(compositeId, 0.0);
-                      Navigator.of(ctx).pop();
-                    },
-                    icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
-                    label: const Text('DELETE WASTE', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                  ),
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text('CANCEL'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    final double wasteVal = double.tryParse(txtController.text) ?? 0.0;
-                    controller.setWasteQuantity(compositeId, wasteVal);
-                    Navigator.of(ctx).pop();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1E293B),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  child: const Text('SAVE'),
-                ),
-              ],
             );
           },
         );
@@ -748,8 +886,10 @@ class _LappingDetailScreenViewState extends State<_LappingDetailScreenView> {
                                         selectedWorkOrderId: state.selectedWorkOrderId,
                                         scannedTraysByWO: state.scannedTraysByWO,
                                         trayOverrideQuantities: state.trayOverrideQuantities,
+                                        itemWasteQuantities: state.itemWasteQuantities,
                                         onSelected: (val) => controller.setSelectedWorkOrderId(val),
                                         onAddWaste: (wo) => _showWasteDialog(context, controller, wo),
+                                        onDeleteWaste: (compositeId) => controller.setWasteQuantity(compositeId, 0.0),
                                       ),
                                     ),
                                     if (state.selectedWorkOrderId != null) ...[

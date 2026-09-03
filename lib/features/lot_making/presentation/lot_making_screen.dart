@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -19,15 +20,23 @@ import 'package:active_wear_scanning/features/lot_making/model/lot_making_state.
 class LotMakingScreen extends StatelessWidget {
   final LotHeaderResponseModel? existingBatch;
   final List<ProductionProgressResponseModel>? preloadedTrays;
+  final LotMakingController? controller;
 
   const LotMakingScreen({
     super.key,
     this.existingBatch,
     this.preloadedTrays,
+    this.controller,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (controller != null) {
+      return ChangeNotifierProvider<LotMakingController>.value(
+        value: controller!,
+        child: const _LotMakingScreenView(),
+      );
+    }
     return ChangeNotifierProvider<LotMakingController>(
       create: (_) => LotMakingController(
         existingBatch: existingBatch,
@@ -57,7 +66,7 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final controller = context.read<LotMakingController>();
-      if (controller.state.isLoading || controller.state.isCachingColors) {
+      if ((controller.state.isLoading || controller.state.isCachingColors) && !AppLoader.isVisible) {
         AppLoader.show(context, message: 'Loading lot data...');
         while (controller.state.isLoading || controller.state.isCachingColors) {
           await Future.delayed(const Duration(milliseconds: 100));
@@ -586,53 +595,62 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
       if (mounted) _updateLoaderState(state);
     });
 
+    final bool isInitialLoading = state.isLoading && state.machines.isEmpty && state.productionProgressTrays.isEmpty;
+
     return PopScope(
-      canPop: !AppLoader.isVisible,
+      canPop: !AppLoader.isVisible && !isInitialLoading,
       child: Scaffold(
         backgroundColor: const Color(0xFFF1F5F9),
-        body: RawKeyboardListener(
-          focusNode: _focusNode,
-          autofocus: true,
-          onKey: _onKey,
-          child: SafeArea(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildPremiumHeader(controller, state),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                    child: CustomScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      slivers: [
-                        SliverToBoxAdapter(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _buildConfigurationPanel(controller, state),
-                              if (state.selectedColor != null) ...[
-                                const SizedBox(height: 10),
-                                _buildLiveDashboard(controller, state),
-                                const SizedBox(height: 10),
-                                _buildWOSummary(controller, state),
-                                const SizedBox(height: 10),
-                              ],
+        body: isInitialLoading
+            ? Container(
+                color: const Color(0xFFF1F5F9),
+                child: const Center(
+                  child: SizedBox.shrink(),
+                ),
+              )
+            : RawKeyboardListener(
+                focusNode: _focusNode,
+                autofocus: true,
+                onKey: _onKey,
+                child: SafeArea(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildPremiumHeader(controller, state),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                          child: CustomScrollView(
+                            physics: const BouncingScrollPhysics(),
+                            slivers: [
+                              SliverToBoxAdapter(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    _buildConfigurationPanel(controller, state),
+                                    if (state.selectedColor != null) ...[
+                                      const SizedBox(height: 10),
+                                      _buildLiveDashboard(controller, state),
+                                      const SizedBox(height: 10),
+                                      _buildWOSummary(controller, state),
+                                      const SizedBox(height: 10),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              if (state.selectedColor != null)
+                                SliverFillRemaining(
+                                  hasScrollBody: true,
+                                  child: _buildScannedSection(controller, state),
+                                ),
                             ],
                           ),
                         ),
-                        if (state.selectedColor != null)
-                          SliverFillRemaining(
-                            hasScrollBody: true,
-                            child: _buildScannedSection(controller, state),
-                          ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
-          ),
-        ),
+              ),
       ),
     );
   }

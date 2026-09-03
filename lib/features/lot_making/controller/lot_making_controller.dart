@@ -18,6 +18,8 @@ class LotMakingController extends ChangeNotifier {
   LotMakingState _state = const LotMakingState();
   LotMakingState get state => _state;
 
+  late final Future<void> initFuture;
+
   LotMakingController({
     this.existingBatch,
     this.preloadedTrays,
@@ -26,17 +28,19 @@ class LotMakingController extends ChangeNotifier {
         "LOT-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}";
     _state = _state.copyWith(lotCode: code);
     
-    initData();
+    initFuture = initData();
   }
 
   Future<void> initData() async {
     _state = _state.copyWith(isLoading: true, clearError: true);
     notifyListeners();
     try {
-      await fetchMachines();
-      await fetchColors();
+      await Future.wait([
+        fetchMachines(),
+        fetchColors(),
+        fetchLotProgressIds(),
+      ]);
       await fetchProductionProgresses();
-      await fetchLotProgressIds();
     } finally {
       _state = _state.copyWith(isLoading: false);
       notifyListeners();
@@ -344,8 +348,12 @@ class LotMakingController extends ChangeNotifier {
             .toSet();
 
         final Set<String> validColors = {};
-        for (final lineId in lineIds) {
-          final res = await _lotRepo.fetchAllWorkOrderLineDetails(lineId);
+        final results = await Future.wait(
+          lineIds.map((lineId) => _lotRepo.fetchAllWorkOrderLineDetails(lineId)),
+        );
+        for (int i = 0; i < lineIds.length; i++) {
+          final lineId = lineIds.elementAt(i);
+          final res = results[i];
           if (res.success && res.data != null) {
             updatedPlanQuantities.removeWhere((key, _) => key.startsWith("${lineId}_"));
             final items = res.data as List;

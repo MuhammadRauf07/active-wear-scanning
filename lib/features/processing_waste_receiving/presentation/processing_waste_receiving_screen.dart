@@ -6,6 +6,7 @@ import 'package:active_wear_scanning/core/theme/app_theme.dart';
 import 'package:active_wear_scanning/core/utils/barcode_buffer_parser.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
+import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/empty_scan_state.dart';
 import 'package:active_wear_scanning/core/widgets/scanner_always_open.dart';
 import 'package:active_wear_scanning/features/processing_waste_receiving/controller/processing_waste_controller.dart';
@@ -408,69 +409,29 @@ class _ProcessingWasteReceivingViewState extends State<_ProcessingWasteReceiving
       canPop: !state.isLoading && !AppLoader.isVisible,
       child: Scaffold(
         backgroundColor: const Color(0xFFF1F5F9),
-        appBar: AppBar(
-          title: const Text(
-            'Processing Waste Receiving',
-            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF1E293B)),
-          ),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: Color(0xFF1E293B)),
-            onPressed: (state.isLoading || AppLoader.isVisible)
-                ? null
-                : () => Navigator.pop(context),
-          ),
-          backgroundColor: Colors.white,
-          elevation: 0,
-          centerTitle: true,
-          actions: [
-            if (state.scannedTrays.isNotEmpty)
-              TextButton(
-                onPressed: state.isLoading
-                    ? null
-                    : () async {
-                        try {
-                          await AppLoader.runWithLoader(
-                            context,
-                            message: 'Saving Waste logs & WIP transactions...',
-                            action: () => controller.saveWasteReceivingData(),
-                          );
-                          if (context.mounted) {
-                            AppSnackBar.showSuccess(context, message: 'Processing waste received successfully!');
-                          }
-                        } catch (e) {
-                          if (context.mounted) {
-                            AppSnackBar.showError(context, message: e.toString());
-                          }
-                        }
-                      },
-                child: const Text(
-                  'SAVE CHANGES',
-                  style: TextStyle(color: Color(0xFF0D47A1), fontWeight: FontWeight.w900, fontSize: 12),
-                ),
-              ),
-          ],
-        ),
-        body: Column(
-          children: [
-            if (state.errorMessage != null)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                color: Colors.red.shade50,
-                child: Row(
-                  children: [
-                    Icon(Icons.error_outline_rounded, color: Colors.red.shade700, size: 20),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        state.errorMessage!,
-                        style: TextStyle(color: Colors.red.shade800, fontSize: 13, fontWeight: FontWeight.w600),
+        body: SafeArea(
+          child: Column(
+            children: [
+              _buildPremiumHeader(controller, state),
+              if (state.errorMessage != null)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  color: Colors.red.shade50,
+                  child: Row(
+                    children: [
+                      Icon(Icons.error_outline_rounded, color: Colors.red.shade700, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          state.errorMessage!,
+                          style: TextStyle(color: Colors.red.shade800, fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            _buildFilterBar(controller, state),
+              _buildFilterBar(controller, state),
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(12),
@@ -557,6 +518,81 @@ class _ProcessingWasteReceivingViewState extends State<_ProcessingWasteReceiving
                   ),
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+  Widget _buildPremiumHeader(ProcessingWasteController controller, ProcessingWasteState state) {
+    final enabled = state.scannedTrays.isNotEmpty && !state.isLoading;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: const Color(0xFFB0BEC5),
+            width: 1.5,
+            strokeAlign: BorderSide.strokeAlignOutside,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            CustomBackButton(
+              onBackPress: (state.isLoading || AppLoader.isVisible)
+                  ? () {}
+                  : () => Navigator.pop(context),
+            ),
+            const Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Processing Waste Receiving',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF263238)),
+                  ),
+                  Text(
+                    'Receive and log waste trays from processing',
+                    style: TextStyle(fontSize: 10, color: Color(0xFF546E7A), fontWeight: FontWeight.w600, letterSpacing: 0.3),
+                  ),
+                ],
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: enabled
+                  ? () async {
+                      try {
+                        await AppLoader.runWithLoader(
+                          context,
+                          message: 'Saving Waste logs & WIP transactions...',
+                          action: () => controller.saveWasteReceivingData(),
+                        );
+                        if (context.mounted) {
+                          AppSnackBar.showSuccess(context, message: 'Processing waste received successfully!');
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          AppSnackBar.showError(context, message: e.toString());
+                        }
+                      }
+                    }
+                  : null,
+              icon: const Icon(Icons.save_rounded, size: 16),
+              label: const Text('SAVE CHANGES'),
+              style: AppTheme.saveButtonStyle(isEnabled: enabled),
             ),
           ],
         ),

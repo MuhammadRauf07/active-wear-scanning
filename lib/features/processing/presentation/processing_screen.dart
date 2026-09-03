@@ -271,12 +271,13 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
             final bhId = entry.key;
             final groupRecords = entry.value;
 
-            // ── Verify active operation: Ensure batch has not moved to a newer operation ──
+            // ── Verify active operation: Ensure trays have not moved to a newer operation ──
             final bhProgRes = await _processingRepo.fetchProductionProgress({
               'BatchHeaderId': bhId.toString(),
               'TransactionType': '2',
               'MaxResultCount': '1000',
             });
+            List<ProductionProgressResponseModel> activeTraysAtCurrentOp = groupRecords;
             if (bhProgRes.success && bhProgRes.data != null) {
               final bhProgs = (bhProgRes.data as List<ProductionProgressResponseModel>)
                   .where((p) => p.productionProgress.transactionType == 2 &&
@@ -287,12 +288,26 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                                 p.primaryTrayModel.trayCode!.trim().isNotEmpty)
                   .toList();
               if (bhProgs.isNotEmpty) {
-                bhProgs.sort((a, b) => (b.productionProgress.id ?? 0).compareTo(a.productionProgress.id ?? 0));
-                final latestOpId = bhProgs.first.productionProgress.operationId;
-                if (latestOpId != null && latestOpId != operationId) {
-                  // Batch has progressed to a newer operation (e.g. 14 instead of 5); skip in current lane
+                // Filter groupRecords to only include trays whose latest active state is at current operationId
+                final validTrays = <ProductionProgressResponseModel>[];
+                for (final gr in groupRecords) {
+                  final trayCode = gr.primaryTrayModel.trayCode ?? 'UNKNOWN';
+                  final trayProgs = bhProgs.where((p) => (p.primaryTrayModel.trayCode ?? 'UNKNOWN') == trayCode).toList();
+                  if (trayProgs.isNotEmpty) {
+                    trayProgs.sort((a, b) => (b.productionProgress.id ?? 0).compareTo(a.productionProgress.id ?? 0));
+                    final latestTrayOpId = trayProgs.first.productionProgress.operationId;
+                    if (latestTrayOpId == operationId) {
+                      validTrays.add(gr);
+                    }
+                  } else {
+                    validTrays.add(gr);
+                  }
+                }
+                if (validTrays.isEmpty) {
+                  // All trays for this batch have progressed to other operations; skip batch in this lane
                   continue;
                 }
+                activeTraysAtCurrentOp = validTrays;
               }
             }
 
@@ -318,13 +333,13 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                 }
               }
               machineCode ??=
-                  groupRecords.first.machineModel.brand ??
-                      groupRecords.first.machineModel.resourceCode ??
+                  activeTraysAtCurrentOp.first.machineModel.brand ??
+                      activeTraysAtCurrentOp.first.machineModel.resourceCode ??
                       '-';
 
               double totalTubes = 0.0;
               double totalWeight = 0.0;
-              for (final gr in groupRecords) {
+              for (final gr in activeTraysAtCurrentOp) {
                 final qty = gr.productionProgress.primaryQuantity ?? 0;
                 final tubes = (gr.productionProgress.secondaryQuantity ?? qty).toDouble();
                 final pw = gr.item.pieceWeight ?? 0;
@@ -332,9 +347,9 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                 totalWeight += qty * pw;
               }
 
-              final bool isStarted = groupRecords.any((r) =>
+              final bool isStarted = activeTraysAtCurrentOp.any((r) =>
               r.productionProgress.isStarted ?? false);
-              final bool isRework = groupRecords.any((r) =>
+              final bool isRework = activeTraysAtCurrentOp.any((r) =>
               r.productionProgress.reworkFlag ?? false);
               
               final blRes = await _lotRepo.fetchLotLines(batchHeaderId: bhId);
@@ -458,7 +473,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                 }
               }
 
-              final bool isDraft = groupRecords.any((r) => r.productionProgress.pbsFlag == true || r.productionProgress.draftFlag == true);
+              final bool isDraft = activeTraysAtCurrentOp.any((r) => r.productionProgress.pbsFlag == true || r.productionProgress.draftFlag == true);
 
               summaries.add(
                 BatchSummaryItem(
@@ -467,7 +482,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                   batchCode: bhFull.batchHeader.batchHeaderCode ?? '-',
                   machine: machineCode,
                   color: bhFull.batchHeader.colorDescription ?? '-',
-                  trayCount: groupRecords.length,
+                  trayCount: activeTraysAtCurrentOp.length,
                   totalTubes: totalTubes,
                   totalWeight: totalWeight,
                   trolleyCode: trolleyCode,

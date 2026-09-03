@@ -277,10 +277,10 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
         GridView.count(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
-          childAspectRatio: 3.2,
+          crossAxisCount: 3,
+          mainAxisSpacing: 8,
+          crossAxisSpacing: 8,
+          childAspectRatio: 2.3,
           children: [
             _buildHUDCard('BATCH #', controller.batchCode, Icons.tag_rounded),
             _buildHUDCard('MACHINE', controller.machine, Icons.precision_manufacturing_rounded),
@@ -290,16 +290,16 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
             _buildHUDCard('WEIGHT', '${controller.totalWeight.toStringAsFixed(1)} g', Icons.scale_rounded),
           ],
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             color: const Color(0xFF1E293B),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.1),
-                blurRadius: 10,
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 8,
                 offset: const Offset(0, 4),
               ),
             ],
@@ -320,26 +320,27 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
 
   Widget _buildHUDCard(String label, String value, IconData icon, {Color? valueColor}) {
     return Container(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
       ),
       child: Row(
         children: [
-          Icon(icon, color: const Color(0xFF64748B), size: 18),
-          const SizedBox(width: 10),
+          Icon(icon, color: const Color(0xFF64748B), size: 16),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(label, style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 0.5)),
+                Text(label, style: const TextStyle(fontSize: 7.5, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 0.4)),
+                const SizedBox(height: 1),
                 Text(
                   value,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: FontWeight.w900,
                     color: valueColor ?? const Color(0xFF1E293B),
                   ),
@@ -408,7 +409,7 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -433,7 +434,9 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
               isReworkMode: state.isReworkMode,
               selectedReworkTrayIds: state.selectedReworkTrayIds,
               trayIdsWithWastage: state.trayIdsWithWastage,
+              wastageByOriginalId: state.wastageByOriginalId,
               isEditable: state.isBatchStarted,
+              isBatchStarted: state.isBatchStarted,
               operationName: controller.operationName,
               onQuantitySubmit: (progressId, newQty, productGrade) async {
                 try {
