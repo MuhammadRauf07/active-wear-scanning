@@ -7,6 +7,7 @@ class OrderHeaderScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF1F5F9),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -14,8 +15,8 @@ class OrderHeaderScreen extends StatelessWidget {
             CustomInspectionHeader(
               heading: 'Order Header',
               isShowBackIcon: true,
-              topPadding: 0,
-              horizontalPadding: 12,
+              topPadding: 12,
+              horizontalPadding: 16,
             ),
             const Expanded(
               child: Center(

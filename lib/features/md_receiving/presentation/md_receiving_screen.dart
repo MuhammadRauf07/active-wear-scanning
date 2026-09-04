@@ -6,6 +6,7 @@ import 'package:active_wear_scanning/core/theme/app_theme.dart';
 import 'package:active_wear_scanning/core/utils/barcode_buffer_parser.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
+import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/empty_scan_state.dart';
 import 'package:active_wear_scanning/core/widgets/scanner_always_open.dart';
 import 'package:active_wear_scanning/features/carton_packing/presentation/widgets/carton_packing_row.dart';
@@ -193,19 +194,7 @@ class _MdReceivingScreenViewState extends State<_MdReceivingScreenView> {
         ),
         child: Row(
           children: [
-            IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
-              onPressed: () {
-                HapticFeedbackHelper.buttonClick();
-                Navigator.of(context).pop();
-              },
-              style: IconButton.styleFrom(
-                foregroundColor: const Color(0xFF546E7A),
-                backgroundColor: const Color(0xFFECEFF1),
-                padding: const EdgeInsets.all(8),
-              ),
-            ),
-            const SizedBox(width: 12),
+            const CustomBackButton(),
             const Expanded(
               child: Column(
                 mainAxisSize: MainAxisSize.min,

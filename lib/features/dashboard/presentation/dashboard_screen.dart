@@ -9,7 +9,7 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF1F5F9),
       body: SafeArea(
         child: Column(
           children: [
@@ -17,12 +17,12 @@ class DashboardScreen extends StatelessWidget {
               heading: 'Dashboard',
               subtitle: 'View your orders overview',
               isShowBackIcon: false,
-              topPadding: 10,
-              horizontalPadding: 12,
+              topPadding: 12,
+              horizontalPadding: 16,
             ),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                 child: Column(
                   children: [
                     _buildDashboardCard('Unplanned Orders', Icons.assignment_late, Colors.orange),

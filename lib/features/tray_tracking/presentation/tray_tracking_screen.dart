@@ -96,14 +96,14 @@ class _TrayTrackingScreenViewState extends State<_TrayTrackingScreenView> with S
               heading: 'Tray Tracking',
               subtitle: 'Track and monitor tray locations',
               isShowBackIcon: true,
-              topPadding: 10,
+              topPadding: 12,
               horizontalPadding: 16,
             ),
             Expanded(
               child: state.isLoading 
                 ? const Center(child: _TacticalLoader())
                 : Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [

@@ -167,9 +167,150 @@ class _UnholdTraysScreenViewState extends State<_UnholdTraysScreenView> {
           child: Column(
             children: [
               _buildHeader(controller, state, canSave),
-              _buildOriginSelectorCard(controller, state),
-              _buildActionBar(controller, state),
-              Expanded(child: _buildScannedTraysTable(controller, state)),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFFB0BEC5),
+                        width: 1.5,
+                        strokeAlign: BorderSide.strokeAlignOutside,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildOriginSelectorPanel(controller, state),
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'SCANNED TRAYS TO RELEASE',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFF263238),
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${state.scannedTrays.length} Tray(s) Scanned',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF78909C),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(
+                                height: 38,
+                                child: ElevatedButton.icon(
+                                  onPressed: state.isLoading ? null : () => _onScanTray(controller),
+                                  icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
+                                  label: const Text('SCAN TRAY', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 10)),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF0D47A1),
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const TrayTableHeader(showHoldColumn: false),
+                        Expanded(
+                          child: state.scannedTrays.isEmpty
+                              ? const EmptyScanState(hasBorder: false)
+                              : ListView.separated(
+                                  padding: EdgeInsets.zero,
+                                  itemCount: state.scannedTrays.length,
+                                  separatorBuilder: (ctx, i) => const Divider(height: 1, color: Color(0xFFECEFF1)),
+                                  itemBuilder: (ctx, idx) {
+                                    final item = state.scannedTrays[idx];
+                                    final trayCode = item.primaryTrayModel.trayCode ?? '-';
+                                    final itemDesc = item.item.description;
+                                    final qty = item.productionProgress.primaryQuantity?.toStringAsFixed(0) ?? '0';
+
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                      child: Row(
+                                        children: [
+                                          SizedBox(
+                                            width: 32,
+                                            child: Text(
+                                              '${idx + 1}',
+                                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF78909C)),
+                                            ),
+                                          ),
+                                          Expanded(
+                                            flex: 3,
+                                            child: Text(
+                                              trayCode,
+                                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
+                                            ),
+                                          ),
+                                          Expanded(
+                                            flex: 5,
+                                            child: Text(
+                                              itemDesc,
+                                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          Expanded(
+                                            flex: 2,
+                                            child: Center(
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFE8F5E9),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                ),
+                                                child: Text(
+                                                  '$qty tubes',
+                                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF2E7D32)),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          SizedBox(
+                                            width: 40,
+                                            child: IconButton(
+                                              icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 20),
+                                              onPressed: () => controller.removeScannedTray(idx),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -213,174 +354,77 @@ class _UnholdTraysScreenViewState extends State<_UnholdTraysScreenView> {
     );
   }
 
-  Widget _buildOriginSelectorCard(UnholdTraysController controller, UnholdTraysState state) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFCFD8DC)),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.filter_alt_outlined, size: 18, color: Color(0xFF1565C0)),
-            const SizedBox(width: 8),
-            const Text('HOLD ORIGIN: ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF455A64))),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Container(
-                height: 38,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFCFD8DC)),
+  Widget _buildOriginSelectorPanel(UnholdTraysController controller, UnholdTraysState state) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF8FAFC),
+        border: Border(bottom: BorderSide(color: Color(0xFFCFD8DC), width: 1)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            flex: 3,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'HOLD ORIGIN',
+                  style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Color(0xFF78909C), letterSpacing: 0.5),
                 ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: state.selectedOrigin,
-                    isExpanded: true,
-                    items: const [
-                      DropdownMenuItem(value: 'knitting', child: Text('Knitting Production', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700))),
-                      DropdownMenuItem(value: 'pbs', child: Text('PBS (Processing)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700))),
-                    ],
-                    onChanged: (val) {
-                      if (val != null) controller.changeOrigin(val);
-                    },
+                const SizedBox(height: 6),
+                Container(
+                  height: 40,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFCFD8DC)),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: state.selectedOrigin,
+                      isExpanded: true,
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'knitting',
+                          child: Text('Knitting Production', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238))),
+                        ),
+                        DropdownMenuItem(
+                          value: 'pbs',
+                          child: Text('PBS (Processing)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238))),
+                        ),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) controller.changeOrigin(val);
+                      },
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
-            const SizedBox(width: 8),
-            SizedBox(
-              height: 38,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 2,
+            child: SizedBox(
+              height: 40,
               child: ElevatedButton.icon(
                 onPressed: () => _showReferenceHeldTraysDialog(controller, state),
-                icon: const Icon(Icons.layers_outlined, size: 14),
-                label: Text('SHOW HOLD TRAYS (${state.heldTrays.length})', style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w900)),
+                icon: const Icon(Icons.layers_outlined, size: 16),
+                label: Text(
+                  'SHOW HOLD (${state.heldTrays.length})',
+                  style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w900),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFE67E22),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionBar(UnholdTraysController controller, UnholdTraysState state) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-      child: SizedBox(
-        width: double.infinity,
-        height: 44,
-        child: ElevatedButton.icon(
-          onPressed: () => _onScanTray(controller),
-          icon: const Icon(Icons.qr_code_scanner, size: 18),
-          label: const Text('SCAN TRAY TO RELEASE', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF1565C0),
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            elevation: 2,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildScannedTraysTable(UnholdTraysController controller, UnholdTraysState state) {
-    if (state.scannedTrays.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(16),
-        child: EmptyScanState(),
-      );
-    }
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFB0BEC5), width: 1.5),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          const TrayTableHeader(showHoldColumn: false),
-          Expanded(
-            child: ListView.separated(
-              padding: EdgeInsets.zero,
-              itemCount: state.scannedTrays.length,
-              separatorBuilder: (ctx, i) => const Divider(height: 1, color: Color(0xFFECEFF1)),
-              itemBuilder: (ctx, idx) {
-                final item = state.scannedTrays[idx];
-                final trayCode = item.primaryTrayModel.trayCode ?? '-';
-                final itemDesc = item.item.description;
-                final qty = item.productionProgress.primaryQuantity?.toStringAsFixed(0) ?? '0';
-
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 32,
-                        child: Text(
-                          '${idx + 1}',
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF78909C)),
-                        ),
-                      ),
-                      Expanded(
-                        flex: 3,
-                        child: Text(
-                          trayCode,
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
-                        ),
-                      ),
-                      Expanded(
-                        flex: 5,
-                        child: Text(
-                          itemDesc,
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Expanded(
-                        flex: 2,
-                        child: Center(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE8F5E9),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              '$qty tubes',
-                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF2E7D32)),
-                            ),
-                          ),
-                        ),
-                      ),
-                      SizedBox(
-                        width: 40,
-                        child: IconButton(
-                          icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 20),
-                          onPressed: () => controller.removeScannedTray(idx),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
             ),
           ),
         ],

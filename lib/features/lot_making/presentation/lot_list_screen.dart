@@ -951,7 +951,7 @@ class _LotListScreenState extends State<LotListScreen>
                     heading: 'LOT HISTORY',
                     subtitle: 'Manage your scanning lots',
                     isShowBackIcon: true,
-                    topPadding: 0,
+                    topPadding: 12,
                     horizontalPadding: 16,
                     widget: ElevatedButton.icon(
                       onPressed: _navigateToAddLot,
@@ -999,7 +999,7 @@ class _LotListScreenState extends State<LotListScreen>
 
   Widget _buildPremiumTabBar() {
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: const Color(0xFFE2E8F0),

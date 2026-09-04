@@ -326,11 +326,11 @@ class _WIPScreenViewState extends State<_WIPScreenView> {
               _buildPremiumHeader(),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                   child: state.locators.isEmpty
                       ? _buildEmptyLocatorsState()
                       : ListView.builder(
-                          padding: const EdgeInsets.only(bottom: 24),
+                          padding: EdgeInsets.zero,
                           itemCount: state.locators.length,
                           itemBuilder: (context, index) {
                             final loc = state.locators[index];

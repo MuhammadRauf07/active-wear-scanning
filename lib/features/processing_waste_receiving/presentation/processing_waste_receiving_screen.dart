@@ -409,6 +409,7 @@ class _ProcessingWasteReceivingViewState extends State<_ProcessingWasteReceiving
       canPop: !state.isLoading && !AppLoader.isVisible,
       child: Scaffold(
         backgroundColor: const Color(0xFFF1F5F9),
+        resizeToAvoidBottomInset: false,
         body: SafeArea(
           child: Column(
             children: [
@@ -431,100 +432,102 @@ class _ProcessingWasteReceivingViewState extends State<_ProcessingWasteReceiving
                     ],
                   ),
                 ),
-              _buildFilterBar(controller, state),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFB0BEC5), width: 1.5),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFF1F5F9),
-                          border: Border(bottom: BorderSide(color: Color(0xFFB0BEC5), width: 1.5)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.qr_code_scanner_rounded, color: Color(0xFF0D47A1), size: 20),
-                            const SizedBox(width: 12),
-                            const Expanded(
-                              child: Text(
-                                'SCANNED WASTE TRAYS',
-                                style: TextStyle(color: Color(0xFF263238), fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 0.5),
-                              ),
-                            ),
-                            Text(
-                              '${state.scannedTrays.length} Trays',
-                              style: const TextStyle(color: Color(0xFF546E7A), fontSize: 11, fontWeight: FontWeight.w700),
-                            ),
-                          ],
-                        ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFFB0BEC5),
+                        width: 1.5,
+                        strokeAlign: BorderSide.strokeAlignOutside,
                       ),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-                          child: Column(
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildFilterBar(controller, state),
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'SCANNED WASTE TRAYS',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFF263238),
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${state.scannedTrays.length} Tray(s) Scanned',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF78909C),
+                                    ),
+                                  ),
+                                ],
+                              ),
                               SizedBox(
-                                width: double.infinity,
-                                height: 44,
+                                height: 38,
                                 child: ElevatedButton.icon(
                                   onPressed: state.isLoading
                                       ? null
                                       : () => _onScanTray(controller, state),
-                                  icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
-                                  label: const Text('SCAN TRAY', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+                                  icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
+                                  label: const Text('SCAN TRAY', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 10)),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: const Color(0xFF0D47A1),
                                     foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                     elevation: 0,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(height: 12),
-                              Expanded(
-                                child: state.scannedTrays.isEmpty
-                                    ? const EmptyScanState(hasBorder: false)
-                                    : Column(
-                                        children: [
-                                          _buildTableHeader(),
-                                          Expanded(
-                                            child: ListView.builder(
-                                              padding: EdgeInsets.zero,
-                                              itemCount: state.scannedTrays.length,
-                                              itemBuilder: (context, index) {
-                                                final reversedIndex = state.scannedTrays.length - 1 - index;
-                                                final model = state.scannedTrays[reversedIndex];
-                                                return _buildScannedRow(controller, model, reversedIndex);
-                                              },
-                                            ),
-                                          ),
-                                        ],
-                                      ),
                               ),
                             ],
                           ),
                         ),
-                      ),
-                    ],
+                        _buildTableHeader(),
+                        Expanded(
+                          child: state.scannedTrays.isEmpty
+                              ? const EmptyScanState(hasBorder: false)
+                              : ListView.builder(
+                                  padding: EdgeInsets.zero,
+                                  itemCount: state.scannedTrays.length,
+                                  itemBuilder: (context, index) {
+                                    final reversedIndex = state.scannedTrays.length - 1 - index;
+                                    final model = state.scannedTrays[reversedIndex];
+                                    return _buildScannedRow(controller, model, reversedIndex);
+                                  },
+                                ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildPremiumHeader(ProcessingWasteController controller, ProcessingWasteState state) {
     final enabled = state.scannedTrays.isNotEmpty && !state.isLoading;

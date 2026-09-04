@@ -5,7 +5,6 @@ import 'package:active_wear_scanning/features/processing/presentation/processing
 import 'package:active_wear_scanning/features/processing/presentation/widgets/batch_details_table.dart';
 import 'package:active_wear_scanning/features/lot_making/model/lot_header_model.dart';
 import 'package:active_wear_scanning/features/knitting_production/repo/knitting_production_repo.dart';
-import 'package:active_wear_scanning/features/knitting_production/model/tray_details_model.dart';
 import '../../../core/widgets/app_loader.dart';
 import '../../lot_making/repo/lot_repo.dart';
 import '../repo/processing_repo.dart';
@@ -549,7 +548,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                 heading: 'WIP PROCESSING',
                 subtitle: 'Manufacturing Status & Tracking',
                 isShowBackIcon: true,
-                topPadding: 0,
+                topPadding: 12,
                 horizontalPadding: 16,
                 onBackPress: () {
                   if (_selectedOperation != null) {
@@ -560,8 +559,6 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                 },
               ),
 
-              const SizedBox(height: 16),
-
               // 3. Operation Grid
               Expanded(
                 child: AbsorbPointer(
@@ -569,7 +566,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                   child: _isLoadingOperations && _operations.isEmpty
                       ? const SizedBox.shrink()
                       : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                     itemCount: _operations.length,
                     itemBuilder: (context, index) {
                       final op = _operations[index];
