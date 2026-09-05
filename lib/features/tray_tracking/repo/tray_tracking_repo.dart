@@ -11,7 +11,7 @@ class TrayTrackingRepo {
     );
 
     if (result.success && result.data != null) {
-      final List data = result.data as List;
+      final List data = result.data is Map ? (result.data['items'] ?? []) : (result.data as List);
       if (data.isNotEmpty) {
         return PlexApiResult(true, 200, "Success", data.first);
       } else {
@@ -19,5 +19,29 @@ class TrayTrackingRepo {
       }
     }
     return result;
+  }
+
+  Future<PlexApiResult> fetchProductionProgress(Map<String, String> query) async {
+    return await _api.getList('/api/app/production-progresses', query: query);
+  }
+
+  Future<PlexApiResult> fetchBatchHeaderById(int id) async {
+    return await _api.getObject('/api/app/batch-headers/$id');
+  }
+
+  Future<PlexApiResult> fetchMachineById(int id) async {
+    return await _api.getObject('/api/app/resources/$id');
+  }
+
+  Future<PlexApiResult> fetchLotLines({int? trayId, int? batchHeaderId}) async {
+    final query = {
+      'MaxResultCount': '1000',
+      'maxResultCount': '1000',
+      if (trayId != null) 'TrayId': trayId.toString(),
+      if (trayId != null) 'trayId': trayId.toString(),
+      if (batchHeaderId != null) 'BatchHeaderId': batchHeaderId.toString(),
+      if (batchHeaderId != null) 'batchHeaderId': batchHeaderId.toString(),
+    };
+    return await _api.getList('/api/app/batch-liness', query: query);
   }
 }

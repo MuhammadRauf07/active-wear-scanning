@@ -31,18 +31,18 @@ class MachineModel {
 
   factory MachineModel.fromJson(Map<String, dynamic> json) {
     return MachineModel(
-      location: json['location'],
-      brand: json['brand'],
-      model: json['model'],
-      serialNumber: json['serialNumber'],
-      installationDate: json['installationDate'] != null ? DateTime.parse(json['installationDate']) : null,
+      location: json['location']?.toString(),
+      brand: json['brand']?.toString() ?? json['name']?.toString() ?? json['code']?.toString() ?? json['resourceCode']?.toString(),
+      model: json['model']?.toString(),
+      serialNumber: json['serialNumber']?.toString(),
+      installationDate: json['installationDate'] != null ? DateTime.tryParse(json['installationDate'].toString()) : null,
       capacity: json['capacity'] != null ? double.tryParse(json['capacity'].toString()) : null,
       status: int.tryParse(json['status']?.toString() ?? ''),
-      isActive: json['isActive'],
-      resourceCode: json['resourceCode'],
+      isActive: json['isActive'] as bool?,
+      resourceCode: json['resourceCode']?.toString() ?? json['code']?.toString() ?? json['brand']?.toString() ?? json['name']?.toString(),
       costCenterLineId: int.tryParse(json['costCenterLineId']?.toString() ?? ''),
       resourceTypeId: int.tryParse(json['resourceTypeId']?.toString() ?? ''),
-      concurrencyStamp: json['concurrencyStamp'],
+      concurrencyStamp: json['concurrencyStamp']?.toString(),
       id: int.tryParse(json['id']?.toString() ?? ''),
     );
   }

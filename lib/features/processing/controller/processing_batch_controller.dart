@@ -966,11 +966,19 @@ class ProcessingBatchController extends ChangeNotifier {
       }
 
       final bool hasRemainingHeldTrays = _state.trays.any((t) => t.productionProgress.holdFlag == true);
+      final int reworkCount = _state.isReworkMode ? _state.selectedReworkTrayIds.length : 0;
+      final int standardCount = _state.isReworkMode
+          ? (_state.trays.length - _state.selectedReworkTrayIds.length)
+          : _state.trays.length;
 
       onSuccess({
         'submitted': true,
         'targetOps': targetOps,
         'isRework': _state.isReworkMode,
+        'reworkTargetOpId': _state.reworkTargetOpId,
+        'reworkTrayCount': reworkCount,
+        'nextOpId': nextOperationId,
+        'standardTrayCount': standardCount,
         'isReassigned': false,
         'hasRemainingHeldTrays': hasRemainingHeldTrays,
         'batchHeaderId': _state.trays.isNotEmpty ? _state.trays.first.productionProgress.batchHeaderId : null,

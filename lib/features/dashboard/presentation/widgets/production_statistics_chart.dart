@@ -86,7 +86,7 @@ class _ProductionStatisticsChartState extends State<ProductionStatisticsChart> {
           final locPieces = trays.fold<double>(0, (sum, t) => sum + (t.productionProgress.primaryQuantity ?? 0));
 
           if (locPieces > 0) {
-            final name = l.locator.description;
+            final name = l.locator.description ?? 'Locator $locId';
             tempStats.add(LocatorStat(
               id: locId,
               name: name,

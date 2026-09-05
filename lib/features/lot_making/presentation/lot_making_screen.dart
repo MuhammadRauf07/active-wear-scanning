@@ -394,8 +394,10 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
                           const cellStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238));
                           const blueCellStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1B64A3));
 
+                          final trayCode = (tray.primaryTrayModel.trayCode ?? '').trim().toUpperCase();
                           final isScanned = state.scannedTrays.any(
-                                (st) => st.productionProgress.id == tray.productionProgress.id,
+                                (st) => (st.primaryTrayModel.trayCode ?? '').trim().toUpperCase() == trayCode ||
+                                        (st.productionProgress.id != null && st.productionProgress.id == tray.productionProgress.id),
                           );
 
                           return Container(

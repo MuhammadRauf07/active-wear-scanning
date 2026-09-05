@@ -49,7 +49,15 @@ void main() {
           label: Text(labelText),
         );
       },
-      appInfo: PlexAppInfo(title: 'Active Wear Scanning', appLogo: const Icon(Icons.qr_code_scanner), initialRoute: '/'),
+      appInfo: PlexAppInfo(
+        title: 'Active Wear Scanning',
+        appLogo: Image.asset(
+          'lib/core/assets/interloop-logo.png',
+          height: 48,
+          fit: BoxFit.contain,
+        ),
+        initialRoute: '/',
+      ),
       onInitializationComplete: () {
         // // Force the app to clear memory and demand a login every single time it boots
         // PlexApp.app.logout();

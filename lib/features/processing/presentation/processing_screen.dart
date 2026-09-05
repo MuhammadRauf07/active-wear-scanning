@@ -53,6 +53,10 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
   Map<int, List<BatchSummaryItem>> _opBatchDetails = {};
   Map<int, bool> _loadingDetails = {};
   Map<int, String> _trayIdToCode = {}; // trayDetailId → trayCode lookup
+  final Map<int, String> _machineCodeCache = {};
+  final Map<String, int?> _woLineProcessedItemCache = {};
+  final Map<int, List<Map<String, dynamic>>> _itemRoutingCache = {};
+  static const int _cacheTtlSeconds = 30;
   static final Map<int, List<DisposedBatch>> _disposedBatches = {};
   static final Map<int, List<OptimisticTransfer>> _optimisticCache = {};
 
@@ -71,6 +75,10 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
   void dispose() {
     _disposedBatches.clear();
     _optimisticCache.clear();
+    _machineCodeCache.clear();
+    _woLineProcessedItemCache.clear();
+    _itemRoutingCache.clear();
+    _trayIdToCode.clear();
     super.dispose();
   }
 
@@ -130,6 +138,9 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
       for (var r in allRecords) {
         if (r.productionProgress.transactionType != 2) continue;
         if (r.productionProgress.wipStatus != 0) continue;
+        if (r.productionProgress.locatorId == 18) continue;
+        if ((r.productionProgress.subOperation ?? '').toLowerCase() == 'waste') continue;
+        if (r.primaryTrayModel.trayCode == null || r.primaryTrayModel.trayCode!.trim().isEmpty) continue;
         final opId = r.productionProgress.operationId;
         if (opId != null) {
           recordsByOp.putIfAbsent(opId, () => []).add(r);
@@ -151,7 +162,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
         // Inject non-expired optimistic cache counts
         final pending = _optimisticCache[op.id] ?? [];
         final now = DateTime.now();
-        pending.removeWhere((x) => now.difference(x.timestamp).inSeconds > 25);
+        pending.removeWhere((x) => now.difference(x.timestamp).inSeconds > _cacheTtlSeconds);
         for (final opt in pending) {
           if (!_isBatchDisposed(op.id, opt.batchHeaderId)) {
             uniqueBatches.add(opt.batchHeaderId);
@@ -172,7 +183,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
   bool _isBatchDisposed(int operationId, int bhId) {
     final list = _disposedBatches[operationId] ?? [];
     final now = DateTime.now();
-    list.removeWhere((x) => now.difference(x.timestamp).inSeconds > 25);
+    list.removeWhere((x) => now.difference(x.timestamp).inSeconds > _cacheTtlSeconds);
     return list.any((x) => x.batchHeaderId == bhId);
   }
 
@@ -189,6 +200,9 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
         if (r.productionProgress.transactionType != 2) continue;
         if (r.productionProgress.wipStatus != 0) continue;
         if (r.productionProgress.operationId != operationId) continue;
+        if (r.productionProgress.locatorId == 18) continue;
+        if ((r.productionProgress.subOperation ?? '').toLowerCase() == 'waste') continue;
+        if (r.primaryTrayModel.trayCode == null || r.primaryTrayModel.trayCode!.trim().isEmpty) continue;
 
         final bhId = r.productionProgress.batchHeaderId;
         if (bhId != null) {
@@ -200,7 +214,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
       // Inject non-expired optimistic cache counts
       final pending = _optimisticCache[operationId] ?? [];
       final now = DateTime.now();
-      pending.removeWhere((x) => now.difference(x.timestamp).inSeconds > 120);
+      pending.removeWhere((x) => now.difference(x.timestamp).inSeconds > _cacheTtlSeconds);
       for (final opt in pending) {
         if (!_isBatchDisposed(operationId, opt.batchHeaderId)) {
           uniqueBatches.add(opt.batchHeaderId);
@@ -220,11 +234,11 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
     if (!force && hasCache) return;
 
     try {
-      setState(() {
-        if (!hasCache) {
+      if (mounted) {
+        setState(() {
           _loadingDetails[operationId] = true;
-        }
-      });
+        });
+      }
 
       final res = await _processingRepo.fetchProductionProgress({
         'OperationId': operationId.toString(),
@@ -246,8 +260,9 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
 
           final bhId = r.productionProgress.batchHeaderId;
           if (bhId != null) {
-            if (_isBatchDisposed(operationId, bhId))
+            if (_isBatchDisposed(operationId, bhId)) {
               continue; // Mask eventual consistency lag
+            }
 
             final groupList = grouped.putIfAbsent(bhId, () => []);
             final trayCode = r.primaryTrayModel.trayCode ?? 'UNKNOWN';
@@ -264,18 +279,28 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
           }
         }
 
-        final List<BatchSummaryItem> summaries = [];
-        for (final entry in grouped.entries) {
+        // Process all batches concurrently in parallel
+        final summaryFutures = grouped.entries.map((entry) async {
           try {
             final bhId = entry.key;
             final groupRecords = entry.value;
 
+            // In parallel, fetch batch's production progress, lot header, and lot lines
+            final results = await Future.wait([
+              _processingRepo.fetchProductionProgress({
+                'BatchHeaderId': bhId.toString(),
+                'TransactionType': '2',
+                'MaxResultCount': '1000',
+              }),
+              _lotRepo.fetchLotHeaderById(bhId),
+              _lotRepo.fetchLotLines(batchHeaderId: bhId),
+            ]);
+
+            final bhProgRes = results[0];
+            final bhRes = results[1];
+            final blRes = results[2];
+
             // ── Verify active operation: Ensure trays have not moved to a newer operation ──
-            final bhProgRes = await _processingRepo.fetchProductionProgress({
-              'BatchHeaderId': bhId.toString(),
-              'TransactionType': '2',
-              'MaxResultCount': '1000',
-            });
             List<ProductionProgressResponseModel> activeTraysAtCurrentOp = groupRecords;
             if (bhProgRes.success && bhProgRes.data != null) {
               final bhProgs = (bhProgRes.data as List<ProductionProgressResponseModel>)
@@ -304,77 +329,99 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                 }
                 if (validTrays.isEmpty) {
                   // All trays for this batch have progressed to other operations; skip batch in this lane
-                  continue;
+                  return null;
                 }
                 activeTraysAtCurrentOp = validTrays;
               }
             }
 
-            final bhRes = await _lotRepo.fetchLotHeaderById(bhId);
-            if (bhRes.success && bhRes.data != null) {
-              final bhFull = LotHeaderResponseModel.fromJson(bhRes.data);
+            if (!bhRes.success || bhRes.data == null) {
+              return null;
+            }
 
-              String? machineCode =
-                  bhFull.machine?.brand ?? bhFull.machine?.resourceCode;
-              if (machineCode == null && bhFull.batchHeader.machineId != null) {
-                final mRes = await _lotRepo.fetchMachineById(
-                  bhFull.batchHeader.machineId!,
-                );
+            final bhFull = LotHeaderResponseModel.fromJson(bhRes.data);
+
+            String? machineCode =
+                bhFull.machine?.brand ?? bhFull.machine?.resourceCode ?? bhFull.machine?.model;
+            final mId = bhFull.batchHeader.machineId;
+            if ((machineCode == null || machineCode.isEmpty || machineCode == '-') && mId != null) {
+              if (_machineCodeCache.containsKey(mId)) {
+                machineCode = _machineCodeCache[mId];
+              } else {
+                final mRes = await _lotRepo.fetchMachineById(mId);
                 if (mRes.success && mRes.data != null) {
                   final mData = mRes.data as Map<String, dynamic>;
                   final mJson = (mData['resource'] is Map)
                       ? Map<String, dynamic>.from(mData['resource'] as Map)
                       : mData;
-                  machineCode = mJson['brand']?.toString() ??
-                      mJson['resourceCode']?.toString() ??
+                  final resolved = mJson['brand']?.toString() ??
+                      mJson['name']?.toString() ??
                       mJson['code']?.toString() ??
+                      mJson['resourceCode']?.toString() ??
                       mJson['model']?.toString();
+                  if (resolved != null && resolved.isNotEmpty) {
+                    _machineCodeCache[mId] = resolved;
+                    machineCode = resolved;
+                  }
                 }
               }
-              machineCode ??=
-                  activeTraysAtCurrentOp.first.machineModel.brand ??
-                      activeTraysAtCurrentOp.first.machineModel.resourceCode ??
-                      '-';
+            }
 
-              double totalTubes = 0.0;
-              double totalWeight = 0.0;
+            if (machineCode == null || machineCode.isEmpty || machineCode == '-') {
               for (final gr in activeTraysAtCurrentOp) {
-                final qty = gr.productionProgress.primaryQuantity ?? 0;
-                final tubes = (gr.productionProgress.secondaryQuantity ?? qty).toDouble();
-                final pw = gr.item.pieceWeight ?? 0;
-                totalTubes += tubes;
-                totalWeight += qty * pw;
+                final mBrand = gr.machineModel.brand;
+                final mResCode = gr.machineModel.resourceCode;
+                if (mBrand != null && mBrand.isNotEmpty && mBrand != '-') {
+                  machineCode = mBrand;
+                  break;
+                }
+                if (mResCode != null && mResCode.isNotEmpty && mResCode != '-') {
+                  machineCode = mResCode;
+                  break;
+                }
               }
+            }
+            machineCode ??= '-';
 
-              final bool isStarted = activeTraysAtCurrentOp.any((r) =>
-              r.productionProgress.isStarted ?? false);
-              final bool isRework = activeTraysAtCurrentOp.any((r) =>
-              r.productionProgress.reworkFlag ?? false);
-              
-              final blRes = await _lotRepo.fetchLotLines(batchHeaderId: bhId);
-              bool isReassigned = false;
-              if (blRes.success && blRes.data != null) {
-                final linesList = blRes.data as List;
-                isReassigned = linesList.any((l) {
-                  final dBl = l['batchLines'] as Map<String, dynamic>? ?? l;
-                  return dBl['isReAssigned'] == true;
-                });
-              }
+            double totalTubes = 0.0;
+            double totalWeight = 0.0;
+            for (final gr in activeTraysAtCurrentOp) {
+              final qty = gr.productionProgress.primaryQuantity ?? 0;
+              final tubes = (gr.productionProgress.secondaryQuantity ?? qty).toDouble();
+              final pw = gr.item.pieceWeight ?? 0;
+              totalTubes += tubes;
+              totalWeight += qty * pw;
+            }
 
-              int? nextOpId;
-              String? nextOpName;
+            final bool isStarted = activeTraysAtCurrentOp.any((r) =>
+            r.productionProgress.isStarted ?? false);
+            final bool isRework = activeTraysAtCurrentOp.any((r) =>
+            r.productionProgress.reworkFlag ?? false);
+            
+            bool isReassigned = false;
+            int? nextOpId;
+            String? nextOpName;
 
-              if (blRes.success && blRes.data != null) {
-                final linesList = blRes.data as List;
-                if (linesList.isNotEmpty) {
-                  final firstLine = linesList.first;
-                  final bl = firstLine['batchLines'] as Map<String, dynamic>? ?? firstLine;
-                  final itemId = bl['itemId'] as int?;
-                  final workOrderLineId = bl['workOrderLineId'] as int?;
-                  final colorDescription = bhFull.batchHeader.colorDescription;
+            if (blRes.success && blRes.data != null) {
+              final linesList = blRes.data as List;
+              isReassigned = linesList.any((l) {
+                final dBl = l['batchLines'] as Map<String, dynamic>? ?? l;
+                return dBl['isReAssigned'] == true;
+              });
 
-                  int? firstProcessedItemId;
-                  if (workOrderLineId != null && colorDescription != null) {
+              if (linesList.isNotEmpty) {
+                final firstLine = linesList.first;
+                final bl = firstLine['batchLines'] as Map<String, dynamic>? ?? firstLine;
+                final itemId = bl['itemId'] as int?;
+                final workOrderLineId = bl['workOrderLineId'] as int?;
+                final colorDescription = bhFull.batchHeader.colorDescription;
+
+                int? firstProcessedItemId;
+                if (workOrderLineId != null && colorDescription != null) {
+                  final cacheKey = '${workOrderLineId}_$colorDescription';
+                  if (_woLineProcessedItemCache.containsKey(cacheKey)) {
+                    firstProcessedItemId = _woLineProcessedItemCache[cacheKey];
+                  } else {
                     try {
                       final woRes = await _lotRepo.fetchWorkOrderLineDetails(
                         workOrderLineId,
@@ -401,111 +448,118 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                           }
                         }
                       }
+                      _woLineProcessedItemCache[cacheKey] = firstProcessedItemId;
                     } catch (_) {}
                   }
-                  final List<Map<String, dynamic>> parsedRoutings = [];
-                  final bhrRes = await _lotRepo.fetchBatchHeaderRoutings(bhId);
-                  if (bhrRes.success && bhrRes.data != null && (bhrRes.data as List).isNotEmpty) {
-                    for (final r in bhrRes.data as List) {
-                      final map = r is Map<String, dynamic> ? r : {};
-                      final bhr = map['batchHeaderRouting'] as Map<String, dynamic>? ?? map;
-                      final opId = bhr['operationId'] as int?;
-                      final seq = bhr['seq'] as int? ?? bhr['sequence'] as int?;
-                      if (opId != null && seq != null) {
-                        parsedRoutings.add({
-                          'operationId': opId,
-                          'seq': seq,
-                        });
-                      }
+                }
+                final List<Map<String, dynamic>> parsedRoutings = [];
+                final bhrRes = await _lotRepo.fetchBatchHeaderRoutings(bhId);
+                if (bhrRes.success && bhrRes.data != null && (bhrRes.data as List).isNotEmpty) {
+                  for (final r in bhrRes.data as List) {
+                    final map = r is Map<String, dynamic> ? r : {};
+                    final bhr = map['batchHeaderRouting'] as Map<String, dynamic>? ?? map;
+                    final opId = bhr['operationId'] as int?;
+                    final seq = bhr['seq'] as int? ?? bhr['sequence'] as int?;
+                    if (opId != null && seq != null) {
+                      parsedRoutings.add({
+                        'operationId': opId,
+                        'seq': seq,
+                      });
                     }
-                  } else {
-                    final effectiveItemId = firstProcessedItemId ?? itemId;
-                    if (effectiveItemId != null) {
+                  }
+                } else {
+                  final effectiveItemId = firstProcessedItemId ?? itemId;
+                  if (effectiveItemId != null) {
+                    if (_itemRoutingCache.containsKey(effectiveItemId)) {
+                      parsedRoutings.addAll(_itemRoutingCache[effectiveItemId]!);
+                    } else {
                       final routingRes = await _lotRepo.fetchItemRoutings(effectiveItemId);
                       if (routingRes.success && routingRes.data != null) {
                         final routingItems = routingRes.data as List;
+                        final List<Map<String, dynamic>> cachedList = [];
                         for (final r in routingItems) {
                           final map = r is Map<String, dynamic> ? r : {};
                           final ir = map['itemRouting'] as Map<String, dynamic>? ?? map;
                           final opId = ir['operationId'] as int?;
                           final seq = ir['sequence'] as int? ?? ir['seq'] as int?;
                           if (opId != null && seq != null) {
-                            parsedRoutings.add({
+                            cachedList.add({
                               'operationId': opId,
                               'seq': seq,
                             });
                           }
                         }
+                        _itemRoutingCache[effectiveItemId] = cachedList;
+                        parsedRoutings.addAll(cachedList);
                       }
                     }
                   }
+                }
 
-                  parsedRoutings.sort((a, b) => (a['seq'] as int).compareTo(b['seq'] as int));
+                parsedRoutings.sort((a, b) => (a['seq'] as int).compareTo(b['seq'] as int));
 
-                  final currentIdx = parsedRoutings.indexWhere((r) => r['operationId'] == operationId);
-                  if (currentIdx != -1 && currentIdx < parsedRoutings.length - 1) {
-                    nextOpId = parsedRoutings[currentIdx + 1]['operationId'] as int?;
-                    if (nextOpId != null) {
-                      final targetOpIdx = _allOperations.indexWhere((o) => o.id == nextOpId);
-                      nextOpName = targetOpIdx != -1 ? _allOperations[targetOpIdx].name : 'N/A';
-                    }
+                final currentIdx = parsedRoutings.indexWhere((r) => r['operationId'] == operationId);
+                if (currentIdx != -1 && currentIdx < parsedRoutings.length - 1) {
+                  nextOpId = parsedRoutings[currentIdx + 1]['operationId'] as int?;
+                  if (nextOpId != null) {
+                    final targetOpIdx = _allOperations.indexWhere((o) => o.id == nextOpId);
+                    nextOpName = targetOpIdx != -1 ? _allOperations[targetOpIdx].name : 'N/A';
                   }
                 }
               }
-
-              String? trolleyCode;
-              final trayDetailId = bhFull.batchHeader.trayDetailId;
-              if (trayDetailId != null) {
-                if (_trayIdToCode.containsKey(trayDetailId)) {
-                  trolleyCode = _trayIdToCode[trayDetailId];
-                } else {
-                  final tRes = await _lotRepo.fetchTrayDetailById(trayDetailId);
-                  if (tRes.success && tRes.data != null) {
-                    final tJson = tRes.data as Map;
-                    final tdJson = tJson['trayDetails'] ?? tJson['trayDetail'] ?? tJson;
-                    final tCode = tdJson['trayCode']?.toString();
-                    if (tCode != null) {
-                      _trayIdToCode[trayDetailId] = tCode;
-                      trolleyCode = tCode;
-                    }
-                  }
-                }
-              }
-
-              final bool isDraft = activeTraysAtCurrentOp.any((r) => r.productionProgress.pbsFlag == true || r.productionProgress.draftFlag == true);
-
-              summaries.add(
-                BatchSummaryItem(
-                  batchHeaderId: bhId,
-                  machineId: bhFull.batchHeader.machineId,
-                  batchCode: bhFull.batchHeader.batchHeaderCode ?? '-',
-                  machine: machineCode,
-                  color: bhFull.batchHeader.colorDescription ?? '-',
-                  trayCount: activeTraysAtCurrentOp.length,
-                  totalTubes: totalTubes,
-                  totalWeight: totalWeight,
-                  trolleyCode: trolleyCode,
-                  isStarted: isStarted,
-                  reworkFlag: isRework,
-                  isReassigned: isReassigned,
-                  isDraft: isDraft,
-                  nextOperationId: nextOpId,
-                  nextOperationName: nextOpName,
-                ),
-              );
             }
+
+            String? trolleyCode;
+            final trayDetailId = bhFull.batchHeader.trayDetailId;
+            if (trayDetailId != null) {
+              if (_trayIdToCode.containsKey(trayDetailId)) {
+                trolleyCode = _trayIdToCode[trayDetailId];
+              } else {
+                final tRes = await _lotRepo.fetchTrayDetailById(trayDetailId);
+                if (tRes.success && tRes.data != null) {
+                  final tJson = tRes.data as Map;
+                  final tdJson = tJson['trayDetails'] ?? tJson['trayDetail'] ?? tJson;
+                  final tCode = tdJson['trayCode']?.toString();
+                  if (tCode != null) {
+                    _trayIdToCode[trayDetailId] = tCode;
+                    trolleyCode = tCode;
+                  }
+                }
+              }
+            }
+
+            final bool isDraft = activeTraysAtCurrentOp.any((r) => r.productionProgress.pbsFlag == true || r.productionProgress.draftFlag == true);
+
+            return BatchSummaryItem(
+              batchHeaderId: bhId,
+              machineId: bhFull.batchHeader.machineId,
+              batchCode: bhFull.batchHeader.batchHeaderCode ?? '-',
+              machine: machineCode,
+              color: bhFull.batchHeader.colorDescription ?? '-',
+              trayCount: activeTraysAtCurrentOp.length,
+              totalTubes: totalTubes,
+              totalWeight: totalWeight,
+              trolleyCode: trolleyCode,
+              isStarted: isStarted,
+              reworkFlag: isRework,
+              isReassigned: isReassigned,
+              isDraft: isDraft,
+              nextOperationId: nextOpId,
+              nextOperationName: nextOpName,
+            );
           } catch (itemErr) {
-            debugPrint('Error processing batch $entry: $itemErr');
+            debugPrint('Error processing batch ${entry.key}: $itemErr');
+            return null;
           }
-        }
+        });
+
+        final batchResults = await Future.wait(summaryFutures);
+        final List<BatchSummaryItem> summaries = batchResults.whereType<BatchSummaryItem>().toList();
 
         // Inject non-expired optimistic cache items
         final pending = _optimisticCache[operationId] ?? [];
         final now = DateTime.now();
-        pending.removeWhere((x) =>
-        now
-            .difference(x.timestamp)
-            .inSeconds > 120);
+        pending.removeWhere((x) => now.difference(x.timestamp).inSeconds > _cacheTtlSeconds);
         for (final opt in pending) {
           if (!summaries.any((b) => b.batchHeaderId == opt.batchHeaderId) &&
               !_isBatchDisposed(operationId, opt.batchHeaderId)) {
@@ -751,61 +805,78 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                                          }
                                        }
 
-                                       final isRework = result['isRework'] == true;
-                                       final isReassigned = result['isReassigned'] == true;
-                                       final hasRemainingHeldTrays = result['hasRemainingHeldTrays'] == true;
+                                        final isRework = result['isRework'] == true;
+                                        final isReassigned = result['isReassigned'] == true;
+                                        final hasRemainingHeldTrays = result['hasRemainingHeldTrays'] == true;
+                                        final int? reworkTargetOpId = result['reworkTargetOpId'] as int?;
+                                        final int reworkTrayCount = (result['reworkTrayCount'] as num?)?.toInt() ?? s.trayCount;
+                                        final int? standardTargetOpId = result['nextOpId'] as int?;
+                                        final int standardTrayCount = (result['standardTrayCount'] as num?)?.toInt() ?? s.trayCount;
 
-                                       setState(() {
-                                         if (!hasRemainingHeldTrays && activeOpId != null) {
-                                           final dList = _disposedBatches.putIfAbsent(activeOpId, () => []);
-                                           dList.removeWhere((x) => x.batchHeaderId == s.batchHeaderId);
-                                           dList.add(DisposedBatch(
-                                             batchHeaderId: s.batchHeaderId,
-                                             timestamp: DateTime.now(),
-                                           ));
-                                           final currentList = _opBatchDetails[activeOpId];
-                                           if (currentList != null) {
-                                             _opBatchDetails[activeOpId] = currentList.where((b) => b.batchHeaderId != s.batchHeaderId).toList();
-                                           }
-                                           if ((_opBatchCounts[activeOpId] ?? 0) > 0) {
-                                             _opBatchCounts[activeOpId] = (_opBatchCounts[activeOpId] ?? 1) - 1;
-                                           }
-                                         }
+                                        setState(() {
+                                          // 1. Remove this batch from the disposed list of EVERY target operation it is entering
+                                          for (final tOpId in targetOps) {
+                                            _disposedBatches[tOpId]?.removeWhere((x) => x.batchHeaderId == s.batchHeaderId);
+                                          }
 
-                                         for (final tOpId in targetOps) {
-                                           _opBatchCounts[tOpId] = (_opBatchCounts[tOpId] ?? 0) + 1;
+                                          // 2. Only mark as disposed from activeOpId if no trays are left in activeOpId
+                                          final bool someTraysRemainInActiveOp = targetOps.contains(activeOpId) || hasRemainingHeldTrays;
+                                          if (!someTraysRemainInActiveOp && activeOpId != null) {
+                                            final dList = _disposedBatches.putIfAbsent(activeOpId, () => []);
+                                            dList.removeWhere((x) => x.batchHeaderId == s.batchHeaderId);
+                                            dList.add(DisposedBatch(
+                                              batchHeaderId: s.batchHeaderId,
+                                              timestamp: DateTime.now(),
+                                            ));
+                                            final currentList = _opBatchDetails[activeOpId];
+                                            if (currentList != null) {
+                                              _opBatchDetails[activeOpId] = currentList.where((b) => b.batchHeaderId != s.batchHeaderId).toList();
+                                            }
+                                            if ((_opBatchCounts[activeOpId] ?? 0) > 0) {
+                                              _opBatchCounts[activeOpId] = (_opBatchCounts[activeOpId] ?? 1) - 1;
+                                            }
+                                          }
 
-                                           final targetList = _opBatchDetails[tOpId] ?? [];
-                                           final updatedBatch = BatchSummaryItem(
-                                             batchHeaderId: s.batchHeaderId,
-                                             machineId: s.machineId,
-                                             batchCode: s.batchCode,
-                                             machine: s.machine,
-                                             color: s.color,
-                                             trayCount: s.trayCount,
-                                             totalTubes: s.totalTubes,
-                                             totalWeight: s.totalWeight,
-                                             trolleyCode: s.trolleyCode,
-                                             isStarted: false,
-                                             reworkFlag: isRework || s.reworkFlag,
-                                             isReassigned: isReassigned || s.isReassigned,
-                                             isDraft: false,
-                                           );
-                                           if (!targetList.any((b) => b.batchHeaderId == s.batchHeaderId)) {
-                                             _opBatchDetails[tOpId] = List.from(targetList)..add(updatedBatch);
-                                           }
+                                          // 3. Increment counts and populate optimistic cache for each destination operation
+                                          for (final tOpId in targetOps) {
+                                            final bool isThisReworkOp = tOpId == reworkTargetOpId;
+                                            final int opTrayCount = isThisReworkOp ? reworkTrayCount : (tOpId == standardTargetOpId ? standardTrayCount : s.trayCount);
 
-                                           final list = _optimisticCache.putIfAbsent(tOpId, () => []);
-                                           list.removeWhere((x) => x.batchHeaderId == s.batchHeaderId);
-                                           list.add(OptimisticTransfer(
-                                             batchHeaderId: s.batchHeaderId,
-                                             item: updatedBatch,
-                                             timestamp: DateTime.now(),
-                                           ));
-                                         }
+                                            if (tOpId != activeOpId) {
+                                              _opBatchCounts[tOpId] = (_opBatchCounts[tOpId] ?? 0) + 1;
+                                            }
 
-                                         _selectedOperation = null;
-                                       });
+                                            final targetList = _opBatchDetails[tOpId] ?? [];
+                                            final updatedBatch = BatchSummaryItem(
+                                              batchHeaderId: s.batchHeaderId,
+                                              machineId: s.machineId,
+                                              batchCode: s.batchCode,
+                                              machine: s.machine,
+                                              color: s.color,
+                                              trayCount: opTrayCount > 0 ? opTrayCount : s.trayCount,
+                                              totalTubes: s.totalTubes,
+                                              totalWeight: s.totalWeight,
+                                              trolleyCode: s.trolleyCode,
+                                              isStarted: false,
+                                              reworkFlag: isThisReworkOp ? true : (isRework || s.reworkFlag),
+                                              isReassigned: isReassigned || s.isReassigned,
+                                              isDraft: false,
+                                            );
+                                            if (!targetList.any((b) => b.batchHeaderId == s.batchHeaderId)) {
+                                              _opBatchDetails[tOpId] = List.from(targetList)..add(updatedBatch);
+                                            }
+
+                                            final list = _optimisticCache.putIfAbsent(tOpId, () => []);
+                                            list.removeWhere((x) => x.batchHeaderId == s.batchHeaderId);
+                                            list.add(OptimisticTransfer(
+                                              batchHeaderId: s.batchHeaderId,
+                                              item: updatedBatch,
+                                              timestamp: DateTime.now(),
+                                            ));
+                                          }
+
+                                          _selectedOperation = null;
+                                        });
                                      } else {
                                        if (mounted && activeOpId != null) {
                                          _fetchOpDetails(activeOpId, force: true);

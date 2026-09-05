@@ -1,48 +1,86 @@
+import 'package:active_wear_scanning/features/common-models/common_models.dart';
+import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
+
+class WipBatchModel {
+  final int batchHeaderId;
+  final String batchCode;
+  final String machine;
+  final String color;
+  final int trayCount;
+  final double totalTubes;
+  final double totalWeight;
+  final String? trolleyCode;
+  final bool isStarted;
+  final bool reworkFlag;
+  final bool isReassigned;
+  final bool isDraft;
+  final List<ProductionProgressResponseModel> trays;
+
+  const WipBatchModel({
+    required this.batchHeaderId,
+    required this.batchCode,
+    required this.machine,
+    required this.color,
+    required this.trayCount,
+    required this.totalTubes,
+    required this.totalWeight,
+    this.trolleyCode,
+    this.isStarted = false,
+    this.reworkFlag = false,
+    this.isReassigned = false,
+    this.isDraft = false,
+    this.trays = const [],
+  });
+}
+
+class WipOperationModel {
+  final Operation operation;
+  final int batchCount;
+  final int trayCount;
+  final double totalTubes;
+  final double totalWeight;
+
+  const WipOperationModel({
+    required this.operation,
+    this.batchCount = 0,
+    this.trayCount = 0,
+    this.totalTubes = 0,
+    this.totalWeight = 0,
+  });
+
+  WipOperationModel copyWith({
+    Operation? operation,
+    int? batchCount,
+    int? trayCount,
+    double? totalTubes,
+    double? totalWeight,
+  }) {
+    return WipOperationModel(
+      operation: operation ?? this.operation,
+      batchCount: batchCount ?? this.batchCount,
+      trayCount: trayCount ?? this.trayCount,
+      totalTubes: totalTubes ?? this.totalTubes,
+      totalWeight: totalWeight ?? this.totalWeight,
+    );
+  }
+}
+
 class LocatorResponse {
-  final Locator locator;
-  final Department department;
+  final LocatorModel locator;
+  final Department? department;
   final Operation? operation;
 
   LocatorResponse({
     required this.locator,
-    required this.department,
+    this.department,
     this.operation,
   });
 
   factory LocatorResponse.fromJson(Map<String, dynamic> json) {
     return LocatorResponse(
-      locator: Locator.fromJson(json['locator'] ?? {}),
-      department: Department.fromJson(json['department'] ?? {}),
-      operation: json['operation'] != null ? Operation.fromJson(json['operation']) : null,
-    );
-  }
-}
-
-class Locator {
-  final int id;
-  final String description;
-  final String locatorCode;
-  final String? logicalWH;
-  final int departmentId;
-  final int? operationId;
-
-  Locator({
-    required this.id,
-    required this.description,
-    required this.locatorCode,
-    this.logicalWH,
-    required this.departmentId,
-    this.operationId,
-  });
-
-  factory Locator.fromJson(Map<String, dynamic> json) {
-    return Locator(
-      id: json['id'] ?? 0,
-      description: json['description'] ?? '',
-      locatorCode: json['locatorCode'] ?? '',
-      logicalWH: json['logicalWH'],
-      departmentId: json['departmentId'] ?? 0,
-      operationId: json['operationId'],
+      locator: LocatorModel.fromJson(Map<String, dynamic>.from(json['locator'] ?? json)),
+      department: json['department'] != null ? Department.fromJson(Map<String, dynamic>.from(json['department'])) : null,
+      operation: json['operation'] != null ? Operation.fromJson(Map<String, dynamic>.from(json['operation'])) : null,
     );
   }
 }
@@ -60,59 +98,9 @@ class Department {
 
   factory Department.fromJson(Map<String, dynamic> json) {
     return Department(
-      id: json['id'] ?? 0,
-      code: json['code'] ?? '',
-      name: json['name'] ?? '',
-    );
-  }
-}
-
-class Operation {
-  final int id;
-  final String code;
-  final String name;
-
-  Operation({
-    required this.id,
-    required this.code,
-    required this.name,
-  });
-
-  factory Operation.fromJson(Map<String, dynamic> json) {
-    return Operation(
-      id: json['id'] ?? 0,
-      code: json['code'] ?? '',
-      name: json['name'] ?? '',
-    );
-  }
-}
-
-class WIPEntry {
-  final String workOrder;
-  final String? machine;
-  final String? batchNo;
-  final String item;
-  final int traysCount;
-  final int pcsCount;
-
-  WIPEntry({
-    required this.workOrder,
-    this.machine,
-    this.batchNo,
-    required this.item,
-    required this.traysCount,
-    required this.pcsCount,
-  });
-
-  // Dummy factory for mocking/testing since user didn't provide WIP data API
-  factory WIPEntry.fromJson(Map<String, dynamic> json) {
-    return WIPEntry(
-      workOrder: json['workOrder'] ?? '',
-      machine: json['machine'],
-      batchNo: json['batchNo'],
-      item: json['item'] ?? '',
-      traysCount: json['traysCount'] ?? 0,
-      pcsCount: json['pcsCount'] ?? 0,
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      code: json['code']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
     );
   }
 }

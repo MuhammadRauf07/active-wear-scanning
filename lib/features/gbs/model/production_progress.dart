@@ -48,7 +48,12 @@ class ProductionProgressResponseModel {
       productionProgress: finalPP,
       operation: Operation.fromJson(json['operation'] ?? {}),
       shift: Shift.fromJson(json['shift'] ?? {}),
-      machineModel: MachineModel.fromJson(json['machine'] ?? {}),
+      machineModel: MachineModel.fromJson(
+        (json['machine'] is Map ? json['machine'] as Map<String, dynamic> : null) ??
+        (json['resource'] is Map ? json['resource'] as Map<String, dynamic> : null) ??
+        (json['machineModel'] is Map ? json['machineModel'] as Map<String, dynamic> : null) ??
+        {}
+      ),
       workOrderHeader: WorkOrderHeader.fromJson(json['workOrderHeader'] ?? {}),
       workOrderLine: WorkOrderLine.fromJson(json['workOrderLine'] ?? {}),
       item: Item.fromJson(json['item'] ?? {}),
