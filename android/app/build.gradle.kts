@@ -37,6 +37,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        resValue("string", "app_name", "AWFL PROD")
     }
 
     signingConfigs {
@@ -45,6 +46,20 @@ android {
             keyPassword = keystoreProperties["keyPassword"] as String?
             storeFile = keystoreProperties["storeFile"]?.let { file(it as String) }
             storePassword = keystoreProperties["storePassword"] as String?
+        }
+    }
+
+    flavorDimensions += "default"
+
+    productFlavors {
+        create("uat") {
+            dimension = "default"
+            applicationIdSuffix = ".uat"
+            resValue("string", "app_name", "AWFL UAT")
+        }
+        create("prod") {
+            dimension = "default"
+            resValue("string", "app_name", "AWFL PROD")
         }
     }
 

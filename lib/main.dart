@@ -21,10 +21,21 @@ import 'package:plex/plex_screens/plex_login_screen.dart';
 import 'package:plex/plex_utils/plex_messages.dart';
 
 void main() {
+  runActiveWearApp(
+    defaultEnv: AppEnvironment.prod,
+    appTitle: 'AWFL PROD',
+  );
+}
+
+void runActiveWearApp({
+  AppEnvironment defaultEnv = AppEnvironment.prod,
+  String appTitle = 'AWFL PROD',
+}) {
   WidgetsFlutterBinding.ensureInitialized();
   PlexNetworking.instance.allowBadCertificateForHTTPS();
 
   AppConfig.tenant = 'ActiveWare';
+  AppConfig.initWithEnvironment(defaultEnv, title: appTitle);
 
   injectSingleton(UserRepo());
   injectSingleton(KnittingProductionRepo());
@@ -50,7 +61,7 @@ void main() {
         );
       },
       appInfo: PlexAppInfo(
-        title: 'Active Wear Scanning',
+        title: appTitle,
         appLogo: Image.asset(
           'lib/core/assets/interloop-logo.png',
           height: 48,
@@ -63,7 +74,7 @@ void main() {
         // PlexApp.app.logout();
         
         PlexNetworking.instance.allowBadCertificateForHTTPS();
-        AppConfig.init();
+        AppConfig.initWithEnvironment(defaultEnv, title: appTitle);
         PlexNetworking.instance.setBasePath(AppConfig.baseUrl);
         PlexNetworking.instance.addHeaders = () async {
           final user = PlexApp.app.getUser() as TasdeeqUser?;

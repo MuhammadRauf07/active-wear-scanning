@@ -19,6 +19,7 @@ class AppConfig {
   static const String _envKey = 'app_selected_environment';
 
   static AppEnvironment _currentEnv = AppEnvironment.prod;
+  static String appTitle = 'AWFL PROD';
 
   static AppEnvironment get currentEnvironment => _currentEnv;
   static String get baseUrl => _currentEnv.url;
@@ -29,17 +30,26 @@ class AppConfig {
   static String appVersion = '1.0.0';
   static bool enableLogging = true;
 
-  /// Initializes the saved environment on app launch
-  static void init() {
-    final savedEnvLabel = PlexSp.instance.getString(_envKey);
-    if (savedEnvLabel != null) {
-      for (final env in AppEnvironment.values) {
-        if (env.label == savedEnvLabel) {
-          _currentEnv = env;
-          break;
+  /// Initializes the environment based on flavor
+  static void initWithEnvironment(AppEnvironment defaultEnv, {String title = 'AWFL'}) {
+    _currentEnv = defaultEnv;
+    appTitle = title;
+    if (enableEnvironmentSwitcher) {
+      final savedEnvLabel = PlexSp.instance.getString(_envKey);
+      if (savedEnvLabel != null) {
+        for (final env in AppEnvironment.values) {
+          if (env.label == savedEnvLabel) {
+            _currentEnv = env;
+            break;
+          }
         }
       }
     }
+  }
+
+  /// Initializes the saved environment on app launch (legacy/default)
+  static void init() {
+    initWithEnvironment(AppEnvironment.prod, title: 'AWFL PROD');
   }
 
   /// Dynamically updates the active environment
