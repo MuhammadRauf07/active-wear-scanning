@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'custom_outlined_button.dart';
-
 class CustomInspectionHeader extends StatelessWidget {
   final String heading;
   final IconData? icon;

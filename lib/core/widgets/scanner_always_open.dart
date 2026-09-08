@@ -1,9 +1,7 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -256,25 +254,16 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
               onBackPress: _close,
               topPadding: 0,
               horizontalPadding: 12,
-              widget: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (!kIsWeb && !Platform.isWindows)
-                    IconButton(
-                      icon: const Icon(Icons.flash_on, color: Colors.blue),
-                      onPressed: () => _controller.toggleTorch(),
-                    ),
-                  if (widget.showDoneButton)
-                    CustomOutlinedButton(
+              widget: widget.showDoneButton
+                  ? CustomOutlinedButton(
                       borderColor: Colors.blue,
                       label: 'Done',
                       fillColor: Colors.blue,
                       textColor: Colors.white,
                       buttonHeight: 36.0,
                       onPressed: _close,
-                    ),
-                ],
-              ),
+                    )
+                  : null,
             ),
             Padding(
               padding: const EdgeInsets.all(12),

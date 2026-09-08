@@ -133,12 +133,6 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
               onBackPress: _close,
               topPadding: 0,
               horizontalPadding: 12,
-              widget: (!kIsWeb && !Platform.isWindows)
-                  ? IconButton(
-                      icon: const Icon(Icons.flash_on, color: Colors.blue),
-                      onPressed: () => _controller.toggleTorch(),
-                    )
-                  : const SizedBox.shrink(),
             ),
             Padding(
               padding: const EdgeInsets.all(12),

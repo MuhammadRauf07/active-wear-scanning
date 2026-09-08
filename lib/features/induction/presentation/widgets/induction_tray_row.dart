@@ -78,7 +78,7 @@ class InductionTrayRow extends StatelessWidget {
 
   TextStyle _cellStyle({bool isBold = false, bool isSmall = false, Color? color}) {
     return TextStyle(
-      fontSize: isSmall ? 10 : 11,
+      fontSize: isSmall ? 8.5 : 9.0,
       fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
       color: color ?? const Color(0xFF1E293B),
     );

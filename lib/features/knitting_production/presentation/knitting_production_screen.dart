@@ -5,15 +5,12 @@ import 'package:active_wear_scanning/core/utils/barcode_buffer_parser.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
+import 'package:active_wear_scanning/core/widgets/barcode_scanner_dialog.dart';
 import 'package:active_wear_scanning/core/widgets/empty_scan_state.dart';
 import 'package:active_wear_scanning/core/widgets/scanner_always_open.dart';
 import 'package:active_wear_scanning/core/widgets/tray_table_header.dart';
-import 'package:active_wear_scanning/features/knitting_production/model/scanned_tray.dart';
 import 'package:active_wear_scanning/features/knitting_production/presentation/widgets/scanned_tray_row.dart';
 import 'package:active_wear_scanning/features/knitting_production/presentation/widgets/work_order_dropdown.dart';
-import 'package:active_wear_scanning/features/knitting_production/model/plan_header_model.dart';
-import 'package:active_wear_scanning/features/knitting_production/model/tray_details_model.dart';
-import 'package:active_wear_scanning/features/common-models/common_models.dart';
 import 'package:plex/plex_di/plex_dependency_injection.dart';
 import 'package:active_wear_scanning/features/knitting_production/repo/knitting_production_repo.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
@@ -106,9 +103,9 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
   Future<void> _fetchMachineData(KnittingProductionController controller, String scannedCode) async {
     AppLoader.show(context, message: 'Loading Machine Data...');
     await controller.fetchMachineData(scannedCode);
+    if (!mounted) return;
     AppLoader.hide(context);
 
-    if (!mounted) return;
     if (controller.state.errorMessage != null) {
       _showError(controller.state.errorMessage!);
       controller.resetMachine();
@@ -1200,7 +1197,7 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
                           : ListView.separated(
                               controller: scrollController,
                               itemCount: availableTrays.length + (isLoadingMore ? 1 : 0),
-                              separatorBuilder: (_, __) => const Divider(),
+                              separatorBuilder: (_, _) => const Divider(),
                               itemBuilder: (context, idx) {
                                 if (idx == availableTrays.length) {
                                   return const Padding(
@@ -1244,31 +1241,16 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
 
   Future<void> _onScanMachineBarcode(KnittingProductionController controller) async {
     setState(() => _isScannerOpen = true);
-    await ScannerAlwaysOpen.show(
+    final code = await BarcodeScannerDialog.show(
       context,
       title: 'Scan Machine',
-      showDoneButton: false,
-      onResult: (scannedCode) async {
-        final code = scannedCode.trim();
-        if (code.isEmpty) return 'Invalid machine code';
-        
-        await controller.fetchMachineData(code);
-
-        if (controller.state.errorMessage != null) {
-          final err = controller.state.errorMessage!;
-          controller.resetMachine();
-          return err;
-        }
-
-        if (controller.state.selectedPlanLine != null) {
-          _overrideQuantityController.text = controller.getPlanQuantityPerTray();
-        }
-        if (mounted) Navigator.of(context).pop();
-        return null;
-      },
     );
     if (mounted) {
       setState(() => _isScannerOpen = false);
+    }
+
+    if (code != null && code.trim().isNotEmpty) {
+      _fetchMachineData(controller, code.trim());
     }
   }
 
@@ -1288,7 +1270,7 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
         return ChangeNotifierProvider<KnittingProductionController>.value(
           value: controller,
           child: Consumer<KnittingProductionController>(
-            builder: (context, latestController, __) {
+            builder: (context, latestController, _) {
               final latestState = latestController.state;
               if (latestState.scannedTrays.isEmpty) {
                 return const Center(

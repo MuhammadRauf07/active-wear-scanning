@@ -93,7 +93,7 @@ class _InductionStoreScreenViewState extends State<_InductionStoreScreenView> {
         return ChangeNotifierProvider<InductionController>.value(
           value: controller,
           child: Consumer<InductionController>(
-            builder: (context, latestController, __) {
+            builder: (context, latestController, _) {
               final latestState = latestController.state;
               if (latestState.scannedTrays.isEmpty) {
                 return const Center(
@@ -277,26 +277,26 @@ class _InductionStoreScreenViewState extends State<_InductionStoreScreenView> {
     final List<LotHeaderModel> availableBatches = uniqueBatches.values.toList();
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: const BoxDecoration(
         color: Color(0xFFF8FAFC),
         border: Border(bottom: BorderSide(color: Color(0xFFCFD8DC), width: 1)),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            flex: 3,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'BATCH/LOT NUMBER',
-                  style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Color(0xFF78909C), letterSpacing: 0.5),
-                ),
-                const SizedBox(height: 6),
-                _InductionOverlayDropdown<LotHeaderModel>(
+          const Text(
+            'BATCH / LOT NUMBER',
+            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF546E7A), letterSpacing: 0.8),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                flex: 6,
+                child: _InductionOverlayDropdown<LotHeaderModel>(
                   hint: "Select batch/lot number...",
                   items: availableBatches,
                   selectedValue: state.selectedBatch,
@@ -305,33 +305,31 @@ class _InductionStoreScreenViewState extends State<_InductionStoreScreenView> {
                     controller.selectBatch(val);
                   },
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            flex: 2,
-            child: SizedBox(
-              height: 40,
-              child: ElevatedButton.icon(
-                onPressed: state.selectedBatch == null
-                    ? null
-                    : () => _showAvailableTraysDialog(controller, state),
-                icon: const Icon(Icons.layers_outlined, size: 16),
-                label: const Text(
-                  'SHOW TRAYS',
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE67E22),
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: Colors.grey.shade300,
-                  disabledForegroundColor: Colors.grey.shade500,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  elevation: 0,
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                height: 44,
+                child: ElevatedButton.icon(
+                  onPressed: state.selectedBatch == null
+                      ? null
+                      : () => _showAvailableTraysDialog(controller, state),
+                  icon: const Icon(Icons.layers_outlined, size: 16),
+                  label: const Text(
+                    'SHOW TRAYS',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.3),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE67E22),
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: Colors.grey.shade300,
+                    disabledForegroundColor: Colors.grey.shade500,
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    elevation: 0,
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
         ],
       ),
@@ -351,7 +349,7 @@ class _InductionStoreScreenViewState extends State<_InductionStoreScreenView> {
             return Dialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: Container(
-                width: MediaQuery.of(context).size.width * 0.85,
+                width: MediaQuery.of(context).size.width * 0.88,
                 height: MediaQuery.of(context).size.height * 0.75,
                 padding: const EdgeInsets.all(20),
                 child: Column(
@@ -360,63 +358,146 @@ class _InductionStoreScreenViewState extends State<_InductionStoreScreenView> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'AVAILABLE TRAYS (${availableTrays.length})',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFFE67E22)),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE67E22).withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.layers_rounded, color: Color(0xFFE67E22), size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'AVAILABLE TRAYS (${availableTrays.length})',
+                                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFFE67E22)),
+                                ),
+                                Text(
+                                  'Batch: ${state.selectedBatch?.batchHeaderCode ?? "-"}',
+                                  style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF64748B)),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                         IconButton(
-                          icon: const Icon(Icons.close_rounded),
+                          icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
                           onPressed: () => Navigator.of(context).pop(),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    const InductionTrayTableHeader(),
+                    const SizedBox(height: 16),
                     Expanded(
-                      child: availableTrays.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'No available trays for this batch/lot',
-                                style: TextStyle(color: Colors.grey, fontSize: 13, fontStyle: FontStyle.italic),
-                              ),
-                            )
-                          : ListView.builder(
-                              itemCount: availableTrays.length,
-                              itemBuilder: (ctx, index) {
-                                final tray = availableTrays[index];
-                                final qty = tray.productionProgress.primaryQuantity ?? 0.0;
-                                final weight = qty * (tray.item.pieceWeight ?? 0);
-
-                                const cellStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1E293B));
-                                const blueCellStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF0D47A1));
-
-                                return Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                  decoration: BoxDecoration(
-                                    color: index.isEven ? Colors.white : const Color(0xFFF8FAFC),
-                                    border: Border(bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.1), width: 1)),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Expanded(flex: 2, child: Text(tray.primaryTrayModel.trayCode ?? 'N/A', style: blueCellStyle)),
-                                      Expanded(flex: 2, child: Text(tray.workOrderHeader.workOrderCode, style: cellStyle)),
-                                      Expanded(
-                                        flex: 4,
-                                        child: Text(
-                                          tray.item.description,
-                                          style: cellStyle,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      Expanded(flex: 2, child: Text(tray.item.sizeDescription ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
-                                      Expanded(flex: 2, child: Text(qty.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
-                                      Expanded(flex: 2, child: Text('${weight.toStringAsFixed(1)} g', textAlign: TextAlign.center, style: cellStyle)),
-                                    ],
-                                  ),
-                                );
-                              },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFCFD8DC), width: 1.2),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: Column(
+                          children: [
+                            const InductionTrayTableHeader(
+                              showActionColumn: false,
+                              centerAlignAll: true,
                             ),
+                            Expanded(
+                              child: availableTrays.isEmpty
+                                  ? const Center(
+                                      child: Text(
+                                        'No available trays for this batch/lot',
+                                        style: TextStyle(color: Colors.grey, fontSize: 12, fontStyle: FontStyle.italic),
+                                      ),
+                                    )
+                                  : ListView.builder(
+                                      itemCount: availableTrays.length,
+                                      itemBuilder: (ctx, index) {
+                                        final tray = availableTrays[index];
+                                        final qty = tray.productionProgress.primaryQuantity ?? 0.0;
+                                        final weight = qty * (tray.item.pieceWeight ?? 0);
+
+                                        const cellStyle = TextStyle(
+                                          fontSize: 8.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF1E293B),
+                                        );
+                                        const blueCellStyle = TextStyle(
+                                          fontSize: 8.5,
+                                          fontWeight: FontWeight.w800,
+                                          color: Color(0xFF0D47A1),
+                                        );
+
+                                        return Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                          decoration: BoxDecoration(
+                                            color: index.isEven ? Colors.white : const Color(0xFFF8FAFC),
+                                            border: Border(bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.1), width: 1)),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                flex: 2,
+                                                child: Text(
+                                                  tray.primaryTrayModel.trayCode ?? 'N/A',
+                                                  textAlign: TextAlign.center,
+                                                  style: blueCellStyle,
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Text(
+                                                  tray.workOrderHeader.workOrderCode,
+                                                  textAlign: TextAlign.center,
+                                                  style: cellStyle,
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 4,
+                                                child: Text(
+                                                  tray.item.description,
+                                                  textAlign: TextAlign.center,
+                                                  style: cellStyle,
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Text(
+                                                  tray.item.sizeDescription ?? 'N/A',
+                                                  textAlign: TextAlign.center,
+                                                  style: cellStyle,
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Text(
+                                                  qty.toStringAsFixed(0),
+                                                  textAlign: TextAlign.center,
+                                                  style: cellStyle.copyWith(fontWeight: FontWeight.w800),
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Text(
+                                                  '${weight.toStringAsFixed(1)} g',
+                                                  textAlign: TextAlign.center,
+                                                  style: cellStyle,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),

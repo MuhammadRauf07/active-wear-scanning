@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/barcode_scanner_dialog.dart';
 import 'package:active_wear_scanning/core/utils/barcode_buffer_parser.dart';
@@ -28,7 +29,6 @@ class _TrayTrackingScreenView extends StatefulWidget {
 }
 
 class _TrayTrackingScreenViewState extends State<_TrayTrackingScreenView> with SingleTickerProviderStateMixin {
-  final _trayCodeController = TextEditingController();
   final _barcodeParser = BarcodeBufferParser();
   late AnimationController _pulseController;
 
@@ -46,7 +46,6 @@ class _TrayTrackingScreenViewState extends State<_TrayTrackingScreenView> with S
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_onHardwareKey);
     _pulseController.dispose();
-    _trayCodeController.dispose();
     super.dispose();
   }
 
@@ -61,9 +60,12 @@ class _TrayTrackingScreenViewState extends State<_TrayTrackingScreenView> with S
     if (cleanCode.isEmpty) return;
 
     final controller = context.read<TrayTrackingController>();
-    _trayCodeController.text = cleanCode;
+    AppLoader.show(context, message: 'Please wait...');
 
     final error = await controller.onTrayScanned(cleanCode);
+    if (!mounted) return;
+    AppLoader.hide(context);
+
     if (error == null) {
       HapticFeedbackHelper.scanSuccess();
     } else {
@@ -107,7 +109,7 @@ class _TrayTrackingScreenViewState extends State<_TrayTrackingScreenView> with S
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _buildScanningConsole(),
+                        _buildScanningConsole(state),
                         const SizedBox(height: 12),
                         Expanded(
                           child: state.trayDetail != null
@@ -134,7 +136,15 @@ class _TrayTrackingScreenViewState extends State<_TrayTrackingScreenView> with S
                                         color: const Color(0xFFEF4444),
                                       ),
                                     )
-                                  : const SizedBox.shrink(),
+                                  : Center(
+                                      child: _buildEmptyState(
+                                        icon: Icons.qr_code_scanner_rounded,
+                                        title: 'NO TRAY SCANNED',
+                                        message: 'Tap "SCAN TRAY" or use scanner to track tray history',
+                                        color: const Color(0xFF0D47A1),
+                                        isScanning: true,
+                                      ),
+                                    ),
                         ),
                       ],
                     ),
@@ -146,9 +156,12 @@ class _TrayTrackingScreenViewState extends State<_TrayTrackingScreenView> with S
     );
   }
 
-  Widget _buildScanningConsole() {
+  Widget _buildScanningConsole(TrayTrackingState state) {
+    final hasTray = state.trayDetail != null;
+    final trayCode = state.trayDetail?.trayCode ?? '';
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -158,41 +171,49 @@ class _TrayTrackingScreenViewState extends State<_TrayTrackingScreenView> with S
       child: Row(
         children: [
           Expanded(
-            child: Container(
-              height: 48,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Center(
-                child: TextField(
-                  controller: _trayCodeController,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1E293B)),
-                  decoration: const InputDecoration(
-                    hintText: 'ENTER TRAY CODE...',
-                    hintStyle: TextStyle(fontSize: 12, color: Color(0xFF94A3B8), fontWeight: FontWeight.w600),
-                    border: InputBorder.none,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  hasTray ? 'CURRENTLY TRACKING' : 'TRAY TRACKING CONSOLE',
+                  style: const TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF64748B),
+                    letterSpacing: 0.8,
                   ),
-                  onSubmitted: (val) => _onTrayScanned(val),
                 ),
-              ),
+                const SizedBox(height: 2),
+                Text(
+                  hasTray ? trayCode : 'Ready to track tray',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                    color: hasTray ? const Color(0xFF0D47A1) : const Color(0xFF1E293B),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 12),
           SizedBox(
-            height: 48,
+            height: 44,
             child: ElevatedButton.icon(
               onPressed: _openScanner,
               icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
-              label: const Text('SCAN TRAY', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5)),
+              label: Text(
+                hasTray ? 'SCAN ANOTHER TRAY' : 'SCAN TRAY',
+                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.3),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF0D47A1),
                 foregroundColor: Colors.white,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(horizontal: 18),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
             ),
           ),
@@ -235,7 +256,7 @@ class _TrayTrackingScreenViewState extends State<_TrayTrackingScreenView> with S
                         const Icon(Icons.qr_code_2_rounded, color: Colors.white, size: 22),
                         const SizedBox(width: 8),
                         Text(
-                          _trayCodeController.text.toUpperCase(),
+                          (state.trayDetail?.trayCode ?? '').toUpperCase(),
                           style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 2),
                         ),
                       ],
@@ -506,20 +527,47 @@ class _TacticalLoader extends StatelessWidget {
   const _TacticalLoader();
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const SizedBox(
-          width: 60,
-          height: 60,
-          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0D47A1)),
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
-        const SizedBox(height: 24),
-        Text(
-          'ESTABLISHING TELEMETRY LINK...',
-          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF0D47A1).withValues(alpha: 0.7), letterSpacing: 1.5),
+        child: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 36,
+              height: 36,
+              child: CircularProgressIndicator(
+                strokeWidth: 3.5,
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1B64A3)),
+                backgroundColor: Color(0xFFE2E8F0),
+              ),
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Please wait...',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF1E293B),
+                letterSpacing: 0.3,
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
