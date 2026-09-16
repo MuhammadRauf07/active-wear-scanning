@@ -5,6 +5,7 @@ import 'package:active_wear_scanning/features/processing/repo/processing_repo.da
 import 'package:active_wear_scanning/features/lot_making/model/lot_header_model.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:active_wear_scanning/features/processing/model/processing_batch_state.dart';
+import 'package:active_wear_scanning/features/processing/model/defect_list_model.dart';
 
 import '../../common-models/common_models.dart';
 
@@ -50,9 +51,19 @@ class ProcessingBatchController extends ChangeNotifier {
     try {
       await _fetchMachineCapacity();
       await _fetchBatchHeader();
+      await fetchDefectLists();
       await fetchTrays();
     } catch (e) {
       _state = _state.copyWith(isLoading: false, errorMessage: e.toString());
+      notifyListeners();
+    }
+  }
+
+  Future<void> fetchDefectLists() async {
+    final res = await _processingRepo.fetchDefectLists();
+    if (res.success && res.data != null) {
+      final list = (res.data as List).cast<DefectListItemModel>();
+      _state = _state.copyWith(defectLists: list);
       notifyListeners();
     }
   }
@@ -434,7 +445,14 @@ class ProcessingBatchController extends ChangeNotifier {
     }
   }
 
-  Future<void> updateQuantity(int progressId, double newQty, [int productGrade = 1]) async {
+  Future<void> updateQuantity(
+    int progressId,
+    double newQty, [
+    int productGrade = 1,
+    List<int> selectedDefectListIds = const [],
+    String? reason,
+    String? remarks,
+  ]) async {
     _state = _state.copyWith(isLoading: true, clearError: true);
     notifyListeners();
 
@@ -451,6 +469,9 @@ class ProcessingBatchController extends ChangeNotifier {
       final double pgt = tray.item.perGarmentTube;
       final double newPrimaryQty = pgt > 0 ? newQty * pgt : newQty;
       final double wastagePrimaryQty = pgt > 0 ? wastageTubes * pgt : wastageTubes;
+
+      final userReason = (reason != null && reason.trim().isNotEmpty) ? reason.trim() : '';
+      final userRemarks = (remarks != null && remarks.trim().isNotEmpty) ? remarks.trim() : null;
 
       // 1. Update original production progress record
       final json = tray.productionProgress.toJson();
@@ -504,6 +525,20 @@ class ProcessingBatchController extends ChangeNotifier {
 
       // 2. Manage the wastage record
       if (wastageTubes > 0) {
+        final primaryDefectId = selectedDefectListIds.isNotEmpty ? selectedDefectListIds.first : null;
+        final descriptions = <String>[];
+        for (final defId in selectedDefectListIds) {
+          final matches = _state.defectLists.where((d) => d.defectList.id == defId).toList();
+          if (matches.isNotEmpty) {
+            final desc = matches.first.defectList.description;
+            if (desc != null && desc.isNotEmpty) {
+              descriptions.add(desc);
+            }
+          }
+        }
+        final combinedDefectDescription = descriptions.isNotEmpty ? descriptions.join('; ') : null;
+        final effectiveRemarks = userRemarks ?? combinedDefectDescription;
+
         final wastageRecord = _state.wastageByOriginalId[progressId];
         if (wastageRecord != null && wastageRecord.productionProgress.id != null) {
           // UPDATE existing wastage record
@@ -514,6 +549,12 @@ class ProcessingBatchController extends ChangeNotifier {
           wJson['requiredQty'] = requiredTubes.toInt();
           wJson['locatorId'] = 18;
           wJson['productGrade'] = productGrade;
+          if (primaryDefectId != null) {
+            wJson['defectListId'] = primaryDefectId;
+          }
+          if (effectiveRemarks != null) {
+            wJson['remarks'] = effectiveRemarks;
+          }
 
           wJson.remove('id');
           wJson.remove('progressCode');
@@ -543,6 +584,10 @@ class ProcessingBatchController extends ChangeNotifier {
           newJson['requiredQty'] = requiredTubes.toInt();
           newJson['locatorId'] = 18;
           newJson['productGrade'] = productGrade;
+          newJson['defectListId'] = primaryDefectId;
+          if (effectiveRemarks != null) {
+            newJson['remarks'] = effectiveRemarks;
+          }
           newJson['transactionType'] = tray.productionProgress.transactionType ?? 2;
           newJson['subOperation'] = progressId.toString();
           newJson['isStarted'] = false;
@@ -554,6 +599,68 @@ class ProcessingBatchController extends ChangeNotifier {
             throw Exception(postRes.message);
           }
         }
+
+        // 3. Post to Defect History API for each selected defect
+        // First delete any previous defect histories for this tray to avoid duplicates if updating
+        await _deleteDefectHistoriesForTray(tray);
+
+        if (selectedDefectListIds.isNotEmpty) {
+          for (final defId in selectedDefectListIds) {
+            final defectHistoryPayload = <String, dynamic>{
+              'defectId': defId,
+              'defectCount': selectedDefectListIds.length,
+              'defectQuantity': wastageTubes.toInt(),
+              'reason': userReason,
+              'remarks': userRemarks,
+              'operationId': tray.productionProgress.operationId ?? tray.operation.id,
+              'workOrderHeaderId': tray.productionProgress.workOrderHeaderId ?? tray.workOrderHeader.id,
+              'workOrderLineId': tray.productionProgress.workOrderLineId ?? tray.workOrderLine.id,
+              'processItemId': tray.productionProgress.processedItemId ?? tray.item.id,
+              'shiftId': tray.productionProgress.shiftId ?? tray.shift.id,
+              'primaryTrayId': tray.productionProgress.primaryTrayId ?? tray.primaryTrayModel.id,
+              'machineId': tray.productionProgress.machineId ?? tray.machineModel.id,
+              'locatorId': tray.productionProgress.locatorId ?? 18,
+              'batchHeaderId': tray.productionProgress.batchHeaderId ?? tray.batchHeader?.id ?? batchHeaderId,
+              'batchLinesId': tray.productionProgress.batchLinesId ?? tray.primaryTrayModel.batchLinesId,
+            };
+
+            try {
+              final histRes = await _processingRepo.createDefectHistory(defectHistoryPayload);
+              if (!histRes.success) {
+                debugPrint('Warning: Defect history post returned unsuccessful: ${histRes.message}');
+              }
+            } catch (e) {
+              debugPrint('Error posting defect history: $e');
+            }
+          }
+        } else {
+          final defectHistoryPayload = <String, dynamic>{
+            'defectId': null,
+            'defectCount': 1,
+            'defectQuantity': wastageTubes.toInt(),
+            'reason': userReason,
+            'remarks': userRemarks,
+            'operationId': tray.productionProgress.operationId ?? tray.operation.id,
+            'workOrderHeaderId': tray.productionProgress.workOrderHeaderId ?? tray.workOrderHeader.id,
+            'workOrderLineId': tray.productionProgress.workOrderLineId ?? tray.workOrderLine.id,
+            'processItemId': tray.productionProgress.processedItemId ?? tray.item.id,
+            'shiftId': tray.productionProgress.shiftId ?? tray.shift.id,
+            'primaryTrayId': tray.productionProgress.primaryTrayId ?? tray.primaryTrayModel.id,
+            'machineId': tray.productionProgress.machineId ?? tray.machineModel.id,
+            'locatorId': tray.productionProgress.locatorId ?? 18,
+            'batchHeaderId': tray.productionProgress.batchHeaderId ?? tray.batchHeader?.id ?? batchHeaderId,
+            'batchLinesId': tray.productionProgress.batchLinesId ?? tray.primaryTrayModel.batchLinesId,
+          };
+
+          try {
+            final histRes = await _processingRepo.createDefectHistory(defectHistoryPayload);
+            if (!histRes.success) {
+              debugPrint('Warning: Defect history post returned unsuccessful: ${histRes.message}');
+            }
+          } catch (e) {
+            debugPrint('Error posting defect history: $e');
+          }
+        }
       } else {
         // newQty == requiredQty (wastage reduced to 0), delete the wastage record if exists
         final wastageRecord = _state.wastageByOriginalId[progressId];
@@ -561,6 +668,7 @@ class ProcessingBatchController extends ChangeNotifier {
           final wId = wastageRecord.productionProgress.id!;
           await _processingRepo.deleteProductionProgress(wId);
         }
+        await _deleteDefectHistoriesForTray(tray);
       }
 
       _state = _state.copyWith(trays: []); // Force reload
@@ -570,6 +678,46 @@ class ProcessingBatchController extends ChangeNotifier {
       _state = _state.copyWith(isLoading: false, errorMessage: e.toString());
       notifyListeners();
       rethrow;
+    }
+  }
+
+  Future<void> _deleteDefectHistoriesForTray(ProductionProgressResponseModel tray) async {
+    try {
+      final trayId = tray.productionProgress.primaryTrayId ?? tray.primaryTrayModel.id;
+      final opId = tray.productionProgress.operationId ?? tray.operation.id;
+      final bHeaderId = tray.productionProgress.batchHeaderId ?? tray.batchHeader?.id ?? batchHeaderId;
+      final bLineId = tray.productionProgress.batchLinesId ?? tray.primaryTrayModel.batchLinesId;
+
+      final res = await _processingRepo.fetchDefectHistories(
+        batchHeaderId: bHeaderId,
+        primaryTrayId: trayId,
+        operationId: opId,
+      );
+
+      if (res.success && res.data != null) {
+        final List rawList = res.data is Map ? (res.data['items'] ?? []) : res.data;
+        for (final item in rawList) {
+          if (item is Map) {
+            final dh = item['defectHistory'] is Map ? item['defectHistory'] as Map : item;
+            final itemTrayId = dh['primaryTrayId'] as int? ?? int.tryParse(dh['primaryTrayId']?.toString() ?? '');
+            final itemOpId = dh['operationId'] as int? ?? int.tryParse(dh['operationId']?.toString() ?? '');
+            final itemBatchHeaderId = dh['batchHeaderId'] as int? ?? int.tryParse(dh['batchHeaderId']?.toString() ?? '');
+            final itemBatchLinesId = dh['batchLinesId'] as int? ?? int.tryParse(dh['batchLinesId']?.toString() ?? '');
+            final id = dh['id'] as int? ?? int.tryParse(dh['id']?.toString() ?? '');
+
+            final bool matchesTray = (trayId != null && itemTrayId == trayId) ||
+                (bLineId != null && itemBatchLinesId == bLineId);
+            final bool matchesOp = itemOpId == null || itemOpId == opId;
+            final bool matchesBatch = itemBatchHeaderId == null || itemBatchHeaderId == bHeaderId;
+
+            if (id != null && matchesTray && matchesOp && matchesBatch) {
+              await _processingRepo.deleteDefectHistory(id);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error deleting defect histories for tray: $e');
     }
   }
 
@@ -598,6 +746,9 @@ class ProcessingBatchController extends ChangeNotifier {
           throw Exception(delRes.message);
         }
       }
+
+      // 2. Delete defect history entries for this tray
+      await _deleteDefectHistoriesForTray(tray);
 
       // 2. Restore primary & secondary quantities on original progress entry and clear waste fields
       final json = tray.productionProgress.toJson();

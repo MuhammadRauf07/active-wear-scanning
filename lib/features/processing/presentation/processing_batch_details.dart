@@ -431,6 +431,7 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
           Expanded(
             child: ProcessingTrayTable(
               trays: state.trays,
+              defectLists: state.defectLists,
               isReworkMode: state.isReworkMode,
               selectedReworkTrayIds: state.selectedReworkTrayIds,
               trayIdsWithWastage: state.trayIdsWithWastage,
@@ -438,9 +439,9 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
               isEditable: state.isBatchStarted,
               isBatchStarted: state.isBatchStarted,
               operationName: controller.operationName,
-              onQuantitySubmit: (progressId, newQty, productGrade) async {
+              onQuantitySubmit: (progressId, newQty, productGrade, defectListIds, reason, remarks) async {
                 try {
-                  await controller.updateQuantity(progressId, newQty, productGrade);
+                  await controller.updateQuantity(progressId, newQty, productGrade, defectListIds, reason, remarks);
                   if (mounted) AppSnackBar.showSuccess(context, message: 'Quantity updated successfully.');
                 } catch (e) {
                   if (mounted) AppSnackBar.showError(context, message: 'Failed to update quantity: $e');

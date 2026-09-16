@@ -89,12 +89,13 @@ class ProductionProgress {
   final String? remarks;
   final double? waste;
   final double? requiredQty;
+  final int? defectListId;
 
   final bool? holdFlag;
   final DateTime? holdDate;
   final DateTime? unHoldDate;
 
-  var batchLinesId;
+  final int? batchLinesId;
 
   ProductionProgress({
     this.subOperation,
@@ -138,6 +139,7 @@ class ProductionProgress {
     this.remarks,
     this.waste,
     this.requiredQty,
+    this.defectListId,
     this.holdFlag,
     this.holdDate,
     this.unHoldDate,
@@ -187,6 +189,7 @@ class ProductionProgress {
       remarks: json['remarks'],
       waste: json['waste'] != null ? double.tryParse(json['waste'].toString()) : null,
       requiredQty: json['requiredQty'] != null ? double.tryParse(json['requiredQty'].toString()) : null,
+      defectListId: int.tryParse(json['defectListId']?.toString() ?? json['defectId']?.toString() ?? ''),
       holdFlag: (json['holdFlag'] is bool ? json['holdFlag'] as bool : (json['holdFlag'] == 1 || json['holdFlag'] == 'true')),
       holdDate: json['holdDate'] != null ? DateTime.parse(json['holdDate']) : null,
       unHoldDate: json['unHoldDate'] != null ? DateTime.parse(json['unHoldDate']) : null,
@@ -234,6 +237,7 @@ class ProductionProgress {
       'remarks': remarks,
       'waste': waste?.round(),
       'requiredQty': requiredQty?.round(),
+      'defectListId': defectListId,
       'holdFlag': holdFlag ?? false,
       'holdDate': holdDate?.toIso8601String(),
       'unHoldDate': unHoldDate?.toIso8601String(),
@@ -282,6 +286,7 @@ class ProductionProgress {
     String? remarks,
     double? waste,
     double? requiredQty,
+    int? defectListId,
     bool? holdFlag,
     DateTime? holdDate,
     DateTime? unHoldDate,
@@ -328,6 +333,7 @@ class ProductionProgress {
       remarks: remarks ?? this.remarks,
       waste: waste ?? this.waste,
       requiredQty: requiredQty ?? this.requiredQty,
+      defectListId: defectListId ?? this.defectListId,
       holdFlag: holdFlag ?? this.holdFlag,
       holdDate: holdDate ?? this.holdDate,
       unHoldDate: unHoldDate ?? this.unHoldDate,

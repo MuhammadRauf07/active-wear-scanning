@@ -1,4 +1,5 @@
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
+import 'package:active_wear_scanning/features/processing/model/defect_list_model.dart';
 
 class ProcessingBatchState {
   final bool isLoading;
@@ -6,6 +7,7 @@ class ProcessingBatchState {
   final List<ProductionProgressResponseModel> trays;
   final Set<int> trayIdsWithWastage;
   final Map<int, ProductionProgressResponseModel> wastageByOriginalId;
+  final List<DefectListItemModel> defectLists;
   final bool isBatchStarted;
   final DateTime? issueTime;
   final DateTime? startTime;
@@ -28,6 +30,7 @@ class ProcessingBatchState {
     this.trays = const [],
     this.trayIdsWithWastage = const {},
     this.wastageByOriginalId = const {},
+    this.defectLists = const [],
     this.isBatchStarted = false,
     this.issueTime,
     this.startTime,
@@ -65,6 +68,7 @@ class ProcessingBatchState {
     List<ProductionProgressResponseModel>? trays,
     Set<int>? trayIdsWithWastage,
     Map<int, ProductionProgressResponseModel>? wastageByOriginalId,
+    List<DefectListItemModel>? defectLists,
     bool? isBatchStarted,
     DateTime? issueTime,
     DateTime? startTime,
@@ -88,6 +92,7 @@ class ProcessingBatchState {
       trays: trays ?? this.trays,
       trayIdsWithWastage: trayIdsWithWastage ?? this.trayIdsWithWastage,
       wastageByOriginalId: wastageByOriginalId ?? this.wastageByOriginalId,
+      defectLists: defectLists ?? this.defectLists,
       isBatchStarted: isBatchStarted ?? this.isBatchStarted,
       issueTime: issueTime ?? this.issueTime,
       startTime: startTime ?? this.startTime,

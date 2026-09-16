@@ -1,4 +1,5 @@
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
+import 'package:active_wear_scanning/features/processing/model/defect_list_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -9,6 +10,7 @@ import 'package:flutter/services.dart';
 /// Add Waste and Delete Waste.
 class ProcessingTrayTable extends StatefulWidget {
   final List<ProductionProgressResponseModel> trays;
+  final List<DefectListItemModel> defectLists;
   final bool isReworkMode;
   final Set<int> selectedReworkTrayIds;
   final void Function(int progressId, bool selected) onReworkToggle;
@@ -16,7 +18,14 @@ class ProcessingTrayTable extends StatefulWidget {
   final bool isEditable;
   final bool isBatchStarted;
   final String operationName;
-  final Future<void> Function(int progressId, double newQty, int productGrade)? onQuantitySubmit;
+  final Future<void> Function(
+    int progressId,
+    double newQty,
+    int productGrade,
+    List<int> defectListIds,
+    String reason,
+    String remarks,
+  )? onQuantitySubmit;
   final Future<void> Function(int progressId)? onDeleteWastage;
   final Set<int> trayIdsWithWastage;
   final Map<int, ProductionProgressResponseModel> wastageByOriginalId;
@@ -27,6 +36,7 @@ class ProcessingTrayTable extends StatefulWidget {
   const ProcessingTrayTable({
     super.key,
     required this.trays,
+    this.defectLists = const [],
     required this.isReworkMode,
     required this.selectedReworkTrayIds,
     required this.onReworkToggle,
@@ -449,6 +459,11 @@ class _ProcessingTrayTableState extends State<ProcessingTrayTable> {
                                           }
                                           final double requiredTubes = t.productionProgress.requiredQty?.toDouble() ??
                                               (hasWaste ? tubes + wasteQty : tubes);
+                                          final wastageRecord = widget.wastageByOriginalId[id];
+                                          final int initialProductGrade = wastageRecord?.productionProgress.productGrade ?? t.productionProgress.productGrade ?? 1;
+                                          final int? initialDefectListId = wastageRecord?.productionProgress.defectListId;
+                                          final List<int> initialDefectListIds = initialDefectListId != null ? [initialDefectListId] : const [];
+                                          final String? initialRemarks = wastageRecord?.productionProgress.remarks;
                                           _showAddWasteDialog(
                                             context,
                                             id,
@@ -456,7 +471,9 @@ class _ProcessingTrayTableState extends State<ProcessingTrayTable> {
                                             tubes,
                                             requiredTubes,
                                             hasCurrentWaste: hasWaste,
-                                            initialProductGrade: t.productionProgress.productGrade ?? 1,
+                                            initialProductGrade: initialProductGrade,
+                                            initialDefectListIds: initialDefectListIds,
+                                            initialRemarks: initialRemarks,
                                           );
                                         } else if (value == 'delete_waste') {
                                           final confirm = await showDialog<bool>(
@@ -593,6 +610,9 @@ class _ProcessingTrayTableState extends State<ProcessingTrayTable> {
     double requiredQty, {
     bool hasCurrentWaste = false,
     int initialProductGrade = 1,
+    List<int> initialDefectListIds = const [],
+    String? initialRemarks,
+    String? initialReason,
   }) {
     showDialog(
       context: context,
@@ -603,12 +623,16 @@ class _ProcessingTrayTableState extends State<ProcessingTrayTable> {
         currentQty: currentQty,
         requiredQty: requiredQty,
         initialProductGrade: initialProductGrade,
-        onSave: (finalQty, productGrade) async {
+        initialDefectListIds: initialDefectListIds,
+        initialRemarks: initialRemarks,
+        initialReason: initialReason,
+        defectLists: widget.defectLists,
+        onSave: (finalQty, productGrade, defectListIds, reason, remarks) async {
           setState(() {
             _loadingRows[progressId] = true;
           });
           try {
-            await widget.onQuantitySubmit?.call(progressId, finalQty, productGrade);
+            await widget.onQuantitySubmit?.call(progressId, finalQty, productGrade, defectListIds, reason, remarks);
           } finally {
             if (mounted) {
               setState(() {
@@ -645,7 +669,17 @@ class _PremiumAddWasteDialog extends StatefulWidget {
   final double currentQty;
   final double requiredQty;
   final int initialProductGrade;
-  final Future<void> Function(double finalQty, int productGrade) onSave;
+  final List<int> initialDefectListIds;
+  final String? initialRemarks;
+  final String? initialReason;
+  final List<DefectListItemModel> defectLists;
+  final Future<void> Function(
+    double finalQty,
+    int productGrade,
+    List<int> defectListIds,
+    String reason,
+    String remarks,
+  ) onSave;
   final Future<void> Function()? onDelete;
 
   const _PremiumAddWasteDialog({
@@ -654,6 +688,10 @@ class _PremiumAddWasteDialog extends StatefulWidget {
     required this.currentQty,
     required this.requiredQty,
     this.initialProductGrade = 1,
+    this.initialDefectListIds = const [],
+    this.initialRemarks,
+    this.initialReason,
+    this.defectLists = const [],
     required this.onSave,
     this.onDelete,
   });
@@ -665,25 +703,40 @@ class _PremiumAddWasteDialog extends StatefulWidget {
 class _PremiumAddWasteDialogState extends State<_PremiumAddWasteDialog> {
   int _selectedMode = 2; // Default to Wastage Qty (2)
   int _selectedProductGrade = 1; // 1 = Grade B, 2 = Grade C
+  List<int> _selectedDefectListIds = [];
   late TextEditingController _qtyController;
   late TextEditingController _wastageController;
+  late TextEditingController _reasonController;
+  late TextEditingController _remarksController;
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
     _selectedProductGrade = (widget.initialProductGrade == 2) ? 2 : 1;
+    _selectedDefectListIds = List<int>.from(widget.initialDefectListIds);
     _qtyController = TextEditingController(text: widget.currentQty.toStringAsFixed(0));
     final initialWaste = widget.requiredQty - widget.currentQty;
     _wastageController = TextEditingController(
       text: initialWaste > 0 ? initialWaste.toStringAsFixed(0) : '0',
     );
+    _reasonController = TextEditingController(text: widget.initialReason ?? '');
+    _remarksController = TextEditingController(text: widget.initialRemarks ?? '');
+
+    _reasonController.addListener(() {
+      if (mounted) setState(() {});
+    });
+    _remarksController.addListener(() {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
   void dispose() {
     _qtyController.dispose();
     _wastageController.dispose();
+    _reasonController.dispose();
+    _remarksController.dispose();
     super.dispose();
   }
 
@@ -778,9 +831,10 @@ class _PremiumAddWasteDialogState extends State<_PremiumAddWasteDialog> {
   Widget build(BuildContext context) {
     final text = _qtyController.text;
     final parsedQty = double.tryParse(text) ?? 0;
-    final isUnchanged = parsedQty == widget.currentQty;
-    final isValid = parsedQty > 0 && parsedQty <= widget.requiredQty && !isUnchanged;
+    final isReasonValid = _reasonController.text.trim().isNotEmpty;
+    final isRemarksValid = _remarksController.text.trim().isNotEmpty;
     final currentWaste = (widget.requiredQty - parsedQty).clamp(0, widget.requiredQty).toInt();
+    final isValid = currentWaste > 0 && parsedQty > 0 && parsedQty < widget.requiredQty && isReasonValid && isRemarksValid;
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1080,6 +1134,257 @@ class _PremiumAddWasteDialogState extends State<_PremiumAddWasteDialog> {
                         ),
                       ],
                     ),
+
+                    const SizedBox(height: 18),
+
+                    // Defects Selection Header
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'DEFECT REASONS (${_selectedDefectListIds.length} SELECTED)',
+                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF64748B), letterSpacing: 0.5),
+                        ),
+                        InkWell(
+                          onTap: _isSaving ? null : () => _showMultiDefectPicker(context),
+                          borderRadius: BorderRadius.circular(6),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF6FF),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFFBFDBFE)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.add_rounded, size: 13, color: Color(0xFF1D4ED8)),
+                                SizedBox(width: 3),
+                                Text('Select Defects', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF1D4ED8))),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Selected Defects Chip Container
+                    Container(
+                      width: double.infinity,
+                      constraints: const BoxConstraints(minHeight: 46),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
+                      ),
+                      child: _selectedDefectListIds.isEmpty
+                          ? InkWell(
+                              onTap: _isSaving ? null : () => _showMultiDefectPicker(context),
+                              child: const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.touch_app_outlined, size: 16, color: Color(0xFF94A3B8)),
+                                    SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Tap to select defect reasons...',
+                                        style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )
+                          : Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: [
+                                ..._selectedDefectListIds.map((id) {
+                                  final matches = widget.defectLists.where((d) => d.defectList.id == id).toList();
+                                  final d = matches.isNotEmpty ? matches.first.defectList : null;
+                                  final label = (d?.description != null && d!.description!.isNotEmpty)
+                                      ? d.description!
+                                      : (d?.code ?? 'Defect #$id');
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: const Color(0xFF93C5FD)),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (d?.code != null && d!.code!.isNotEmpty) ...[
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFDBEAFE),
+                                              borderRadius: BorderRadius.circular(3),
+                                            ),
+                                            child: Text(
+                                              d.code!,
+                                              style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF1D4ED8)),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 5),
+                                        ],
+                                        Flexible(
+                                          child: Text(
+                                            label,
+                                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1E293B)),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        InkWell(
+                                          onTap: _isSaving
+                                              ? null
+                                              : () {
+                                                  setState(() {
+                                                    _selectedDefectListIds.remove(id);
+                                                  });
+                                                },
+                                          child: const Icon(Icons.close_rounded, size: 14, color: Color(0xFF64748B)),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    // Reason Text Field (Required)
+                    Row(
+                      children: [
+                        const Text(
+                          'REASON',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF64748B),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Text(
+                          '*',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFFDC2626),
+                          ),
+                        ),
+                        const Spacer(),
+                        if (_reasonController.text.trim().isEmpty)
+                          const Text(
+                            'Required',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFDC2626),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: _reasonController,
+                      enabled: !_isSaving,
+                      maxLines: 2,
+                      minLines: 1,
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                      decoration: InputDecoration(
+                        hintText: 'Enter reason for wastage...',
+                        hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: _reasonController.text.trim().isEmpty
+                                ? const Color(0xFFE2E8F0)
+                                : const Color(0xFF93C5FD),
+                            width: 1.2,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Color(0xFF0D47A1), width: 1.5),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    // Remarks Text Field (Required)
+                    Row(
+                      children: [
+                        const Text(
+                          'REMARKS',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF64748B),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Text(
+                          '*',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFFDC2626),
+                          ),
+                        ),
+                        const Spacer(),
+                        if (_remarksController.text.trim().isEmpty)
+                          const Text(
+                            'Required',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFDC2626),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: _remarksController,
+                      enabled: !_isSaving,
+                      maxLines: 2,
+                      minLines: 1,
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                      decoration: InputDecoration(
+                        hintText: 'Enter additional remarks...',
+                        hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: _remarksController.text.trim().isEmpty
+                                ? const Color(0xFFE2E8F0)
+                                : const Color(0xFF93C5FD),
+                            width: 1.2,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Color(0xFF0D47A1), width: 1.5),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1161,7 +1466,13 @@ class _PremiumAddWasteDialogState extends State<_PremiumAddWasteDialog> {
                                 _isSaving = true;
                               });
                               try {
-                                await widget.onSave(parsedQty, _selectedProductGrade);
+                                await widget.onSave(
+                                  parsedQty,
+                                  _selectedProductGrade,
+                                  _selectedDefectListIds,
+                                  _reasonController.text.trim(),
+                                  _remarksController.text.trim(),
+                                );
                                 if (mounted) Navigator.pop(context);
                               } catch (e) {
                                 if (mounted) {
@@ -1350,6 +1661,222 @@ class _PremiumAddWasteDialogState extends State<_PremiumAddWasteDialog> {
           ],
         ),
       ),
+    );
+  }
+
+  void _showMultiDefectPicker(BuildContext context) {
+    final tempSelected = List<int>.from(_selectedDefectListIds);
+    String filterText = '';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final filteredList = widget.defectLists.where((item) {
+              final d = item.defectList;
+              final desc = (d.description ?? '').toLowerCase();
+              final code = (d.code ?? '').toLowerCase();
+              final query = filterText.toLowerCase();
+              return desc.contains(query) || code.contains(query);
+            }).toList();
+
+            return Container(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.75,
+              ),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Handle bar
+                  Center(
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 10, bottom: 6),
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFCBD5E1),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  // Modal Header
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 10, 16, 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Select Defect Reasons',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
+                            ),
+                            Text(
+                              '${tempSelected.length} defect(s) selected',
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                            ),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            if (tempSelected.isNotEmpty)
+                              TextButton(
+                                onPressed: () {
+                                  setModalState(() {
+                                    tempSelected.clear();
+                                  });
+                                },
+                                child: const Text('Clear All', style: TextStyle(fontSize: 12, color: Color(0xFFDC2626))),
+                              ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF0D47A1),
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              ),
+                              onPressed: () {
+                                Navigator.pop(ctx);
+                                setState(() {
+                                  _selectedDefectListIds = tempSelected;
+                                });
+                              },
+                              child: const Text('Done', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                  // Search Bar
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: TextField(
+                      decoration: InputDecoration(
+                        hintText: 'Search defect code or description...',
+                        hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                        prefixIcon: const Icon(Icons.search_rounded, size: 20, color: Color(0xFF64748B)),
+                        filled: true,
+                        fillColor: const Color(0xFFF1F5F9),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        isDense: true,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                      onChanged: (val) {
+                        setModalState(() {
+                          filterText = val;
+                        });
+                      },
+                    ),
+                  ),
+                  // Defect List
+                  Expanded(
+                    child: filteredList.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'No matching defects found',
+                              style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                            ),
+                          )
+                        : ListView.separated(
+                            itemCount: filteredList.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                            itemBuilder: (ctx, idx) {
+                              final item = filteredList[idx];
+                              final d = item.defectList;
+                              final isSelected = tempSelected.contains(d.id);
+                              final desc = d.description ?? 'Defect #${d.id}';
+                              final code = d.code;
+
+                              return InkWell(
+                                onTap: () {
+                                  setModalState(() {
+                                    if (isSelected) {
+                                      tempSelected.remove(d.id);
+                                    } else {
+                                      tempSelected.add(d.id);
+                                    }
+                                  });
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Checkbox(
+                                        value: isSelected,
+                                        activeColor: const Color(0xFF0D47A1),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                                        onChanged: (checked) {
+                                          setModalState(() {
+                                            if (checked == true) {
+                                              if (!tempSelected.contains(d.id)) tempSelected.add(d.id);
+                                            } else {
+                                              tempSelected.remove(d.id);
+                                            }
+                                          });
+                                        },
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            if (code != null && code.isNotEmpty) ...[
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFEFF6FF),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                  border: Border.all(color: const Color(0xFFBFDBFE)),
+                                                ),
+                                                child: Text(
+                                                  code,
+                                                  style: const TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w800,
+                                                    color: Color(0xFF1D4ED8),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                            ],
+                                            Text(
+                                              desc,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                                color: const Color(0xFF1E293B),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
