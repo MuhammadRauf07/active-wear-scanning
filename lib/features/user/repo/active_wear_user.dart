@@ -18,6 +18,7 @@ class TasdeeqUser extends PlexUser {
   late bool supportsMultipleTimezone;
   late String timezone;
   late String concurrencyStamp;
+  List<String> roleNames = const [];
 
   @override
   String getLoggedInEmail() => email;
@@ -26,7 +27,7 @@ class TasdeeqUser extends PlexUser {
   String getLoggedInFullName() => name;
 
   @override
-  List<String>? getLoggedInRules() => null;
+  List<String>? getLoggedInRules() => roleNames;
 
   @override
   String getLoggedInUsername() => userName;
@@ -49,6 +50,7 @@ class TasdeeqUser extends PlexUser {
     map['supportsMultipleTimezone'] = supportsMultipleTimezone;
     map['timezone'] = timezone;
     map['concurrencyStamp'] = concurrencyStamp;
+    map['roleNames'] = roleNames;
     return map;
   }
 
@@ -68,9 +70,14 @@ class TasdeeqUser extends PlexUser {
     supportsMultipleTimezone = json['supportsMultipleTimezone'];
     timezone = json['timezone'];
     concurrencyStamp = json['concurrencyStamp'];
+    if (json['roleNames'] is List) {
+      roleNames = (json['roleNames'] as List).map((e) => e.toString()).toList();
+    } else {
+      roleNames = const [];
+    }
   }
 
-  TasdeeqUser.fromToken(Token json, Profile profile) {
+  TasdeeqUser.fromToken(Token json, Profile profile, {this.roleNames = const []}) {
     accessToken = json.accessToken;
     tokenType = json.tokenType;
     expiresIn = json.expiresIn;
@@ -88,3 +95,4 @@ class TasdeeqUser extends PlexUser {
     concurrencyStamp = profile.concurrencyStamp;
   }
 }
+

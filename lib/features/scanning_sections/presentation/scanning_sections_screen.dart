@@ -3,6 +3,7 @@ import 'package:active_wear_scanning/features/gbs/presentation/gbs_receiving_scr
 import 'package:active_wear_scanning/features/processing/presentation/processing_screen.dart';
 import 'package:active_wear_scanning/features/induction/presentation/induction_store_screen.dart';
 import 'package:active_wear_scanning/features/scanning_sections/presentation/widgets/section_card.dart';
+import 'package:active_wear_scanning/features/scanning_sections/presentation/widgets/section_permission_helper.dart';
 import 'package:active_wear_scanning/features/knitting_production/presentation/knitting_production_screen.dart';
 import 'package:active_wear_scanning/features/wip/presentation/wip_screen.dart';
 import 'package:active_wear_scanning/features/tray_tracking/presentation/tray_tracking_screen.dart';
@@ -11,14 +12,19 @@ import 'package:active_wear_scanning/features/md_receiving/presentation/md_recei
 import 'package:active_wear_scanning/features/stitching_line_schedule/presentation/stitching_line_schedule_screen.dart';
 import 'package:active_wear_scanning/features/processing_waste_receiving/presentation/processing_waste_receiving_screen.dart';
 import 'package:active_wear_scanning/features/unhold_trays/presentation/unhold_trays_screen.dart';
+import 'package:active_wear_scanning/features/user/repo/active_wear_user.dart';
 import 'package:active_wear_scanning/core/widgets/environment_switcher_button.dart';
 import 'package:flutter/material.dart';
+import 'package:plex/plex_package.dart';
 
 class ScanningSectionsScreen extends StatelessWidget {
   const ScanningSectionsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final user = PlexApp.app.getUser() as TasdeeqUser?;
+    final List<String> userRoles = user?.roleNames ?? [];
+
     return Scaffold(
       body: Container(
         color: const Color(0xFFF1F5F9), // Slate Grey to match secondary screens
@@ -71,6 +77,7 @@ class ScanningSectionsScreen extends StatelessWidget {
                             subtitle: 'Verify and trace manufacturing trays',
                             sectionCode: 'TRAY',
                             progressValue: 0.5,
+                            enabled: SectionPermissionHelper.isSectionAllowed('Knitting Production', userRoles),
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const KnittingProductionScreen())),
                           ),
                           SectionCard(
@@ -78,6 +85,7 @@ class ScanningSectionsScreen extends StatelessWidget {
                             subtitle: 'Handle goods-based stock incoming',
                             sectionCode: 'TRAY',
                             progressValue: 0.5,
+                            enabled: SectionPermissionHelper.isSectionAllowed('GBS Receiving', userRoles),
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GBSReceivingScreen())),
                           ),
                         ]),
@@ -90,6 +98,7 @@ class ScanningSectionsScreen extends StatelessWidget {
                             subtitle: 'Initialize new production lots',
                             sectionCode: 'TRAY',
                             progressValue: 0.5,
+                            enabled: SectionPermissionHelper.isSectionAllowed('Lot Making', userRoles),
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LotListScreen())),
                           ),
                           SectionCard(
@@ -97,6 +106,7 @@ class ScanningSectionsScreen extends StatelessWidget {
                             subtitle: 'Main production line tasks',
                             sectionCode: 'PROC',
                             progressValue: 0.5,
+                            enabled: SectionPermissionHelper.isSectionAllowed('Processing', userRoles),
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ProcessingScreen())),
                           ),
                         ]),
@@ -109,6 +119,7 @@ class ScanningSectionsScreen extends StatelessWidget {
                             subtitle: 'Log materials to production store',
                             sectionCode: 'TRAY',
                             progressValue: 0.5,
+                            enabled: SectionPermissionHelper.isSectionAllowed('Induction Store', userRoles),
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const InductionStoreScreen())),
                           ),
                           SectionCard(
@@ -116,6 +127,7 @@ class ScanningSectionsScreen extends StatelessWidget {
                             subtitle: 'Manage stitching line schedule',
                             sectionCode: 'POST',
                             progressValue: 0.5,
+                            enabled: SectionPermissionHelper.isSectionAllowed('Stitching Line Schedule', userRoles),
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const StitchingLineScheduleScreen())),
                           ),
                         ]),
@@ -128,6 +140,7 @@ class ScanningSectionsScreen extends StatelessWidget {
                             subtitle: 'Location history of production trays',
                             sectionCode: 'TRACK',
                             progressValue: 0.5,
+                            enabled: SectionPermissionHelper.isSectionAllowed('Tray Tracking', userRoles),
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const TrayTrackingScreen())),
                           ),
                           SectionCard(
@@ -135,6 +148,7 @@ class ScanningSectionsScreen extends StatelessWidget {
                             subtitle: 'Real-time production flow',
                             sectionCode: 'WIP',
                             progressValue: 0.75,
+                            enabled: SectionPermissionHelper.isSectionAllowed('WIP Monitoring', userRoles),
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const WIPScreen())),
                           ),
                         ]),
@@ -147,6 +161,7 @@ class ScanningSectionsScreen extends StatelessWidget {
                             subtitle: 'Box goods for logistics and delivery',
                             sectionCode: 'CART',
                             progressValue: 0.5,
+                            enabled: SectionPermissionHelper.isSectionAllowed('Carton Packing', userRoles),
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CartonPackingScreen())),
                           ),
                           SectionCard(
@@ -154,6 +169,7 @@ class ScanningSectionsScreen extends StatelessWidget {
                             subtitle: 'Log incoming MD material items',
                             sectionCode: 'MDRC',
                             progressValue: 0.5,
+                            enabled: SectionPermissionHelper.isSectionAllowed('MD Receiving', userRoles),
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const MdReceivingScreen())),
                           ),
                         ]),
@@ -166,6 +182,7 @@ class ScanningSectionsScreen extends StatelessWidget {
                             subtitle: 'Log and receive waste products',
                             sectionCode: 'MDRC',
                             progressValue: 0.5,
+                            enabled: SectionPermissionHelper.isSectionAllowed('Processing Waste Receiving', userRoles),
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ProcessingWasteReceivingScreen())),
                           ),
                           SectionCard(
@@ -173,6 +190,7 @@ class ScanningSectionsScreen extends StatelessWidget {
                             subtitle: 'Release held trays from Knitting/PBS',
                             sectionCode: 'HOLD',
                             progressValue: 0.5,
+                            enabled: SectionPermissionHelper.isSectionAllowed('Unhold Trays', userRoles),
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const UnholdTraysScreen())),
                           ),
                         ]),

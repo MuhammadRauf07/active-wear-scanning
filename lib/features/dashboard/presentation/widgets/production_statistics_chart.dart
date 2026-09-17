@@ -62,7 +62,14 @@ class _ProductionStatisticsChartState extends State<ProductionStatisticsChart> {
     try {
       final locRes = await _wipRepo.fetchLocators();
       if (!locRes.success || locRes.data == null) {
-        if (mounted) setState(() { _error = 'Failed to load locators'; _isLoading = false; });
+        if (mounted) {
+          setState(() {
+            _error = (locRes.code == 403)
+                ? 'Live production analytics view is restricted for current operator role'
+                : 'No active production locators available';
+            _isLoading = false;
+          });
+        }
         return;
       }
 
@@ -316,8 +323,34 @@ class _ProductionStatisticsChartState extends State<ProductionStatisticsChart> {
           child: _isLoading
               ? const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator()))
               : _error != null
-                  ? Center(child: Padding(padding: const EdgeInsets.all(32),
-                      child: Text(_error!, style: const TextStyle(color: Colors.red))))
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFF1F5F9),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.analytics_outlined, color: Color(0xFF64748B), size: 28),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              _error!,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF64748B),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
                   : _stats.isEmpty
                       ? const Center(child: Padding(padding: EdgeInsets.all(32),
                           child: Text('No production data available.')))
