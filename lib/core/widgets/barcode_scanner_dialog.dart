@@ -1,5 +1,3 @@
-import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
-import 'package:active_wear_scanning/core/widgets/custom_outlined_button.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -124,35 +122,129 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
     return Material(
       color: Colors.white,
       child: SafeArea(
+        top: false,
         child: Column(
           children: [
-            CustomInspectionHeader(
-              heading: widget.title,
-              subtitle: 'Scan or enter manually',
-              isShowBackIcon: true,
-              onBackPress: _close,
-              topPadding: 0,
-              horizontalPadding: 12,
+            // ── Seamless Integrated Dialog Header ─────────────────────────
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: const BoxDecoration(
+                color: Color(0xFF0F172A), // Dark Slate Navy
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF3B82F6).withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.qr_code_scanner_rounded,
+                      color: Color(0xFF60A5FA),
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          widget.title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.2,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        const Text(
+                          'Scan barcode or enter manually',
+                          style: TextStyle(
+                            color: Color(0xFF94A3B8),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _close,
+                    icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8), size: 22),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    splashRadius: 20,
+                  ),
+                ],
+              ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(12),
+
+            // ── Compact Manual Input Bar ─────────────────────────────────
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: const BoxDecoration(
+                color: Color(0xFFF8FAFC),
+                border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+              ),
               child: Row(
                 children: [
                   Expanded(
-                    child: TextField(
-                      controller: _manualController,
-                      decoration: InputDecoration(
-                        hintText: 'Enter code manually',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(6),
-                          borderSide: BorderSide(color: Colors.grey.shade300),
+                    child: SizedBox(
+                      height: 38,
+                      child: TextField(
+                        controller: _manualController,
+                        onSubmitted: (_) => _submitManual(),
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                        decoration: InputDecoration(
+                          hintText: 'Enter code manually...',
+                          hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8), fontWeight: FontWeight.normal),
+                          prefixIcon: const Icon(Icons.keyboard_alt_outlined, size: 18, color: Color(0xFF64748B)),
+                          prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                          filled: true,
+                          fillColor: Colors.white,
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(color: Color(0xFF0284C7), width: 1.5),
+                          ),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  if (_showSubmit) CustomOutlinedButton(label: 'Submit', borderColor: Colors.blue, fillColor: Colors.blue, textColor: Colors.white, onPressed: _submitManual),
+                  if (_showSubmit) ...[
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      height: 38,
+                      child: ElevatedButton(
+                        onPressed: _submitManual,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0D47A1),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: const Text('SUBMIT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

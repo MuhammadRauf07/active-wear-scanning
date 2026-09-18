@@ -43,11 +43,20 @@ class LotRepo {
 
     if (result.success && result.data != null) {
       final List data = result.data is Map ? (result.data['items'] ?? []) : result.data;
-      if (data.isNotEmpty) {
-        return PlexApiResult(true, 200, "Success", data.first);
-      } else {
-        return PlexApiResult(false, 404, "Tray not found", null);
+      final cleanQuery = trayCode.trim().toLowerCase();
+      for (final elem in data) {
+        final map = Map<String, dynamic>.from(elem as Map);
+        final itemTray = map.containsKey('trayDetail')
+            ? map['trayDetail']
+            : (map.containsKey('trayDetails')
+                ? map['trayDetails']
+                : (map.containsKey('primaryTrayModel') ? map['primaryTrayModel'] : map));
+        final code = (itemTray?['trayCode'] ?? map['trayCode'])?.toString().trim().toLowerCase();
+        if (code == cleanQuery) {
+          return PlexApiResult(true, 200, "Success", map);
+        }
       }
+      return PlexApiResult(false, 404, "Tray not found", null);
     }
     return result;
   }

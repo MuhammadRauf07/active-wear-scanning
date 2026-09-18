@@ -145,15 +145,25 @@ class ProcessingWasteController extends ChangeNotifier {
     }
 
     final List rawList = progressResult.data is Map ? (progressResult.data['items'] ?? []) : progressResult.data;
-    if (rawList.isEmpty) {
+    final cleanCode = code.toLowerCase();
+    final matchingItem = rawList.firstWhere(
+      (elem) {
+        if (elem is! Map) return false;
+        final map = Map<String, dynamic>.from(elem);
+        final itemTray = map.containsKey('primaryTrayModel')
+            ? map['primaryTrayModel']
+            : (map.containsKey('trayDetails') ? map['trayDetails'] : (map.containsKey('trayDetail') ? map['trayDetail'] : map));
+        final tCode = (itemTray?['trayCode'] ?? map['trayCode'])?.toString().trim().toLowerCase();
+        return tCode == cleanCode;
+      },
+      orElse: () => null,
+    );
+
+    if (matchingItem == null) {
       return 'This tray does not have any processing waste logged!';
     }
 
-    final firstItem = rawList.first;
-    if (firstItem is! Map) {
-      return 'Invalid progress data returned from backend';
-    }
-
+    final firstItem = matchingItem as Map;
     final model = ProductionProgressResponseModel.fromJson(
       Map<String, dynamic>.from(firstItem),
     );

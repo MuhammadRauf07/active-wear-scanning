@@ -218,10 +218,7 @@ class GbsController extends ChangeNotifier {
     final holdMatch = _state.availableTrayForGbs.where((t) {
       final String tCode = (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase();
       final String pCode = (t.productionProgress.progressCode ?? '').trim().toLowerCase();
-      if (tCode == code || pCode == code) return true;
-      String cleanTCode = tCode.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').replaceAll(RegExp(r'^0+'), '');
-      String cleanScanned = code.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').replaceAll(RegExp(r'^0+'), '');
-      return (cleanTCode.isNotEmpty && cleanTCode == cleanScanned) || (tCode.endsWith(code) && code.length > 3);
+      return tCode == code || pCode == code;
     }).firstOrNull;
 
     if (holdMatch != null && holdMatch.productionProgress.holdFlag == true) {
@@ -231,17 +228,7 @@ class GbsController extends ChangeNotifier {
     final match = getFilteredTrays().where((t) {
       final String tCode = (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase();
       final String pCode = (t.productionProgress.progressCode ?? '').trim().toLowerCase();
-
-      if (tCode == code || pCode == code) return true;
-
-      String cleanTCode = tCode.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').replaceAll(RegExp(r'^0+'), '');
-      String cleanScanned = code.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').replaceAll(RegExp(r'^0+'), '');
-
-      if (cleanTCode.isNotEmpty && cleanTCode == cleanScanned) return true;
-
-      if (tCode.endsWith(code) && code.length > 3) return true;
-
-      return false;
+      return tCode == code || pCode == code;
     }).firstOrNull;
 
     if (match == null) {
@@ -280,7 +267,7 @@ class GbsController extends ChangeNotifier {
       primaryQuantity: match.productionProgress.primaryQuantity?.toStringAsFixed(0) ?? '0',
       pieceWeight: match.item.pieceWeight ?? 0.0,
       perGarmentTube: perGarmentTube,
-      trayCode: scannedCode.trim(),
+      trayCode: match.primaryTrayModel.trayCode ?? scannedCode.trim(),
       trayUpdateId: match.primaryTrayModel.id,
       trayConcurrencyStamp: match.primaryTrayModel.concurrencyStamp,
     );

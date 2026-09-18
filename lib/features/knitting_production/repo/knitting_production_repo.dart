@@ -130,12 +130,16 @@ class KnittingProductionRepo {
     if (!result.success || result.data == null) return result;
     try {
       final List data = result.data is Map ? (result.data['items'] ?? []) : result.data;
-      if (data.isNotEmpty) {
-        final item = Map<String, dynamic>.from(data.first as Map);
-        return PlexApiResult(true, 200, "Success", TrayDetailsModel.fromJson(item));
-      } else {
-        return PlexApiResult(false, 404, "Tray not found", null);
+      final cleanQuery = trayCode.trim().toLowerCase();
+      for (final elem in data) {
+        final item = Map<String, dynamic>.from(elem as Map);
+        final parsed = TrayDetailsModel.fromJson(item);
+        final codeFromModel = (parsed.trayDetails?.trayCode ?? '').trim().toLowerCase();
+        if (codeFromModel == cleanQuery) {
+          return PlexApiResult(true, 200, "Success", parsed);
+        }
       }
+      return PlexApiResult(false, 404, "Tray not found", null);
     } catch (e) {
       return PlexApiResult(false, 500, e.toString(), null);
     }

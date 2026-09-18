@@ -602,6 +602,7 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
     return PopScope(
       canPop: !AppLoader.isVisible && !isInitialLoading,
       child: Scaffold(
+        resizeToAvoidBottomInset: false,
         backgroundColor: const Color(0xFFF1F5F9),
         body: isInitialLoading
             ? Container(
@@ -620,31 +621,24 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
                     children: [
                       _buildPremiumHeader(controller, state),
                       Expanded(
-                        child: Padding(
+                        child: SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
                           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                          child: CustomScrollView(
-                            physics: const BouncingScrollPhysics(),
-                            slivers: [
-                              SliverToBoxAdapter(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: [
-                                    _buildConfigurationPanel(controller, state),
-                                    if (state.selectedColor != null) ...[
-                                      const SizedBox(height: 10),
-                                      _buildLiveDashboard(controller, state),
-                                      const SizedBox(height: 10),
-                                      _buildWOSummary(controller, state),
-                                      const SizedBox(height: 10),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                              if (state.selectedColor != null)
-                                SliverFillRemaining(
-                                  hasScrollBody: true,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _buildConfigurationPanel(controller, state),
+                              if (state.selectedColor != null) ...[
+                                const SizedBox(height: 10),
+                                _buildLiveDashboard(controller, state),
+                                const SizedBox(height: 10),
+                                _buildWOSummary(controller, state),
+                                const SizedBox(height: 10),
+                                SizedBox(
+                                  height: 480,
                                   child: _buildScannedSection(controller, state),
                                 ),
+                              ],
                             ],
                           ),
                         ),

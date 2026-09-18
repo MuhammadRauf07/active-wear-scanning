@@ -1,7 +1,7 @@
 import 'package:active_wear_scanning/core/config/app_config.dart';
 import 'package:active_wear_scanning/features/carton_packing/presentation/carton_packing_screen.dart';
 import 'package:active_wear_scanning/features/carton_packing/repo/carton_packing_repo.dart';
-import 'package:active_wear_scanning/features/dashboard/presentation/dashboard_screen.dart';
+import 'package:active_wear_scanning/features/home/presentation/home_screen.dart';
 import 'package:active_wear_scanning/features/gbs/presentation/gbs_receiving_screen.dart';
 import 'package:active_wear_scanning/features/gbs/repo/gbs_receiving_repo.dart';
 import 'package:active_wear_scanning/features/induction/presentation/induction_store_screen.dart';
@@ -65,18 +65,17 @@ void runActiveWearApp({
         final user = PlexApp.app.getUser() as TasdeeqUser?;
         final List<String> userRoles = user?.roleNames ?? [];
 
-        // Dashboard is always visible to everyone
-        if (route.route == '/dashboard' || route.title == 'Dashboard') {
+        // Home is always visible to everyone
+        if (route.route == '/home' || route.title == 'Home' || route.route == '/dashboard' || route.title == 'Dashboard') {
           return NavigationDrawerDestination(
-            icon: route.logo ?? const Icon(Icons.dashboard_outlined),
-            selectedIcon: route.selectedLogo ?? route.logo ?? const Icon(Icons.dashboard),
-            label: const Text('Dashboard'),
+            icon: route.logo ?? const Icon(Icons.home_outlined),
+            selectedIcon: route.selectedLogo ?? route.logo ?? const Icon(Icons.home_rounded),
+            label: const Text('Home'),
           );
         }
 
         // For Operations Overview (all sections grid)
         if (route.route == '/scanning' || route.title == 'Operations Overview') {
-          // If admin, show Operations Overview in drawer; otherwise hide
           final isAdmin = userRoles.any((r) {
             final n = r.toLowerCase().replaceAll(RegExp(r'[\s_\-\/\\]'), '');
             return n.contains('admin') || n.contains('superadmin') || n == 'root';
@@ -84,11 +83,7 @@ void runActiveWearApp({
           if (!isAdmin) {
             return const SizedBox.shrink();
           }
-          return NavigationDrawerDestination(
-            icon: route.logo ?? const Icon(Icons.apps_outlined),
-            selectedIcon: route.selectedLogo ?? route.logo ?? const Icon(Icons.apps),
-            label: const Text('Operations Overview'),
-          );
+          return _DrawerModuleTile(route: route);
         }
 
         // For specific scanning sections, check permission against user roles
@@ -96,11 +91,7 @@ void runActiveWearApp({
           return const SizedBox.shrink();
         }
 
-        return NavigationDrawerDestination(
-          icon: route.logo ?? const Icon(Icons.circle_outlined),
-          selectedIcon: route.selectedLogo ?? route.logo ?? const Icon(Icons.circle),
-          label: Text(route.title),
-        );
+        return _DrawerModuleTile(route: route);
       },
       appInfo: PlexAppInfo(
         title: appTitle,
@@ -109,7 +100,7 @@ void runActiveWearApp({
           height: 48,
           fit: BoxFit.contain,
         ),
-        initialRoute: '/dashboard',
+        initialRoute: '/home',
       ),
       onInitializationComplete: () {
         PlexNetworking.instance.allowBadCertificateForHTTPS();
@@ -140,6 +131,7 @@ void runActiveWearApp({
             return null;
           }
 
+
           var profile = resultProfile.data as Profile;
 
           List<String> roleNames = [];
@@ -166,11 +158,11 @@ void runActiveWearApp({
         disableBottomNavigation: true,
         dashboardScreens: [
           PlexRoute(
-            route: '/dashboard',
-            title: 'Dashboard',
-            logo: const Icon(Icons.dashboard_outlined),
-            selectedLogo: const Icon(Icons.dashboard),
-            screen: (context, {data}) => const DashboardScreen(),
+            route: '/home',
+            title: 'Home',
+            logo: const Icon(Icons.home_outlined),
+            selectedLogo: const Icon(Icons.home_rounded),
+            screen: (context, {data}) => const HomeScreen(),
           ),
           PlexRoute(
             route: '/knitting_production',
@@ -267,9 +259,9 @@ void runActiveWearApp({
       ),
       pages: [
         PlexRoute(
-          route: '/dashboard',
-          title: 'Dashboard',
-          screen: (context, {data}) => const DashboardScreen(),
+          route: '/home',
+          title: 'Home',
+          screen: (context, {data}) => const HomeScreen(),
         ),
         PlexRoute(
           route: '/knitting_production',
@@ -340,3 +332,56 @@ void runActiveWearApp({
     ),
   );
 }
+
+class _DrawerModuleTile extends StatelessWidget {
+  final PlexRoute route;
+
+  const _DrawerModuleTile({required this.route});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(28),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(28),
+          onTap: () {
+            // Close the navigation drawer
+            Navigator.of(context).pop();
+            // Open full screen route without Plex AppBar
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (c) => route.screen(c),
+              ),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                IconTheme(
+                  data: const IconThemeData(color: Color(0xFF475569), size: 22),
+                  child: route.logo ?? const Icon(Icons.circle_outlined),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    route.title,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+

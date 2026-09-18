@@ -1207,22 +1207,57 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
                                     ),
                                   );
                                 }
-                                final code = availableTrays[idx].trayDetails?.trayCode ?? '';
-                                return ListTile(
-                                  leading: const Icon(Icons.layers_outlined, color: Color(0xFFE67E22)),
-                                  title: Text(
-                                    code,
-                                    style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF1E293B)),
+                                final code = (availableTrays[idx].trayDetails?.trayCode ?? '').trim().toUpperCase();
+                                final isAlreadyScanned = controller.state.scannedTrays.any(
+                                  (st) => st.trayCode.trim().toUpperCase() == code,
+                                );
+
+                                return Container(
+                                  color: isAlreadyScanned ? const Color(0xFFF1F5F9) : Colors.transparent,
+                                  child: ListTile(
+                                    enabled: !isAlreadyScanned,
+                                    leading: Icon(
+                                      Icons.layers_outlined,
+                                      color: isAlreadyScanned ? const Color(0xFF94A3B8) : const Color(0xFFE67E22),
+                                    ),
+                                    title: Text(
+                                      code,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        color: isAlreadyScanned ? const Color(0xFF94A3B8) : const Color(0xFF1E293B),
+                                        decoration: isAlreadyScanned ? TextDecoration.lineThrough : null,
+                                      ),
+                                    ),
+                                    trailing: isAlreadyScanned
+                                        ? Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFE2E8F0),
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: const Text(
+                                              'SCANNED',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w800,
+                                                color: Color(0xFF64748B),
+                                                letterSpacing: 0.5,
+                                              ),
+                                            ),
+                                          )
+                                        : const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF94A3B8)),
+                                    onTap: isAlreadyScanned
+                                        ? null
+                                        : () async {
+                                            Navigator.pop(context);
+                                            final err = await controller.validateAndAddTray(code, _overrideQuantityController.text);
+                                            if (err != null && mounted) {
+                                              _showError(err);
+                                            } else {
+                                              HapticFeedbackHelper.scanSuccess();
+                                            }
+                                          },
                                   ),
-                                  onTap: () async {
-                                    Navigator.pop(context);
-                                    final err = await controller.validateAndAddTray(code, _overrideQuantityController.text);
-                                    if (err != null && mounted) {
-                                      _showError(err);
-                                    } else {
-                                      HapticFeedbackHelper.scanSuccess();
-                                    }
-                                  },
                                 );
                               },
                             ),
@@ -1461,34 +1496,96 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
       builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Container(
-          width: MediaQuery.of(context).size.width * 0.85,
-          height: MediaQuery.of(context).size.height * 0.7,
-          padding: const EdgeInsets.all(16),
+          width: MediaQuery.of(ctx).size.width * 0.85,
+          height: MediaQuery.of(ctx).size.height * 0.75,
+          padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('HELD TRAYS (KNITTING)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFFC62828))),
-                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEE2E2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.front_hand_rounded, color: Color(0xFFDC2626), size: 20),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        'HELD TRAYS (${heldTrays.length})',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFFC62828)),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
                 ],
               ),
-              const Divider(),
+              const SizedBox(height: 12),
+              const TrayTableHeader(actionColumnWidth: 0, showItemDescriptionColumn: true, fontSize: 9.0),
               Expanded(
                 child: heldTrays.isEmpty
-                    ? const Center(child: Text('No held trays found in Knitting Production.'))
-                    : ListView.separated(
+                    ? const Center(
+                        child: Text(
+                          'No held trays found in Knitting Production.',
+                          style: TextStyle(color: Colors.grey, fontSize: 13, fontStyle: FontStyle.italic),
+                        ),
+                      )
+                    : ListView.builder(
                         itemCount: heldTrays.length,
-                        separatorBuilder: (c, i) => const Divider(height: 1),
-                        itemBuilder: (c, idx) {
-                          final item = heldTrays[idx];
-                          return ListTile(
-                            dense: true,
-                            leading: const Icon(Icons.front_hand_outlined, color: Colors.red),
-                            title: Text(item.primaryTrayModel.trayCode ?? '-', style: const TextStyle(fontWeight: FontWeight.w800)),
-                            subtitle: Text('${item.item.description} | WO: ${item.workOrderHeader.workOrderCode}'),
-                            trailing: Text('${item.productionProgress.primaryQuantity?.toStringAsFixed(0) ?? "0"} tubes', style: const TextStyle(fontWeight: FontWeight.w700)),
+                        itemBuilder: (c, index) {
+                          final item = heldTrays[index];
+                          final qty = item.productionProgress.primaryQuantity ?? 0.0;
+                          final weight = qty * (item.item.pieceWeight ?? 0);
+
+                          const cellStyle = TextStyle(fontSize: 9.0, fontWeight: FontWeight.w600, color: Color(0xFF263238));
+                          const blueCellStyle = TextStyle(fontSize: 9.0, fontWeight: FontWeight.w700, color: Color(0xFF1B64A3));
+
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: index.isEven ? Colors.white : const Color(0xFFF8FAFC),
+                              border: Border(bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.1), width: 1)),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  flex: 5,
+                                  child: Text(item.primaryTrayModel.trayCode ?? 'N/A', textAlign: TextAlign.center, style: blueCellStyle),
+                                ),
+                                Expanded(
+                                  flex: 16,
+                                  child: Text(
+                                    item.item.description.isNotEmpty
+                                        ? item.item.description
+                                        : (item.workOrderHeader.workOrderCode ?? 'N/A'),
+                                    maxLines: 1,
+                                    textAlign: TextAlign.center,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: cellStyle,
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 3,
+                                  child: Text(item.item.sizeDescription ?? 'N/A', textAlign: TextAlign.center, style: cellStyle),
+                                ),
+                                Expanded(
+                                  flex: 4,
+                                  child: Text(qty.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle),
+                                ),
+                                Expanded(
+                                  flex: 4,
+                                  child: Text('${weight.toStringAsFixed(0)}g', textAlign: TextAlign.center, style: cellStyle),
+                                ),
+                              ],
+                            ),
                           );
                         },
                       ),
