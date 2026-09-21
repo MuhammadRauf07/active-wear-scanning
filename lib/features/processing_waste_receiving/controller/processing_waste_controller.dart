@@ -1,14 +1,12 @@
-import 'package:active_wear_scanning/features/common-models/common_models.dart';
-import 'package:active_wear_scanning/features/processing/repo/processing_repo.dart';
 import 'package:flutter/foundation.dart';
 import 'package:plex/plex_di/plex_dependency_injection.dart';
+import 'package:active_wear_scanning/features/common-models/common_models.dart';
+import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:active_wear_scanning/features/processing_waste_receiving/model/processing_waste_state.dart';
 import 'package:active_wear_scanning/features/processing_waste_receiving/repo/processing_waste_repo.dart';
-import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 
 class ProcessingWasteController extends ChangeNotifier {
   final _repo = fromPlex<ProcessingWasteRepo>();
-  final _processingRepo = ProcessingRepo();
 
   ProcessingWasteState _state = const ProcessingWasteState();
   ProcessingWasteState get state => _state;
@@ -21,85 +19,213 @@ class ProcessingWasteController extends ChangeNotifier {
     _state = _state.copyWith(isLoading: true, clearError: true);
     notifyListeners();
 
-    await fetchOperations();
-    await fetchAvailableWasteTrays();
-  }
-
-  Future<void> fetchOperations() async {
-    final opsRes = await _processingRepo.fetchProcessingOperations();
-    if (opsRes.success && opsRes.data != null) {
-      final List<Operation> ops = List<Operation>.from(opsRes.data);
-      _state = _state.copyWith(operations: ops);
-      notifyListeners();
-    }
-  }
-
-  void setSelectedOperation(int? opId) {
-    if (_state.selectedOperationId != opId) {
-      if (opId == null) {
-        _state = _state.copyWith(clearSelectedOperation: true);
-      } else {
-        _state = _state.copyWith(selectedOperationId: opId);
-      }
-      notifyListeners();
-    }
-  }
-
-  Future<void> fetchAvailableWasteTrays() async {
-    _state = _state.copyWith(isLoading: true, clearError: true);
-    notifyListeners();
-
     try {
-      final res = await _repo.fetchProductionProgress({
-        'LocatorId': '18',
+      // 1. Fetch Operations (only processNature == 1)
+      List<Operation> operations = [];
+      final opsRes = await _repo.fetchOperations();
+      if (opsRes.success && opsRes.data != null) {
+        final List<Operation> allOps = List<Operation>.from(opsRes.data);
+        operations = allOps.where((op) => op.processNature == 1).toList()
+          ..sort((a, b) {
+            if (a.seqNo != null && b.seqNo != null) return a.seqNo!.compareTo(b.seqNo!);
+            final aNum = int.tryParse(a.code);
+            final bNum = int.tryParse(b.code);
+            if (aNum != null && bNum != null) return aNum.compareTo(bNum);
+            return a.name.compareTo(b.name);
+          });
+      }
+
+      // 2. Fetch Waste Production Progresses
+      final progressRes = await _repo.fetchProductionProgress({
         'MaxResultCount': '1000',
       });
 
-      if (res.success && res.data != null) {
-        final List rawList = res.data is Map ? (res.data['items'] ?? []) : (res.data is List ? res.data : []);
-        final List<ProductionProgressResponseModel> available = [];
+      final List<BatchWasteGroupItem> batchGroups = [];
+      final Map<String, _BatchGroupAccumulator> accumulatorMap = {};
 
-        final allOps = _state.operations;
+      if (progressRes.success && progressRes.data != null) {
+        final List rawList = progressRes.data is Map
+            ? (progressRes.data['items'] ?? [])
+            : (progressRes.data is List ? progressRes.data : []);
 
         for (final item in rawList) {
-          if (item is Map) {
-            try {
-              final rawProgress = item.containsKey('productionProgress')
-                  ? Map<String, dynamic>.from(item['productionProgress'] as Map)
-                  : Map<String, dynamic>.from(item);
+          if (item is! Map) continue;
+          try {
+            final rawProgress = item.containsKey('productionProgress') && item['productionProgress'] is Map
+                ? Map<String, dynamic>.from(item['productionProgress'] as Map)
+                : Map<String, dynamic>.from(item);
 
-              final toLocId = rawProgress['toLocatorId'] as int? ?? rawProgress['toLocator']?['id'] as int?;
-              final locId = rawProgress['locatorId'] as int? ?? rawProgress['locator']?['id'] as int?;
-              if (toLocId == 19 || locId == 19) continue; // Already received in waste store
+            final model = ProductionProgressResponseModel.fromJson(Map<String, dynamic>.from(item));
+            final pp = model.productionProgress;
 
-              final model = ProductionProgressResponseModel.fromJson(Map<String, dynamic>.from(item));
-              
-              // Enrich operation name if omitted
-              if (model.operation.name.isEmpty || model.operation.name == 'N/A') {
-                final opId = model.productionProgress.operationId;
-                if (opId != null && allOps.isNotEmpty) {
-                  final match = allOps.where((o) => o.id == opId).firstOrNull;
-                  if (match != null) {
-                    final enrichedModel = model.copyWith(operation: match);
-                    available.add(enrichedModel);
-                    continue;
-                  }
-                }
-              }
-              available.add(model);
-            } catch (e) {
-              debugPrint("⚠️ Skipping unparseable waste item: $e");
+            // Check if this record is waste
+            final double wasteVal = (pp.waste ?? 0.0) > 0
+                ? pp.waste!.toDouble()
+                : ((pp.subOperation ?? '').toLowerCase() == 'waste' || pp.productGrade == 2 || pp.productGrade == 1
+                    ? (pp.secondaryQuantity ?? pp.primaryQuantity ?? 0.0).toDouble()
+                    : 0.0);
+
+            if (wasteVal <= 0 && (pp.subOperation ?? '').toLowerCase() != 'waste') {
+              continue; // Not a waste item
             }
+
+            // Exclude already received items
+            final toLocId = pp.locatorId ?? (rawProgress['toLocatorId'] as int?);
+            final locId = pp.locatorId ?? (rawProgress['locatorId'] as int?);
+            final wipStatus = pp.wipStatus ?? (rawProgress['wipStatus'] as int?);
+            if (locId == 18 && toLocId == 18 && wipStatus == 1) {
+              continue; // Fully received
+            }
+
+            // Find matching operation (must have processNature == 1)
+            Operation? opMatch;
+            final targetOpId = pp.operationId ?? (model.operation.id > 0 ? model.operation.id : null);
+            if (targetOpId != null && operations.isNotEmpty) {
+              opMatch = operations.where((o) => o.id == targetOpId).firstOrNull;
+            }
+
+            // Only process waste for operations whose processing nature is 1
+            if (opMatch == null) {
+              continue;
+            }
+
+            final opName = opMatch.name.isNotEmpty
+                ? opMatch.name
+                : (model.operation.name.isNotEmpty ? model.operation.name : 'Operation #${pp.operationId ?? "N/A"}');
+
+            // Categorize into stage
+            String stageName;
+            String stageKey;
+            if (opName.toLowerCase().contains('lapping')) {
+              final subOp = (pp.subOperation ?? '').toLowerCase();
+              final remarks = (pp.remarks ?? '').toLowerCase();
+              if (subOp.contains('adjust') || remarks.contains('adjust')) {
+                stageName = 'Lapping (Adjustments)';
+                stageKey = 'lapping_adjustments';
+              } else {
+                stageName = 'Lapping (Batch)';
+                stageKey = 'lapping_batch';
+              }
+            } else {
+              stageName = opName;
+              stageKey = 'op_${pp.operationId ?? 0}';
+            }
+
+            // Group by batch / work order / stage
+            final batchId = pp.batchHeaderId ?? model.batchHeader?.id;
+            final woId = pp.workOrderHeaderId ?? (model.workOrderHeader.id > 0 ? model.workOrderHeader.id : null);
+            final groupKey = '${stageKey}_b_${batchId ?? "none"}_w_${woId ?? "none"}';
+
+            final batchCode = model.batchHeader?.batchHeaderCode ??
+                (batchId != null ? 'Batch #$batchId' : (rawProgress['batchCode']?.toString() ?? 'N/A'));
+            final woCode = model.workOrderHeader.workOrderCode.isNotEmpty
+                ? model.workOrderHeader.workOrderCode
+                : (rawProgress['workOrderCode']?.toString() ?? (woId != null ? 'WO #$woId' : 'N/A'));
+            final itemDesc = model.item.description.isNotEmpty
+                ? model.item.description
+                : ((model.processedItem != null && model.processedItem!.description.isNotEmpty)
+                    ? model.processedItem!.description
+                    : (rawProgress['itemDescription']?.toString() ?? 'N/A'));
+            final sizeDesc = model.item.sizeDescription ?? (rawProgress['sizeDescription']?.toString() ?? 'N/A');
+            final colorDesc = model.item.colorDescription ?? (rawProgress['colorDescription']?.toString() ?? 'N/A');
+            final gradeStr = pp.productGrade == 2 ? 'Grade C' : (pp.productGrade == 1 ? 'Grade B' : 'Grade A');
+
+            if (!accumulatorMap.containsKey(groupKey)) {
+              accumulatorMap[groupKey] = _BatchGroupAccumulator(
+                id: groupKey,
+                batchHeaderId: batchId,
+                batchCode: batchCode,
+                workOrderHeaderId: woId,
+                workOrderCode: woCode,
+                workOrderLineId: pp.workOrderLineId ?? model.workOrderLine.id,
+                operationId: pp.operationId ?? opMatch.id,
+                operationName: opName,
+                stageName: stageName,
+                stageKey: stageKey,
+                itemDescription: itemDesc,
+                sizeDescription: sizeDesc,
+                colorDescription: colorDesc,
+                sourceLocatorId: locId,
+                productGrade: gradeStr,
+              );
+            }
+
+            final acc = accumulatorMap[groupKey]!;
+            acc.totalTubes += wasteVal.round();
+            acc.totalPrimaryQty += (pp.primaryQuantity ?? wasteVal).toDouble();
+            acc.progressItems.add(model);
+            acc.rawProgressMaps.add(rawProgress);
+          } catch (e) {
+            debugPrint("⚠️ Skipping invalid waste progress entry: $e");
           }
         }
-
-        _state = _state.copyWith(
-          availableWasteTrays: available,
-          isLoading: false,
-        );
-      } else {
-        _state = _state.copyWith(isLoading: false, errorMessage: res.message);
       }
+
+      for (final acc in accumulatorMap.values) {
+        batchGroups.add(acc.toBatchWasteGroupItem());
+      }
+
+      // Sort batches by batchCode and stageName
+      batchGroups.sort((a, b) => a.batchCode.compareTo(b.batchCode));
+
+      // 3. Build Operation Dropdown Options with live counts
+      final List<WasteOperationOption> operationOptions = [];
+
+      // Total count & tubes across all operations
+      final int totalAllTubes = batchGroups.fold(0, (sum, b) => sum + b.totalTubes);
+      operationOptions.add(WasteOperationOption(
+        key: 'all',
+        label: 'All Operations',
+        count: batchGroups.length,
+        totalTubes: totalAllTubes,
+      ));
+
+      // Lapping stages
+      final lappingBatchList = batchGroups.where((b) => b.stageKey == 'lapping_batch').toList();
+      final lappingAdjList = batchGroups.where((b) => b.stageKey == 'lapping_adjustments').toList();
+
+      operationOptions.add(WasteOperationOption(
+        key: 'lapping_batch',
+        label: 'Lapping (Batch)',
+        stageType: 'batch',
+        count: lappingBatchList.length,
+        totalTubes: lappingBatchList.fold(0, (sum, b) => sum + b.totalTubes),
+      ));
+
+      operationOptions.add(WasteOperationOption(
+        key: 'lapping_adjustments',
+        label: 'Lapping (Adjustments)',
+        stageType: 'adjustments',
+        count: lappingAdjList.length,
+        totalTubes: lappingAdjList.fold(0, (sum, b) => sum + b.totalTubes),
+      ));
+
+      // Other operations
+      for (final op in operations) {
+        if (op.name.toLowerCase().contains('lapping')) continue;
+        final opKey = 'op_${op.id}';
+        final opBatches = batchGroups.where((b) => b.operationId == op.id || b.stageKey == opKey).toList();
+        operationOptions.add(WasteOperationOption(
+          key: opKey,
+          label: op.name,
+          operationId: op.id,
+          count: opBatches.length,
+          totalTubes: opBatches.fold(0, (sum, b) => sum + b.totalTubes),
+        ));
+      }
+
+      // Preserve or reset selection
+      final currentSelectedKey = _state.selectedOperationKey;
+      final validKey = operationOptions.any((o) => o.key == currentSelectedKey) ? currentSelectedKey : 'all';
+
+      _state = _state.copyWith(
+        isLoading: false,
+        operations: operations,
+        operationOptions: operationOptions,
+        selectedOperationKey: validKey,
+        allBatchGroups: batchGroups,
+        selectedBatchGroupIds: {},
+      );
     } catch (e) {
       _state = _state.copyWith(isLoading: false, errorMessage: e.toString());
     } finally {
@@ -107,201 +233,217 @@ class ProcessingWasteController extends ChangeNotifier {
     }
   }
 
-  void removeScannedTray(int index) {
-    if (index >= 0 && index < _state.scannedTrays.length) {
-      final model = _state.scannedTrays[index];
-      final progressId = model.productionProgress.id;
-
-      final updatedScanned = List<ProductionProgressResponseModel>.from(_state.scannedTrays)..removeAt(index);
-      final updatedMap = Map<int, Map<String, dynamic>>.from(_state.productionProgressMap)..remove(progressId);
-
+  void selectOperationFilter(String key) {
+    if (_state.selectedOperationKey != key) {
       _state = _state.copyWith(
-        scannedTrays: updatedScanned,
-        productionProgressMap: updatedMap,
+        selectedOperationKey: key,
+        selectedBatchGroupIds: {}, // Clear selection on filter change
       );
       notifyListeners();
     }
   }
 
-  Future<String?> validateScanCode(String scannedCode) async {
-    final code = scannedCode.trim();
-    if (code.isEmpty) return 'Invalid scanned code';
-
-    final isAlreadyScanned = _state.scannedTrays.any(
-      (item) => item.primaryTrayModel.trayCode?.trim().toLowerCase() == code.toLowerCase(),
-    );
-    if (isAlreadyScanned) return 'Tray already scanned in current session';
-
-    // Fetch waste production progress for this tray from locator 18
-    final progressResult = await _repo.fetchProductionProgress({
-      'TrayCode': code,
-      'LocatorId': '18',
-      'MaxResultCount': '10',
-      'SkipCount': '0',
-    });
-
-    if (!progressResult.success || progressResult.data == null) {
-      return 'Verification Error: ${progressResult.message}';
-    }
-
-    final List rawList = progressResult.data is Map ? (progressResult.data['items'] ?? []) : progressResult.data;
-    final cleanCode = code.toLowerCase();
-    final matchingItem = rawList.firstWhere(
-      (elem) {
-        if (elem is! Map) return false;
-        final map = Map<String, dynamic>.from(elem);
-        final itemTray = map.containsKey('primaryTrayModel')
-            ? map['primaryTrayModel']
-            : (map.containsKey('trayDetails') ? map['trayDetails'] : (map.containsKey('trayDetail') ? map['trayDetail'] : map));
-        final tCode = (itemTray?['trayCode'] ?? map['trayCode'])?.toString().trim().toLowerCase();
-        return tCode == cleanCode;
-      },
-      orElse: () => null,
-    );
-
-    if (matchingItem == null) {
-      return 'This tray does not have any processing waste logged!';
-    }
-
-    final firstItem = matchingItem as Map;
-    final model = ProductionProgressResponseModel.fromJson(
-      Map<String, dynamic>.from(firstItem),
-    );
-
-    final rawProgress = firstItem.containsKey('productionProgress')
-        ? Map<String, dynamic>.from(firstItem['productionProgress'] as Map)
-        : Map<String, dynamic>.from(firstItem);
-
-    // Verify if it has already been received (toLocatorId == 19 or locatorId == 19)
-    final toLocId = rawProgress['toLocatorId'] as int? ?? rawProgress['toLocator']?['id'] as int?;
-    final locId = rawProgress['locatorId'] as int? ?? rawProgress['locator']?['id'] as int?;
-    if (toLocId == 19 || locId == 19) {
-      return 'Waste has already been received for this tray!';
-    }
-
-    // Check operation filter if selected
-    if (_state.selectedOperationId != null) {
-      final opId = model.productionProgress.operationId;
-      if (opId != _state.selectedOperationId) {
-        final selectedOpName = _state.operations.where((o) => o.id == _state.selectedOperationId).firstOrNull?.name ?? '#${_state.selectedOperationId}';
-        final trayOpName = model.operation.name.isNotEmpty ? model.operation.name : 'Operation #${model.productionProgress.operationId}';
-        return 'Tray belongs to $trayOpName (Filtered for $selectedOpName)';
-      }
-    }
-
-    final progressId = model.productionProgress.id ?? 0;
-    if (progressId == 0) return 'Invalid production progress ID';
-
-    // Enrich operation name if needed
-    ProductionProgressResponseModel modelToUse = model;
-    if (modelToUse.operation.name.isEmpty || modelToUse.operation.name == 'N/A') {
-      final opId = modelToUse.productionProgress.operationId;
-      if (opId != null && _state.operations.isNotEmpty) {
-        final match = _state.operations.where((o) => o.id == opId).firstOrNull;
-        if (match != null) {
-          modelToUse = modelToUse.copyWith(operation: match);
-        }
-      }
-    }
-
-    final updatedScanned = List<ProductionProgressResponseModel>.from(_state.scannedTrays)..add(modelToUse);
-    final updatedMap = Map<int, Map<String, dynamic>>.from(_state.productionProgressMap)..[progressId] = rawProgress;
-
-    _state = _state.copyWith(
-      scannedTrays: updatedScanned,
-      productionProgressMap: updatedMap,
-    );
+  void setSearchQuery(String query) {
+    _state = _state.copyWith(searchQuery: query);
     notifyListeners();
-    return null;
   }
 
-  Future<void> saveWasteReceivingData() async {
-    if (_state.scannedTrays.isEmpty) return;
+  void toggleBatchSelection(String batchGroupId) {
+    final updated = Set<String>.from(_state.selectedBatchGroupIds);
+    if (updated.contains(batchGroupId)) {
+      updated.remove(batchGroupId);
+    } else {
+      updated.add(batchGroupId);
+    }
+    _state = _state.copyWith(selectedBatchGroupIds: updated);
+    notifyListeners();
+  }
+
+  void toggleSelectAll(bool selected) {
+    final updated = Set<String>.from(_state.selectedBatchGroupIds);
+    final visibleBatches = _state.filteredBatchGroups;
+
+    if (selected) {
+      for (final batch in visibleBatches) {
+        updated.add(batch.id);
+      }
+    } else {
+      for (final batch in visibleBatches) {
+        updated.remove(batch.id);
+      }
+    }
+
+    _state = _state.copyWith(selectedBatchGroupIds: updated);
+    notifyListeners();
+  }
+
+  Future<void> receiveWaste() async {
+    if (_state.selectedBatchGroupIds.isEmpty) return;
 
     _state = _state.copyWith(isLoading: true, clearError: false);
     notifyListeners();
 
-    int successCount = 0;
-    final List<String> failedItems = [];
+    int successBatches = 0;
+    final List<String> failedBatches = [];
 
     try {
-      for (final model in _state.scannedTrays) {
-        final progressId = model.productionProgress.id ?? 0;
-        final rawProgress = _state.productionProgressMap[progressId];
-        final trayCode = model.primaryTrayModel.trayCode ?? 'UNKNOWN';
+      final selectedBatches = _state.allBatchGroups.where((b) => _state.selectedBatchGroupIds.contains(b.id)).toList();
 
-        if (rawProgress == null || progressId == 0) {
-          failedItems.add('$trayCode (Invalid-progress)');
-          continue;
+      for (final batch in selectedBatches) {
+        bool batchFailed = false;
+
+        for (int i = 0; i < batch.progressItems.length; i++) {
+          final model = batch.progressItems[i];
+          final rawProgress = i < batch.rawProgressMaps.length ? batch.rawProgressMaps[i] : <String, dynamic>{};
+          final pp = model.productionProgress;
+          final progressId = pp.id ?? (rawProgress['id'] as int?);
+
+          if (progressId == null || progressId == 0) {
+            batchFailed = true;
+            failedBatches.add('${batch.batchCode} (Missing progress ID)');
+            break;
+          }
+
+          final double wasteQty = (pp.waste ?? 0.0) > 0
+              ? pp.waste!.toDouble()
+              : (pp.secondaryQuantity ?? pp.primaryQuantity ?? 0.0).toDouble();
+
+          final double primaryQty = (pp.primaryQuantity ?? wasteQty).toDouble();
+
+          // 1. Post WIP Transaction to Locator 18 (Processing Waste Store)
+          final wipPayload = <String, dynamic>{
+            'subOperation': batch.stageName,
+            'transactionDate': DateTime.now().toIso8601String(),
+            'transactionType': 0, // 0 = Receipt / In
+            'quality': '\u0000',
+            'uom': pp.secondaryUOM ?? 1,
+            'operatorDescription': 'system',
+            'primaryQuantity': primaryQty,
+            'secondaryQuantity': wasteQty,
+            'operationId': pp.operationId ?? model.operation.id,
+            'shiftId': pp.shiftId ?? 1,
+            'locatorId': 18, // Locator 18 = Processing Waste Store
+            'toLocatorId': 18,
+            'isTransfer': false,
+            'workOrderHeaderId': pp.workOrderHeaderId ?? model.workOrderHeader.id,
+            'workOrderLineId': pp.workOrderLineId ?? model.workOrderLine.id,
+            'itemId': pp.itemId ?? model.item.id,
+            'batchHeaderId': pp.batchHeaderId ?? model.batchHeader?.id ?? batch.batchHeaderId,
+            'progressId': progressId,
+          };
+
+          final wipRes = await _repo.createWipTransaction(wipPayload);
+          if (!wipRes.success) {
+            batchFailed = true;
+            failedBatches.add('${batch.batchCode} (WIP-fail: ${wipRes.message})');
+            break;
+          }
+
+          // 2. Update Production Progress record to Locator 18
+          final updatePayload = Map<String, dynamic>.from(rawProgress);
+          updatePayload['locatorId'] = 18;
+          updatePayload['toLocatorId'] = 18;
+          updatePayload['wipStatus'] = 1; // Received status
+          updatePayload.remove('id');
+          updatePayload.remove('progressCode');
+          updatePayload.remove('creationTime');
+          updatePayload.remove('creatorId');
+          updatePayload.remove('lastModificationTime');
+          updatePayload.remove('lastModifierId');
+
+          final updateRes = await _repo.updateProductionProgress(progressId, updatePayload);
+          if (!updateRes.success) {
+            batchFailed = true;
+            failedBatches.add('${batch.batchCode} (Progress-update-fail: ${updateRes.message})');
+            break;
+          }
         }
 
-        final Map<String, dynamic> updatePayload = Map<String, dynamic>.from(rawProgress);
-        updatePayload['toLocatorId'] = 19; // Waste Store
-        updatePayload['locatorId'] = 19;
-
-        final updateRes = await _repo.updateProductionProgress(progressId, updatePayload);
-        if (!updateRes.success) {
-          failedItems.add('$trayCode (Progress-update-fail)');
-          continue;
-        }
-
-        // Post negative WIP at locator 18
-        final double wasteQty = (model.productionProgress.waste ?? 0.0).toDouble();
-        final negativeWipPayload = {
-          'subOperation': 'Locator Transfer',
-          'transactionDate': DateTime.now().toIso8601String(),
-          'transactionType': 1, // Issue / Out
-          'operatorDescription': 'system',
-          'primaryQuantity': -wasteQty,
-          'secondaryQuantity': -wasteQty,
-          'operationId': model.productionProgress.operationId,
-          'shiftId': 1,
-          'locatorId': 18,
-          'toLocatorId': 19,
-          'productionProgressId': progressId,
-        };
-
-        final negWipRes = await _repo.createWipTransaction(negativeWipPayload);
-        if (!negWipRes.success) {
-          failedItems.add('$trayCode (Negative-WIP-fail)');
-          continue;
-        }
-
-        // Post positive WIP at locator 19
-        final positiveWipPayload = {
-          'subOperation': 'Waste Receiving',
-          'transactionDate': DateTime.now().toIso8601String(),
-          'transactionType': 0, // Receipt / In
-          'operatorDescription': 'system',
-          'primaryQuantity': wasteQty,
-          'secondaryQuantity': wasteQty,
-          'operationId': model.productionProgress.operationId,
-          'shiftId': 1,
-          'locatorId': 19,
-          'toLocatorId': null,
-          'productionProgressId': progressId,
-        };
-
-        final posWipRes = await _repo.createWipTransaction(positiveWipPayload);
-        if (posWipRes.success) {
-          successCount++;
-        } else {
-          failedItems.add('$trayCode (Positive-WIP-fail)');
+        if (!batchFailed) {
+          successBatches++;
         }
       }
 
-      if (failedItems.isNotEmpty) {
+      if (failedBatches.isNotEmpty) {
         throw Exception(
-          "Received $successCount waste tray(s) successfully. Failed: ${failedItems.join(', ')}"
+          'Received $successBatches batch(es) successfully. Failed: ${failedBatches.join(', ')}'
         );
       }
 
-      _state = _state.copyWith(isLoading: false, scannedTrays: [], productionProgressMap: {});
+      // Re-fetch all data on completion
+      await fetchInitialData();
     } catch (e) {
-      _state = _state.copyWith(isLoading: false, errorMessage: e.toString().replaceFirst("Exception: ", ""));
+      _state = _state.copyWith(isLoading: false, errorMessage: e.toString().replaceFirst('Exception: ', ''));
       rethrow;
     } finally {
       notifyListeners();
     }
+  }
+}
+
+class _BatchGroupAccumulator {
+  final String id;
+  final int? batchHeaderId;
+  final String batchCode;
+  final int? workOrderHeaderId;
+  final String workOrderCode;
+  final int? workOrderLineId;
+  final int? operationId;
+  final String operationName;
+  final String stageName;
+  final String stageKey;
+  final String itemDescription;
+  final String sizeDescription;
+  final String colorDescription;
+  final int? sourceLocatorId;
+  final String productGrade;
+  int totalTubes;
+  double totalPrimaryQty;
+  final List<ProductionProgressResponseModel> progressItems;
+  final List<Map<String, dynamic>> rawProgressMaps;
+
+  _BatchGroupAccumulator({
+    required this.id,
+    this.batchHeaderId,
+    required this.batchCode,
+    this.workOrderHeaderId,
+    required this.workOrderCode,
+    this.workOrderLineId,
+    this.operationId,
+    required this.operationName,
+    required this.stageName,
+    required this.stageKey,
+    required this.itemDescription,
+    required this.sizeDescription,
+    required this.colorDescription,
+    this.sourceLocatorId,
+    required this.productGrade,
+  })  : totalTubes = 0,
+        totalPrimaryQty = 0.0,
+        progressItems = [],
+        rawProgressMaps = [];
+
+  BatchWasteGroupItem toBatchWasteGroupItem() {
+    return BatchWasteGroupItem(
+      id: id,
+      batchHeaderId: batchHeaderId,
+      batchCode: batchCode,
+      workOrderHeaderId: workOrderHeaderId,
+      workOrderCode: workOrderCode,
+      workOrderLineId: workOrderLineId,
+      operationId: operationId,
+      operationName: operationName,
+      stageName: stageName,
+      stageKey: stageKey,
+      itemDescription: itemDescription,
+      sizeDescription: sizeDescription,
+      colorDescription: colorDescription,
+      totalTubes: totalTubes,
+      totalPrimaryQty: totalPrimaryQty,
+      sourceLocatorId: sourceLocatorId,
+      productGrade: productGrade,
+      progressItems: List.unmodifiable(progressItems),
+      rawProgressMaps: List.unmodifiable(rawProgressMaps),
+    );
   }
 }
