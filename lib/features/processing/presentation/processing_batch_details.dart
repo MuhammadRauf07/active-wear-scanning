@@ -85,14 +85,18 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
         resizeToAvoidBottomInset: false,
         backgroundColor: const Color(0xFFF1F5F9),
         body: SafeArea(
-          child: state.isLoading && state.trays.isEmpty
-              ? const Center(child: CircularProgressIndicator())
-              : Column(
+          child: Column(
             children: [
               _buildPremiumHeader(context, controller, state),
+              if (state.isLoading)
+                const LinearProgressIndicator(
+                  minHeight: 2.5,
+                  color: Color(0xFF1B64A3),
+                  backgroundColor: Color(0xFFE2E8F0),
+                ),
               Expanded(
                 child: AbsorbPointer(
-                  absorbing: state.isLoading,
+                  absorbing: state.isLoading && state.trays.isNotEmpty,
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                     child: Column(
@@ -429,7 +433,37 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
             ),
           ),
           Expanded(
-            child: ProcessingTrayTable(
+            child: (state.isLoading && state.trays.isEmpty)
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 40),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 32,
+                            height: 32,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 3,
+                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1B64A3)),
+                              backgroundColor: Color(0xFFE2E8F0),
+                            ),
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'Loading batch units & intelligence...',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF64748B),
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : ProcessingTrayTable(
               trays: state.trays,
               defectLists: state.defectLists,
               isReworkMode: state.isReworkMode,

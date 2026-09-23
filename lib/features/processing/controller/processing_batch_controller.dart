@@ -433,7 +433,6 @@ class ProcessingBatchController extends ChangeNotifier {
         _state = _state.copyWith(
           isBatchStarted: true,
           startTime: now,
-          trays: [], // Force reload
         );
         notifyListeners();
         await fetchTrays();

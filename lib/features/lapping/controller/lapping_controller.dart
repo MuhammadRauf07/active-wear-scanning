@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'dart:developer' as dev;
+import 'package:active_wear_scanning/features/knitting_production/model/tray_details_model.dart';
 import 'package:active_wear_scanning/features/common-models/common_models.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:active_wear_scanning/features/lapping/model/lapping_model.dart';
@@ -235,7 +236,7 @@ class LappingController extends ChangeNotifier {
             final origQty = originalPiecesMap[compositeId] ?? 0.0;
             summaries[compositeId] = WorkOrderSummary(
               id: compositeId,
-              description: tray.workOrderHeader.description ?? '-',
+              description: tray.workOrderHeader.description,
               componentDescription: itemDesc,
               trayCount: 0,
               cumulativePieces: 0.0,
@@ -489,6 +490,109 @@ class LappingController extends ChangeNotifier {
 
   void toggleReworkMode({required bool enabled}) {
     // Left for interface compatibility
+  }
+
+  List<TrayDetailsModel> _availableTraysDetail = [];
+  List<TrayDetailsModel> get availableTraysDetail => _availableTraysDetail;
+  List<Map<String, dynamic>> _allLotHeaders = [];
+  List<Map<String, dynamic>> _allLotLines = [];
+
+  bool _isLoadingMoreAvailableTrays = false;
+  bool get isLoadingMoreAvailableTrays => _isLoadingMoreAvailableTrays;
+  bool _hasMoreAvailableTrays = true;
+  bool get hasMoreAvailableTrays => _hasMoreAvailableTrays;
+
+  Future<void> fetchAvailableTrays({bool isRefresh = true}) async {
+    if (isRefresh) {
+      _hasMoreAvailableTrays = true;
+      _availableTraysDetail = [];
+      notifyListeners();
+
+      try {
+        final headersRes = await _lotRepo.fetchLotHeaders();
+        final linesRes = await _lotRepo.fetchLotLines();
+        if (headersRes.success && headersRes.data != null) {
+          _allLotHeaders = List<Map<String, dynamic>>.from(headersRes.data as List);
+        }
+        if (linesRes.success && linesRes.data != null) {
+          _allLotLines = List<Map<String, dynamic>>.from(linesRes.data as List);
+        }
+      } catch (e) {
+        debugPrint('Error fetching lot metadata: $e');
+      }
+    }
+
+    try {
+      final skipCount = isRefresh ? 0 : _availableTraysDetail.length;
+      final trayDetailsModel = await _lappingRepo.fetchAvailableTrayDetails(
+        maxResultCount: 100,
+        skipCount: skipCount,
+      );
+      if (trayDetailsModel.success && trayDetailsModel.data != null) {
+        final newItems = (trayDetailsModel.data as List).map((item) => item as TrayDetailsModel).toList();
+        if (newItems.length < 100) {
+          _hasMoreAvailableTrays = false;
+        }
+        _availableTraysDetail = isRefresh ? newItems : [..._availableTraysDetail, ...newItems];
+        notifyListeners();
+      } else {
+        if (isRefresh) {
+          _hasMoreAvailableTrays = false;
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching available trays in lapping: $e');
+    }
+  }
+
+  Future<void> fetchMoreAvailableTrays() async {
+    if (_isLoadingMoreAvailableTrays || !_hasMoreAvailableTrays) return;
+    _isLoadingMoreAvailableTrays = true;
+    notifyListeners();
+
+    await fetchAvailableTrays(isRefresh: false);
+
+    _isLoadingMoreAvailableTrays = false;
+    notifyListeners();
+  }
+
+  List<TrayDetailsModel> getFilteredAvailableTrays([String query = '']) {
+    final cleanQuery = query.trim().toUpperCase();
+    return _availableTraysDetail.where((t) {
+      final trayDetail = t.trayDetails;
+      if (trayDetail == null) return false;
+      if (trayDetail.active != true) return false;
+      if (trayDetail.trayType != 1) return false;
+
+      final bool isEmptied = trayDetail.locatorId == null || trayDetail.trayQuantity == 0 || trayDetail.trayQuantity == null;
+      if (!isEmptied) return false;
+
+      if (cleanQuery.isNotEmpty) {
+        final code = (trayDetail.trayCode ?? '').trim().toUpperCase();
+        if (!code.contains(cleanQuery)) return false;
+      }
+
+      bool isReassigned = false;
+      for (final line in _allLotLines) {
+        final bl = line['batchLines'] as Map<String, dynamic>? ?? line;
+        final blTrayId = bl['trayId'] as int?;
+        final blIsReassigned = bl['isReAssigned'] as bool? ?? false;
+
+        if (blTrayId == trayDetail.id && blIsReassigned) {
+          final lineHeaderId = bl['batchHeaderId'];
+          final isDraft = _allLotHeaders.any((h) {
+            final bh = h['batchHeader'] as Map<String, dynamic>? ?? h;
+            final isLocked = bh['lockFlag'] as bool? ?? false;
+            return bh['id']?.toString() == lineHeaderId?.toString() && !isLocked;
+          });
+          if (isDraft) {
+            isReassigned = true;
+            break;
+          }
+        }
+      }
+      return !isReassigned;
+    }).toList();
   }
 
   Future<List<dynamic>> fetchSystemTraysAndLotMetadata() async {
@@ -1012,9 +1116,8 @@ class LappingController extends ChangeNotifier {
           }
 
           // --- 3.7. UPDATE PRODUCTION PROGRESS batchLineId ---
-          if (targetProgressId != null) {
-            final freshPPRes = await _lotRepo.fetchProductionProgressById(targetProgressId);
-            if (freshPPRes.success && freshPPRes.data != null) {
+          final freshPPRes = await _lotRepo.fetchProductionProgressById(targetProgressId);
+          if (freshPPRes.success && freshPPRes.data != null) {
               final rawMap = Map<String, dynamic>.from(freshPPRes.data is Map ? freshPPRes.data : {});
               final Map<String, dynamic> finalJson = rawMap.containsKey('productionProgress')
                   ? Map<String, dynamic>.from(rawMap['productionProgress'] as Map)
@@ -1061,7 +1164,6 @@ class LappingController extends ChangeNotifier {
                 }
               }
             }
-          }
 
           // --- 4. UPDATE TRAY DETAILS ---
           final tRes = await _lotRepo.fetchTrayDetailById(scannedTray.primaryTrayModel.id!);

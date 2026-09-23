@@ -4,7 +4,6 @@ import 'package:active_wear_scanning/features/processing/model/batch_summary_ite
 import 'package:active_wear_scanning/features/processing/presentation/processing_batch_details.dart';
 import 'package:active_wear_scanning/features/processing/presentation/widgets/batch_details_table.dart';
 import 'package:active_wear_scanning/features/lot_making/model/lot_header_model.dart';
-import 'package:active_wear_scanning/features/knitting_production/repo/knitting_production_repo.dart';
 import '../../../core/widgets/app_loader.dart';
 import '../../lot_making/repo/lot_repo.dart';
 import '../repo/processing_repo.dart';
@@ -44,8 +43,6 @@ class ProcessingScreen extends StatefulWidget {
 class _ProcessingScreenState extends State<ProcessingScreen> {
   final _processingRepo = ProcessingRepo();
   final _lotRepo = LotRepo();
-  final _trayRepo = KnittingProductionRepo();
-  final _batchBarcodeController = TextEditingController();
 
   List<Operation> _operations = [];
   List<Operation> _allOperations = [];
@@ -401,6 +398,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
             bool isReassigned = false;
             int? nextOpId;
             String? nextOpName;
+            bool hasPrevProcess = false;
 
             if (blRes.success && blRes.data != null) {
               final linesList = blRes.data as List;
@@ -499,11 +497,14 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                 parsedRoutings.sort((a, b) => (a['seq'] as int).compareTo(b['seq'] as int));
 
                 final currentIdx = parsedRoutings.indexWhere((r) => r['operationId'] == operationId);
-                if (currentIdx != -1 && currentIdx < parsedRoutings.length - 1) {
-                  nextOpId = parsedRoutings[currentIdx + 1]['operationId'] as int?;
-                  if (nextOpId != null) {
-                    final targetOpIdx = _allOperations.indexWhere((o) => o.id == nextOpId);
-                    nextOpName = targetOpIdx != -1 ? _allOperations[targetOpIdx].name : 'N/A';
+                if (currentIdx != -1) {
+                  hasPrevProcess = currentIdx > 0;
+                  if (currentIdx < parsedRoutings.length - 1) {
+                    nextOpId = parsedRoutings[currentIdx + 1]['operationId'] as int?;
+                    if (nextOpId != null) {
+                      final targetOpIdx = _allOperations.indexWhere((o) => o.id == nextOpId);
+                      nextOpName = targetOpIdx != -1 ? _allOperations[targetOpIdx].name : 'N/A';
+                    }
                   }
                 }
               }
@@ -546,6 +547,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
               isDraft: isDraft,
               nextOperationId: nextOpId,
               nextOperationName: nextOpName,
+              hasPreviousProcess: hasPrevProcess,
             );
           } catch (itemErr) {
             debugPrint('Error processing batch ${entry.key}: $itemErr');
@@ -751,9 +753,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                                   isLoading: _loadingDetails[op.id] == true,
                                   summaries: _opBatchDetails[op.id],
                                   onDetailsPressed: (s) async {
-                                     final currentIndex = _operations
-                                         .indexWhere((o) =>
-                                     o.id == _selectedOperation?.id);
+                                     
                                      final nextOpName = s.nextOperationName ?? 'N/A';
                                      final nextOpId = s.nextOperationId;
                                      final activeOpId = _selectedOperation?.id;
@@ -775,8 +775,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                                                   ?.name ?? '-',
                                               nextOperationName: nextOpName,
                                               nextOperationId: nextOpId,
-                                              hasPreviousProcess: currentIndex >
-                                                  0,
+                                              hasPreviousProcess: s.hasPreviousProcess,
                                             ),
                                       ),
                                     );

@@ -1097,7 +1097,7 @@ class _LotListScreenState extends State<LotListScreen>
 
   Widget _buildListHeader(bool isLocked) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      padding: const EdgeInsets.fromLTRB(29, 12, 29, 8),
       child: Row(
         children: [
           if (!isLocked) const SizedBox(width: 40),
@@ -1212,6 +1212,7 @@ class _LotListScreenState extends State<LotListScreen>
                       child: trolleyCode != null
                           ? Text(
                               trolleyCode,
+                              textAlign: TextAlign.center,
                               style: const TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w900,
@@ -1293,7 +1294,7 @@ class _LotListScreenState extends State<LotListScreen>
     );
   }
 
-  Widget _buildDataCell(String value, int flex, {bool isBold = false, TextAlign align = TextAlign.start}) {
+  Widget _buildDataCell(String value, int flex, {bool isBold = false, TextAlign align = TextAlign.center}) {
     return Expanded(
       flex: flex,
       child: Text(

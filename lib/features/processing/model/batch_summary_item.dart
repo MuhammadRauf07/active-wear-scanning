@@ -14,6 +14,7 @@ class BatchSummaryItem {
   final bool isDraft;
   final int? nextOperationId;
   final String? nextOperationName;
+  final bool hasPreviousProcess;
 
   BatchSummaryItem({
     required this.batchHeaderId,
@@ -31,5 +32,6 @@ class BatchSummaryItem {
     required this.isDraft,
     this.nextOperationId,
     this.nextOperationName,
+    this.hasPreviousProcess = false,
   });
 }

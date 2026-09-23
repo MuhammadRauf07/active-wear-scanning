@@ -30,6 +30,7 @@ class BatchStatusRow extends StatelessWidget {
             flex: 2,
             child: Text(
               summary.batchCode,
+              textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w900,
@@ -43,6 +44,7 @@ class BatchStatusRow extends StatelessWidget {
             flex: 2,
             child: Text(
               summary.machine.toUpperCase(),
+              textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.w700,
@@ -56,6 +58,7 @@ class BatchStatusRow extends StatelessWidget {
             flex: 3,
             child: Text(
               summary.color,
+              textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(

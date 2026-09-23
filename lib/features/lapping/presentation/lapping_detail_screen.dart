@@ -130,241 +130,237 @@ class _LappingDetailScreenViewState extends State<_LappingDetailScreenView> {
   }
 
   Future<void> _showAvailableTraysDialog(LappingController controller, LappingState state) async {
-    if (state.selectedWorkOrderId == null) return;
+    if (state.selectedWorkOrderId == null) {
+      AppSnackBar.showError(context, message: 'Please select a Work Order first');
+      return;
+    }
 
     if (mounted) AppLoader.show(context, message: 'Loading available trays...');
     try {
-      final results = await controller.fetchSystemTraysAndLotMetadata();
+      await controller.fetchAvailableTrays(isRefresh: true);
       if (!mounted) return;
       AppLoader.hide(context);
 
-      final systemTrays = results[0] as List;
-      final lotHeaders = results[1] as List<Map<String, dynamic>>;
-      final lotLines = results[2] as List<Map<String, dynamic>>;
+      final scrollController = ScrollController();
+      final searchController = TextEditingController();
 
-      // Filter empty reusable trays
-      final emptySystemTrays = systemTrays.where((t) {
-        final trayMap = t is Map ? t : (t as dynamic).toJson();
-        final trayDetail = trayMap.containsKey('trayDetail') ? trayMap['trayDetail'] : trayMap;
-        if (trayDetail['active'] != true) return false;
-        if (trayDetail['trayType'] != 1) return false;
-
-        final bool isEmptied = trayDetail['locatorId'] == null || trayDetail['trayQuantity'] == 0;
-        if (!isEmptied) return false;
-
-        // Check if reassigned in draft
-        bool isReassigned = false;
-        for (final line in lotLines) {
-          final bl = line['batchLines'] as Map<String, dynamic>? ?? line;
-          if (bl == null) continue;
-
-          final blTrayId = bl['trayId'] as int?;
-          final blIsReassigned = bl['isReAssigned'] as bool? ?? false;
-
-          if (blTrayId == trayDetail['id'] && blIsReassigned) {
-            final lineHeaderId = bl['batchHeaderId'];
-            final isDraft = lotHeaders.any(
-              (h) {
-                final bh = h['batchHeader'] as Map<String, dynamic>? ?? h;
-                final isLocked = bh['lockFlag'] as bool? ?? false;
-                return bh['id']?.toString() == lineHeaderId?.toString() && !isLocked;
-              },
-            );
-            if (isDraft) {
-              isReassigned = true;
-              break;
-            }
-          }
+      scrollController.addListener(() {
+        if (scrollController.position.pixels >= scrollController.position.maxScrollExtent - 50) {
+          controller.fetchMoreAvailableTrays();
         }
-        return !isReassigned;
-      }).toList();
-
-      final currentWOTrays = state.scannedTraysByWO[state.selectedWorkOrderId!] ?? [];
-      final pendingWOTrays = state.trays.where((t) {
-        final woId = t.workOrderHeader.id;
-        final itemDesc = t.processedItem?.description ?? t.item.description;
-        final compositeId = '${woId}_$itemDesc';
-
-        if (compositeId != state.selectedWorkOrderId) return false;
-
-        final alreadyScanned = currentWOTrays.any((st) => st.primaryTrayModel.trayCode == t.primaryTrayModel.trayCode);
-        return !alreadyScanned;
-      }).toList();
+      });
 
       showDialog(
         context: context,
-        builder: (context) {
-          return Dialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: Container(
-              constraints: const BoxConstraints(maxHeight: 500, maxWidth: 450),
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'AVAILABLE TRAYS FOR LAPPING',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF1E293B),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(context),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                    ],
-                  ),
-                  const Divider(),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    child: (pendingWOTrays.isEmpty && emptySystemTrays.isEmpty)
-                        ? const Center(
-                            child: Text(
-                              'No available trays found',
-                              style: TextStyle(color: Colors.grey, fontSize: 13),
-                            ),
-                          )
-                        : ListView(
+        builder: (dialogCtx) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              return ListenableBuilder(
+                listenable: controller,
+                builder: (context, _) {
+                  final availableTrays = controller.getFilteredAvailableTrays(searchController.text);
+                  final isLoadingMore = controller.isLoadingMoreAvailableTrays;
+
+                  // Collect all scanned tray codes across all work orders in current session
+                  final scannedTrayCodes = <String>{};
+                  for (final list in state.scannedTraysByWO.values) {
+                    for (final t in list) {
+                      final code = t.primaryTrayModel.trayCode?.trim().toUpperCase();
+                      if (code != null && code.isNotEmpty) {
+                        scannedTrayCodes.add(code);
+                      }
+                    }
+                  }
+
+                  return Dialog(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    child: Container(
+                      constraints: const BoxConstraints(maxHeight: 520, maxWidth: 440),
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // ── Header ──────────────────────────────────────────
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              if (pendingWOTrays.isNotEmpty) ...[
-                                const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                                  child: Text(
-                                    'PENDING BATCH TRAYS',
-                                    style: TextStyle(
-                                      fontSize: 10,
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFE67E22).withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(Icons.layers_rounded, color: Color(0xFFE67E22), size: 20),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    'AVAILABLE TRAYS (${availableTrays.length})',
+                                    style: const TextStyle(
+                                      fontSize: 14,
                                       fontWeight: FontWeight.w900,
-                                      color: Color(0xFF64748B),
-                                      letterSpacing: 0.5,
+                                      color: Color(0xFF1E293B),
                                     ),
                                   ),
-                                ),
-                                ...List.generate(pendingWOTrays.length, (index) {
-                                  final tray = pendingWOTrays[index];
-                                  final qty = tray.productionProgress.primaryQuantity ?? 0.0;
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                                    child: Row(
-                                      children: [
-                                        const Icon(Icons.inventory_2_outlined, color: Color(0xFF0D47A1), size: 18),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                'Tray ${tray.primaryTrayModel.trayCode ?? 'N/A'}',
-                                                style: const TextStyle(
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w800,
-                                                  color: Color(0xFF1E293B),
-                                                ),
-                                              ),
-                                              const SizedBox(height: 2),
-                                              Text(
-                                                'Item: ${tray.processedItem?.description ?? tray.item.description}',
-                                                style: TextStyle(
-                                                  fontSize: 10,
-                                                  color: Color(0xFF546E7A),
-                                                  fontWeight: FontWeight.w500,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        Column(
-                                          crossAxisAlignment: CrossAxisAlignment.end,
-                                          children: [
-                                            Text(
-                                              '${qty.toInt()} Tubes',
-                                              style: const TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w800,
-                                                color: Color(0xFF0D47A1),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              'Size: ${tray.item.sizeDescription ?? 'N/A'}',
-                                              style: TextStyle(
-                                                fontSize: 10,
-                                                color: Color(0xFF90A4AE),
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                }),
-                              ],
-                              if (emptySystemTrays.isNotEmpty) ...[
-                                const Divider(height: 24),
-                                const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                                  child: Text(
-                                    'EMPTY REUSABLE TRAYS (FOR REASSIGNMENT)',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w900,
-                                      color: Color(0xFF64748B),
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                ),
-                                ...List.generate(emptySystemTrays.length, (index) {
-                                  final trayMap = emptySystemTrays[index] is Map ? emptySystemTrays[index] : (emptySystemTrays[index] as dynamic).toJson();
-                                  final tray = trayMap.containsKey('trayDetail') ? trayMap['trayDetail'] : trayMap;
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                                    child: Row(
-                                      children: [
-                                        const Icon(Icons.inventory_2_outlined, color: Color(0xFF0D47A1), size: 18),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Text(
-                                            'Tray ${tray['trayCode'] ?? 'N/A'}',
-                                            style: const TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w800,
-                                              color: Color(0xFF1E293B),
-                                            ),
-                                          ),
-                                        ),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFE8F5E9),
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          child: const Text(
-                                            'REUSABLE',
-                                            style: TextStyle(
-                                              color: Color(0xFF2E7D32),
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w900,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                }),
-                              ],
+                                ],
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.close),
+                                onPressed: () => Navigator.pop(dialogCtx),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                              ),
                             ],
                           ),
-                  ),
-                ],
-              ),
-            ),
+                          const SizedBox(height: 12),
+
+                          // ── Search Input ────────────────────────────────────
+                          TextField(
+                            controller: searchController,
+                            onChanged: (_) => setDialogState(() {}),
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                            decoration: InputDecoration(
+                              hintText: 'Search tray code...',
+                              hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                              prefixIcon: const Icon(Icons.search, size: 18, color: Color(0xFF94A3B8)),
+                              suffixIcon: searchController.text.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear, size: 16, color: Color(0xFF94A3B8)),
+                                      onPressed: () {
+                                        searchController.clear();
+                                        setDialogState(() {});
+                                      },
+                                    )
+                                  : null,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              filled: true,
+                              fillColor: const Color(0xFFF8FAFC),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: const BorderSide(color: Color(0xFFE67E22), width: 1.5),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          const Divider(height: 1),
+
+                          // ── Trays List ──────────────────────────────────────
+                          Expanded(
+                            child: availableTrays.isEmpty && !isLoadingMore
+                                ? const Center(
+                                    child: Padding(
+                                      padding: EdgeInsets.symmetric(vertical: 24.0),
+                                      child: Text(
+                                        'No available reusable trays found',
+                                        style: TextStyle(color: Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w500),
+                                      ),
+                                    ),
+                                  )
+                                : ListView.separated(
+                                    controller: scrollController,
+                                    padding: const EdgeInsets.symmetric(vertical: 4),
+                                    itemCount: availableTrays.length + (isLoadingMore ? 1 : 0),
+                                    separatorBuilder: (_, _) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                                    itemBuilder: (context, idx) {
+                                      if (idx == availableTrays.length) {
+                                        return const Padding(
+                                          padding: EdgeInsets.all(12.0),
+                                          child: Center(
+                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                          ),
+                                        );
+                                      }
+                                      final rawCode = availableTrays[idx].trayDetails?.trayCode ?? '';
+                                      final code = rawCode.trim().toUpperCase();
+                                      final isAlreadyScanned = scannedTrayCodes.contains(code);
+
+                                      return Container(
+                                        color: isAlreadyScanned ? const Color(0xFFF8FAFC) : Colors.transparent,
+                                        child: ListTile(
+                                          dense: true,
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          enabled: !isAlreadyScanned,
+                                          leading: Icon(
+                                            Icons.inventory_2_outlined,
+                                            color: isAlreadyScanned ? const Color(0xFF94A3B8) : const Color(0xFF1B64A3),
+                                            size: 20,
+                                          ),
+                                          title: Text(
+                                            'Tray $code',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w800,
+                                              color: isAlreadyScanned ? const Color(0xFF94A3B8) : const Color(0xFF1E293B),
+                                              decoration: isAlreadyScanned ? TextDecoration.lineThrough : null,
+                                            ),
+                                          ),
+                                          trailing: isAlreadyScanned
+                                              ? Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFFE2E8F0),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: const Text(
+                                                    'SCANNED',
+                                                    style: TextStyle(
+                                                      fontSize: 9,
+                                                      fontWeight: FontWeight.w800,
+                                                      color: Color(0xFF64748B),
+                                                      letterSpacing: 0.5,
+                                                    ),
+                                                  ),
+                                                )
+                                              : Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFFE8F5E9),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: const Text(
+                                                    'REUSABLE',
+                                                    style: TextStyle(
+                                                      color: Color(0xFF2E7D32),
+                                                      fontSize: 9,
+                                                      fontWeight: FontWeight.w900,
+                                                    ),
+                                                  ),
+                                                ),
+                                          onTap: isAlreadyScanned
+                                              ? null
+                                              : () async {
+                                                  Navigator.pop(dialogCtx);
+                                                  if (_trayQtyController.text.trim().isEmpty) {
+                                                    _focusNode.requestFocus();
+                                                    AppSnackBar.showError(
+                                                      context,
+                                                      message: 'Please enter tubes count to scan tray $code',
+                                                    );
+                                                  } else {
+                                                    await _processBluetoothScan(rawCode);
+                                                  }
+                                                },
+                                        ),
+                                      );
+                                    },
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
           );
         },
       );

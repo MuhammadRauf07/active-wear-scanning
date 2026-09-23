@@ -17,9 +17,40 @@ class BatchDetailsTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 24),
-        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      return Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            bottomLeft: Radius.circular(10.5),
+            bottomRight: Radius.circular(10.5),
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: const BoxDecoration(
+                color: Color(0xFFF1F5F9),
+                border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+              ),
+              child: Row(
+                children: [
+                  _buildHeaderCell('BATCH #', 2, align: TextAlign.center),
+                  _buildHeaderCell('MACHINE', 2, align: TextAlign.center),
+                  _buildHeaderCell('COLOR', 3, align: TextAlign.center),
+                  _buildHeaderCell('TUBES', 1, align: TextAlign.center),
+                  _buildHeaderCell('RE-ASSIGN', 2, align: TextAlign.center),
+                  _buildHeaderCell('REWORK', 2, align: TextAlign.center),
+                  _buildHeaderCell('STATE', 2, align: TextAlign.center),
+                  const SizedBox(width: 24),
+                ],
+              ),
+            ),
+            ...List.generate(3, (i) => _buildSkeletonRow(isLast: i == 2)),
+          ],
+        ),
       );
     }
 
@@ -47,47 +78,89 @@ class BatchDetailsTable extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-        // ── Grid Header ──────────────────────────────────────────────────────
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: const BoxDecoration(
-            color: Color(0xFFF1F5F9), // Subtle Slate 100
-            border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+          // ── Grid Header ──────────────────────────────────────────────────────
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: const BoxDecoration(
+              color: Color(0xFFF1F5F9), // Subtle Slate 100
+              border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+            ),
+            child: Row(
+              children: [
+                _buildHeaderCell('BATCH #', 2, align: TextAlign.center),
+                _buildHeaderCell('MACHINE', 2, align: TextAlign.center),
+                _buildHeaderCell('COLOR', 3, align: TextAlign.center),
+                _buildHeaderCell('TUBES', 1, align: TextAlign.center),
+                _buildHeaderCell('RE-ASSIGN', 2, align: TextAlign.center),
+                _buildHeaderCell('REWORK', 2, align: TextAlign.center),
+                _buildHeaderCell('STATE', 2, align: TextAlign.center),
+                const SizedBox(width: 24), // Action column spacer
+              ],
+            ),
           ),
-          child: Row(
-            children: [
-              _buildHeaderCell('BATCH #', 2),
-              _buildHeaderCell('MACHINE', 2),
-              _buildHeaderCell('COLOR', 3),
-              _buildHeaderCell('TUBES', 1, align: TextAlign.center),
-              _buildHeaderCell('RE-ASSIGN', 2, align: TextAlign.center),
-              _buildHeaderCell('REWORK', 2, align: TextAlign.center),
-              _buildHeaderCell('STATE', 2, align: TextAlign.center),
-              const SizedBox(width: 32), // Action column spacer
-            ],
+
+          // ── Data Rows ────────────────────────────────────────────────────────
+          ListView.builder(
+            shrinkWrap: true,
+            padding: EdgeInsets.zero,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: summaries!.length,
+            itemBuilder: (context, index) {
+              return BatchStatusRow(
+                summary: summaries![index],
+                isLast: index == summaries!.length - 1,
+                onDetailsPressed: () => onDetailsPressed(summaries![index]),
+              );
+            },
           ),
-        ),
+        ],
+      ),
+    );
+  }
 
-        // ── Data Rows ────────────────────────────────────────────────────────
-        ListView.builder(
-          shrinkWrap: true,
-          padding: EdgeInsets.zero,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: summaries!.length,
-          itemBuilder: (context, index) {
-            return BatchStatusRow(
-              summary: summaries![index],
-              isLast: index == summaries!.length - 1,
-              onDetailsPressed: () => onDetailsPressed(summaries![index]),
-            );
-          },
-        ),
-      ],
-    ),
-  );
-}
+  Widget _buildSkeletonRow({bool isLast = false}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: isLast ? null : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(flex: 2, child: _skeletonBox(width: 50, height: 10)),
+          const SizedBox(width: 8),
+          Expanded(flex: 2, child: _skeletonBox(width: 45, height: 10)),
+          const SizedBox(width: 8),
+          Expanded(flex: 3, child: _skeletonBox(width: 70, height: 10)),
+          const SizedBox(width: 8),
+          Expanded(flex: 1, child: _skeletonBox(width: 25, height: 10)),
+          const SizedBox(width: 8),
+          Expanded(flex: 2, child: _skeletonBox(width: 30, height: 10)),
+          const SizedBox(width: 8),
+          Expanded(flex: 2, child: _skeletonBox(width: 30, height: 10)),
+          const SizedBox(width: 8),
+          Expanded(flex: 2, child: _skeletonBox(width: 55, height: 14, radius: 4)),
+          const SizedBox(width: 8),
+          _skeletonBox(width: 24, height: 24, radius: 6),
+        ],
+      ),
+    );
+  }
 
-  Widget _buildHeaderCell(String label, int flex, {TextAlign align = TextAlign.start}) {
+  Widget _skeletonBox({required double width, required double height, double radius = 3}) {
+    return Center(
+      child: Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          color: const Color(0xFFE2E8F0).withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(radius),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderCell(String label, int flex, {TextAlign align = TextAlign.center}) {
     return Expanded(
       flex: flex,
       child: Text(
