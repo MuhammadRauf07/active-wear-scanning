@@ -860,6 +860,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                                               reworkFlag: isThisReworkOp ? true : (isRework || s.reworkFlag),
                                               isReassigned: isReassigned || s.isReassigned,
                                               isDraft: false,
+                                              hasPreviousProcess: s.hasPreviousProcess,
                                             );
                                             if (!targetList.any((b) => b.batchHeaderId == s.batchHeaderId)) {
                                               _opBatchDetails[tOpId] = List.from(targetList)..add(updatedBatch);

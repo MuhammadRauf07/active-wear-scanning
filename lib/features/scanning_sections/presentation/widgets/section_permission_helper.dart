@@ -74,6 +74,9 @@ class SectionPermissionHelper {
     if (normalizedTitle.contains('unholdtrays') || normalizedTitle.contains('unhold')) {
       return ['unholdtrays', 'unhold', 'knittingproduction', 'knitting', 'processing', 'pbs'];
     }
+    if (normalizedTitle.contains('reports') || normalizedTitle.contains('report') || normalizedTitle.contains('analytics')) {
+      return ['reports', 'report', 'analytics', 'admin', 'supervisor', 'manager', 'audit', 'executive'];
+    }
     return [normalizedTitle];
   }
 

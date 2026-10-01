@@ -445,7 +445,7 @@ class _LappingDetailScreenViewState extends State<_LappingDetailScreenView> {
       HapticFeedbackHelper.scanSuccess();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Draft saved successfully!'),
+          content: Text('Draft saved successfully! Trolley has been released and is available for re-use.'),
           backgroundColor: Colors.green,
         ),
       );
@@ -464,7 +464,7 @@ class _LappingDetailScreenViewState extends State<_LappingDetailScreenView> {
       if (!mounted) return;
       AppLoader.hide(context);
       HapticFeedbackHelper.scanSuccess();
-      _showInfoDialog('Success', 'Trays successfully submitted to next operation.', isSuccess: true, onDismiss: () {
+      _showInfoDialog('Success', 'Trays successfully submitted to next operation.\nTrolley has been released and is available for re-use.', isSuccess: true, onDismiss: () {
         if (mounted) Navigator.pop(context, true);
       });
     } catch (e) {

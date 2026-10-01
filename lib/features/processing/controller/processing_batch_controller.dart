@@ -21,7 +21,8 @@ class ProcessingBatchController extends ChangeNotifier {
   final String operationName;
   final String nextOperationName;
   final int? nextOperationId;
-  final bool hasPreviousProcess;
+  bool _hasPreviousProcess;
+  bool get hasPreviousProcess => _hasPreviousProcess;
 
   final _processingRepo = ProcessingRepo();
   final _lotRepo = LotRepo();
@@ -41,8 +42,8 @@ class ProcessingBatchController extends ChangeNotifier {
     required this.operationName,
     required this.nextOperationName,
     this.nextOperationId,
-    required this.hasPreviousProcess,
-  });
+    required bool hasPreviousProcess,
+  }) : _hasPreviousProcess = hasPreviousProcess;
 
   Future<void> loadInitialData() async {
     _state = _state.copyWith(isLoading: true, clearError: true);
@@ -51,8 +52,10 @@ class ProcessingBatchController extends ChangeNotifier {
     try {
       await _fetchMachineCapacity();
       await _fetchBatchHeader();
+      await _checkRoutingSequence();
       await fetchDefectLists();
       await fetchTrays();
+      await _checkRoutingSequence();
     } catch (e) {
       _state = _state.copyWith(isLoading: false, errorMessage: e.toString());
       notifyListeners();
@@ -99,6 +102,55 @@ class ProcessingBatchController extends ChangeNotifier {
           trolleyDetailId: trayDetailId,
         );
       }
+    }
+  }
+
+  Future<void> _checkRoutingSequence() async {
+    try {
+      final List<Map<String, dynamic>> parsedRoutings = [];
+      final bhrRes = await _lotRepo.fetchBatchHeaderRoutings(batchHeaderId);
+      if (bhrRes.success && bhrRes.data != null && (bhrRes.data as List).isNotEmpty) {
+        for (final r in bhrRes.data as List) {
+          final rMap = r is Map ? r as Map<String, dynamic> : {};
+          final bhr = rMap['batchHeaderRouting'] as Map? ?? rMap;
+          final opId = bhr['operationId'] as int?;
+          final seq = bhr['seq'] as int? ?? bhr['sequence'] as int?;
+          if (opId != null && seq != null) {
+            parsedRoutings.add({'operationId': opId, 'seq': seq});
+          }
+        }
+      } else {
+        final firstTray = _state.trays.isNotEmpty ? _state.trays.first : null;
+        final int? routingItemId = firstTray?.productionProgress.processedItemId ?? firstTray?.item.id;
+        if (routingItemId != null) {
+          final routingRes = await _lotRepo.fetchItemRoutings(routingItemId);
+          if (routingRes.success && routingRes.data != null) {
+            for (final r in routingRes.data as List) {
+              final rMap = r is Map ? r as Map<String, dynamic> : {};
+              final ir = rMap['itemRouting'] as Map?;
+              final opId = ir?['operationId'] as int?;
+              final seq = ir?['seq'] as int? ?? ir?['sequence'] as int?;
+              if (opId != null && seq != null) {
+                parsedRoutings.add({'operationId': opId, 'seq': seq});
+              }
+            }
+          }
+        }
+      }
+
+      if (parsedRoutings.isNotEmpty) {
+        parsedRoutings.sort((a, b) => (a['seq'] as int).compareTo(b['seq'] as int));
+        final currentIdx = parsedRoutings.indexWhere((r) => r['operationId'] == currentOperationId);
+        if (currentIdx != -1) {
+          final computedHasPrev = currentIdx > 0;
+          if (_hasPreviousProcess != computedHasPrev) {
+            _hasPreviousProcess = computedHasPrev;
+            notifyListeners();
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error evaluating routing sequence: $e');
     }
   }
 

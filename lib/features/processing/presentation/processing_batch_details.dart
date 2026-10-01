@@ -125,7 +125,7 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
 
   Widget _buildPremiumHeader(BuildContext context, ProcessingBatchController controller, ProcessingBatchState state) {
     final isLapping = controller.operationName.toLowerCase().contains('lapping');
-    final submitBlocked = !state.isBatchStarted || (isLapping && !state.isReassignedBatch && !state.isReworkMode);
+    final submitBlocked = !state.isBatchStarted || (isLapping && !state.isReassignedBatch && !state.isReworkMode && !state.isReworkBatch);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -289,7 +289,14 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
             _buildHUDCard('BATCH #', controller.batchCode, Icons.tag_rounded),
             _buildHUDCard('MACHINE', controller.machine, Icons.precision_manufacturing_rounded),
             _buildHUDCard('COLOR', controller.color, Icons.palette_rounded),
-            _buildHUDCard('TROLLEY', state.trolleyCode ?? 'N/A', Icons.local_shipping_rounded, valueColor: state.trolleyCode != null ? const Color(0xFF1B64A3) : const Color(0xFF94A3B8)),
+            _buildHUDCard(
+              'TROLLEY', 
+              state.trolleyCode ?? (state.isReassignedBatch ? 'N/A (Reassigned)' : 'N/A'), 
+              Icons.local_shipping_rounded, 
+              valueColor: state.trolleyCode != null 
+                  ? const Color(0xFF1B64A3) 
+                  : (state.isReassignedBatch ? const Color(0xFF60A5FA) : const Color(0xFF94A3B8)),
+            ),
             _buildHUDCard('TRAYS', '${controller.trayCount} UNITS', Icons.inventory_2_rounded),
             _buildHUDCard('WEIGHT', '${controller.totalWeight.toStringAsFixed(1)} g', Icons.scale_rounded),
           ],
@@ -520,7 +527,7 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
         title: const Text('Free Trolley'),
         content: Text(
           'Remove trolley "${state.trolleyCode}" from batch ${controller.batchCode}?\n\n'
-              'You will need to re-attach a trolley before submitting.',
+              '${state.isReassignedBatch ? "This batch is reassigned and can proceed without a trolley." : "You will need to re-attach a trolley before submitting."}',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
@@ -548,7 +555,9 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
     if (controller.state.errorMessage != null) {
       AppSnackBar.showError(context, message: controller.state.errorMessage!);
     } else {
-      AppSnackBar.showWarning(context, message: 'Trolley free. Scan a new trolley before submitting.');
+      AppSnackBar.showWarning(context, message: controller.state.isReassignedBatch 
+          ? 'Trolley free. Reassigned batch can proceed without a trolley.' 
+          : 'Trolley free. Scan a new trolley before submitting.');
     }
   }
 
@@ -952,7 +961,7 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
   }
 
   void _confirmSubmit(ProcessingBatchController controller, ProcessingBatchState state) {
-    if (state.trolleyDetailId == null) {
+    if (!state.isReassignedBatch && state.trolleyDetailId == null) {
       AppSnackBar.showError(context, message: 'Please scan a trolley before submitting.');
       return;
     }
@@ -1041,8 +1050,8 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
                   onPressed: () => _showBatchRoutingDialog(controller, state),
                 ),
               ),
-              const SizedBox(width: 6),
-              if (controller.hasPreviousProcess && !isLapping) ...[
+              if (controller.hasPreviousProcess) ...[
+                const SizedBox(width: 6),
                 Expanded(
                   child: _buildConsoleButton(
                     label: state.isReworkMode ? 'CANCEL' : 'REWORK',
@@ -1059,9 +1068,9 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
                     },
                   ),
                 ),
-                const SizedBox(width: 6),
               ],
               if (isLapping && !state.isReassignedBatch) ...[
+                const SizedBox(width: 6),
                 Expanded(
                   child: _buildConsoleButton(
                     label: 'RE-ASSIGN',
@@ -1098,22 +1107,24 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
                     },
                   ),
                 ),
-                const SizedBox(width: 6),
               ],
-              Expanded(
-                child: _buildConsoleButton(
-                  label: state.trolleyCode != null ? 'FREE TROLLEY' : 'SCAN TROLLEY',
-                  icon: state.trolleyCode != null ? Icons.link_off_rounded : Icons.qr_code_scanner_rounded,
-                  color: state.trolleyCode != null ? Colors.red.shade700 : Colors.teal.shade700,
-                  onPressed: !state.isBatchStarted
-                      ? null
-                      : (state.isUpdatingTrolley
-                      ? null
-                      : (state.trolleyCode != null
-                      ? () => _confirmFreeTrolley(controller, state)
-                      : () => _showScanTrolleyDialog(controller))),
+              if (!state.isReassignedBatch || state.trolleyCode != null) ...[
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _buildConsoleButton(
+                    label: state.trolleyCode != null ? 'FREE TROLLEY' : 'SCAN TROLLEY',
+                    icon: state.trolleyCode != null ? Icons.link_off_rounded : Icons.qr_code_scanner_rounded,
+                    color: state.trolleyCode != null ? Colors.red.shade700 : Colors.teal.shade700,
+                    onPressed: !state.isBatchStarted
+                        ? null
+                        : (state.isUpdatingTrolley
+                        ? null
+                        : (state.trolleyCode != null
+                        ? () => _confirmFreeTrolley(controller, state)
+                        : () => _showScanTrolleyDialog(controller))),
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ],

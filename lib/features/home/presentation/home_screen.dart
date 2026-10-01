@@ -7,6 +7,7 @@ import 'package:active_wear_scanning/features/lot_making/presentation/lot_list_s
 import 'package:active_wear_scanning/features/md_receiving/presentation/md_receiving_screen.dart';
 import 'package:active_wear_scanning/features/processing/presentation/processing_screen.dart';
 import 'package:active_wear_scanning/features/processing_waste_receiving/presentation/processing_waste_receiving_screen.dart';
+import 'package:active_wear_scanning/features/reports/presentation/reports_main_screen.dart';
 import 'package:active_wear_scanning/features/scanning_sections/presentation/widgets/section_permission_helper.dart';
 import 'package:active_wear_scanning/features/stitching_line_schedule/presentation/stitching_line_schedule_screen.dart';
 import 'package:active_wear_scanning/features/tray_tracking/presentation/tray_tracking_screen.dart';
@@ -91,6 +92,11 @@ class HomeScreen extends StatelessWidget {
       title: 'Unhold Trays',
       icon: Icons.lock_open_rounded,
       screen: (c) => const UnholdTraysScreen(),
+    ),
+    _WorkstationModule(
+      title: 'Reports & Analytics',
+      icon: Icons.bar_chart_rounded,
+      screen: (c) => const ReportsMainScreen(),
     ),
   ];
 

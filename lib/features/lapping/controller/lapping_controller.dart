@@ -688,6 +688,33 @@ class LappingController extends ChangeNotifier {
         resetDraftProgressIds: {},
       );
 
+      // Release trolley from batch header if attached so it becomes free for other lots/batches in draft state
+      try {
+        final bhRes = await _lotRepo.fetchLotHeaderById(batchHeaderId);
+        if (bhRes.success && bhRes.data != null) {
+          final bhRaw = Map<String, dynamic>.from(bhRes.data is Map ? bhRes.data : {});
+          final bhMap = Map<String, dynamic>.from(bhRaw['batchHeader'] ?? bhRaw);
+          final currentTrolleyId = bhMap['trayDetailId'];
+          if (currentTrolleyId != null) {
+            final Map<String, dynamic> updateJson = {
+              'planDate': bhMap['planDate'],
+              'colorDescription': bhMap['colorDescription'],
+              'lockFlag': bhMap['lockFlag'] ?? false,
+              'batchHeaderCode': bhMap['batchHeaderCode'],
+              'machineId': bhMap['machineId'],
+              'colorCode': bhMap['colorCodeId'] ?? bhMap['colorCode'],
+              'shiftId': bhMap['shiftId'],
+              'trayDetailId': null,
+              'concurrencyStamp': bhMap['concurrencyStamp'],
+            };
+            await _lotRepo.updateLotHeader(batchHeaderId, updateJson);
+            dev.log("LappingController: Released trolley $currentTrolleyId from batchHeader $batchHeaderId (isDraft: $isDraft)");
+          }
+        }
+      } catch (e) {
+        dev.log("LappingController: Non-blocking error releasing trolley from batch header: $e");
+      }
+
       // Update draftStatus and draftFlag on all active Lapping progress records for this batch on save draft
       if (isDraft) {
         final activeLappingProgresses = _state.rawActiveTrays
