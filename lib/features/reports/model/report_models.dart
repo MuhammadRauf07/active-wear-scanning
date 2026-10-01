@@ -43,81 +43,119 @@ class BatchLine {
 }
 
 // ---------------------------------------------------------------------------
-// 1. Knitting Report Item Model
+// 1. Work Order Full Status Report Models (Exact Match with Reference)
 // ---------------------------------------------------------------------------
-class KnittingReportItem {
-  final PlanLine planLine;
-  final MachineModel? machine;
-  final Shift? shift;
-  final WorkOrderHeader? workOrderHeader;
-  final Item? item;
-  final double planWeight;
-  final double planTubes;
-  final double actualWeight;
-  final double actualTubes;
-  final double sampleQty;
-  final double cGradeQty;
-  final double cycleTime;
-  final double completionPercentage;
-
-  KnittingReportItem({
-    required this.planLine,
-    this.machine,
-    this.shift,
-    this.workOrderHeader,
-    this.item,
-    required this.planWeight,
-    required this.planTubes,
-    required this.actualWeight,
-    required this.actualTubes,
-    required this.sampleQty,
-    required this.cGradeQty,
-    required this.cycleTime,
-    required this.completionPercentage,
-  });
-}
-
-// ---------------------------------------------------------------------------
-// 2. Work Order Report Item Model
-// ---------------------------------------------------------------------------
-class WorkOrderReportItem {
-  final int workOrderHeaderId;
+class WorkOrderHeaderSummary {
+  final int id;
   final String workOrderCode;
+  final String workOrderDate;
+  final String description;
+  final String customer;
+  final String brand;
+  final String style;
   final String? customerPo;
-  final String? workOrderDate;
-  final String? status;
-  final double requiredTubes;
-  final double planTubes;
-  final double knittedTubes;
-  final double packedTubes;
+  final String? crdStartDate;
+  final String? crdEndDate;
+  final String status;
+  final bool isLocked;
   final int totalBatches;
-  final int completedBatches;
-  final double knittingMargin;
-  final double dyeingMargin;
-  final double stitchingMargin;
-  final double progressPercent;
+  final double totalRequiredTubes;
+  final double totalPlannedTubes;
+  final double totalKnittedTubes;
 
-  WorkOrderReportItem({
-    required this.workOrderHeaderId,
+  WorkOrderHeaderSummary({
+    required this.id,
     required this.workOrderCode,
+    required this.workOrderDate,
+    required this.description,
+    required this.customer,
+    required this.brand,
+    required this.style,
     this.customerPo,
-    this.workOrderDate,
-    this.status,
-    required this.requiredTubes,
-    required this.planTubes,
-    required this.knittedTubes,
-    required this.packedTubes,
+    this.crdStartDate,
+    this.crdEndDate,
+    required this.status,
+    required this.isLocked,
     required this.totalBatches,
-    required this.completedBatches,
-    required this.knittingMargin,
-    required this.dyeingMargin,
-    required this.stitchingMargin,
-    required this.progressPercent,
+    required this.totalRequiredTubes,
+    required this.totalPlannedTubes,
+    required this.totalKnittedTubes,
+  });
+}
+
+class WorkOrderItemColorStatusRow {
+  final String itemDescription;
+  final String sizeDescription;
+  final String colorDescription;
+  final String processedItemDescription;
+
+  // Header metric tags
+  final double woRequiredTubes; // WO.TB
+  final double knitPlanTubes;   // P.TB
+  final double knitAGradeTubes; // A.TB
+  final double knitCGradeTubes; // C.TB
+  final double sampleTubes;     // S.TB
+  final int gbsReceivedTrays;   // GBS.TR
+  final double gbsReceivedTubes;// GBS.TB
+  final double gbsStockTubes;   // GBS.STK.TB
+
+  // Stage Breakdown Columns (Trays, Tubes)
+  final int freshLotMakingTrays;
+  final double freshLotMakingTubes;
+
+  final int reassignedLotMakingTrays;
+  final double reassignedLotMakingTubes;
+
+  final int freshWipTrays;
+  final double freshWipTubes;
+
+  final int reassignedWipTrays;
+  final double reassignedWipTubes;
+
+  final int readyToReceiveTrays;
+  final double readyToReceiveTubes;
+
+  final int riReceivedTrays;
+  final double riReceivedTubes;
+
+  final int riStockTrays;
+  final double riStockTubes;
+
+  final double allocatedTubes;
+
+  WorkOrderItemColorStatusRow({
+    required this.itemDescription,
+    required this.sizeDescription,
+    required this.colorDescription,
+    required this.processedItemDescription,
+    required this.woRequiredTubes,
+    required this.knitPlanTubes,
+    required this.knitAGradeTubes,
+    required this.knitCGradeTubes,
+    required this.sampleTubes,
+    required this.gbsReceivedTrays,
+    required this.gbsReceivedTubes,
+    required this.gbsStockTubes,
+    required this.freshLotMakingTrays,
+    required this.freshLotMakingTubes,
+    required this.reassignedLotMakingTrays,
+    required this.reassignedLotMakingTubes,
+    required this.freshWipTrays,
+    required this.freshWipTubes,
+    required this.reassignedWipTrays,
+    required this.reassignedWipTubes,
+    required this.readyToReceiveTrays,
+    required this.readyToReceiveTubes,
+    required this.riReceivedTrays,
+    required this.riReceivedTubes,
+    required this.riStockTrays,
+    required this.riStockTubes,
+    required this.allocatedTubes,
   });
 }
 
 // ---------------------------------------------------------------------------
-// 3. Batch Report Item Model
+// 2. Batch Report Item Model
 // ---------------------------------------------------------------------------
 class BatchReportItem {
   final LotHeaderModel batchHeader;
@@ -127,7 +165,7 @@ class BatchReportItem {
   final bool isLocked;
   final int? trayDetailId;
   final String? trolleyCode;
-  final bool isTrolleyFreed; // True if reassigned/freed at lapping
+  final bool isTrolleyFreed;
   final double totalWeight;
   final double totalTubes;
   final int totalTrays;
@@ -158,7 +196,7 @@ class BatchReportItem {
 }
 
 // ---------------------------------------------------------------------------
-// 4. Induction Report Item Model
+// 3. Induction Report Item Model
 // ---------------------------------------------------------------------------
 class InductionReportItem {
   final ProductionProgress progress;
@@ -170,7 +208,7 @@ class InductionReportItem {
   final String sizeDescription;
   final double weight;
   final double tubes;
-  final int productGrade; // 1 = Grade A, 2 = Grade B, etc.
+  final int productGrade;
   final DateTime? inductionDate;
   final bool isBatched;
   final int? batchHeaderId;
@@ -193,15 +231,15 @@ class InductionReportItem {
 }
 
 // ---------------------------------------------------------------------------
-// 5. Tray & Trolley Report Item Model
+// 4. Tray & Trolley Report Item Model
 // ---------------------------------------------------------------------------
 class TrayTrolleyReportItem {
   final TrayDetail trayDetail;
   final String assetCode;
-  final String assetType; // 'Tray' or 'Trolley'
+  final String assetType;
   final bool isActive;
   final bool isReAssigned;
-  final String status; // 'Available / Free', 'In Use', 'Inactive'
+  final String status;
   final String? currentBatchCode;
   final String? currentWorkOrderCode;
   final String? locatorName;

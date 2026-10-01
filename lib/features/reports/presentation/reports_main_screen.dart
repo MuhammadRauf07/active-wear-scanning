@@ -4,7 +4,6 @@ import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/app_loader.dart';
 import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
 import 'package:active_wear_scanning/features/reports/controller/reports_controller.dart';
-import 'package:active_wear_scanning/features/reports/presentation/sub_reports/knitting_report_view.dart';
 import 'package:active_wear_scanning/features/reports/presentation/sub_reports/work_order_report_view.dart';
 import 'package:active_wear_scanning/features/reports/presentation/sub_reports/batch_report_view.dart';
 import 'package:active_wear_scanning/features/reports/presentation/sub_reports/induction_report_view.dart';
@@ -36,10 +35,9 @@ class _ReportsMainScreenView extends StatelessWidget {
     }
 
     final tabs = [
-      {'label': 'Knitting', 'icon': Icons.precision_manufacturing_rounded},
-      {'label': 'Work Order', 'icon': Icons.assignment_rounded},
-      {'label': 'Batch', 'icon': Icons.layers_rounded},
-      {'label': 'Induction', 'icon': Icons.warehouse_rounded},
+      {'label': 'Work Order Status', 'icon': Icons.assignment_rounded},
+      {'label': 'Batch Report', 'icon': Icons.layers_rounded},
+      {'label': 'Induction Store', 'icon': Icons.warehouse_rounded},
       {'label': 'Trays & Trolleys', 'icon': Icons.track_changes_rounded},
     ];
 
@@ -53,7 +51,7 @@ class _ReportsMainScreenView extends StatelessWidget {
               // Top Header
               CustomInspectionHeader(
                 heading: 'REPORTS & ANALYTICS',
-                subtitle: 'Manufacturing Intelligence & Live Tracking',
+                subtitle: 'Manufacturing Status & Traceability',
                 isShowBackIcon: true,
                 topPadding: 12,
                 horizontalPadding: 16,
@@ -62,7 +60,7 @@ class _ReportsMainScreenView extends StatelessWidget {
 
               // Navigation Tabs Ribbon
               Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(10),
@@ -122,7 +120,6 @@ class _ReportsMainScreenView extends StatelessWidget {
                     : IndexedStack(
                         index: controller.selectedTabIndex,
                         children: [
-                          KnittingReportView(controller: controller),
                           WorkOrderReportView(controller: controller),
                           BatchReportView(controller: controller),
                           InductionReportView(controller: controller),
@@ -140,14 +137,12 @@ class _ReportsMainScreenView extends StatelessWidget {
   bool _isDatasetEmpty(ReportsController controller) {
     switch (controller.selectedTabIndex) {
       case 0:
-        return controller.knittingItems.isEmpty;
+        return controller.workOrderItemRows.isEmpty && controller.selectedWorkOrderSummary == null;
       case 1:
-        return controller.workOrderItems.isEmpty;
-      case 2:
         return controller.batchItems.isEmpty;
-      case 3:
+      case 2:
         return controller.inductionItems.isEmpty;
-      case 4:
+      case 3:
         return controller.trayTrolleyItems.isEmpty;
       default:
         return true;

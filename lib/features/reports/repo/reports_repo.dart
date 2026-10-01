@@ -10,61 +10,41 @@ class ReportsRepo {
   final ApiService _api = ApiService();
 
   // ---------------------------------------------------------------------------
-  // 1. Knitting Report Data
+  // 1. Work Order Report Data
   // ---------------------------------------------------------------------------
-  Future<PlexApiResult> fetchKnittingPlanLines({
-    String? planDate,
-    int? shiftId,
-    int? resourceId,
-    int? workOrderHeaderId,
-  }) async {
-    final query = <String, dynamic>{
-      'MaxResultCount': '1000',
-    };
-    if (planDate != null && planDate.isNotEmpty) query['PlanDate'] = planDate;
-    if (shiftId != null) query['ShiftId'] = shiftId.toString();
-    if (resourceId != null) query['ResourceId'] = resourceId.toString();
-    if (workOrderHeaderId != null) query['WorkOrderHeaderId'] = workOrderHeaderId.toString();
+  Future<PlexApiResult> fetchWorkOrderHeaders() async {
+    final result = await _api.getList('/api/app/work-order-headers?MaxResultCount=1000');
+    if (!result.success || result.data == null) {
+      // Fallback endpoint if headers path is singular
+      final fallback = await _api.getList('/api/app/work-orders?MaxResultCount=1000');
+      if (fallback.success && fallback.data != null) return _parseWorkOrderHeaders(fallback.data);
+      return result;
+    }
+    return _parseWorkOrderHeaders(result.data);
+  }
 
-    final result = await _api.getList('/api/app/plan-lines', query: query);
-    if (!result.success || result.data == null) return result;
-
+  PlexApiResult _parseWorkOrderHeaders(dynamic raw) {
     try {
-      final List rawData = result.data is Map ? (result.data['items'] ?? []) : result.data;
+      final List rawData = raw is Map ? (raw['items'] ?? []) : (raw is List ? raw : []);
       final list = rawData.map((item) {
-        return PlanLine.fromJson(Map<String, dynamic>.from(item as Map));
+        return WorkOrderHeader.fromJson(Map<String, dynamic>.from(item as Map));
       }).toList();
       return PlexApiResult(true, 200, "Success", list);
     } catch (e) {
-      dev.log("ReportsRepo fetchKnittingPlanLines error: $e");
+      dev.log("ReportsRepo _parseWorkOrderHeaders error: $e");
       return PlexApiResult(false, 500, e.toString(), null);
     }
   }
 
-  Future<PlexApiResult> fetchKnittingProductionProgress({
-    String? date,
-    int? shiftId,
-  }) async {
-    final query = <String, dynamic>{
-      'MaxResultCount': '1000',
-      'TransactionType': '1', // Knitting / GBS
-    };
-    if (date != null && date.isNotEmpty) query['Date'] = date;
-    if (shiftId != null) query['ShiftId'] = shiftId.toString();
-
-    return await _fetchProductionProgressList(query);
-  }
-
-  // ---------------------------------------------------------------------------
-  // 2. Work Order Report Data
-  // ---------------------------------------------------------------------------
   Future<PlexApiResult> fetchWorkOrderLines({
+    int? workOrderHeaderId,
     int? workOrderLineId,
     int? batchHeaderId,
   }) async {
     final query = <String, dynamic>{
       'MaxResultCount': '1000',
     };
+    if (workOrderHeaderId != null) query['WorkOrderHeaderId'] = workOrderHeaderId.toString();
     if (workOrderLineId != null) query['WorkOrderLineId'] = workOrderLineId.toString();
     if (batchHeaderId != null) query['batchHeaderId'] = batchHeaderId.toString();
 
@@ -92,7 +72,7 @@ class ReportsRepo {
   }
 
   // ---------------------------------------------------------------------------
-  // 3. Batch Report Data
+  // 2. Batch Report Data
   // ---------------------------------------------------------------------------
   Future<PlexApiResult> fetchBatchHeaders({
     String? batchCode,
@@ -138,7 +118,7 @@ class ReportsRepo {
   }
 
   // ---------------------------------------------------------------------------
-  // 4. Induction Store & WIP Report Data
+  // 3. Induction Store & WIP Report Data
   // ---------------------------------------------------------------------------
   Future<PlexApiResult> fetchInductionProductionProgress({
     int? operationId,
@@ -158,7 +138,7 @@ class ReportsRepo {
   }
 
   // ---------------------------------------------------------------------------
-  // 5. Trays & Trolleys Report Data
+  // 4. Trays & Trolleys Report Data
   // ---------------------------------------------------------------------------
   Future<PlexApiResult> fetchTrayDetails({
     int? trayType, // 1 = Tray, 2 = Trolley
@@ -190,28 +170,16 @@ class ReportsRepo {
   // ---------------------------------------------------------------------------
   // Shared Lookups
   // ---------------------------------------------------------------------------
-  Future<PlexApiResult> fetchMachines() async {
-    final result = await _api.getList('/api/app/resources?MaxResultCount=1000');
-    if (!result.success || result.data == null) return result;
-    try {
-      final List rawData = result.data is Map ? (result.data['items'] ?? []) : result.data;
-      final list = rawData.map((item) => MachineModel.fromJson(Map<String, dynamic>.from(item as Map))).toList();
-      return PlexApiResult(true, 200, "Success", list);
-    } catch (e) {
-      return PlexApiResult(false, 500, e.toString(), null);
-    }
+  Future<PlexApiResult> fetchCustomers() async {
+    return await _api.getList('/api/app/customers?MaxResultCount=1000');
   }
 
-  Future<PlexApiResult> fetchShifts() async {
-    final result = await _api.getList('/api/app/shifts?MaxResultCount=1000');
-    if (!result.success || result.data == null) return result;
-    try {
-      final List rawData = result.data is Map ? (result.data['items'] ?? []) : result.data;
-      final list = rawData.map((item) => Shift.fromJson(Map<String, dynamic>.from(item as Map))).toList();
-      return PlexApiResult(true, 200, "Success", list);
-    } catch (e) {
-      return PlexApiResult(false, 500, e.toString(), null);
-    }
+  Future<PlexApiResult> fetchBrands() async {
+    return await _api.getList('/api/app/brands?MaxResultCount=1000');
+  }
+
+  Future<PlexApiResult> fetchStyles() async {
+    return await _api.getList('/api/app/styles?MaxResultCount=1000');
   }
 
   Future<PlexApiResult> fetchOperations() async {

@@ -5,7 +5,6 @@ class ReportFilterBar extends StatelessWidget {
   final ReportsController controller;
   final String searchHint;
   final List<String>? statusOptions;
-  final bool showShiftFilter;
   final bool showOperationFilter;
 
   const ReportFilterBar({
@@ -13,14 +12,13 @@ class ReportFilterBar extends StatelessWidget {
     required this.controller,
     this.searchHint = 'Search records...',
     this.statusOptions,
-    this.showShiftFilter = false,
     this.showOperationFilter = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -28,7 +26,7 @@ class ReportFilterBar extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -108,17 +106,13 @@ class ReportFilterBar extends StatelessWidget {
             ),
           ),
 
-          // Row 3: Optional Status / Shift / Operation Dropdowns
-          if (statusOptions != null || showShiftFilter || showOperationFilter) ...[
+          // Row 3: Optional Status / Operation Dropdowns
+          if (statusOptions != null || showOperationFilter) ...[
             const SizedBox(height: 10),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  if (showShiftFilter && controller.shifts.isNotEmpty) ...[
-                    _buildShiftDropdown(),
-                    const SizedBox(width: 8),
-                  ],
                   if (showOperationFilter && controller.operations.isNotEmpty) ...[
                     _buildOperationDropdown(),
                     const SizedBox(width: 8),
@@ -223,37 +217,6 @@ class ReportFilterBar extends StatelessWidget {
           controller.setDatePreset(DateFilterPreset.custom, customRange: picked);
         }
       },
-    );
-  }
-
-  Widget _buildShiftDropdown() {
-    return Container(
-      height: 32,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0xFFCBD5E1)),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<int?>(
-          value: controller.selectedShiftId,
-          hint: const Text('All Shifts', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
-          icon: const Icon(Icons.arrow_drop_down, size: 18, color: Color(0xFF64748B)),
-          style: const TextStyle(fontSize: 11, color: Color(0xFF0F172A), fontWeight: FontWeight.w600),
-          items: [
-            const DropdownMenuItem<int?>(
-              value: null,
-              child: Text('All Shifts'),
-            ),
-            ...controller.shifts.map((s) => DropdownMenuItem<int?>(
-                  value: s.id,
-                  child: Text(s.description ?? s.code),
-                )),
-          ],
-          onChanged: controller.setShiftFilter,
-        ),
-      ),
     );
   }
 

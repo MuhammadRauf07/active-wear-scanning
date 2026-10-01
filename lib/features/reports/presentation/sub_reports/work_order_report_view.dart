@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:active_wear_scanning/features/common-models/common_models.dart';
 import 'package:active_wear_scanning/features/reports/controller/reports_controller.dart';
 import 'package:active_wear_scanning/features/reports/model/report_models.dart';
-import 'package:active_wear_scanning/features/reports/presentation/widgets/report_filter_bar.dart';
-import 'package:active_wear_scanning/features/reports/presentation/widgets/report_kpi_card.dart';
 
 class WorkOrderReportView extends StatelessWidget {
   final ReportsController controller;
@@ -11,250 +10,207 @@ class WorkOrderReportView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = controller.workOrderItems;
-
-    final double totalRequiredTubes = items.fold(0.0, (sum, i) => sum + i.requiredTubes);
-    final double totalKnittedTubes = items.fold(0.0, (sum, i) => sum + i.knittedTubes);
-    final double totalPackedTubes = items.fold(0.0, (sum, i) => sum + i.packedTubes);
-    final int totalBatchesCount = items.fold(0, (sum, i) => sum + i.totalBatches);
-    final double fulfillmentRate = totalRequiredTubes > 0 ? (totalKnittedTubes / totalRequiredTubes) * 100 : 0.0;
+    final summary = controller.selectedWorkOrderSummary;
+    final rows = controller.workOrderItemRows;
 
     return RefreshIndicator(
       onRefresh: () => controller.fetchCurrentReportData(),
       color: const Color(0xFF1B64A3),
       child: ListView(
-        padding: const EdgeInsets.only(bottom: 24),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         children: [
-          // Filter Bar
-          ReportFilterBar(
-            controller: controller,
-            searchHint: 'Search Work Order / Customer PO...',
-            statusOptions: const ['In Progress', 'Completed'],
-          ),
+          // 1. Work Order Selector Dropdown Bar
+          _buildWorkOrderSelector(context),
 
-          // KPI Grid
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final isWide = constraints.maxWidth > 600;
-                return GridView.count(
-                  crossAxisCount: isWide ? 4 : 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisSpacing: 10,
-                  mainAxisSpacing: 10,
-                  childAspectRatio: isWide ? 2.4 : 1.75,
-                  children: [
-                    ReportKpiCard(
-                      title: 'TOTAL REQUIRED',
-                      value: '${totalRequiredTubes.toStringAsFixed(0)} Tubes',
-                      subtitle: 'Work Orders: ${items.length}',
-                      icon: Icons.assignment_rounded,
-                      color: const Color(0xFF1B64A3),
-                    ),
-                    ReportKpiCard(
-                      title: 'KNITTED YIELD',
-                      value: '${totalKnittedTubes.toStringAsFixed(0)} Tubes',
-                      subtitle: 'Produced Stock',
-                      icon: Icons.check_circle_outline_rounded,
-                      color: const Color(0xFF2E7D32),
-                    ),
-                    ReportKpiCard(
-                      title: 'PACKED OUTPUT',
-                      value: '${totalPackedTubes.toStringAsFixed(0)} Tubes',
-                      subtitle: 'Ready for Dispatch',
-                      icon: Icons.all_inbox_rounded,
-                      color: const Color(0xFFD97706),
-                    ),
-                    ReportKpiCard(
-                      title: 'FULFILLMENT',
-                      value: '${fulfillmentRate.toStringAsFixed(1)}%',
-                      subtitle: '$totalBatchesCount Batches Total',
-                      icon: Icons.trending_up_rounded,
-                      color: const Color(0xFF7C3AED),
-                      badgeText: fulfillmentRate >= 100 ? 'Fulfilled' : 'Active',
-                      badgeColor: fulfillmentRate >= 100 ? const Color(0xFF2E7D32) : const Color(0xFF7C3AED),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
+          const SizedBox(height: 12),
 
-          const SizedBox(height: 16),
+          // 2. Work Order Header Card (Matching Reference Layout)
+          if (summary != null) _buildWorkOrderHeaderCard(summary),
 
-          // Header
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'WORK ORDERS (${items.length})',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF334155),
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                Text(
-                  'Auto-aggregated from Batch Lines',
-                  style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
-                ),
-              ],
-            ),
-          ),
+          const SizedBox(height: 12),
 
-          const SizedBox(height: 8),
+          // 3. Legend / Abbreviations Strip
+          _buildLegendStrip(),
 
-          if (items.isEmpty)
+          const SizedBox(height: 14),
+
+          // 4. Matrix Breakdown Table / List
+          if (rows.isEmpty)
             Container(
-              margin: const EdgeInsets.all(16),
               padding: const EdgeInsets.all(32),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
               child: const Column(
                 children: [
-                  Icon(Icons.assignment_late_outlined, size: 48, color: Color(0xFF94A3B8)),
-                  SizedBox(height: 12),
+                  Icon(Icons.assignment_late_outlined, size: 44, color: Color(0xFF94A3B8)),
+                  SizedBox(height: 10),
                   Text(
-                    'No Work Orders match the active criteria',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+                    'No status data available for the selected Work Order',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
                   ),
                 ],
               ),
             )
           else
-            ...items.map((item) => _buildWorkOrderCard(item)),
+            ..._buildGroupedItemMatrices(rows),
         ],
       ),
     );
   }
 
-  Widget _buildWorkOrderCard(WorkOrderReportItem woItem) {
-    final bool isCompleted = woItem.status == 'Completed';
-
+  // ---------------------------------------------------------------------------
+  // 1. Work Order Dropdown Selector
+  // ---------------------------------------------------------------------------
+  Widget _buildWorkOrderSelector(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.015),
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEFF6FF),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Icon(Icons.assignment_rounded, size: 18, color: Color(0xFF1B64A3)),
+          ),
+          const SizedBox(width: 10),
+          const Text(
+            'SELECT WORK ORDER:',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Container(
+              height: 38,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFCBD5E1)),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<WorkOrderHeader>(
+                  value: controller.selectedWorkOrder,
+                  isExpanded: true,
+                  hint: const Text('Choose Work Order', style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+                  icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF1B64A3)),
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                  items: controller.workOrdersList.map((wo) {
+                    final code = wo.workOrderCode.isNotEmpty ? wo.workOrderCode : 'WO #${wo.id}';
+                    return DropdownMenuItem<WorkOrderHeader>(
+                      value: wo,
+                      child: Text(code),
+                    );
+                  }).toList(),
+                  onChanged: (wo) => controller.selectWorkOrder(wo),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 2. Work Order Header Card
+  // ---------------------------------------------------------------------------
+  Widget _buildWorkOrderHeaderCard(WorkOrderHeaderSummary summary) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Row 1: Code & Status
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF3E8FF),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Icon(Icons.assignment_rounded, size: 16, color: Color(0xFF7C3AED)),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'WO #${woItem.workOrderCode}',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF0F172A),
-                    ),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: isCompleted ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  woItem.status ?? 'In Progress',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: isCompleted ? const Color(0xFF166534) : const Color(0xFFB45309),
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 10),
-
-          // Meta Info
-          Row(
-            children: [
-              Expanded(
-                child: _buildMetaItem('Customer PO', woItem.customerPo ?? 'Standard PO'),
-              ),
-              Expanded(
-                child: _buildMetaItem('Batches Created', '${woItem.totalBatches} (${woItem.completedBatches} Done)'),
-              ),
-              Expanded(
-                child: _buildMetaItem('Margins (K/D/S)', '${woItem.knittingMargin.toStringAsFixed(0)}% / ${woItem.dyeingMargin.toStringAsFixed(0)}% / ${woItem.stitchingMargin.toStringAsFixed(0)}%'),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 10),
-
-          // Progress Container
+          // Blue Table Header Banner
           Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: const BoxDecoration(
+              color: Color(0xFF0F3D69), // Navy Header from Web Screenshot
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(9),
+                topRight: Radius.circular(9),
+              ),
             ),
-            child: Column(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
+                    const Icon(Icons.layers_rounded, color: Colors.white, size: 16),
+                    const SizedBox(width: 8),
                     Text(
-                      'Required: ${woItem.requiredTubes.toStringAsFixed(0)} Tubes',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
-                    ),
-                    Text(
-                      'Knitted: ${woItem.knittedTubes.toStringAsFixed(0)} | Packed: ${woItem.packedTubes.toStringAsFixed(0)}',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF7C3AED)),
+                      'WORK ORDER: ${summary.workOrderCode}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: (woItem.progressPercent / 100).clamp(0.0, 1.0),
-                    backgroundColor: const Color(0xFFE2E8F0),
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      isCompleted ? const Color(0xFF2E7D32) : const Color(0xFF7C3AED),
-                    ),
-                    minHeight: 6,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: summary.isLocked ? const Color(0xFF16A34A) : const Color(0xFFD97706),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    summary.status.toUpperCase(),
+                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
                   ),
                 ),
               ],
+            ),
+          ),
+
+          // Header Data Grid
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth > 600;
+                return Wrap(
+                  spacing: 16,
+                  runSpacing: 10,
+                  children: [
+                    _buildHeaderItem('WORK ORDER DATE', summary.workOrderDate, width: isWide ? 120 : 100),
+                    _buildHeaderItem('DESCRIPTION', summary.description, width: isWide ? 160 : 140),
+                    _buildHeaderItem('CUSTOMER', summary.customer, width: isWide ? 140 : 120),
+                    _buildHeaderItem('BRAND', summary.brand, width: isWide ? 130 : 110),
+                    _buildHeaderItem('STYLE', summary.style, width: isWide ? 120 : 100),
+                    _buildHeaderItem('CUSTOMER PO', summary.customerPo ?? '-', width: isWide ? 120 : 100),
+                    _buildHeaderItem('TOTAL BATCHES', '${summary.totalBatches} Batches', width: isWide ? 120 : 100, isBoldValue: true),
+                    _buildHeaderItem('TOTAL TUBES', '${summary.totalRequiredTubes.toStringAsFixed(0)} Tubes', width: isWide ? 120 : 100, isBoldValue: true, valueColor: const Color(0xFF1B64A3)),
+                  ],
+                );
+              },
             ),
           ),
         ],
@@ -262,22 +218,223 @@ class WorkOrderReportView extends StatelessWidget {
     );
   }
 
-  Widget _buildMetaItem(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: Color(0xFF64748B)),
+  Widget _buildHeaderItem(String label, String value, {double? width, bool isBoldValue = false, Color? valueColor}) {
+    return SizedBox(
+      width: width,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF64748B),
+              letterSpacing: 0.3,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: isBoldValue ? FontWeight.bold : FontWeight.w600,
+              color: valueColor ?? const Color(0xFF0F172A),
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 3. Legend / Abbreviations Strip
+  // ---------------------------------------------------------------------------
+  Widget _buildLegendStrip() {
+    final legends = [
+      {'abbr': 'WO.TB', 'desc': 'Work Order Required Tubes'},
+      {'abbr': 'P.TB', 'desc': 'Knit Plan Tubes'},
+      {'abbr': 'A.TB', 'desc': 'Knit A-Grade Tubes'},
+      {'abbr': 'C.TB', 'desc': 'Knit C-Grade Tubes'},
+      {'abbr': 'S.TB', 'desc': 'Sample Tubes'},
+      {'abbr': 'GBS.TR', 'desc': 'Trays Received at GBS'},
+      {'abbr': 'GBS.TB', 'desc': 'Tubes Received at GBS'},
+      {'abbr': 'GBS.STK.TB', 'desc': 'Tubes Stock at GBS'},
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 6,
+        children: legends.map((l) {
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: const Color(0xFFCBD5E1)),
+                ),
+                child: Text(
+                  l['abbr']!,
+                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF1B64A3)),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                l['desc']!,
+                style: const TextStyle(fontSize: 10, color: Color(0xFF64748B)),
+              ),
+            ],
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 4. Matrix Breakdown w.r.t Item & Color
+  // ---------------------------------------------------------------------------
+  List<Widget> _buildGroupedItemMatrices(List<WorkOrderItemColorStatusRow> rows) {
+    return rows.map((row) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-        const SizedBox(height: 1),
-        Text(
-          value,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Item Header Bar with Quick Metric Badges
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: const BoxDecoration(
+                color: Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(9),
+                  topRight: Radius.circular(9),
+                ),
+                border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    row.itemDescription,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                  ),
+                  const SizedBox(height: 6),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _buildMetricTag('WO.TB', row.woRequiredTubes.toStringAsFixed(0), const Color(0xFF1B64A3)),
+                        _buildMetricTag('P.TB', row.knitPlanTubes.toStringAsFixed(0), const Color(0xFF475569)),
+                        _buildMetricTag('A.TB', row.knitAGradeTubes.toStringAsFixed(0), const Color(0xFF16A34A)),
+                        _buildMetricTag('C.TB', row.knitCGradeTubes.toStringAsFixed(0), const Color(0xFFDC2626)),
+                        _buildMetricTag('S.TB', row.sampleTubes.toStringAsFixed(0), const Color(0xFFD97706)),
+                        _buildMetricTag('GBS.TR', '${row.gbsReceivedTrays}', const Color(0xFF0284C7)),
+                        _buildMetricTag('GBS.TB', row.gbsReceivedTubes.toStringAsFixed(0), const Color(0xFF0284C7)),
+                        _buildMetricTag('GBS.STK.TB', row.gbsStockTubes.toStringAsFixed(0), const Color(0xFF64748B)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Horizontal Scrollable Breakdown Table
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                headingRowHeight: 34,
+                dataRowMinHeight: 36,
+                dataRowMaxHeight: 40,
+                headingRowColor: WidgetStateProperty.all(const Color(0xFF0F3D69)),
+                columnSpacing: 14,
+                horizontalMargin: 12,
+                columns: const [
+                  DataColumn(label: Text('Color', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))),
+                  DataColumn(label: Text('Processed', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))),
+                  DataColumn(label: Text('Fresh Lot (Tr/Tb)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))),
+                  DataColumn(label: Text('Reassigned Lot (Tr/Tb)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))),
+                  DataColumn(label: Text('Fresh WIP (Tr/Tb)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))),
+                  DataColumn(label: Text('Reassigned WIP (Tr/Tb)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))),
+                  DataColumn(label: Text('Ready R&I (Tr/Tb)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))),
+                  DataColumn(label: Text('R&I Received (Tr/Tb)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))),
+                  DataColumn(label: Text('R&I Stock (Tr/Tb)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))),
+                  DataColumn(label: Text('Allocated', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))),
+                ],
+                rows: [
+                  DataRow(
+                    cells: [
+                      DataCell(Text(row.colorDescription, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)))),
+                      DataCell(Text(row.processedItemDescription, style: const TextStyle(fontSize: 10, color: Color(0xFF475569)))),
+                      DataCell(_buildStageCell(row.freshLotMakingTrays, row.freshLotMakingTubes)),
+                      DataCell(_buildStageCell(row.reassignedLotMakingTrays, row.reassignedLotMakingTubes)),
+                      DataCell(_buildStageCell(row.freshWipTrays, row.freshWipTubes)),
+                      DataCell(_buildStageCell(row.reassignedWipTrays, row.reassignedWipTubes)),
+                      DataCell(_buildStageCell(row.readyToReceiveTrays, row.readyToReceiveTubes)),
+                      DataCell(_buildStageCell(row.riReceivedTrays, row.riReceivedTubes)),
+                      DataCell(_buildStageCell(row.riStockTrays, row.riStockTubes)),
+                      DataCell(Text(row.allocatedTubes.toStringAsFixed(0), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF1B64A3)))),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-      ],
+      );
+    }).toList();
+  }
+
+  Widget _buildMetricTag(String label, String value, Color color) {
+    return Container(
+      margin: const EdgeInsets.only(right: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('$label: ', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color)),
+          Text(value, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStageCell(int trays, double tubes) {
+    return Text(
+      '$trays / ${tubes.toStringAsFixed(0)}',
+      style: TextStyle(
+        fontSize: 11,
+        fontWeight: tubes > 0 ? FontWeight.bold : FontWeight.normal,
+        color: tubes > 0 ? const Color(0xFF0F172A) : const Color(0xFF94A3B8),
+      ),
     );
   }
 }
