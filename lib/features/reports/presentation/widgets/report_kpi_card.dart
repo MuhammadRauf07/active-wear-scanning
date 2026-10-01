@@ -36,9 +36,12 @@ class ReportKpiCard extends StatelessWidget {
           ),
         ],
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return Row(
+      child: Center(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               // Left Icon
@@ -53,16 +56,17 @@ class ReportKpiCard extends StatelessWidget {
               const SizedBox(width: 8),
 
               // Right Data Column
-              Expanded(
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 120),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Expanded(
+                        Flexible(
                           child: Text(
                             title,
                             style: const TextStyle(
@@ -75,9 +79,9 @@ class ReportKpiCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        if (badgeText != null)
+                        if (badgeText != null) ...[
+                          const SizedBox(width: 4),
                           Container(
-                            margin: const EdgeInsets.only(left: 4),
                             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                             decoration: BoxDecoration(
                               color: (badgeColor ?? color).withValues(alpha: 0.12),
@@ -93,20 +97,19 @@ class ReportKpiCard extends StatelessWidget {
                               maxLines: 1,
                             ),
                           ),
+                        ],
                       ],
                     ),
                     const SizedBox(height: 2),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        value,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF0F172A),
-                        ),
+                    Text(
+                      value,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A),
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     if (subtitle != null) ...[
                       const SizedBox(height: 1),
@@ -125,8 +128,8 @@ class ReportKpiCard extends StatelessWidget {
                 ),
               ),
             ],
-          );
-        },
+          ),
+        ),
       ),
     );
   }

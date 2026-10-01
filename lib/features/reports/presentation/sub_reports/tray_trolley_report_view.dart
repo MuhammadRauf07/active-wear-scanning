@@ -44,7 +44,7 @@ class TrayTrolleyReportView extends StatelessWidget {
                   physics: const NeverScrollableScrollPhysics(),
                   crossAxisSpacing: 10,
                   mainAxisSpacing: 10,
-                  childAspectRatio: isWide ? 2.8 : 2.1,
+                  childAspectRatio: isWide ? 2.4 : 1.75,
                   children: [
                     ReportKpiCard(
                       title: 'TOTAL ASSETS',

@@ -1089,7 +1089,7 @@ class PlanLine {
       quantityPerTray: (json['quantityPerTray'] as num?)?.toDouble() ?? 0,
       actualStartTime: json['actualStartTime']?.toString(),
       actualEndTime: json['actualEndTime']?.toString(),
-      cancelled: json['cancelled'],
+      cancelled: json['cancelled'] == true,
       primaryUOM: (json['primaryUOM'] as num?)?.toInt() ?? 0,
       primaryPlanQuantity: (json['primaryPlanQuantity'] as num?)?.toDouble() ?? 0,
       secondaryPlanQuantity: (json['secondaryPlanQuantity'] as num?)?.toDouble() ?? 0,
