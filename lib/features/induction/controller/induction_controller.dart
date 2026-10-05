@@ -24,17 +24,15 @@ class InductionController extends ChangeNotifier {
 
   void selectBatch(LotHeaderModel? batch) {
     if (_state.selectedBatch?.id != batch?.id) {
-      _state = _state.copyWith(
-        selectedBatch: batch,
-        scannedTrays: [],
-      );
+      _state = _state.copyWith(selectedBatch: batch, scannedTrays: []);
       notifyListeners();
     }
   }
 
   void removeScannedTray(int index) {
     if (index >= 0 && index < _state.scannedTrays.length) {
-      final updated = List<GBSScannedTray>.from(_state.scannedTrays)..removeAt(index);
+      final updated = List<GBSScannedTray>.from(_state.scannedTrays)
+        ..removeAt(index);
       _state = _state.copyWith(scannedTrays: updated);
       notifyListeners();
     }
@@ -51,7 +49,9 @@ class InductionController extends ChangeNotifier {
     if (blRes.success && blRes.data != null) {
       final rawLines = blRes.data is List ? blRes.data as List : [];
       for (final l in rawLines) {
-        final bl = l['batchLines'] as Map<String, dynamic>? ?? (l is Map<String, dynamic> ? l : {});
+        final bl =
+            l['batchLines'] as Map<String, dynamic>? ??
+            (l is Map<String, dynamic> ? l : {});
         if (bl['isReAssigned'] == true) {
           final trayId = bl['trayId'] as int?;
           final bhId = bl['batchHeaderId'] as int?;
@@ -66,21 +66,26 @@ class InductionController extends ChangeNotifier {
     final res = await _inductionRepo.getProductionProgress();
     if (res.success && res.data != null) {
       final allTrays = res.data as List<InductionModel>;
-      
+
       // De-duplicate by primaryTrayId to keep ONLY the latest progress record for each tray
       final Map<int, InductionModel> latestByTray = {};
       for (final t in allTrays) {
-        final trayId = t.productionProgress.primaryTrayId ?? t.primaryTrayModel.id;
+        final trayId =
+            t.productionProgress.primaryTrayId ?? t.primaryTrayModel.id;
         if (trayId != null) {
-          if (!latestByTray.containsKey(trayId) || (t.productionProgress.id ?? 0) > (latestByTray[trayId]!.productionProgress.id ?? 0)) {
+          if (!latestByTray.containsKey(trayId) ||
+              (t.productionProgress.id ?? 0) >
+                  (latestByTray[trayId]!.productionProgress.id ?? 0)) {
             latestByTray[trayId] = t;
           }
         }
       }
 
       final filtered = latestByTray.values.where((t) {
-        final trayId = t.productionProgress.primaryTrayId ?? t.primaryTrayModel.id;
-        final bool isReassigned = t.primaryTrayModel.isReAssigned == true ||
+        final trayId =
+            t.productionProgress.primaryTrayId ?? t.primaryTrayModel.id;
+        final bool isReassigned =
+            t.primaryTrayModel.isReAssigned == true ||
             (trayId != null && reassignedTrayIds.contains(trayId)) ||
             (t.productionProgress.subOperation?.toLowerCase() == 'handover');
 
@@ -95,21 +100,34 @@ class InductionController extends ChangeNotifier {
       final enrichedFiltered = <InductionModel>[];
       for (final t in filtered) {
         InductionModel itemToUse = t;
-        final trayId = itemToUse.productionProgress.primaryTrayId ?? itemToUse.primaryTrayModel.id;
-        final bhId = itemToUse.productionProgress.batchHeaderId ?? (trayId != null ? reassignedTrayToBatchId[trayId] : null);
-        
-        if ((itemToUse.batchHeader == null || itemToUse.batchHeader?.batchHeaderCode == null) && bhId != null && bhId > 0) {
+        final trayId =
+            itemToUse.productionProgress.primaryTrayId ??
+            itemToUse.primaryTrayModel.id;
+        final bhId =
+            itemToUse.productionProgress.batchHeaderId ??
+            (trayId != null ? reassignedTrayToBatchId[trayId] : null);
+
+        if ((itemToUse.batchHeader == null ||
+                itemToUse.batchHeader?.batchHeaderCode == null) &&
+            bhId != null &&
+            bhId > 0) {
           if (batchHeaderCache.containsKey(bhId)) {
             itemToUse = itemToUse.copyWith(batchHeader: batchHeaderCache[bhId]);
           } else {
             try {
               final bhRes = await _inductionRepo.fetchLotHeaderById(bhId);
               if (bhRes.success && bhRes.data != null) {
-                final Map<String, dynamic> dataMap = Map<String, dynamic>.from(bhRes.data is Map ? bhRes.data : {});
+                final Map<String, dynamic> dataMap = Map<String, dynamic>.from(
+                  bhRes.data is Map ? bhRes.data : {},
+                );
                 LotHeaderModel? bhModel;
-                if (dataMap.containsKey('batchHeader') && dataMap['batchHeader'] != null) {
-                  bhModel = LotHeaderModel.fromJson(Map<String, dynamic>.from(dataMap['batchHeader']));
-                } else if (dataMap.containsKey('id') || dataMap.containsKey('batchHeaderCode')) {
+                if (dataMap.containsKey('batchHeader') &&
+                    dataMap['batchHeader'] != null) {
+                  bhModel = LotHeaderModel.fromJson(
+                    Map<String, dynamic>.from(dataMap['batchHeader']),
+                  );
+                } else if (dataMap.containsKey('id') ||
+                    dataMap.containsKey('batchHeaderCode')) {
                   bhModel = LotHeaderModel.fromJson(dataMap);
                 }
                 if (bhModel != null) {
@@ -118,7 +136,9 @@ class InductionController extends ChangeNotifier {
                 }
               }
             } catch (e) {
-              debugPrint("⚠️ Exception parsing LotHeader in InductionController: $e");
+              debugPrint(
+                "⚠️ Exception parsing LotHeader in InductionController: $e",
+              );
             }
           }
         }
@@ -130,10 +150,7 @@ class InductionController extends ChangeNotifier {
         isLoading: false,
       );
     } else {
-      _state = _state.copyWith(
-        isLoading: false,
-        errorMessage: res.message,
-      );
+      _state = _state.copyWith(isLoading: false, errorMessage: res.message);
     }
     notifyListeners();
   }
@@ -156,9 +173,12 @@ class InductionController extends ChangeNotifier {
       final allTrays = res.data as List<InductionModel>;
       final Map<int, InductionModel> latestByTray = {};
       for (final t in allTrays) {
-        final trayId = t.productionProgress.primaryTrayId ?? t.primaryTrayModel.id;
+        final trayId =
+            t.productionProgress.primaryTrayId ?? t.primaryTrayModel.id;
         if (trayId != null) {
-          if (!latestByTray.containsKey(trayId) || (t.productionProgress.id ?? 0) > (latestByTray[trayId]!.productionProgress.id ?? 0)) {
+          if (!latestByTray.containsKey(trayId) ||
+              (t.productionProgress.id ?? 0) >
+                  (latestByTray[trayId]!.productionProgress.id ?? 0)) {
             latestByTray[trayId] = t;
           }
         }
@@ -166,7 +186,9 @@ class InductionController extends ChangeNotifier {
 
       final holdMatch = latestByTray.values.where((t) {
         final tCode = (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase();
-        final pCode = (t.productionProgress.progressCode ?? '').trim().toLowerCase();
+        final pCode = (t.productionProgress.progressCode ?? '')
+            .trim()
+            .toLowerCase();
         return tCode == code || pCode == code;
       }).firstOrNull;
 
@@ -178,15 +200,20 @@ class InductionController extends ChangeNotifier {
     final selectedBatchId = _state.selectedBatch?.id;
     final matchIndex = _state.availableTrays.indexWhere((t) {
       final tCode = (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase();
-      final pCode = (t.productionProgress.progressCode ?? '').trim().toLowerCase();
+      final pCode = (t.productionProgress.progressCode ?? '')
+          .trim()
+          .toLowerCase();
       final isCodeMatch = tCode == code || pCode == code;
-      final isBatchMatch = t.batchHeader?.id == selectedBatchId ||
+      final isBatchMatch =
+          t.batchHeader?.id == selectedBatchId ||
           t.productionProgress.batchHeaderId == selectedBatchId;
       return isCodeMatch && isBatchMatch;
     });
 
     if (matchIndex == -1) {
-      final batchName = _state.selectedBatch?.batchHeaderCode ?? '#${_state.selectedBatch?.id}';
+      final batchName =
+          _state.selectedBatch?.batchHeaderCode ??
+          '#${_state.selectedBatch?.id}';
       return 'Tray is not a reassigned tray for selected Batch $batchName';
     }
 
@@ -196,16 +223,21 @@ class InductionController extends ChangeNotifier {
       return 'Invalid tray type.';
     }
 
-    int targetItemId = match.productionProgress.processedItemId ?? match.item.id;
+    int targetItemId =
+        match.productionProgress.processedItemId ?? match.item.id;
     String colorDesc = match.item.colorDescription ?? '';
     String sizeDesc = match.item.sizeDescription ?? '';
 
     if (targetItemId > 0) {
       final itemRes = await _inductionRepo.fetchItemDef(targetItemId);
       if (itemRes.success && itemRes.data != null) {
-        final itemData = itemRes.data is Map ? itemRes.data as Map<String, dynamic> : {};
-        if (itemData['colorDescription'] != null) colorDesc = itemData['colorDescription'];
-        if (itemData['sizeDescription'] != null) sizeDesc = itemData['sizeDescription'];
+        final itemData = itemRes.data is Map
+            ? itemRes.data as Map<String, dynamic>
+            : {};
+        if (itemData['colorDescription'] != null)
+          colorDesc = itemData['colorDescription'];
+        if (itemData['sizeDescription'] != null)
+          sizeDesc = itemData['sizeDescription'];
       }
     }
 
@@ -215,13 +247,15 @@ class InductionController extends ChangeNotifier {
       itemDescription: match.item.description,
       sizeDescription: sizeDesc,
       colorDescription: colorDesc,
-      primaryQuantity: (match.productionProgress.primaryQuantity ?? 0).toStringAsFixed(0),
+      primaryQuantity: (match.productionProgress.primaryQuantity ?? 0)
+          .toStringAsFixed(0),
       pieceWeight: match.item.pieceWeight ?? 0.0,
       trayUpdateId: match.primaryTrayModel.id,
       trayConcurrencyStamp: match.primaryTrayModel.concurrencyStamp,
     );
 
-    final updated = List<GBSScannedTray>.from(_state.scannedTrays)..add(newTray);
+    final updated = List<GBSScannedTray>.from(_state.scannedTrays)
+      ..add(newTray);
     _state = _state.copyWith(scannedTrays: updated);
     notifyListeners();
     return null;
@@ -249,13 +283,16 @@ class InductionController extends ChangeNotifier {
           "transactionType": 1,
           "uom": currentTrayData.workOrderLine.uom,
           "operatorDescription": "system",
-          "primaryQuantity": currentTrayData.productionProgress.primaryQuantity ?? 0,
-          "secondaryQuantity": currentTrayData.productionProgress.secondaryQuantity ?? 0,
+          "primaryQuantity":
+              currentTrayData.productionProgress.primaryQuantity ?? 0,
+          "secondaryQuantity":
+              currentTrayData.productionProgress.secondaryQuantity ?? 0,
           "primaryUOM": currentTrayData.productionProgress.primaryUOM ?? 0,
           "secondaryUOM": currentTrayData.productionProgress.secondaryUOM ?? 0,
           "code": currentTrayData.item.code,
           "productGrade": currentTrayData.productionProgress.productGrade ?? 0,
-          "productNature": currentTrayData.productionProgress.productNature ?? 0,
+          "productNature":
+              currentTrayData.productionProgress.productNature ?? 0,
           "progressId": currentTrayData.productionProgress.id,
           "operationId": currentTrayData.productionProgress.operationId,
           "workOrderHeaderId": currentTrayData.workOrderHeader.id,
@@ -264,16 +301,21 @@ class InductionController extends ChangeNotifier {
           "shiftId": currentTrayData.shift.id,
           "primaryTrayId": currentTrayData.primaryTrayModel.id,
           "machineId": currentTrayData.machineModel.id,
-          "planHeaderId": currentTrayData.productionProgress.planHeaderId ?? currentTrayData.planHeader?.id,
+          "planHeaderId":
+              currentTrayData.productionProgress.planHeaderId ??
+              currentTrayData.planHeader?.id,
           "locatorId": 11,
           "batchHeaderId": currentTrayData.productionProgress.batchHeaderId,
           "batchLineId": currentTrayData.productionProgress.batchLinesId,
-          "processitemd": currentTrayData.productionProgress.processedItemId ?? currentTrayData.item.id,
+          "processitemd":
+              currentTrayData.productionProgress.processedItemId ??
+              currentTrayData.item.id,
         };
 
         await _inductionRepo.postWipTransactions(wipPayload);
 
-        Map<String, dynamic> updatePayload = currentTrayData.productionProgress.toJson();
+        Map<String, dynamic> updatePayload = currentTrayData.productionProgress
+            .toJson();
         updatePayload['pbsFlag'] = true;
         updatePayload['pBSFlag'] = true;
         updatePayload['locatorId'] = 11;
@@ -288,14 +330,28 @@ class InductionController extends ChangeNotifier {
           throw Exception('Failed to update tray ${scannedTray.trayCode}');
         }
 
-        final trayRes = await _inductionRepo.fetchTrayDetailById(currentTrayData.primaryTrayModel.id!);
+        final trayRes = await _inductionRepo.fetchTrayDetailById(
+          currentTrayData.primaryTrayModel.id!,
+        );
         if (trayRes.success) {
-          final tData = trayRes.data.containsKey('trayDetail') ? trayRes.data['trayDetail'] : trayRes.data;
+          final tData = trayRes.data.containsKey('trayDetail')
+              ? trayRes.data['trayDetail']
+              : trayRes.data;
           Map<String, dynamic> trayUpd = Map<String, dynamic>.from(tData);
           trayUpd["locatorId"] = 11;
-          trayUpd.removeWhere((key, value) => ["creatorId", "creationTime", "lastModifierId", "lastModificationTime"].contains(key));
-          
-          await _inductionRepo.updateTrayDetails(currentTrayData.primaryTrayModel.id!, trayUpd);
+          trayUpd.removeWhere(
+            (key, value) => [
+              "creatorId",
+              "creationTime",
+              "lastModifierId",
+              "lastModificationTime",
+            ].contains(key),
+          );
+
+          await _inductionRepo.updateTrayDetails(
+            currentTrayData.primaryTrayModel.id!,
+            trayUpd,
+          );
         }
       }
       _state = _state.copyWith(isLoading: false);

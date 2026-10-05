@@ -20,14 +20,12 @@ class LotMakingController extends ChangeNotifier {
 
   late final Future<void> initFuture;
 
-  LotMakingController({
-    this.existingBatch,
-    this.preloadedTrays,
-  }) {
-    final code = existingBatch?.batchHeader.batchHeaderCode ??
+  LotMakingController({this.existingBatch, this.preloadedTrays}) {
+    final code =
+        existingBatch?.batchHeader.batchHeaderCode ??
         "LOT-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}";
     _state = _state.copyWith(lotCode: code);
-    
+
     initFuture = initData();
   }
 
@@ -84,42 +82,59 @@ class LotMakingController extends ChangeNotifier {
     try {
       final trays = _state.productionProgressTrays.where((t) {
         final progressId = t.productionProgress.id;
-        final isCurrentBatchDbTray = progressId != null && _state.currentBatchDatabaseProgressIds.contains(progressId);
+        final isCurrentBatchDbTray =
+            progressId != null &&
+            _state.currentBatchDatabaseProgressIds.contains(progressId);
         return t.productionProgress.locatorId == 3 &&
             t.productionProgress.gbsFlag == true &&
             t.workOrderHeader?.id == woId &&
-            (progressId == null || !_state.lotProgressIds.contains(progressId) || isCurrentBatchDbTray);
+            (progressId == null ||
+                !_state.lotProgressIds.contains(progressId) ||
+                isCurrentBatchDbTray);
       }).toList();
 
       final lineIds = trays
-          .map((t) => t.productionProgress.workOrderLineId ?? t.workOrderLine?.id)
+          .map(
+            (t) => t.productionProgress.workOrderLineId ?? t.workOrderLine?.id,
+          )
           .whereType<int>()
           .toSet();
 
       final Set<String> validColors = {};
-      final updatedPlanQuantities = Map<String, double>.from(_state.colorPlanQuantities);
+      final updatedPlanQuantities = Map<String, double>.from(
+        _state.colorPlanQuantities,
+      );
 
       for (final lineId in lineIds) {
         final res = await _lotRepo.fetchAllWorkOrderLineDetails(lineId);
         if (res.success && res.data != null) {
-          updatedPlanQuantities.removeWhere((key, _) => key.startsWith("${lineId}_"));
+          updatedPlanQuantities.removeWhere(
+            (key, _) => key.startsWith("${lineId}_"),
+          );
           final items = res.data as List;
           for (final item in items) {
             final detail = (item as Map)['workOrderLineDetail'];
             if (detail != null) {
-              final colorDesc = detail['colorDescription']?.toString().trim().toUpperCase();
-              final planQty = (detail['planQuantity'] as num?)?.toDouble() ?? 0.0;
+              final colorDesc = detail['colorDescription']
+                  ?.toString()
+                  .trim()
+                  .toUpperCase();
+              final planQty =
+                  (detail['planQuantity'] as num?)?.toDouble() ?? 0.0;
               if (colorDesc != null && colorDesc.isNotEmpty) {
                 validColors.add(colorDesc);
                 final key = "${lineId}_$colorDesc";
-                updatedPlanQuantities[key] = (updatedPlanQuantities[key] ?? 0.0) + planQty;
+                updatedPlanQuantities[key] =
+                    (updatedPlanQuantities[key] ?? 0.0) + planQty;
               }
             }
           }
         }
       }
 
-      final updatedValidColors = Map<int, Set<String>>.from(_state.workOrderValidColors);
+      final updatedValidColors = Map<int, Set<String>>.from(
+        _state.workOrderValidColors,
+      );
       updatedValidColors[woId] = validColors;
 
       _state = _state.copyWith(
@@ -141,8 +156,9 @@ class LotMakingController extends ChangeNotifier {
 
   void removeScannedTray(int index) {
     if (index >= 0 && index < _state.scannedTrays.length) {
-      final updated = List<ProductionProgressResponseModel>.from(_state.scannedTrays)
-        ..removeAt(index);
+      final updated = List<ProductionProgressResponseModel>.from(
+        _state.scannedTrays,
+      )..removeAt(index);
       _state = _state.copyWith(
         scannedTrays: updated,
         clearReferenceRouting: updated.isEmpty,
@@ -162,20 +178,30 @@ class LotMakingController extends ChangeNotifier {
       if (t.workOrderHeader == null) continue;
 
       final progressId = t.productionProgress.id;
-      final isCurrentBatchDbTray = progressId != null && _state.currentBatchDatabaseProgressIds.contains(progressId);
-      final hasBatchHeader = t.productionProgress.batchHeaderId != null && t.productionProgress.batchHeaderId != 0;
-      final isCurrentBatchHeader = existingBatch?.batchHeader.id != null && t.productionProgress.batchHeaderId == existingBatch!.batchHeader.id;
+      final isCurrentBatchDbTray =
+          progressId != null &&
+          _state.currentBatchDatabaseProgressIds.contains(progressId);
+      final hasBatchHeader =
+          t.productionProgress.batchHeaderId != null &&
+          t.productionProgress.batchHeaderId != 0;
+      final isCurrentBatchHeader =
+          existingBatch?.batchHeader.id != null &&
+          t.productionProgress.batchHeaderId == existingBatch!.batchHeader.id;
       final isAssignedToOtherLot = hasBatchHeader && !isCurrentBatchHeader;
 
       if (isAssignedToOtherLot) continue;
-      if (progressId != null && _state.lotProgressIds.contains(progressId) && !isCurrentBatchDbTray) {
+      if (progressId != null &&
+          _state.lotProgressIds.contains(progressId) &&
+          !isCurrentBatchDbTray) {
         continue;
       }
 
       final code = (t.primaryTrayModel.trayCode ?? '').trim().toUpperCase();
       if (code.isEmpty) continue;
 
-      if (!uniqueGbsTrays.containsKey(code) || (t.productionProgress.id ?? 0) > (uniqueGbsTrays[code]!.productionProgress.id ?? 0)) {
+      if (!uniqueGbsTrays.containsKey(code) ||
+          (t.productionProgress.id ?? 0) >
+              (uniqueGbsTrays[code]!.productionProgress.id ?? 0)) {
         uniqueGbsTrays[code] = t;
       }
     }
@@ -196,18 +222,22 @@ class LotMakingController extends ChangeNotifier {
   List<WorkOrderHeader> getFilteredWorkOrders() {
     final wos = getAvailableWorkOrders();
     if (_state.selectedColor == null) return wos;
-    final selectedColorDesc = _state.selectedColor!.segmentCode?.description?.toUpperCase();
+    final selectedColorDesc = _state.selectedColor!.segmentCode?.description
+        ?.toUpperCase();
     if (selectedColorDesc == null) return wos;
 
     return wos.where((wo) {
       final validColors = _state.workOrderValidColors[wo.id];
-      if (validColors == null || !validColors.contains(selectedColorDesc)) return false;
+      if (validColors == null || !validColors.contains(selectedColorDesc))
+        return false;
 
       final trays = _state.productionProgressTrays.where((t) {
         if (t.workOrderHeader?.id != wo.id) return false;
-        final lineId = t.productionProgress.workOrderLineId ?? t.workOrderLine?.id;
+        final lineId =
+            t.productionProgress.workOrderLineId ?? t.workOrderLine?.id;
         if (lineId == null) return false;
-        final planQty = _state.colorPlanQuantities["${lineId}_$selectedColorDesc"] ?? 0.0;
+        final planQty =
+            _state.colorPlanQuantities["${lineId}_$selectedColorDesc"] ?? 0.0;
         return planQty > 0.0;
       }).toList();
 
@@ -217,7 +247,8 @@ class LotMakingController extends ChangeNotifier {
 
   List<LotColorModel> getFilteredColors() {
     if (_state.selectedWorkOrder == null) return _state.colors;
-    final validColors = _state.workOrderValidColors[_state.selectedWorkOrder!.id];
+    final validColors =
+        _state.workOrderValidColors[_state.selectedWorkOrder!.id];
     if (validColors == null) return [];
 
     return _state.colors.where((color) {
@@ -237,13 +268,21 @@ class LotMakingController extends ChangeNotifier {
       if (t.workOrderHeader?.id != _state.selectedWorkOrder!.id) continue;
 
       final progressId = t.productionProgress.id;
-      final isCurrentBatchDbTray = progressId != null && _state.currentBatchDatabaseProgressIds.contains(progressId);
-      final hasBatchHeader = t.productionProgress.batchHeaderId != null && t.productionProgress.batchHeaderId != 0;
-      final isCurrentBatchHeader = existingBatch?.batchHeader.id != null && t.productionProgress.batchHeaderId == existingBatch!.batchHeader.id;
+      final isCurrentBatchDbTray =
+          progressId != null &&
+          _state.currentBatchDatabaseProgressIds.contains(progressId);
+      final hasBatchHeader =
+          t.productionProgress.batchHeaderId != null &&
+          t.productionProgress.batchHeaderId != 0;
+      final isCurrentBatchHeader =
+          existingBatch?.batchHeader.id != null &&
+          t.productionProgress.batchHeaderId == existingBatch!.batchHeader.id;
       final isAssignedToOtherLot = hasBatchHeader && !isCurrentBatchHeader;
 
       if (isAssignedToOtherLot) continue;
-      if (progressId != null && _state.lotProgressIds.contains(progressId) && !isCurrentBatchDbTray) {
+      if (progressId != null &&
+          _state.lotProgressIds.contains(progressId) &&
+          !isCurrentBatchDbTray) {
         continue;
       }
 
@@ -251,7 +290,9 @@ class LotMakingController extends ChangeNotifier {
       if (code.isEmpty) continue;
 
       // Keep latest progress record snapshot for this physical tray code
-      if (!uniqueTrays.containsKey(code) || (t.productionProgress.id ?? 0) > (uniqueTrays[code]!.productionProgress.id ?? 0)) {
+      if (!uniqueTrays.containsKey(code) ||
+          (t.productionProgress.id ?? 0) >
+              (uniqueTrays[code]!.productionProgress.id ?? 0)) {
         uniqueTrays[code] = t;
       }
     }
@@ -261,20 +302,27 @@ class LotMakingController extends ChangeNotifier {
       return (qtys['remaining'] ?? 0.0) > 0;
     }).toList();
 
-    deDuplicated.sort((a, b) => (a.primaryTrayModel.trayCode ?? '').compareTo(b.primaryTrayModel.trayCode ?? ''));
+    deDuplicated.sort(
+      (a, b) => (a.primaryTrayModel.trayCode ?? '').compareTo(
+        b.primaryTrayModel.trayCode ?? '',
+      ),
+    );
     return deDuplicated;
   }
 
   List<ProductionProgressResponseModel> getTraysForSelectedWorkOrderAndColor() {
     final trays = getTraysForSelectedWorkOrder();
     if (_state.selectedColor == null) return [];
-    final selectedColorDesc = _state.selectedColor!.segmentCode?.description?.toUpperCase();
+    final selectedColorDesc = _state.selectedColor!.segmentCode?.description
+        ?.toUpperCase();
     if (selectedColorDesc == null) return [];
 
     return trays.where((t) {
-      final lineId = t.productionProgress.workOrderLineId ?? t.workOrderLine?.id;
+      final lineId =
+          t.productionProgress.workOrderLineId ?? t.workOrderLine?.id;
       if (lineId == null) return false;
-      final planQty = _state.colorPlanQuantities["${lineId}_$selectedColorDesc"] ?? 0.0;
+      final planQty =
+          _state.colorPlanQuantities["${lineId}_$selectedColorDesc"] ?? 0.0;
       return planQty > 0.0;
     }).toList();
   }
@@ -283,7 +331,8 @@ class LotMakingController extends ChangeNotifier {
     double sum = 0.0;
     final currentBatchId = existingBatch?.batchHeader.id;
     for (final t in _state.productionProgressTrays) {
-      final lineId = t.productionProgress.workOrderLineId ?? t.workOrderLine?.id;
+      final lineId =
+          t.productionProgress.workOrderLineId ?? t.workOrderLine?.id;
       if (lineId == workOrderLineId) {
         final bhId = t.productionProgress.batchHeaderId;
         if (bhId != null && bhId != 0 && bhId != currentBatchId) {
@@ -298,22 +347,39 @@ class LotMakingController extends ChangeNotifier {
     final code = (tray.primaryTrayModel.trayCode ?? '').trim().toUpperCase();
     final fallbackQty = tray.productionProgress.primaryQuantity ?? 0.0;
     if (code.isEmpty) {
-      return {'actual': fallbackQty, 'alreadyScanned': 0.0, 'remaining': fallbackQty};
+      return {
+        'actual': fallbackQty,
+        'alreadyScanned': 0.0,
+        'remaining': fallbackQty,
+      };
     }
 
-    final matchingTrays = _state.productionProgressTrays.where((t) =>
-        (t.primaryTrayModel.trayCode ?? '').trim().toUpperCase() == code &&
-        t.productionProgress.locatorId == 3 &&
-        t.productionProgress.gbsFlag == true
-    ).toList();
+    final matchingTrays = _state.productionProgressTrays
+        .where(
+          (t) =>
+              (t.primaryTrayModel.trayCode ?? '').trim().toUpperCase() ==
+                  code &&
+              t.productionProgress.locatorId == 3 &&
+              t.productionProgress.gbsFlag == true,
+        )
+        .toList();
 
     if (matchingTrays.isEmpty) {
-      return {'actual': fallbackQty, 'alreadyScanned': 0.0, 'remaining': fallbackQty};
+      return {
+        'actual': fallbackQty,
+        'alreadyScanned': 0.0,
+        'remaining': fallbackQty,
+      };
     }
 
-    matchingTrays.sort((a, b) => (b.productionProgress.id ?? 0).compareTo(a.productionProgress.id ?? 0));
+    matchingTrays.sort(
+      (a, b) => (b.productionProgress.id ?? 0).compareTo(
+        a.productionProgress.id ?? 0,
+      ),
+    );
     final latestRecord = matchingTrays.first;
-    final actual = latestRecord.productionProgress.primaryQuantity ?? fallbackQty;
+    final actual =
+        latestRecord.productionProgress.primaryQuantity ?? fallbackQty;
 
     double assignedToOtherLots = 0.0;
     final currentBatchId = existingBatch?.batchHeader.id;
@@ -328,17 +394,25 @@ class LotMakingController extends ChangeNotifier {
     final remaining = (actual - assignedToOtherLots).clamp(0.0, actual);
 
     double scannedInCurrentBatch = 0.0;
-    final matchingScanned = _state.scannedTrays.where((st) =>
-        (st.primaryTrayModel.trayCode ?? '').trim().toUpperCase() == code
-    ).toList();
+    final matchingScanned = _state.scannedTrays
+        .where(
+          (st) =>
+              (st.primaryTrayModel.trayCode ?? '').trim().toUpperCase() == code,
+        )
+        .toList();
 
     if (matchingScanned.isNotEmpty) {
-      scannedInCurrentBatch = matchingScanned.fold<double>(0.0, (sum, st) => sum + (st.productionProgress.primaryQuantity ?? 0.0));
+      scannedInCurrentBatch = matchingScanned.fold<double>(
+        0.0,
+        (sum, st) => sum + (st.productionProgress.primaryQuantity ?? 0.0),
+      );
     }
 
     return {
       'actual': actual,
-      'alreadyScanned': scannedInCurrentBatch > 0 ? scannedInCurrentBatch : assignedToOtherLots,
+      'alreadyScanned': scannedInCurrentBatch > 0
+          ? scannedInCurrentBatch
+          : assignedToOtherLots,
       'remaining': remaining,
     };
   }
@@ -359,7 +433,8 @@ class LotMakingController extends ChangeNotifier {
     } else {
       _state = _state.copyWith(
         isLoading: false,
-        errorMessage: result.message ?? 'Unknown error fetching production progresses',
+        errorMessage:
+            result.message ?? 'Unknown error fetching production progresses',
       );
     }
     notifyListeners();
@@ -371,8 +446,12 @@ class LotMakingController extends ChangeNotifier {
 
     try {
       final wos = getAvailableWorkOrders();
-      final updatedValidColors = Map<int, Set<String>>.from(_state.workOrderValidColors);
-      final updatedPlanQuantities = Map<String, double>.from(_state.colorPlanQuantities);
+      final updatedValidColors = Map<int, Set<String>>.from(
+        _state.workOrderValidColors,
+      );
+      final updatedPlanQuantities = Map<String, double>.from(
+        _state.colorPlanQuantities,
+      );
 
       for (final wo in wos) {
         final woId = wo.id;
@@ -380,37 +459,53 @@ class LotMakingController extends ChangeNotifier {
 
         final trays = _state.productionProgressTrays.where((t) {
           final progressId = t.productionProgress.id;
-          final isCurrentBatchDbTray = progressId != null && _state.currentBatchDatabaseProgressIds.contains(progressId);
+          final isCurrentBatchDbTray =
+              progressId != null &&
+              _state.currentBatchDatabaseProgressIds.contains(progressId);
           return t.productionProgress.locatorId == 3 &&
               t.productionProgress.gbsFlag == true &&
               t.workOrderHeader?.id == woId &&
-              (progressId == null || !_state.lotProgressIds.contains(progressId) || isCurrentBatchDbTray);
+              (progressId == null ||
+                  !_state.lotProgressIds.contains(progressId) ||
+                  isCurrentBatchDbTray);
         }).toList();
 
         final lineIds = trays
-            .map((t) => t.productionProgress.workOrderLineId ?? t.workOrderLine?.id)
+            .map(
+              (t) =>
+                  t.productionProgress.workOrderLineId ?? t.workOrderLine?.id,
+            )
             .whereType<int>()
             .toSet();
 
         final Set<String> validColors = {};
         final results = await Future.wait(
-          lineIds.map((lineId) => _lotRepo.fetchAllWorkOrderLineDetails(lineId)),
+          lineIds.map(
+            (lineId) => _lotRepo.fetchAllWorkOrderLineDetails(lineId),
+          ),
         );
         for (int i = 0; i < lineIds.length; i++) {
           final lineId = lineIds.elementAt(i);
           final res = results[i];
           if (res.success && res.data != null) {
-            updatedPlanQuantities.removeWhere((key, _) => key.startsWith("${lineId}_"));
+            updatedPlanQuantities.removeWhere(
+              (key, _) => key.startsWith("${lineId}_"),
+            );
             final items = res.data as List;
             for (final item in items) {
               final detail = (item as Map)['workOrderLineDetail'];
               if (detail != null) {
-                final colorDesc = detail['colorDescription']?.toString().trim().toUpperCase();
-                final planQty = (detail['planQuantity'] as num?)?.toDouble() ?? 0.0;
+                final colorDesc = detail['colorDescription']
+                    ?.toString()
+                    .trim()
+                    .toUpperCase();
+                final planQty =
+                    (detail['planQuantity'] as num?)?.toDouble() ?? 0.0;
                 if (colorDesc != null && colorDesc.isNotEmpty) {
                   validColors.add(colorDesc);
                   final key = "${lineId}_$colorDesc";
-                  updatedPlanQuantities[key] = (updatedPlanQuantities[key] ?? 0.0) + planQty;
+                  updatedPlanQuantities[key] =
+                      (updatedPlanQuantities[key] ?? 0.0) + planQty;
                 }
               }
             }
@@ -430,7 +525,9 @@ class LotMakingController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _loadExistingLotTrays(List<ProductionProgressResponseModel> allProgresses) async {
+  Future<void> _loadExistingLotTrays(
+    List<ProductionProgressResponseModel> allProgresses,
+  ) async {
     final batchHeaderId = existingBatch!.batchHeader.id;
     if (batchHeaderId == null) return;
 
@@ -444,12 +541,20 @@ class LotMakingController extends ChangeNotifier {
         .toSet();
 
     final linkedTrays = allProgresses
-        .where((p) => p.productionProgress.id != null && linkedProgressIds.contains(p.productionProgress.id))
+        .where(
+          (p) =>
+              p.productionProgress.id != null &&
+              linkedProgressIds.contains(p.productionProgress.id),
+        )
         .toList();
 
     if (linkedTrays.isNotEmpty) {
-      final updatedProgressIds = Set<int>.from(_state.currentBatchDatabaseProgressIds)..addAll(linkedProgressIds);
-      final updatedScanned = List<ProductionProgressResponseModel>.from(_state.scannedTrays)..addAll(linkedTrays);
+      final updatedProgressIds = Set<int>.from(
+        _state.currentBatchDatabaseProgressIds,
+      )..addAll(linkedProgressIds);
+      final updatedScanned = List<ProductionProgressResponseModel>.from(
+        _state.scannedTrays,
+      )..addAll(linkedTrays);
 
       _state = _state.copyWith(
         currentBatchDatabaseProgressIds: updatedProgressIds,
@@ -480,7 +585,9 @@ class LotMakingController extends ChangeNotifier {
       LotMachineModel? selected;
       if (existingBatch?.machine != null) {
         final editMachineId = existingBatch!.machine!.id;
-        final match = machinesList.where((m) => m.resource?.id == editMachineId).toList();
+        final match = machinesList
+            .where((m) => m.resource?.id == editMachineId)
+            .toList();
         if (match.isNotEmpty) selected = match.first;
       }
       _state = _state.copyWith(
@@ -506,7 +613,9 @@ class LotMakingController extends ChangeNotifier {
       LotColorModel? selected;
       if (existingBatch?.colorCode != null) {
         final editColorId = existingBatch!.colorCode!.id;
-        final match = colorsList.where((c) => c.segmentCode?.id == editColorId).toList();
+        final match = colorsList
+            .where((c) => c.segmentCode?.id == editColorId)
+            .toList();
         if (match.isNotEmpty) selected = match.first;
       }
       _state = _state.copyWith(
@@ -523,19 +632,30 @@ class LotMakingController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String?> validateTrayForScan(String scannedCode, double overrideQty) async {
+  Future<String?> validateTrayForScan(
+    String scannedCode,
+    double overrideQty,
+  ) async {
     final code = scannedCode.trim();
     if (code.isEmpty) return 'Invalid tray code';
     if (_state.selectedColor == null) return 'Please select a lot Color first';
-    if (_state.scannedTrays.any((t) => (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase() == code.toLowerCase())) {
+    if (_state.scannedTrays.any(
+      (t) =>
+          (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase() ==
+          code.toLowerCase(),
+    )) {
       return 'Already assigned';
     }
 
-    final available = _state.productionProgressTrays.where((t) =>
-        (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase() == code.toLowerCase() &&
-        t.productionProgress.locatorId == 3 &&
-        t.productionProgress.gbsFlag == true
-    ).toList();
+    final available = _state.productionProgressTrays
+        .where(
+          (t) =>
+              (t.primaryTrayModel.trayCode ?? '').trim().toLowerCase() ==
+                  code.toLowerCase() &&
+              t.productionProgress.locatorId == 3 &&
+              t.productionProgress.gbsFlag == true,
+        )
+        .toList();
 
     if (available.isEmpty) return 'Tray not found or not checked out via GBS';
 
@@ -544,27 +664,38 @@ class LotMakingController extends ChangeNotifier {
       orElse: () => available.first,
     );
 
-    if (_state.selectedWorkOrder == null) return 'Please select a Work Order first';
+    if (_state.selectedWorkOrder == null)
+      return 'Please select a Work Order first';
     if (tray.workOrderHeader.id != _state.selectedWorkOrder?.id) {
       return 'Tray belongs to another Work Order (${tray.workOrderHeader.workOrderCode})';
     }
 
     if ((tray.primaryTrayModel.trayType ?? 0) != 1) return 'Invalid tray type.';
     final progressId = tray.productionProgress.id;
-    final isCurrentBatchDbTray = progressId != null && _state.currentBatchDatabaseProgressIds.contains(progressId);
-    if (progressId != null && _state.lotProgressIds.contains(progressId) && !isCurrentBatchDbTray) {
+    final isCurrentBatchDbTray =
+        progressId != null &&
+        _state.currentBatchDatabaseProgressIds.contains(progressId);
+    if (progressId != null &&
+        _state.lotProgressIds.contains(progressId) &&
+        !isCurrentBatchDbTray) {
       return 'Tray already assigned to a lot';
     }
 
-    final workOrderLineId = tray.productionProgress.workOrderLineId ?? tray.workOrderLine?.id;
+    final workOrderLineId =
+        tray.productionProgress.workOrderLineId ?? tray.workOrderLine?.id;
     final colorDescription = _state.selectedColor!.segmentCode?.description;
     if (colorDescription == null) return 'Selected Color has no description';
 
-    final colorRes = await _lotRepo.fetchWorkOrderLineDetails(workOrderLineId!, colorDescription);
-    if (!colorRes.success || colorRes.data == null) return 'Validation error: ${colorRes.message}';
+    final colorRes = await _lotRepo.fetchWorkOrderLineDetails(
+      workOrderLineId!,
+      colorDescription,
+    );
+    if (!colorRes.success || colorRes.data == null)
+      return 'Validation error: ${colorRes.message}';
 
     final items = colorRes.data as List?;
-    if (items == null || items.isEmpty) return 'Invalid tray: Tray does not belong to the selected color';
+    if (items == null || items.isEmpty)
+      return 'Invalid tray: Tray does not belong to the selected color';
 
     final firstItem = items.first as Map;
     final detail = firstItem['workOrderLineDetail'];
@@ -579,7 +710,8 @@ class LotMakingController extends ChangeNotifier {
     }
 
     final routingRes = await _lotRepo.fetchItemRoutings(processedItemId);
-    if (!routingRes.success || routingRes.data == null) return 'Routing validation error: ${routingRes.message}';
+    if (!routingRes.success || routingRes.data == null)
+      return 'Routing validation error: ${routingRes.message}';
 
     final routingItems = routingRes.data as List;
     final routingCodes = routingItems
@@ -589,7 +721,7 @@ class LotMakingController extends ChangeNotifier {
     final routingCount = routingItems.length;
 
     if (routingCount == 0) return 'Tray item has no route configured';
-    
+
     Set<String>? refRoutingCodes = _state.referenceRoutingCodes;
     int? refRoutingCount = _state.referenceRoutingCount;
     int? refMinOpId = _state.referenceMinOperationId;
@@ -618,14 +750,19 @@ class LotMakingController extends ChangeNotifier {
     }
 
     final capacityRaw = _state.selectedMachine?.resource?.capacity;
-    final capacityKg = capacityRaw != null ? double.tryParse(capacityRaw.toString()) : null;
+    final capacityKg = capacityRaw != null
+        ? double.tryParse(capacityRaw.toString())
+        : null;
     if (capacityKg != null && capacityKg > 0) {
       final capacityGrams = capacityKg * 1000;
-      final newQty = overrideQty > 0 ? overrideQty : (tray.productionProgress.primaryQuantity ?? 0);
+      final newQty = overrideQty > 0
+          ? overrideQty
+          : (tray.productionProgress.primaryQuantity ?? 0);
       final pw = tray.item.pieceWeight ?? 0;
       double currentTotal = 0;
       for (int i = 0; i < _state.scannedTrays.length; i++) {
-        final qty = _state.scannedTrays[i].productionProgress.primaryQuantity ?? 0;
+        final qty =
+            _state.scannedTrays[i].productionProgress.primaryQuantity ?? 0;
         final p = _state.scannedTrays[i].item.pieceWeight ?? 0;
         currentTotal += qty * p;
       }
@@ -644,16 +781,21 @@ class LotMakingController extends ChangeNotifier {
       }
     }
     if (planQty > 0.0) {
-      final newQty = overrideQty > 0 ? overrideQty : (tray.productionProgress.primaryQuantity ?? 0.0);
+      final newQty = overrideQty > 0
+          ? overrideQty
+          : (tray.productionProgress.primaryQuantity ?? 0.0);
       double currentCumulative = 0.0;
       for (int i = 0; i < _state.scannedTrays.length; i++) {
         final t = _state.scannedTrays[i];
-        final lineId = t.productionProgress.workOrderLineId ?? t.workOrderLine?.id;
+        final lineId =
+            t.productionProgress.workOrderLineId ?? t.workOrderLine?.id;
         if (lineId == workOrderLineId) {
           currentCumulative += t.productionProgress.primaryQuantity ?? 0.0;
         }
       }
-      final alreadyAssigned = getAlreadyAssignedTubesForWorkOrderLine(workOrderLineId);
+      final alreadyAssigned = getAlreadyAssignedTubesForWorkOrderLine(
+        workOrderLineId,
+      );
       final totalScanned = currentCumulative + newQty + alreadyAssigned;
 
       final int extraAllowed = (planQty * 0.1).ceil();
@@ -668,7 +810,9 @@ class LotMakingController extends ChangeNotifier {
       updatedProcessed[tray.primaryTrayModel.id!] = processedItemId;
     }
 
-    final updatedScanned = List<ProductionProgressResponseModel>.from(_state.scannedTrays)..add(tray);
+    final updatedScanned = List<ProductionProgressResponseModel>.from(
+      _state.scannedTrays,
+    )..add(tray);
 
     _state = _state.copyWith(
       trayProcessedItemId: updatedProcessed,
@@ -692,7 +836,8 @@ class LotMakingController extends ChangeNotifier {
       if (existingBatch == null) {
         final res = await _lotRepo.createLotHeader({
           "planDate": DateTime.now().toIso8601String(),
-          "colorDescription": _state.selectedColor?.segmentCode?.description ?? "N/A",
+          "colorDescription":
+              _state.selectedColor?.segmentCode?.description ?? "N/A",
           "batchHeaderCode": batchCode,
           "machineId": _state.selectedMachine?.resource?.id ?? 0,
           "colorCode": _state.selectedColor?.segmentCode?.id ?? 0,
@@ -706,7 +851,11 @@ class LotMakingController extends ChangeNotifier {
         }
 
         final data = res.data as Map;
-        final rawId = data['id'] ?? data['batchHeader']?['id'] ?? data['result']?['id'] ?? 0;
+        final rawId =
+            data['id'] ??
+            data['batchHeader']?['id'] ??
+            data['result']?['id'] ??
+            0;
         batchHeaderId = int.tryParse(rawId.toString()) ?? 0;
 
         if (batchHeaderId == 0) {
@@ -732,28 +881,41 @@ class LotMakingController extends ChangeNotifier {
       }
 
       if (existingBatch != null) {
-        final existingLinesRes = await _lotRepo.fetchLotLines(batchHeaderId: batchHeaderId);
+        final existingLinesRes = await _lotRepo.fetchLotLines(
+          batchHeaderId: batchHeaderId,
+        );
         if (existingLinesRes.success && existingLinesRes.data != null) {
           final List rawList = existingLinesRes.data is Map
               ? (existingLinesRes.data['items'] ?? [])
               : (existingLinesRes.data is List ? existingLinesRes.data : []);
 
-          final Set<int?> currentScannedTrayIds = _state.scannedTrays.map((t) => t.primaryTrayModel.id).toSet();
+          final Set<int?> currentScannedTrayIds = _state.scannedTrays
+              .map((t) => t.primaryTrayModel.id)
+              .toSet();
 
           for (final line in rawList) {
             final rawLineMap = Map<String, dynamic>.from(line as Map);
-            final lineMap = rawLineMap.containsKey('batchLines') && rawLineMap['batchLines'] is Map
+            final lineMap =
+                rawLineMap.containsKey('batchLines') &&
+                    rawLineMap['batchLines'] is Map
                 ? Map<String, dynamic>.from(rawLineMap['batchLines'] as Map)
                 : rawLineMap;
 
             final int? lineId = (lineMap['id'] ?? rawLineMap['id']) != null
                 ? int.tryParse((lineMap['id'] ?? rawLineMap['id']).toString())
                 : null;
-            final int? trayId = (lineMap['trayId'] ?? rawLineMap['trayId']) != null
-                ? int.tryParse((lineMap['trayId'] ?? rawLineMap['trayId']).toString())
+            final int? trayId =
+                (lineMap['trayId'] ?? rawLineMap['trayId']) != null
+                ? int.tryParse(
+                    (lineMap['trayId'] ?? rawLineMap['trayId']).toString(),
+                  )
                 : null;
-            final int? progressId = (lineMap['progressId'] ?? rawLineMap['progressId']) != null
-                ? int.tryParse((lineMap['progressId'] ?? rawLineMap['progressId']).toString())
+            final int? progressId =
+                (lineMap['progressId'] ?? rawLineMap['progressId']) != null
+                ? int.tryParse(
+                    (lineMap['progressId'] ?? rawLineMap['progressId'])
+                        .toString(),
+                  )
                 : null;
 
             if (lineId != null && lineId > 0) {
@@ -762,7 +924,9 @@ class LotMakingController extends ChangeNotifier {
 
             if (trayId != null && !currentScannedTrayIds.contains(trayId)) {
               if (progressId != null && progressId > 0) {
-                final ppFetch = await _lotRepo.fetchProductionProgressById(progressId);
+                final ppFetch = await _lotRepo.fetchProductionProgressById(
+                  progressId,
+                );
                 if (ppFetch.success && ppFetch.data != null) {
                   final ppMap = Map<String, dynamic>.from(ppFetch.data as Map);
                   ppMap['batchHeaderId'] = null;
@@ -824,39 +988,54 @@ class LotMakingController extends ChangeNotifier {
 
           final resNewPP = await _lotRepo.postProductionProgress(newPPPayload);
           if (!resNewPP.success) {
-            throw Exception('Failed to create partial production progress: ${resNewPP.message}');
+            throw Exception(
+              'Failed to create partial production progress: ${resNewPP.message}',
+            );
           }
 
           if (resNewPP.data is Map) {
             resolvedProgressId = (resNewPP.data as Map)['id'] ?? 0;
           }
           if (resolvedProgressId == 0) {
-            final allProgRes = await _lotRepo.fetchProductionProgress(query: {
-              'LocatorId': '3',
-              'maxResultCount': '1000',
-            });
+            final allProgRes = await _lotRepo.fetchProductionProgress(
+              query: {'LocatorId': '3', 'maxResultCount': '1000'},
+            );
             if (allProgRes.success && allProgRes.data != null) {
               final List progresses = allProgRes.data as List;
-              final matches = progresses.whereType<ProductionProgressResponseModel>().where((p) =>
-                p.productionProgress.primaryQuantity == qty &&
-                p.productionProgress.primaryTrayId == tray.primaryTrayModel.id &&
-                p.productionProgress.workOrderLineId == (tray.workOrderLine?.id ?? tray.productionProgress.workOrderLineId)
-              ).toList();
+              final matches = progresses
+                  .whereType<ProductionProgressResponseModel>()
+                  .where(
+                    (p) =>
+                        p.productionProgress.primaryQuantity == qty &&
+                        p.productionProgress.primaryTrayId ==
+                            tray.primaryTrayModel.id &&
+                        p.productionProgress.workOrderLineId ==
+                            (tray.workOrderLine?.id ??
+                                tray.productionProgress.workOrderLineId),
+                  )
+                  .toList();
               if (matches.isNotEmpty) {
-                matches.sort((a, b) => (b.productionProgress.id ?? 0).compareTo(a.productionProgress.id ?? 0));
+                matches.sort(
+                  (a, b) => (b.productionProgress.id ?? 0).compareTo(
+                    a.productionProgress.id ?? 0,
+                  ),
+                );
                 resolvedProgressId = matches.first.productionProgress.id ?? 0;
               }
             }
           }
 
           if (resolvedProgressId == 0) {
-            throw Exception('Failed to resolve database ID for the new production progress.');
+            throw Exception(
+              'Failed to resolve database ID for the new production progress.',
+            );
           }
 
           final originalPPPayload = pp.toJson();
           originalPPPayload['primaryQuantity'] = (originalQty - qty).toDouble();
           if (perTube > 0) {
-            originalPPPayload['secondaryQuantity'] = (originalQty - qty) * perTube;
+            originalPPPayload['secondaryQuantity'] =
+                (originalQty - qty) * perTube;
           }
 
           originalPPPayload.remove('id');
@@ -879,9 +1058,14 @@ class LotMakingController extends ChangeNotifier {
           ppPayload.remove('lastModificationTime');
           ppPayload.remove('lastModifierId');
 
-          final resPP = await _lotRepo.updateProductionProgress(pp.id!, ppPayload);
+          final resPP = await _lotRepo.updateProductionProgress(
+            pp.id!,
+            ppPayload,
+          );
           if (!resPP.success) {
-            throw Exception(resPP.message ?? 'Failed to update production progress.');
+            throw Exception(
+              resPP.message ?? 'Failed to update production progress.',
+            );
           }
           resolvedProgressId = pp.id!;
         }
@@ -892,12 +1076,17 @@ class LotMakingController extends ChangeNotifier {
           if (perTube > 0) {
             finalSecondaryQty = qty * perTube;
           } else {
-            final originalPPQty = tray.productionProgress.primaryQuantity ?? 1.0;
-            final originalSecQty = tray.productionProgress.secondaryQuantity ?? 0.0;
-            finalSecondaryQty = originalPPQty > 0 ? (qty * originalSecQty / originalPPQty) : 0.0;
+            final originalPPQty =
+                tray.productionProgress.primaryQuantity ?? 1.0;
+            final originalSecQty =
+                tray.productionProgress.secondaryQuantity ?? 0.0;
+            finalSecondaryQty = originalPPQty > 0
+                ? (qty * originalSecQty / originalPPQty)
+                : 0.0;
           }
         } else {
-          finalSecondaryQty = (tray.productionProgress.secondaryQuantity ?? 0).toDouble();
+          finalSecondaryQty = (tray.productionProgress.secondaryQuantity ?? 0)
+              .toDouble();
         }
 
         final linePayload = {
@@ -913,7 +1102,8 @@ class LotMakingController extends ChangeNotifier {
           "batchHeaderId": batchHeaderId,
           "progressId": resolvedProgressId,
           "workOrderHeaderId": tray.workOrderHeader.id,
-          "workOrderLineId": tray.workOrderLine?.id ?? tray.productionProgress.workOrderLineId,
+          "workOrderLineId":
+              tray.workOrderLine?.id ?? tray.productionProgress.workOrderLineId,
           "itemId": tray.item.id,
           "trayId": tray.primaryTrayModel.id,
           "locatorId": tray.productionProgress.locatorId,
@@ -927,7 +1117,9 @@ class LotMakingController extends ChangeNotifier {
           final int batchLineDbId = int.tryParse(lineId.toString()) ?? 0;
 
           if (batchLineDbId > 0 && resolvedProgressId > 0) {
-            final ppFetchRes = await _lotRepo.fetchProductionProgressById(resolvedProgressId);
+            final ppFetchRes = await _lotRepo.fetchProductionProgressById(
+              resolvedProgressId,
+            );
             if (ppFetchRes.success && ppFetchRes.data != null) {
               final responseModel = ProductionProgressResponseModel.fromJson(
                 Map<String, dynamic>.from(ppFetchRes.data as Map),
@@ -935,7 +1127,7 @@ class LotMakingController extends ChangeNotifier {
               final ppMap = responseModel.productionProgress.toJson();
               ppMap['batchLineId'] = batchLineDbId;
               ppMap.remove('batchLinesId');
-              
+
               ppMap.remove('id');
               ppMap.remove('progressCode');
               ppMap.remove('concurrencyStamp');
@@ -944,11 +1136,15 @@ class LotMakingController extends ChangeNotifier {
               ppMap.remove('lastModificationTime');
               ppMap.remove('lastModifierId');
 
-              await _lotRepo.updateProductionProgress(resolvedProgressId, ppMap);
+              await _lotRepo.updateProductionProgress(
+                resolvedProgressId,
+                ppMap,
+              );
             }
           }
 
-          final double trayCapacity = (tray.primaryTrayModel.trayQuantity ?? 0).toDouble();
+          final double trayCapacity = (tray.primaryTrayModel.trayQuantity ?? 0)
+              .toDouble();
           final bool isPhysicallyFull = qty >= trayCapacity - 0.01;
 
           if (isPhysicallyFull) {

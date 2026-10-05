@@ -301,23 +301,42 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
                     ElevatedButton.icon(
                       onPressed: _close,
                       icon: const Icon(Icons.check_rounded, size: 16),
-                      label: const Text('DONE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+                      label: const Text(
+                        'DONE',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF0284C7),
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
                         minimumSize: Size.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
                     ),
                   ] else ...[
                     IconButton(
                       onPressed: _close,
-                      icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8), size: 22),
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: Color(0xFF94A3B8),
+                        size: 22,
+                      ),
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                      constraints: const BoxConstraints(
+                        minWidth: 32,
+                        minHeight: 32,
+                      ),
                       splashRadius: 20,
                     ),
                   ],
@@ -340,27 +359,52 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
                       child: TextField(
                         controller: _manualController,
                         onSubmitted: (_) => _submitManual(),
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1E293B),
+                        ),
                         decoration: InputDecoration(
                           hintText: 'Enter code manually...',
-                          hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8), fontWeight: FontWeight.normal),
-                          prefixIcon: const Icon(Icons.keyboard_alt_outlined, size: 18, color: Color(0xFF64748B)),
-                          prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                          hintStyle: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF94A3B8),
+                            fontWeight: FontWeight.normal,
+                          ),
+                          prefixIcon: const Icon(
+                            Icons.keyboard_alt_outlined,
+                            size: 18,
+                            color: Color(0xFF64748B),
+                          ),
+                          prefixIconConstraints: const BoxConstraints(
+                            minWidth: 36,
+                            minHeight: 36,
+                          ),
                           filled: true,
                           fillColor: Colors.white,
                           isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFCBD5E1),
+                            ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFCBD5E1),
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide: const BorderSide(color: Color(0xFF0284C7), width: 1.5),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF0284C7),
+                              width: 1.5,
+                            ),
                           ),
                         ),
                       ),
@@ -377,9 +421,17 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
                           foregroundColor: Colors.white,
                           elevation: 0,
                           padding: const EdgeInsets.symmetric(horizontal: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
-                        child: const Text('SUBMIT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
+                        child: const Text(
+                          'SUBMIT',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -449,11 +501,16 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
                           color: Colors.black.withValues(alpha: 0.35),
                           child: Center(
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 24,
+                              ),
                               width: 200,
                               decoration: BoxDecoration(
                                 color: Colors.white,
-                                borderRadius: const BorderRadius.all(Radius.circular(16)),
+                                borderRadius: const BorderRadius.all(
+                                  Radius.circular(16),
+                                ),
                                 border: Border.all(
                                   color: const Color(0xFFE2E8F0),
                                   width: 1.5,
@@ -465,7 +522,9 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
                                     offset: const Offset(0, 8),
                                   ),
                                   BoxShadow(
-                                    color: const Color(0xFF1B64A3).withValues(alpha: 0.05),
+                                    color: const Color(
+                                      0xFF1B64A3,
+                                    ).withValues(alpha: 0.05),
                                     blurRadius: 16,
                                     offset: const Offset(0, 4),
                                   ),
@@ -479,7 +538,9 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
                                     height: 32,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 3.0,
-                                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1B64A3)),
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Color(0xFF1B64A3),
+                                      ),
                                       backgroundColor: Color(0xFFE2E8F0),
                                     ),
                                   ),
@@ -568,11 +629,16 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
                           color: Colors.black.withValues(alpha: 0.35),
                           child: Center(
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 18,
+                              ),
                               width: 180,
                               decoration: BoxDecoration(
                                 color: Colors.white,
-                                borderRadius: const BorderRadius.all(Radius.circular(14)),
+                                borderRadius: const BorderRadius.all(
+                                  Radius.circular(14),
+                                ),
                                 border: Border.all(
                                   color: const Color(0xFFE2E8F0),
                                   width: 1.5,
@@ -593,7 +659,9 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
                                     height: 26,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2.8,
-                                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1B64A3)),
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Color(0xFF1B64A3),
+                                      ),
                                       backgroundColor: Color(0xFFE2E8F0),
                                     ),
                                   ),
@@ -621,7 +689,9 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
               // Scanned items view
               Expanded(
                 child: Container(
-                  color: const Color(0xFFF8FAFC), // Slate-grey background tint for list section
+                  color: const Color(
+                    0xFFF8FAFC,
+                  ), // Slate-grey background tint for list section
                   child: widget.scannedItemsBuilder!(context),
                 ),
               ),

@@ -8,26 +8,34 @@ import 'package:active_wear_scanning/features/gbs/model/production_progress.dart
 class LotRepo {
   final ApiService _api = ApiService();
 
-  Future<PlexApiResult> fetchProductionProgress({Map<String, String>? query}) async {
-    final Map<String, String> q = query ?? {
-      'LocatorId': '3',
-      'maxResultCount': '1000',
-    };
+  Future<PlexApiResult> fetchProductionProgress({
+    Map<String, String>? query,
+  }) async {
+    final Map<String, String> q =
+        query ?? {'LocatorId': '3', 'maxResultCount': '1000'};
     final result = await _api.getList(
-        '/api/app/production-progresses',
-        query: q
+      '/api/app/production-progresses',
+      query: q,
     );
-    
+
     if (!result.success || result.data == null) return result;
 
     try {
-      final List data = result.data is Map ? (result.data['items'] ?? []) : result.data;
+      final List data = result.data is Map
+          ? (result.data['items'] ?? [])
+          : result.data;
       final list = <ProductionProgressResponseModel>[];
       for (final item in data) {
         try {
-          list.add(ProductionProgressResponseModel.fromJson(Map<String, dynamic>.from(item)));
+          list.add(
+            ProductionProgressResponseModel.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          );
         } catch (e) {
-          dev.log("LotRepo parsing error on production progress record: $e. Raw: $item");
+          dev.log(
+            "LotRepo parsing error on production progress record: $e. Raw: $item",
+          );
         }
       }
       return PlexApiResult(true, 200, "Success", list);
@@ -35,23 +43,31 @@ class LotRepo {
       return PlexApiResult(false, 500, e.toString(), null);
     }
   }
+
   Future<PlexApiResult> fetchTrayDetailByCode(String trayCode) async {
     final result = await _api.getList(
-        '/api/app/tray-details',
-        query: {'TrayCode': trayCode}
+      '/api/app/tray-details',
+      query: {'TrayCode': trayCode},
     );
 
     if (result.success && result.data != null) {
-      final List data = result.data is Map ? (result.data['items'] ?? []) : result.data;
+      final List data = result.data is Map
+          ? (result.data['items'] ?? [])
+          : result.data;
       final cleanQuery = trayCode.trim().toLowerCase();
       for (final elem in data) {
         final map = Map<String, dynamic>.from(elem as Map);
         final itemTray = map.containsKey('trayDetail')
             ? map['trayDetail']
             : (map.containsKey('trayDetails')
-                ? map['trayDetails']
-                : (map.containsKey('primaryTrayModel') ? map['primaryTrayModel'] : map));
-        final code = (itemTray?['trayCode'] ?? map['trayCode'])?.toString().trim().toLowerCase();
+                  ? map['trayDetails']
+                  : (map.containsKey('primaryTrayModel')
+                        ? map['primaryTrayModel']
+                        : map));
+        final code = (itemTray?['trayCode'] ?? map['trayCode'])
+            ?.toString()
+            .trim()
+            .toLowerCase();
         if (code == cleanQuery) {
           return PlexApiResult(true, 200, "Success", map);
         }
@@ -61,8 +77,14 @@ class LotRepo {
     return result;
   }
 
-  Future<PlexApiResult> updateProductionProgress(int id, Map<String, dynamic> data) async {
-    final result = await _api.put('/api/app/production-progresses/$id', body: data);
+  Future<PlexApiResult> updateProductionProgress(
+    int id,
+    Map<String, dynamic> data,
+  ) async {
+    final result = await _api.put(
+      '/api/app/production-progresses/$id',
+      body: data,
+    );
     return result;
   }
 
@@ -71,7 +93,10 @@ class LotRepo {
     return result;
   }
 
-  Future<PlexApiResult> updateTrayDetails(int trayId, Map<String, dynamic> data) async {
+  Future<PlexApiResult> updateTrayDetails(
+    int trayId,
+    Map<String, dynamic> data,
+  ) async {
     final result = await _api.put('/api/app/tray-details/$trayId', body: data);
     return result;
   }
@@ -81,11 +106,17 @@ class LotRepo {
     return result;
   }
 
-  Future<PlexApiResult> fetchTrayDetails({int maxResultCount = 10, int skipCount = 0}) async {
-    final result = await _api.getList('/api/app/tray-details', query: {
-      'MaxResultCount': maxResultCount.toString(),
-      'SkipCount': skipCount.toString(),
-    });
+  Future<PlexApiResult> fetchTrayDetails({
+    int maxResultCount = 10,
+    int skipCount = 0,
+  }) async {
+    final result = await _api.getList(
+      '/api/app/tray-details',
+      query: {
+        'MaxResultCount': maxResultCount.toString(),
+        'SkipCount': skipCount.toString(),
+      },
+    );
 
     if (!result.success || result.data == null) {
       return result;
@@ -113,7 +144,10 @@ class LotRepo {
     return result;
   }
 
-  Future<PlexApiResult> updateLotHeader(int id, Map<String, dynamic> data) async {
+  Future<PlexApiResult> updateLotHeader(
+    int id,
+    Map<String, dynamic> data,
+  ) async {
     final result = await _api.put('/api/app/batch-headers/$id', body: data);
     return result;
   }
@@ -123,12 +157,21 @@ class LotRepo {
     return result;
   }
 
-  Future<PlexApiResult> postProductionProgress(Map<String, dynamic> data) async {
-    final result = await _api.post('/api/app/production-progresses', body: data);
+  Future<PlexApiResult> postProductionProgress(
+    Map<String, dynamic> data,
+  ) async {
+    final result = await _api.post(
+      '/api/app/production-progresses',
+      body: data,
+    );
     return result;
   }
 
-  Future<PlexApiResult> fetchLotHeaders({bool? lockFlag, int maxResultCount = 30, int skipCount = 0}) async {
+  Future<PlexApiResult> fetchLotHeaders({
+    bool? lockFlag,
+    int maxResultCount = 30,
+    int skipCount = 0,
+  }) async {
     final query = {
       'MaxResultCount': maxResultCount.toString(),
       'maxResultCount': maxResultCount.toString(),
@@ -172,11 +215,8 @@ class LotRepo {
 
   Future<PlexApiResult> fetchLotLinesByProgressId(int progressId) async {
     final result = await _api.getList(
-      '/api/app/batch-liness', 
-      query: {
-        'progressId': progressId.toString(),
-        'maxResultCount': '1000',
-      }
+      '/api/app/batch-liness',
+      query: {'progressId': progressId.toString(), 'maxResultCount': '1000'},
     );
     return result;
   }
@@ -186,29 +226,31 @@ class LotRepo {
   Future<PlexApiResult> fetchWipTransactionsByProgressId(int progressId) async {
     // Fetching a larger list without the problematic filter to allow in-memory filtering
     final result = await _api.getList(
-      '/api/app/w-iPTransactions', 
-      query: {
-        'maxResultCount': '1000',
-      }
+      '/api/app/w-iPTransactions',
+      query: {'maxResultCount': '1000'},
     );
     return result;
   }
 
   Future<PlexApiResult> fetchLotColors() async {
-    final result = await _api.getList('/api/app/segment-codes', query: {
-      'SegmentTypeDescription': 'COLORS',
-      'MaxResultCount': '1000',
-    });
-    
+    final result = await _api.getList(
+      '/api/app/segment-codes',
+      query: {'SegmentTypeDescription': 'COLORS', 'MaxResultCount': '1000'},
+    );
+
     if (!result.success || result.data == null) return result;
 
     try {
       final data = result.data as List;
       final list = data
-          .map((item) => LotColorModel.fromJson(Map<String, dynamic>.from(item)))
-          .where((color) =>
-              color.segmentType?.description?.toUpperCase() == 'COLORS' ||
-              color.segmentType?.code?.toUpperCase() == 'COLORS')
+          .map(
+            (item) => LotColorModel.fromJson(Map<String, dynamic>.from(item)),
+          )
+          .where(
+            (color) =>
+                color.segmentType?.description?.toUpperCase() == 'COLORS' ||
+                color.segmentType?.code?.toUpperCase() == 'COLORS',
+          )
           .toList();
       return PlexApiResult(true, 200, "Success", list);
     } catch (e) {
@@ -217,13 +259,20 @@ class LotRepo {
   }
 
   Future<PlexApiResult> fetchLotMachines() async {
-    final result = await _api.getList('/api/app/resources', query: {'ResourceTypeId': '2'});
-    
+    final result = await _api.getList(
+      '/api/app/resources',
+      query: {'ResourceTypeId': '2'},
+    );
+
     if (!result.success || result.data == null) return result;
 
     try {
       final data = result.data as List;
-      final list = data.map((item) => LotMachineModel.fromJson(Map<String, dynamic>.from(item))).toList();
+      final list = data
+          .map(
+            (item) => LotMachineModel.fromJson(Map<String, dynamic>.from(item)),
+          )
+          .toList();
       return PlexApiResult(true, 200, "Success", list);
     } catch (e) {
       return PlexApiResult(false, 500, e.toString(), null);
@@ -239,19 +288,27 @@ class LotRepo {
     return await _api.getObject('/api/app/resources/$id');
   }
 
-  Future<PlexApiResult> fetchWorkOrderLineDetails(int workOrderLineId, String colorDescription) async {
+  Future<PlexApiResult> fetchWorkOrderLineDetails(
+    int workOrderLineId,
+    String colorDescription,
+  ) async {
     final query = {
       'WorkOrderLineId': workOrderLineId.toString(),
       'ColorDescription': colorDescription,
     };
-    
+
     // Using the exact URL provided by the user (the GET list endpoint handles query params)
-    final result = await _api.getList('/api/app/work-order-line-details', query: query);
-    
+    final result = await _api.getList(
+      '/api/app/work-order-line-details',
+      query: query,
+    );
+
     return result;
   }
 
-  Future<PlexApiResult> fetchAllWorkOrderLineDetails(int workOrderLineId) async {
+  Future<PlexApiResult> fetchAllWorkOrderLineDetails(
+    int workOrderLineId,
+  ) async {
     final query = {
       'WorkOrderLineId': workOrderLineId.toString(),
       'MaxResultCount': '1000',
@@ -260,9 +317,7 @@ class LotRepo {
   }
 
   Future<PlexApiResult> fetchItemRoutings(int itemDefId) async {
-    final query = {
-      'ItemDefId': itemDefId.toString(),
-    };
+    final query = {'ItemDefId': itemDefId.toString()};
     final result = await _api.getList('/api/app/item-routings', query: query);
     return result;
   }
@@ -276,11 +331,17 @@ class LotRepo {
   }
 
   Future<PlexApiResult> postLotHeaderRouting(Map<String, dynamic> data) async {
-    final result = await _api.post('/api/app/batch-header-routings', body: data);
+    final result = await _api.post(
+      '/api/app/batch-header-routings',
+      body: data,
+    );
     return result;
   }
 
-  Future<PlexApiResult> updateWipTransaction(int id, Map<String, dynamic> data) async {
+  Future<PlexApiResult> updateWipTransaction(
+    int id,
+    Map<String, dynamic> data,
+  ) async {
     return await _api.put('/api/app/w-iPTransactions/$id', body: data);
   }
 
@@ -289,7 +350,9 @@ class LotRepo {
   }
 
   Future<PlexApiResult> fetchLocators({int? operationId}) async {
-    final query = operationId != null ? {'OperationId': operationId.toString()} : <String, dynamic>{};
+    final query = operationId != null
+        ? {'OperationId': operationId.toString()}
+        : <String, dynamic>{};
     final result = await _api.getList('/api/app/locators', query: query);
     return result;
   }

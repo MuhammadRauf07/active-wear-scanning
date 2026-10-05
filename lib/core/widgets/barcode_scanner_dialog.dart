@@ -8,7 +8,10 @@ class BarcodeScannerDialog extends StatefulWidget {
 
   final String title;
 
-  static Future<String?> show(BuildContext context, {String title = 'Scan Barcode'}) {
+  static Future<String?> show(
+    BuildContext context, {
+    String title = 'Scan Barcode',
+  }) {
     return showGeneralDialog<String>(
       context: context,
       barrierDismissible: true,
@@ -19,7 +22,13 @@ class BarcodeScannerDialog extends StatefulWidget {
         return FadeTransition(
           opacity: animation,
           child: SlideTransition(
-            position: Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
+            position:
+                Tween<Offset>(
+                  begin: const Offset(0, 0.05),
+                  end: Offset.zero,
+                ).animate(
+                  CurvedAnimation(parent: animation, curve: Curves.easeOut),
+                ),
             child: child,
           ),
         );
@@ -28,11 +37,22 @@ class BarcodeScannerDialog extends StatefulWidget {
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 24, offset: const Offset(0, 12), spreadRadius: 0)],
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.15),
+                blurRadius: 24,
+                offset: const Offset(0, 12),
+                spreadRadius: 0,
+              ),
+            ],
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(24),
-            child: SizedBox(width: 400, height: 600, child: BarcodeScannerDialog(title: title)),
+            child: SizedBox(
+              width: 400,
+              height: 600,
+              child: BarcodeScannerDialog(title: title),
+            ),
           ),
         ),
       ),
@@ -178,9 +198,16 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
                   ),
                   IconButton(
                     onPressed: _close,
-                    icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8), size: 22),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: Color(0xFF94A3B8),
+                      size: 22,
+                    ),
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    constraints: const BoxConstraints(
+                      minWidth: 32,
+                      minHeight: 32,
+                    ),
                     splashRadius: 20,
                   ),
                 ],
@@ -202,27 +229,52 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
                       child: TextField(
                         controller: _manualController,
                         onSubmitted: (_) => _submitManual(),
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1E293B),
+                        ),
                         decoration: InputDecoration(
                           hintText: 'Enter code manually...',
-                          hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8), fontWeight: FontWeight.normal),
-                          prefixIcon: const Icon(Icons.keyboard_alt_outlined, size: 18, color: Color(0xFF64748B)),
-                          prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                          hintStyle: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF94A3B8),
+                            fontWeight: FontWeight.normal,
+                          ),
+                          prefixIcon: const Icon(
+                            Icons.keyboard_alt_outlined,
+                            size: 18,
+                            color: Color(0xFF64748B),
+                          ),
+                          prefixIconConstraints: const BoxConstraints(
+                            minWidth: 36,
+                            minHeight: 36,
+                          ),
                           filled: true,
                           fillColor: Colors.white,
                           isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFCBD5E1),
+                            ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFCBD5E1),
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide: const BorderSide(color: Color(0xFF0284C7), width: 1.5),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF0284C7),
+                              width: 1.5,
+                            ),
                           ),
                         ),
                       ),
@@ -239,9 +291,17 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
                           foregroundColor: Colors.white,
                           elevation: 0,
                           padding: const EdgeInsets.symmetric(horizontal: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
-                        child: const Text('SUBMIT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
+                        child: const Text(
+                          'SUBMIT',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -254,22 +314,38 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.computer, size: 64, color: Colors.grey.shade300),
+                          Icon(
+                            Icons.computer,
+                            size: 64,
+                            color: Colors.grey.shade300,
+                          ),
                           const SizedBox(height: 16),
-                          const Text('Camera scanner not supported on Windows', style: TextStyle(color: Colors.grey)),
-                          const Text('Please enter the code manually above', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                          const Text(
+                            'Camera scanner not supported on Windows',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                          const Text(
+                            'Please enter the code manually above',
+                            style: TextStyle(color: Colors.grey, fontSize: 12),
+                          ),
                         ],
                       ),
                     )
                   : Stack(
                       children: [
-                        MobileScanner(controller: _controller, onDetect: _onDetect),
+                        MobileScanner(
+                          controller: _controller,
+                          onDetect: _onDetect,
+                        ),
                         Center(
                           child: Container(
                             width: 320,
                             height: 160,
                             decoration: BoxDecoration(
-                              border: Border.all(color: Colors.blue.withValues(alpha: 0.6), width: 3),
+                              border: Border.all(
+                                color: Colors.blue.withValues(alpha: 0.6),
+                                width: 3,
+                              ),
                               borderRadius: BorderRadius.circular(16),
                             ),
                           ),

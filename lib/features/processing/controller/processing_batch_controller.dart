@@ -79,7 +79,9 @@ class ProcessingBatchController extends ChangeNotifier {
       final mJson = mData['resource'] ?? mData;
       final cap = mJson['capacity'];
       if (cap != null) {
-        _state = _state.copyWith(machineCapacity: double.tryParse(cap.toString()));
+        _state = _state.copyWith(
+          machineCapacity: double.tryParse(cap.toString()),
+        );
       }
     }
   }
@@ -87,7 +89,9 @@ class ProcessingBatchController extends ChangeNotifier {
   Future<void> _fetchBatchHeader() async {
     final res = await _lotRepo.fetchLotHeaderById(batchHeaderId);
     if (!res.success || res.data == null) return;
-    final bh = LotHeaderResponseModel.fromJson(res.data as Map<String, dynamic>);
+    final bh = LotHeaderResponseModel.fromJson(
+      res.data as Map<String, dynamic>,
+    );
     final trayDetailId = bh.batchHeader.trayDetailId;
     if (trayDetailId != null) {
       final trayRes = await _lotRepo.fetchTrayDetailById(trayDetailId);
@@ -109,7 +113,9 @@ class ProcessingBatchController extends ChangeNotifier {
     try {
       final List<Map<String, dynamic>> parsedRoutings = [];
       final bhrRes = await _lotRepo.fetchBatchHeaderRoutings(batchHeaderId);
-      if (bhrRes.success && bhrRes.data != null && (bhrRes.data as List).isNotEmpty) {
+      if (bhrRes.success &&
+          bhrRes.data != null &&
+          (bhrRes.data as List).isNotEmpty) {
         for (final r in bhrRes.data as List) {
           final rMap = r is Map ? r as Map<String, dynamic> : {};
           final bhr = rMap['batchHeaderRouting'] as Map? ?? rMap;
@@ -121,7 +127,8 @@ class ProcessingBatchController extends ChangeNotifier {
         }
       } else {
         final firstTray = _state.trays.isNotEmpty ? _state.trays.first : null;
-        final int? routingItemId = firstTray?.productionProgress.processedItemId ?? firstTray?.item.id;
+        final int? routingItemId =
+            firstTray?.productionProgress.processedItemId ?? firstTray?.item.id;
         if (routingItemId != null) {
           final routingRes = await _lotRepo.fetchItemRoutings(routingItemId);
           if (routingRes.success && routingRes.data != null) {
@@ -139,8 +146,12 @@ class ProcessingBatchController extends ChangeNotifier {
       }
 
       if (parsedRoutings.isNotEmpty) {
-        parsedRoutings.sort((a, b) => (a['seq'] as int).compareTo(b['seq'] as int));
-        final currentIdx = parsedRoutings.indexWhere((r) => r['operationId'] == currentOperationId);
+        parsedRoutings.sort(
+          (a, b) => (a['seq'] as int).compareTo(b['seq'] as int),
+        );
+        final currentIdx = parsedRoutings.indexWhere(
+          (r) => r['operationId'] == currentOperationId,
+        );
         if (currentIdx != -1) {
           final computedHasPrev = currentIdx > 0;
           if (_hasPreviousProcess != computedHasPrev) {
@@ -209,13 +220,18 @@ class ProcessingBatchController extends ChangeNotifier {
         final list = res.data as List<ProductionProgressResponseModel>;
 
         final wastageIds = list
-            .where((t) => t.productionProgress.operationId == currentOperationId &&
-                         (t.productionProgress.locatorId == 18 || (t.productionProgress.waste ?? 0) > 0))
+            .where(
+              (t) =>
+                  t.productionProgress.operationId == currentOperationId &&
+                  (t.productionProgress.locatorId == 18 ||
+                      (t.productionProgress.waste ?? 0) > 0),
+            )
             .map((t) => t.productionProgress.primaryTrayId)
             .whereType<int>()
             .toSet();
 
-        final Map<int, ProductionProgressResponseModel> wastageByOriginalId = {};
+        final Map<int, ProductionProgressResponseModel> wastageByOriginalId =
+            {};
         for (final t in list) {
           if (t.productionProgress.operationId != currentOperationId) continue;
           final subOp = t.productionProgress.subOperation;
@@ -232,16 +248,23 @@ class ProcessingBatchController extends ChangeNotifier {
         for (final tray in list) {
           if (tray.productionProgress.transactionType != 2) continue;
           if (tray.productionProgress.wipStatus != 0) continue;
-          if (tray.productionProgress.operationId != currentOperationId) continue;
+          if (tray.productionProgress.operationId != currentOperationId)
+            continue;
           if (tray.productionProgress.locatorId == 18) continue;
 
           final code = tray.primaryTrayModel.trayCode ?? 'UNKNOWN';
-          if (!uniqueTrays.containsKey(code) || (tray.productionProgress.id ?? 0) > (uniqueTrays[code]!.productionProgress.id ?? 0)) {
+          if (!uniqueTrays.containsKey(code) ||
+              (tray.productionProgress.id ?? 0) >
+                  (uniqueTrays[code]!.productionProgress.id ?? 0)) {
             uniqueTrays[code] = tray;
           }
         }
         final deDuplicatedList = uniqueTrays.values.toList();
-        deDuplicatedList.sort((a, b) => (a.primaryTrayModel.trayCode ?? '').compareTo(b.primaryTrayModel.trayCode ?? ''));
+        deDuplicatedList.sort(
+          (a, b) => (a.primaryTrayModel.trayCode ?? '').compareTo(
+            b.primaryTrayModel.trayCode ?? '',
+          ),
+        );
 
         // Enrich each tray with metadata
         final enrichedList = <ProductionProgressResponseModel>[];
@@ -256,21 +279,31 @@ class ProcessingBatchController extends ChangeNotifier {
           if (mainItemId > 0) {
             final itemRes = await _lotRepo.fetchItemDef(mainItemId);
             if (itemRes.success && itemRes.data != null) {
-              final itemData = itemRes.data is Map ? itemRes.data as Map<String, dynamic> : {};
+              final itemData = itemRes.data is Map
+                  ? itemRes.data as Map<String, dynamic>
+                  : {};
               if (itemData['perGarmentTube'] != null) {
                 perGarmentTube = (itemData['perGarmentTube'] as num).toDouble();
               }
-              if (itemData['colorDescription'] != null) colorDesc = itemData['colorDescription'];
-              if (itemData['sizeDescription'] != null) sizeDesc = itemData['sizeDescription'];
+              if (itemData['colorDescription'] != null)
+                colorDesc = itemData['colorDescription'];
+              if (itemData['sizeDescription'] != null)
+                sizeDesc = itemData['sizeDescription'];
             }
           }
 
-          if (colorDesc.isEmpty && processedItemId != null && processedItemId > 0) {
+          if (colorDesc.isEmpty &&
+              processedItemId != null &&
+              processedItemId > 0) {
             final processedRes = await _lotRepo.fetchItemDef(processedItemId);
             if (processedRes.success && processedRes.data != null) {
-              final pd = processedRes.data is Map ? processedRes.data as Map<String, dynamic> : {};
-              if (pd['colorDescription'] != null) colorDesc = pd['colorDescription'];
-              if (sizeDesc.isEmpty && pd['sizeDescription'] != null) sizeDesc = pd['sizeDescription'];
+              final pd = processedRes.data is Map
+                  ? processedRes.data as Map<String, dynamic>
+                  : {};
+              if (pd['colorDescription'] != null)
+                colorDesc = pd['colorDescription'];
+              if (sizeDesc.isEmpty && pd['sizeDescription'] != null)
+                sizeDesc = pd['sizeDescription'];
             }
           }
 
@@ -296,8 +329,10 @@ class ProcessingBatchController extends ChangeNotifier {
         final initialHoldTrayIds = <int>{};
         for (final t in enrichedList) {
           if (t.productionProgress.holdFlag == true) {
-            if (t.primaryTrayModel.id != null) initialHoldTrayIds.add(t.primaryTrayModel.id!);
-            if (t.productionProgress.id != null) initialHoldTrayIds.add(t.productionProgress.id!);
+            if (t.primaryTrayModel.id != null)
+              initialHoldTrayIds.add(t.primaryTrayModel.id!);
+            if (t.productionProgress.id != null)
+              initialHoldTrayIds.add(t.productionProgress.id!);
           }
         }
 
@@ -339,8 +374,10 @@ class ProcessingBatchController extends ChangeNotifier {
       if (!bhRes.success || bhRes.data == null) {
         throw Exception('Failed to fetch batch header');
       }
-      final bh = LotHeaderResponseModel.fromJson(bhRes.data as Map<String, dynamic>).batchHeader;
-      
+      final bh = LotHeaderResponseModel.fromJson(
+        bhRes.data as Map<String, dynamic>,
+      ).batchHeader;
+
       final updateRes = await _lotRepo.updateLotHeader(batchHeaderId, {
         'planDate': bh.planDate,
         'colorDescription': bh.colorDescription,
@@ -364,7 +401,10 @@ class ProcessingBatchController extends ChangeNotifier {
         throw Exception('Free failed: ${updateRes.message}');
       }
     } catch (e) {
-      _state = _state.copyWith(isUpdatingTrolley: false, errorMessage: e.toString());
+      _state = _state.copyWith(
+        isUpdatingTrolley: false,
+        errorMessage: e.toString(),
+      );
     }
     notifyListeners();
   }
@@ -419,7 +459,9 @@ class ProcessingBatchController extends ChangeNotifier {
         return 'Failed to fetch batch header';
       }
 
-      final bh = LotHeaderResponseModel.fromJson(bhRes.data as Map<String, dynamic>).batchHeader;
+      final bh = LotHeaderResponseModel.fromJson(
+        bhRes.data as Map<String, dynamic>,
+      ).batchHeader;
       final updateRes = await _lotRepo.updateLotHeader(batchHeaderId, {
         'planDate': bh.planDate,
         'colorDescription': bh.colorDescription,
@@ -475,17 +517,17 @@ class ProcessingBatchController extends ChangeNotifier {
         payload.remove('lastModificationTime');
         payload.remove('lastModifierId');
 
-        final res = await _processingRepo.updateProductionProgress(pp.id!, payload);
+        final res = await _processingRepo.updateProductionProgress(
+          pp.id!,
+          payload,
+        );
         if (!res.success) anyFailed = true;
       }
 
       if (anyFailed) {
         throw Exception('Some trays failed to start. Please retry.');
       } else {
-        _state = _state.copyWith(
-          isBatchStarted: true,
-          startTime: now,
-        );
+        _state = _state.copyWith(isBatchStarted: true, startTime: now);
         notifyListeners();
         await fetchTrays();
       }
@@ -508,21 +550,30 @@ class ProcessingBatchController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final tIdx = _state.trays.indexWhere((t) => t.productionProgress.id == progressId);
+      final tIdx = _state.trays.indexWhere(
+        (t) => t.productionProgress.id == progressId,
+      );
       if (tIdx == -1) throw Exception('Tray not found');
       final tray = _state.trays[tIdx];
 
-      final double requiredTubes = tray.productionProgress.requiredQty?.toDouble() ??
+      final double requiredTubes =
+          tray.productionProgress.requiredQty?.toDouble() ??
           tray.productionProgress.secondaryQuantity?.toDouble() ??
           tray.productionProgress.primaryQuantity?.toDouble() ??
           0.0;
       final double wastageTubes = requiredTubes - newQty;
       final double pgt = tray.item.perGarmentTube;
       final double newPrimaryQty = pgt > 0 ? newQty * pgt : newQty;
-      final double wastagePrimaryQty = pgt > 0 ? wastageTubes * pgt : wastageTubes;
+      final double wastagePrimaryQty = pgt > 0
+          ? wastageTubes * pgt
+          : wastageTubes;
 
-      final userReason = (reason != null && reason.trim().isNotEmpty) ? reason.trim() : '';
-      final userRemarks = (remarks != null && remarks.trim().isNotEmpty) ? remarks.trim() : null;
+      final userReason = (reason != null && reason.trim().isNotEmpty)
+          ? reason.trim()
+          : '';
+      final userRemarks = (remarks != null && remarks.trim().isNotEmpty)
+          ? remarks.trim()
+          : null;
 
       // 1. Update original production progress record
       final json = tray.productionProgress.toJson();
@@ -543,25 +594,40 @@ class ProcessingBatchController extends ChangeNotifier {
       json.remove('lastModificationTime');
       json.remove('lastModifierId');
 
-      final res = await _processingRepo.updateProductionProgress(progressId, json);
+      final res = await _processingRepo.updateProductionProgress(
+        progressId,
+        json,
+      );
       if (!res.success) {
         throw Exception(res.message);
       }
 
       // Sync the original line's quantity to its corresponding WIPTransaction
       try {
-        final wipRes = await _lotRepo.fetchWipTransactionsByProgressId(progressId);
+        final wipRes = await _lotRepo.fetchWipTransactionsByProgressId(
+          progressId,
+        );
         if (wipRes.success && wipRes.data != null) {
-          final List rawItems = wipRes.data is Map ? (wipRes.data['items'] ?? []) : wipRes.data;
+          final List rawItems = wipRes.data is Map
+              ? (wipRes.data['items'] ?? [])
+              : wipRes.data;
           final items = rawItems.cast<Map<String, dynamic>>();
           final match = items.firstWhere(
-            (e) => (e['wipTransaction']?['progressId'] ?? e['progressId'] ?? e['wipTransaction']?['productionProgressId'] ?? e['productionProgressId'])?.toString() == progressId.toString(),
+            (e) =>
+                (e['wipTransaction']?['progressId'] ??
+                        e['progressId'] ??
+                        e['wipTransaction']?['productionProgressId'] ??
+                        e['productionProgressId'])
+                    ?.toString() ==
+                progressId.toString(),
             orElse: () => <String, dynamic>{},
           );
           if (match.isNotEmpty) {
             final wipId = match['wipTransaction']?['id'] as int?;
             if (wipId != null) {
-              final wipPayload = Map<String, dynamic>.from(match['wipTransaction'] ?? match);
+              final wipPayload = Map<String, dynamic>.from(
+                match['wipTransaction'] ?? match,
+              );
               wipPayload['secondaryQuantity'] = newQty;
               wipPayload['primaryQuantity'] = newPrimaryQty;
               wipPayload.remove('id');
@@ -576,10 +642,14 @@ class ProcessingBatchController extends ChangeNotifier {
 
       // 2. Manage the wastage record
       if (wastageTubes > 0) {
-        final primaryDefectId = selectedDefectListIds.isNotEmpty ? selectedDefectListIds.first : null;
+        final primaryDefectId = selectedDefectListIds.isNotEmpty
+            ? selectedDefectListIds.first
+            : null;
         final descriptions = <String>[];
         for (final defId in selectedDefectListIds) {
-          final matches = _state.defectLists.where((d) => d.defectList.id == defId).toList();
+          final matches = _state.defectLists
+              .where((d) => d.defectList.id == defId)
+              .toList();
           if (matches.isNotEmpty) {
             final desc = matches.first.defectList.description;
             if (desc != null && desc.isNotEmpty) {
@@ -587,11 +657,14 @@ class ProcessingBatchController extends ChangeNotifier {
             }
           }
         }
-        final combinedDefectDescription = descriptions.isNotEmpty ? descriptions.join('; ') : null;
+        final combinedDefectDescription = descriptions.isNotEmpty
+            ? descriptions.join('; ')
+            : null;
         final effectiveRemarks = userRemarks ?? combinedDefectDescription;
 
         final wastageRecord = _state.wastageByOriginalId[progressId];
-        if (wastageRecord != null && wastageRecord.productionProgress.id != null) {
+        if (wastageRecord != null &&
+            wastageRecord.productionProgress.id != null) {
           // UPDATE existing wastage record
           final wJson = wastageRecord.productionProgress.toJson();
           wJson['secondaryQuantity'] = wastageTubes;
@@ -614,7 +687,10 @@ class ProcessingBatchController extends ChangeNotifier {
           wJson.remove('lastModificationTime');
           wJson.remove('lastModifierId');
 
-          final postRes = await _processingRepo.updateProductionProgress(wastageRecord.productionProgress.id!, wJson);
+          final postRes = await _processingRepo.updateProductionProgress(
+            wastageRecord.productionProgress.id!,
+            wJson,
+          );
           if (!postRes.success) {
             throw Exception(postRes.message);
           }
@@ -639,13 +715,16 @@ class ProcessingBatchController extends ChangeNotifier {
           if (effectiveRemarks != null) {
             newJson['remarks'] = effectiveRemarks;
           }
-          newJson['transactionType'] = tray.productionProgress.transactionType ?? 2;
+          newJson['transactionType'] =
+              tray.productionProgress.transactionType ?? 2;
           newJson['subOperation'] = progressId.toString();
           newJson['isStarted'] = false;
           newJson['startDate'] = null;
           newJson['date'] = DateTime.now().toIso8601String();
 
-          final postRes = await _processingRepo.createProductionProgress(newJson);
+          final postRes = await _processingRepo.createProductionProgress(
+            newJson,
+          );
           if (!postRes.success) {
             throw Exception(postRes.message);
           }
@@ -663,22 +742,40 @@ class ProcessingBatchController extends ChangeNotifier {
               'defectQuantity': wastageTubes.toInt(),
               'reason': userReason,
               'remarks': userRemarks,
-              'operationId': tray.productionProgress.operationId ?? tray.operation.id,
-              'workOrderHeaderId': tray.productionProgress.workOrderHeaderId ?? tray.workOrderHeader.id,
-              'workOrderLineId': tray.productionProgress.workOrderLineId ?? tray.workOrderLine.id,
-              'processItemId': tray.productionProgress.processedItemId ?? tray.item.id,
+              'operationId':
+                  tray.productionProgress.operationId ?? tray.operation.id,
+              'workOrderHeaderId':
+                  tray.productionProgress.workOrderHeaderId ??
+                  tray.workOrderHeader.id,
+              'workOrderLineId':
+                  tray.productionProgress.workOrderLineId ??
+                  tray.workOrderLine.id,
+              'processItemId':
+                  tray.productionProgress.processedItemId ?? tray.item.id,
               'shiftId': tray.productionProgress.shiftId ?? tray.shift.id,
-              'primaryTrayId': tray.productionProgress.primaryTrayId ?? tray.primaryTrayModel.id,
-              'machineId': tray.productionProgress.machineId ?? tray.machineModel.id,
+              'primaryTrayId':
+                  tray.productionProgress.primaryTrayId ??
+                  tray.primaryTrayModel.id,
+              'machineId':
+                  tray.productionProgress.machineId ?? tray.machineModel.id,
               'locatorId': tray.productionProgress.locatorId ?? 18,
-              'batchHeaderId': tray.productionProgress.batchHeaderId ?? tray.batchHeader?.id ?? batchHeaderId,
-              'batchLinesId': tray.productionProgress.batchLinesId ?? tray.primaryTrayModel.batchLinesId,
+              'batchHeaderId':
+                  tray.productionProgress.batchHeaderId ??
+                  tray.batchHeader?.id ??
+                  batchHeaderId,
+              'batchLinesId':
+                  tray.productionProgress.batchLinesId ??
+                  tray.primaryTrayModel.batchLinesId,
             };
 
             try {
-              final histRes = await _processingRepo.createDefectHistory(defectHistoryPayload);
+              final histRes = await _processingRepo.createDefectHistory(
+                defectHistoryPayload,
+              );
               if (!histRes.success) {
-                debugPrint('Warning: Defect history post returned unsuccessful: ${histRes.message}');
+                debugPrint(
+                  'Warning: Defect history post returned unsuccessful: ${histRes.message}',
+                );
               }
             } catch (e) {
               debugPrint('Error posting defect history: $e');
@@ -691,22 +788,40 @@ class ProcessingBatchController extends ChangeNotifier {
             'defectQuantity': wastageTubes.toInt(),
             'reason': userReason,
             'remarks': userRemarks,
-            'operationId': tray.productionProgress.operationId ?? tray.operation.id,
-            'workOrderHeaderId': tray.productionProgress.workOrderHeaderId ?? tray.workOrderHeader.id,
-            'workOrderLineId': tray.productionProgress.workOrderLineId ?? tray.workOrderLine.id,
-            'processItemId': tray.productionProgress.processedItemId ?? tray.item.id,
+            'operationId':
+                tray.productionProgress.operationId ?? tray.operation.id,
+            'workOrderHeaderId':
+                tray.productionProgress.workOrderHeaderId ??
+                tray.workOrderHeader.id,
+            'workOrderLineId':
+                tray.productionProgress.workOrderLineId ??
+                tray.workOrderLine.id,
+            'processItemId':
+                tray.productionProgress.processedItemId ?? tray.item.id,
             'shiftId': tray.productionProgress.shiftId ?? tray.shift.id,
-            'primaryTrayId': tray.productionProgress.primaryTrayId ?? tray.primaryTrayModel.id,
-            'machineId': tray.productionProgress.machineId ?? tray.machineModel.id,
+            'primaryTrayId':
+                tray.productionProgress.primaryTrayId ??
+                tray.primaryTrayModel.id,
+            'machineId':
+                tray.productionProgress.machineId ?? tray.machineModel.id,
             'locatorId': tray.productionProgress.locatorId ?? 18,
-            'batchHeaderId': tray.productionProgress.batchHeaderId ?? tray.batchHeader?.id ?? batchHeaderId,
-            'batchLinesId': tray.productionProgress.batchLinesId ?? tray.primaryTrayModel.batchLinesId,
+            'batchHeaderId':
+                tray.productionProgress.batchHeaderId ??
+                tray.batchHeader?.id ??
+                batchHeaderId,
+            'batchLinesId':
+                tray.productionProgress.batchLinesId ??
+                tray.primaryTrayModel.batchLinesId,
           };
 
           try {
-            final histRes = await _processingRepo.createDefectHistory(defectHistoryPayload);
+            final histRes = await _processingRepo.createDefectHistory(
+              defectHistoryPayload,
+            );
             if (!histRes.success) {
-              debugPrint('Warning: Defect history post returned unsuccessful: ${histRes.message}');
+              debugPrint(
+                'Warning: Defect history post returned unsuccessful: ${histRes.message}',
+              );
             }
           } catch (e) {
             debugPrint('Error posting defect history: $e');
@@ -715,7 +830,8 @@ class ProcessingBatchController extends ChangeNotifier {
       } else {
         // newQty == requiredQty (wastage reduced to 0), delete the wastage record if exists
         final wastageRecord = _state.wastageByOriginalId[progressId];
-        if (wastageRecord != null && wastageRecord.productionProgress.id != null) {
+        if (wastageRecord != null &&
+            wastageRecord.productionProgress.id != null) {
           final wId = wastageRecord.productionProgress.id!;
           await _processingRepo.deleteProductionProgress(wId);
         }
@@ -732,12 +848,20 @@ class ProcessingBatchController extends ChangeNotifier {
     }
   }
 
-  Future<void> _deleteDefectHistoriesForTray(ProductionProgressResponseModel tray) async {
+  Future<void> _deleteDefectHistoriesForTray(
+    ProductionProgressResponseModel tray,
+  ) async {
     try {
-      final trayId = tray.productionProgress.primaryTrayId ?? tray.primaryTrayModel.id;
+      final trayId =
+          tray.productionProgress.primaryTrayId ?? tray.primaryTrayModel.id;
       final opId = tray.productionProgress.operationId ?? tray.operation.id;
-      final bHeaderId = tray.productionProgress.batchHeaderId ?? tray.batchHeader?.id ?? batchHeaderId;
-      final bLineId = tray.productionProgress.batchLinesId ?? tray.primaryTrayModel.batchLinesId;
+      final bHeaderId =
+          tray.productionProgress.batchHeaderId ??
+          tray.batchHeader?.id ??
+          batchHeaderId;
+      final bLineId =
+          tray.productionProgress.batchLinesId ??
+          tray.primaryTrayModel.batchLinesId;
 
       final res = await _processingRepo.fetchDefectHistories(
         batchHeaderId: bHeaderId,
@@ -746,20 +870,35 @@ class ProcessingBatchController extends ChangeNotifier {
       );
 
       if (res.success && res.data != null) {
-        final List rawList = res.data is Map ? (res.data['items'] ?? []) : res.data;
+        final List rawList = res.data is Map
+            ? (res.data['items'] ?? [])
+            : res.data;
         for (final item in rawList) {
           if (item is Map) {
-            final dh = item['defectHistory'] is Map ? item['defectHistory'] as Map : item;
-            final itemTrayId = dh['primaryTrayId'] as int? ?? int.tryParse(dh['primaryTrayId']?.toString() ?? '');
-            final itemOpId = dh['operationId'] as int? ?? int.tryParse(dh['operationId']?.toString() ?? '');
-            final itemBatchHeaderId = dh['batchHeaderId'] as int? ?? int.tryParse(dh['batchHeaderId']?.toString() ?? '');
-            final itemBatchLinesId = dh['batchLinesId'] as int? ?? int.tryParse(dh['batchLinesId']?.toString() ?? '');
-            final id = dh['id'] as int? ?? int.tryParse(dh['id']?.toString() ?? '');
+            final dh = item['defectHistory'] is Map
+                ? item['defectHistory'] as Map
+                : item;
+            final itemTrayId =
+                dh['primaryTrayId'] as int? ??
+                int.tryParse(dh['primaryTrayId']?.toString() ?? '');
+            final itemOpId =
+                dh['operationId'] as int? ??
+                int.tryParse(dh['operationId']?.toString() ?? '');
+            final itemBatchHeaderId =
+                dh['batchHeaderId'] as int? ??
+                int.tryParse(dh['batchHeaderId']?.toString() ?? '');
+            final itemBatchLinesId =
+                dh['batchLinesId'] as int? ??
+                int.tryParse(dh['batchLinesId']?.toString() ?? '');
+            final id =
+                dh['id'] as int? ?? int.tryParse(dh['id']?.toString() ?? '');
 
-            final bool matchesTray = (trayId != null && itemTrayId == trayId) ||
+            final bool matchesTray =
+                (trayId != null && itemTrayId == trayId) ||
                 (bLineId != null && itemBatchLinesId == bLineId);
             final bool matchesOp = itemOpId == null || itemOpId == opId;
-            final bool matchesBatch = itemBatchHeaderId == null || itemBatchHeaderId == bHeaderId;
+            final bool matchesBatch =
+                itemBatchHeaderId == null || itemBatchHeaderId == bHeaderId;
 
             if (id != null && matchesTray && matchesOp && matchesBatch) {
               await _processingRepo.deleteDefectHistory(id);
@@ -777,20 +916,26 @@ class ProcessingBatchController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final tIdx = _state.trays.indexWhere((t) => t.productionProgress.id == progressId);
+      final tIdx = _state.trays.indexWhere(
+        (t) => t.productionProgress.id == progressId,
+      );
       if (tIdx == -1) throw Exception('Tray not found');
       final tray = _state.trays[tIdx];
 
-      final double requiredTubes = tray.productionProgress.requiredQty?.toDouble() ??
+      final double requiredTubes =
+          tray.productionProgress.requiredQty?.toDouble() ??
           tray.productionProgress.secondaryQuantity?.toDouble() ??
           tray.productionProgress.primaryQuantity?.toDouble() ??
           0.0;
       final double pgt = tray.item.perGarmentTube;
-      final double restoredPrimaryPcs = pgt > 0 ? requiredTubes * pgt : requiredTubes;
+      final double restoredPrimaryPcs = pgt > 0
+          ? requiredTubes * pgt
+          : requiredTubes;
 
       // 1. Delete wastage entry
       final wastageRecord = _state.wastageByOriginalId[progressId];
-      if (wastageRecord != null && wastageRecord.productionProgress.id != null) {
+      if (wastageRecord != null &&
+          wastageRecord.productionProgress.id != null) {
         final wId = wastageRecord.productionProgress.id!;
         final delRes = await _processingRepo.deleteProductionProgress(wId);
         if (!delRes.success) {
@@ -815,25 +960,40 @@ class ProcessingBatchController extends ChangeNotifier {
       json.remove('lastModificationTime');
       json.remove('lastModifierId');
 
-      final res = await _processingRepo.updateProductionProgress(progressId, json);
+      final res = await _processingRepo.updateProductionProgress(
+        progressId,
+        json,
+      );
       if (!res.success) {
         throw Exception(res.message);
       }
 
       // Sync restored original quantity to its corresponding WIPTransaction
       try {
-        final wipRes = await _lotRepo.fetchWipTransactionsByProgressId(progressId);
+        final wipRes = await _lotRepo.fetchWipTransactionsByProgressId(
+          progressId,
+        );
         if (wipRes.success && wipRes.data != null) {
-          final List rawItems = wipRes.data is Map ? (wipRes.data['items'] ?? []) : wipRes.data;
+          final List rawItems = wipRes.data is Map
+              ? (wipRes.data['items'] ?? [])
+              : wipRes.data;
           final items = rawItems.cast<Map<String, dynamic>>();
           final match = items.firstWhere(
-            (e) => (e['wipTransaction']?['progressId'] ?? e['progressId'] ?? e['wipTransaction']?['productionProgressId'] ?? e['productionProgressId'])?.toString() == progressId.toString(),
+            (e) =>
+                (e['wipTransaction']?['progressId'] ??
+                        e['progressId'] ??
+                        e['wipTransaction']?['productionProgressId'] ??
+                        e['productionProgressId'])
+                    ?.toString() ==
+                progressId.toString(),
             orElse: () => <String, dynamic>{},
           );
           if (match.isNotEmpty) {
             final wipId = match['wipTransaction']?['id'] as int?;
             if (wipId != null) {
-              final wipPayload = Map<String, dynamic>.from(match['wipTransaction'] ?? match);
+              final wipPayload = Map<String, dynamic>.from(
+                match['wipTransaction'] ?? match,
+              );
               wipPayload['secondaryQuantity'] = requiredTubes;
               wipPayload['primaryQuantity'] = restoredPrimaryPcs;
               wipPayload.remove('id');
@@ -867,7 +1027,11 @@ class ProcessingBatchController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void toggleReworkMode({required bool enabled, int? targetOpId, String? targetOpName}) {
+  void toggleReworkMode({
+    required bool enabled,
+    int? targetOpId,
+    String? targetOpName,
+  }) {
     _state = _state.copyWith(
       isReworkMode: enabled,
       selectedReworkTrayIds: enabled ? _state.selectedReworkTrayIds : {},
@@ -880,18 +1044,25 @@ class ProcessingBatchController extends ChangeNotifier {
 
   void selectAllReworkTrays(bool selected) {
     final updatedSet = selected
-        ? _state.trays.map((t) => t.productionProgress.id).whereType<int>().toSet()
+        ? _state.trays
+              .map((t) => t.productionProgress.id)
+              .whereType<int>()
+              .toSet()
         : <int>{};
     _state = _state.copyWith(selectedReworkTrayIds: updatedSet);
     notifyListeners();
   }
 
-  Future<void> submitBatch(void Function(Map<String, dynamic> result) onSuccess) async {
+  Future<void> submitBatch(
+    void Function(Map<String, dynamic> result) onSuccess,
+  ) async {
     _state = _state.copyWith(isLoading: true, clearError: true);
     notifyListeners();
 
     try {
-      final baseProgress = _state.trays.isNotEmpty ? _state.trays.first.productionProgress : null;
+      final baseProgress = _state.trays.isNotEmpty
+          ? _state.trays.first.productionProgress
+          : null;
       final targetOpId = nextOperationId ?? currentOperationId;
       int nextLocatorId = baseProgress?.locatorId ?? 10;
 
@@ -900,7 +1071,18 @@ class ProcessingBatchController extends ChangeNotifier {
         final List<Operation> opsList = List<Operation>.from(opsRes.data);
         final matchOp = opsList.firstWhere(
           (o) => o.id == targetOpId,
-          orElse: () => Operation(code: '', name: '', description: null, identifierRef: null, concurrencyStamp: '', creationTime: '', lastModificationTime: null, creatorId: null, lastModifierId: null, id: 0),
+          orElse: () => Operation(
+            code: '',
+            name: '',
+            description: null,
+            identifierRef: null,
+            concurrencyStamp: '',
+            creationTime: '',
+            lastModificationTime: null,
+            creatorId: null,
+            lastModifierId: null,
+            id: 0,
+          ),
         );
         if (matchOp.id != 0) {
           final resolvedLocId = matchOp.locatorId ?? matchOp.locator?.id;
@@ -911,11 +1093,18 @@ class ProcessingBatchController extends ChangeNotifier {
       }
 
       if (nextLocatorId == (baseProgress?.locatorId ?? 10)) {
-        final locRes = await _processingRepo.fetchLocators(operationId: targetOpId);
+        final locRes = await _processingRepo.fetchLocators(
+          operationId: targetOpId,
+        );
         if (locRes.success && locRes.data != null) {
-          final List locList = locRes.data is Map ? (locRes.data['items'] ?? []) : locRes.data;
+          final List locList = locRes.data is Map
+              ? (locRes.data['items'] ?? [])
+              : locRes.data;
           final match = locList.cast<Map>().firstWhere(
-            (e) => (e['operation']?['id'] ?? e['locator']?['operationId'])?.toString() == targetOpId.toString(),
+            (e) =>
+                (e['operation']?['id'] ?? e['locator']?['operationId'])
+                    ?.toString() ==
+                targetOpId.toString(),
             orElse: () => {},
           );
           if (match.isNotEmpty) {
@@ -930,16 +1119,21 @@ class ProcessingBatchController extends ChangeNotifier {
       // Check if user is attempting to submit trays that are already on HOLD in PBS without toggling/unholding
       for (final t in traysToProcess) {
         final pp = t.productionProgress;
-        if (pp.holdFlag == true && !_state.holdTrayIds.contains(pp.primaryTrayId) && !_state.holdTrayIds.contains(pp.id)) {
+        if (pp.holdFlag == true &&
+            !_state.holdTrayIds.contains(pp.primaryTrayId) &&
+            !_state.holdTrayIds.contains(pp.id)) {
           final trayCode = t.primaryTrayModel.trayCode ?? '${pp.primaryTrayId}';
-          throw Exception('Tray $trayCode is on HOLD. Unhold it from Unhold Trays section to submit.');
+          throw Exception(
+            'Tray $trayCode is on HOLD. Unhold it from Unhold Trays section to submit.',
+          );
         }
       }
 
       for (final t in traysToProcess) {
         final pp = t.productionProgress;
         final json = pp.toJson();
-        final isRework = _state.isReworkMode && _state.selectedReworkTrayIds.contains(pp.id);
+        final isRework =
+            _state.isReworkMode && _state.selectedReworkTrayIds.contains(pp.id);
 
         try {
           if (isRework) {
@@ -951,21 +1145,39 @@ class ProcessingBatchController extends ChangeNotifier {
             json.remove('creatorId');
             json.remove('lastModificationTime');
             json.remove('lastModifierId');
-            
-            final updRes = await _processingRepo.updateProductionProgress(pp.id!, json);
-            if (!updRes.success) throw Exception('Update failed: ${updRes.message}');
+
+            final updRes = await _processingRepo.updateProductionProgress(
+              pp.id!,
+              json,
+            );
+            if (!updRes.success)
+              throw Exception('Update failed: ${updRes.message}');
 
             int rewLoc = pp.locatorId ?? 10;
             if (_state.reworkTargetOpId != null) {
               final opsRes = await _processingRepo.fetchProcessingOperations();
               if (opsRes.success && opsRes.data != null) {
-                final List<Operation> opsList = List<Operation>.from(opsRes.data);
+                final List<Operation> opsList = List<Operation>.from(
+                  opsRes.data,
+                );
                 final matchOp = opsList.firstWhere(
                   (o) => o.id == _state.reworkTargetOpId,
-                  orElse: () => Operation(code: '', name: '', description: null, identifierRef: null, concurrencyStamp: '', creationTime: '', lastModificationTime: null, creatorId: null, lastModifierId: null, id: 0),
+                  orElse: () => Operation(
+                    code: '',
+                    name: '',
+                    description: null,
+                    identifierRef: null,
+                    concurrencyStamp: '',
+                    creationTime: '',
+                    lastModificationTime: null,
+                    creatorId: null,
+                    lastModifierId: null,
+                    id: 0,
+                  ),
                 );
                 if (matchOp.id != 0) {
-                  final resolvedLocId = matchOp.locatorId ?? matchOp.locator?.id;
+                  final resolvedLocId =
+                      matchOp.locatorId ?? matchOp.locator?.id;
                   if (resolvedLocId != null && resolvedLocId > 0) {
                     rewLoc = resolvedLocId;
                   }
@@ -993,7 +1205,8 @@ class ProcessingBatchController extends ChangeNotifier {
               'requiredQty': null,
             });
             final crRes = await _processingRepo.createProductionProgress(newJ);
-            if (!crRes.success) throw Exception('Create failed: ${crRes.message}');
+            if (!crRes.success)
+              throw Exception('Create failed: ${crRes.message}');
 
             int? targetProgressId;
             final ppData = crRes.data;
@@ -1004,19 +1217,33 @@ class ProcessingBatchController extends ChangeNotifier {
               targetProgressId = ppData;
             }
 
-            if (targetProgressId != null && targetProgressId > 0 && pp.batchLinesId != null) {
-              final newWipRes = await _lotRepo.fetchWipTransactionsByProgressId(targetProgressId);
+            if (targetProgressId != null &&
+                targetProgressId > 0 &&
+                pp.batchLinesId != null) {
+              final newWipRes = await _lotRepo.fetchWipTransactionsByProgressId(
+                targetProgressId,
+              );
               if (newWipRes.success && newWipRes.data != null) {
-                final List rawItems = newWipRes.data is Map ? (newWipRes.data['items'] ?? []) : newWipRes.data;
+                final List rawItems = newWipRes.data is Map
+                    ? (newWipRes.data['items'] ?? [])
+                    : newWipRes.data;
                 final items = rawItems.cast<Map<String, dynamic>>();
                 final match = items.firstWhere(
-                  (e) => (e['wipTransaction']?['progressId'] ?? e['progressId'] ?? e['wipTransaction']?['productionProgressId'] ?? e['productionProgressId'])?.toString() == targetProgressId.toString(),
+                  (e) =>
+                      (e['wipTransaction']?['progressId'] ??
+                              e['progressId'] ??
+                              e['wipTransaction']?['productionProgressId'] ??
+                              e['productionProgressId'])
+                          ?.toString() ==
+                      targetProgressId.toString(),
                   orElse: () => {},
                 );
                 if (match.isNotEmpty) {
                   final newWipId = match['wipTransaction']?['id'] as int?;
                   if (newWipId != null) {
-                    final wipPayload = Map<String, dynamic>.from(match['wipTransaction'] ?? match);
+                    final wipPayload = Map<String, dynamic>.from(
+                      match['wipTransaction'] ?? match,
+                    );
                     wipPayload['batchLinesId'] = pp.batchLinesId;
                     wipPayload['batchLineId'] = pp.batchLinesId;
                     wipPayload.remove('id');
@@ -1027,7 +1254,10 @@ class ProcessingBatchController extends ChangeNotifier {
               }
             }
           } else {
-            final bool isHold = _state.holdTrayIds.contains(pp.primaryTrayId) || _state.holdTrayIds.contains(pp.id) || pp.holdFlag == true;
+            final bool isHold =
+                _state.holdTrayIds.contains(pp.primaryTrayId) ||
+                _state.holdTrayIds.contains(pp.id) ||
+                pp.holdFlag == true;
 
             if (isHold) {
               // Tray remains in PBS as HOLD under the same batch
@@ -1043,8 +1273,12 @@ class ProcessingBatchController extends ChangeNotifier {
               holdJson.remove('lastModificationTime');
               holdJson.remove('lastModifierId');
 
-              final updHoldRes = await _processingRepo.updateProductionProgress(pp.id!, holdJson);
-              if (!updHoldRes.success) throw Exception('Hold update failed: ${updHoldRes.message}');
+              final updHoldRes = await _processingRepo.updateProductionProgress(
+                pp.id!,
+                holdJson,
+              );
+              if (!updHoldRes.success)
+                throw Exception('Hold update failed: ${updHoldRes.message}');
             } else {
               json['transactionType'] = 3;
               json['wipStatus'] = 1;
@@ -1055,9 +1289,13 @@ class ProcessingBatchController extends ChangeNotifier {
               json.remove('creatorId');
               json.remove('lastModificationTime');
               json.remove('lastModifierId');
-              
-              final updRes = await _processingRepo.updateProductionProgress(pp.id!, json);
-              if (!updRes.success) throw Exception('Update failed: ${updRes.message}');
+
+              final updRes = await _processingRepo.updateProductionProgress(
+                pp.id!,
+                json,
+              );
+              if (!updRes.success)
+                throw Exception('Update failed: ${updRes.message}');
 
               if (nextOperationId != null) {
                 final Map<String, dynamic> newJ = pp.toJson();
@@ -1083,8 +1321,11 @@ class ProcessingBatchController extends ChangeNotifier {
                   'waste': null,
                   'requiredQty': null,
                 });
-                final crRes = await _processingRepo.createProductionProgress(newJ);
-                if (!crRes.success) throw Exception('Create failed: ${crRes.message}');
+                final crRes = await _processingRepo.createProductionProgress(
+                  newJ,
+                );
+                if (!crRes.success)
+                  throw Exception('Create failed: ${crRes.message}');
 
                 int? targetProgressId;
                 final ppData = crRes.data;
@@ -1095,24 +1336,40 @@ class ProcessingBatchController extends ChangeNotifier {
                   targetProgressId = ppData;
                 }
 
-                if (targetProgressId != null && targetProgressId > 0 && pp.batchLinesId != null) {
-                  final newWipRes = await _lotRepo.fetchWipTransactionsByProgressId(targetProgressId);
+                if (targetProgressId != null &&
+                    targetProgressId > 0 &&
+                    pp.batchLinesId != null) {
+                  final newWipRes = await _lotRepo
+                      .fetchWipTransactionsByProgressId(targetProgressId);
                   if (newWipRes.success && newWipRes.data != null) {
-                    final List rawItems = newWipRes.data is Map ? (newWipRes.data['items'] ?? []) : newWipRes.data;
+                    final List rawItems = newWipRes.data is Map
+                        ? (newWipRes.data['items'] ?? [])
+                        : newWipRes.data;
                     final items = rawItems.cast<Map<String, dynamic>>();
                     final match = items.firstWhere(
-                      (e) => (e['wipTransaction']?['progressId'] ?? e['progressId'] ?? e['wipTransaction']?['productionProgressId'] ?? e['productionProgressId'])?.toString() == targetProgressId.toString(),
+                      (e) =>
+                          (e['wipTransaction']?['progressId'] ??
+                                  e['progressId'] ??
+                                  e['wipTransaction']?['productionProgressId'] ??
+                                  e['productionProgressId'])
+                              ?.toString() ==
+                          targetProgressId.toString(),
                       orElse: () => {},
                     );
                     if (match.isNotEmpty) {
                       final newWipId = match['wipTransaction']?['id'] as int?;
                       if (newWipId != null) {
-                        final wipPayload = Map<String, dynamic>.from(match['wipTransaction'] ?? match);
+                        final wipPayload = Map<String, dynamic>.from(
+                          match['wipTransaction'] ?? match,
+                        );
                         wipPayload['batchLinesId'] = pp.batchLinesId;
                         wipPayload['batchLineId'] = pp.batchLinesId;
                         wipPayload.remove('id');
                         wipPayload.remove('concurrencyStamp');
-                        await _lotRepo.updateWipTransaction(newWipId, wipPayload);
+                        await _lotRepo.updateWipTransaction(
+                          newWipId,
+                          wipPayload,
+                        );
                       }
                     }
                   }
@@ -1146,29 +1403,38 @@ class ProcessingBatchController extends ChangeNotifier {
       );
 
       if (updatedFailedTrayIds.isNotEmpty) {
-        throw Exception('${updatedFailedTrayIds.length} tray(s) failed to submit. Please check connection and retry.');
+        throw Exception(
+          '${updatedFailedTrayIds.length} tray(s) failed to submit. Please check connection and retry.',
+        );
       }
 
       final List<int> targetOps = [];
       if (_state.isReworkMode && _state.reworkTargetOpId != null) {
         targetOps.add(_state.reworkTargetOpId!);
       }
-      
+
       bool hasStandard = false;
       if (_state.isReworkMode) {
-        hasStandard = _state.trays.any((t) => !_state.selectedReworkTrayIds.contains(t.productionProgress.id));
+        hasStandard = _state.trays.any(
+          (t) =>
+              !_state.selectedReworkTrayIds.contains(t.productionProgress.id),
+        );
       } else {
         hasStandard = true;
       }
-      
+
       if (hasStandard && nextOperationId != null) {
         if (!targetOps.contains(nextOperationId!)) {
           targetOps.add(nextOperationId!);
         }
       }
 
-      final bool hasRemainingHeldTrays = _state.trays.any((t) => t.productionProgress.holdFlag == true);
-      final int reworkCount = _state.isReworkMode ? _state.selectedReworkTrayIds.length : 0;
+      final bool hasRemainingHeldTrays = _state.trays.any(
+        (t) => t.productionProgress.holdFlag == true,
+      );
+      final int reworkCount = _state.isReworkMode
+          ? _state.selectedReworkTrayIds.length
+          : 0;
       final int standardCount = _state.isReworkMode
           ? (_state.trays.length - _state.selectedReworkTrayIds.length)
           : _state.trays.length;
@@ -1183,9 +1449,10 @@ class ProcessingBatchController extends ChangeNotifier {
         'standardTrayCount': standardCount,
         'isReassigned': false,
         'hasRemainingHeldTrays': hasRemainingHeldTrays,
-        'batchHeaderId': _state.trays.isNotEmpty ? _state.trays.first.productionProgress.batchHeaderId : null,
+        'batchHeaderId': _state.trays.isNotEmpty
+            ? _state.trays.first.productionProgress.batchHeaderId
+            : null,
       });
-
     } catch (e) {
       _state = _state.copyWith(isLoading: false, errorMessage: e.toString());
       notifyListeners();

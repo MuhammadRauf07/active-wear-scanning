@@ -10,7 +10,6 @@ import '../repo/processing_repo.dart';
 import '../../gbs/model/production_progress.dart';
 import '../../common-models/common_models.dart';
 
-
 class OptimisticTransfer {
   final int batchHeaderId;
   final BatchSummaryItem item;
@@ -27,10 +26,7 @@ class DisposedBatch {
   final int batchHeaderId;
   final DateTime timestamp;
 
-  DisposedBatch({
-    required this.batchHeaderId,
-    required this.timestamp,
-  });
+  DisposedBatch({required this.batchHeaderId, required this.timestamp});
 }
 
 class ProcessingScreen extends StatefulWidget {
@@ -94,14 +90,13 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
           setState(() {
             _allOperations = allOps;
             _operations =
-            allOps.where((op) {
-              final isProcessing = op.processNature == 1;
-              final isNumeric = RegExp(r'^\d+$').hasMatch(op.code);
-              return isProcessing && isNumeric;
-            }).toList()
-              ..sort(
-                    (a, b) => int.parse(a.code).compareTo(int.parse(b.code)),
-              );
+                allOps.where((op) {
+                  final isProcessing = op.processNature == 1;
+                  final isNumeric = RegExp(r'^\d+$').hasMatch(op.code);
+                  return isProcessing && isNumeric;
+                }).toList()..sort(
+                  (a, b) => int.parse(a.code).compareTo(int.parse(b.code)),
+                );
           });
         }
         await _fetchAllBatchCounts();
@@ -136,8 +131,11 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
         if (r.productionProgress.transactionType != 2) continue;
         if (r.productionProgress.wipStatus != 0) continue;
         if (r.productionProgress.locatorId == 18) continue;
-        if ((r.productionProgress.subOperation ?? '').toLowerCase() == 'waste') continue;
-        if (r.primaryTrayModel.trayCode == null || r.primaryTrayModel.trayCode!.trim().isEmpty) continue;
+        if ((r.productionProgress.subOperation ?? '').toLowerCase() == 'waste')
+          continue;
+        if (r.primaryTrayModel.trayCode == null ||
+            r.primaryTrayModel.trayCode!.trim().isEmpty)
+          continue;
         final opId = r.productionProgress.operationId;
         if (opId != null) {
           recordsByOp.putIfAbsent(opId, () => []).add(r);
@@ -159,7 +157,9 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
         // Inject non-expired optimistic cache counts
         final pending = _optimisticCache[op.id] ?? [];
         final now = DateTime.now();
-        pending.removeWhere((x) => now.difference(x.timestamp).inSeconds > _cacheTtlSeconds);
+        pending.removeWhere(
+          (x) => now.difference(x.timestamp).inSeconds > _cacheTtlSeconds,
+        );
         for (final opt in pending) {
           if (!_isBatchDisposed(op.id, opt.batchHeaderId)) {
             uniqueBatches.add(opt.batchHeaderId);
@@ -180,7 +180,9 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
   bool _isBatchDisposed(int operationId, int bhId) {
     final list = _disposedBatches[operationId] ?? [];
     final now = DateTime.now();
-    list.removeWhere((x) => now.difference(x.timestamp).inSeconds > _cacheTtlSeconds);
+    list.removeWhere(
+      (x) => now.difference(x.timestamp).inSeconds > _cacheTtlSeconds,
+    );
     return list.any((x) => x.batchHeaderId == bhId);
   }
 
@@ -198,8 +200,11 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
         if (r.productionProgress.wipStatus != 0) continue;
         if (r.productionProgress.operationId != operationId) continue;
         if (r.productionProgress.locatorId == 18) continue;
-        if ((r.productionProgress.subOperation ?? '').toLowerCase() == 'waste') continue;
-        if (r.primaryTrayModel.trayCode == null || r.primaryTrayModel.trayCode!.trim().isEmpty) continue;
+        if ((r.productionProgress.subOperation ?? '').toLowerCase() == 'waste')
+          continue;
+        if (r.primaryTrayModel.trayCode == null ||
+            r.primaryTrayModel.trayCode!.trim().isEmpty)
+          continue;
 
         final bhId = r.productionProgress.batchHeaderId;
         if (bhId != null) {
@@ -211,7 +216,9 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
       // Inject non-expired optimistic cache counts
       final pending = _optimisticCache[operationId] ?? [];
       final now = DateTime.now();
-      pending.removeWhere((x) => now.difference(x.timestamp).inSeconds > _cacheTtlSeconds);
+      pending.removeWhere(
+        (x) => now.difference(x.timestamp).inSeconds > _cacheTtlSeconds,
+      );
       for (final opt in pending) {
         if (!_isBatchDisposed(operationId, opt.batchHeaderId)) {
           uniqueBatches.add(opt.batchHeaderId);
@@ -251,9 +258,14 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
           if (r.productionProgress.transactionType != 2) continue;
           if (r.productionProgress.wipStatus != 0) continue;
           if (r.productionProgress.operationId != operationId) continue;
-          if (r.productionProgress.locatorId == 18) continue; // Exclude waste/scrap records
-          if ((r.productionProgress.subOperation ?? '').toLowerCase() == 'waste') continue;
-          if (r.primaryTrayModel.trayCode == null || r.primaryTrayModel.trayCode!.trim().isEmpty) continue;
+          if (r.productionProgress.locatorId == 18)
+            continue; // Exclude waste/scrap records
+          if ((r.productionProgress.subOperation ?? '').toLowerCase() ==
+              'waste')
+            continue;
+          if (r.primaryTrayModel.trayCode == null ||
+              r.primaryTrayModel.trayCode!.trim().isEmpty)
+            continue;
 
           final bhId = r.productionProgress.batchHeaderId;
           if (bhId != null) {
@@ -263,8 +275,9 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
 
             final groupList = grouped.putIfAbsent(bhId, () => []);
             final trayCode = r.primaryTrayModel.trayCode ?? 'UNKNOWN';
-            final existingIdx = groupList.indexWhere((e) =>
-            (e.primaryTrayModel.trayCode ?? 'UNKNOWN') == trayCode);
+            final existingIdx = groupList.indexWhere(
+              (e) => (e.primaryTrayModel.trayCode ?? 'UNKNOWN') == trayCode,
+            );
             if (existingIdx != -1) {
               if ((r.productionProgress.id ?? 0) >
                   (groupList[existingIdx].productionProgress.id ?? 0)) {
@@ -298,25 +311,43 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
             final blRes = results[2];
 
             // ── Verify active operation: Ensure trays have not moved to a newer operation ──
-            List<ProductionProgressResponseModel> activeTraysAtCurrentOp = groupRecords;
+            List<ProductionProgressResponseModel> activeTraysAtCurrentOp =
+                groupRecords;
             if (bhProgRes.success && bhProgRes.data != null) {
-              final bhProgs = (bhProgRes.data as List<ProductionProgressResponseModel>)
-                  .where((p) => p.productionProgress.transactionType == 2 &&
-                                p.productionProgress.wipStatus == 0 &&
-                                p.productionProgress.locatorId != 18 &&
-                                (p.productionProgress.subOperation ?? '').toLowerCase() != 'waste' &&
-                                p.primaryTrayModel.trayCode != null &&
-                                p.primaryTrayModel.trayCode!.trim().isNotEmpty)
-                  .toList();
+              final bhProgs =
+                  (bhProgRes.data as List<ProductionProgressResponseModel>)
+                      .where(
+                        (p) =>
+                            p.productionProgress.transactionType == 2 &&
+                            p.productionProgress.wipStatus == 0 &&
+                            p.productionProgress.locatorId != 18 &&
+                            (p.productionProgress.subOperation ?? '')
+                                    .toLowerCase() !=
+                                'waste' &&
+                            p.primaryTrayModel.trayCode != null &&
+                            p.primaryTrayModel.trayCode!.trim().isNotEmpty,
+                      )
+                      .toList();
               if (bhProgs.isNotEmpty) {
                 // Filter groupRecords to only include trays whose latest active state is at current operationId
                 final validTrays = <ProductionProgressResponseModel>[];
                 for (final gr in groupRecords) {
                   final trayCode = gr.primaryTrayModel.trayCode ?? 'UNKNOWN';
-                  final trayProgs = bhProgs.where((p) => (p.primaryTrayModel.trayCode ?? 'UNKNOWN') == trayCode).toList();
+                  final trayProgs = bhProgs
+                      .where(
+                        (p) =>
+                            (p.primaryTrayModel.trayCode ?? 'UNKNOWN') ==
+                            trayCode,
+                      )
+                      .toList();
                   if (trayProgs.isNotEmpty) {
-                    trayProgs.sort((a, b) => (b.productionProgress.id ?? 0).compareTo(a.productionProgress.id ?? 0));
-                    final latestTrayOpId = trayProgs.first.productionProgress.operationId;
+                    trayProgs.sort(
+                      (a, b) => (b.productionProgress.id ?? 0).compareTo(
+                        a.productionProgress.id ?? 0,
+                      ),
+                    );
+                    final latestTrayOpId =
+                        trayProgs.first.productionProgress.operationId;
                     if (latestTrayOpId == operationId) {
                       validTrays.add(gr);
                     }
@@ -339,9 +370,14 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
             final bhFull = LotHeaderResponseModel.fromJson(bhRes.data);
 
             String? machineCode =
-                bhFull.machine?.brand ?? bhFull.machine?.resourceCode ?? bhFull.machine?.model;
+                bhFull.machine?.brand ??
+                bhFull.machine?.resourceCode ??
+                bhFull.machine?.model;
             final mId = bhFull.batchHeader.machineId;
-            if ((machineCode == null || machineCode.isEmpty || machineCode == '-') && mId != null) {
+            if ((machineCode == null ||
+                    machineCode.isEmpty ||
+                    machineCode == '-') &&
+                mId != null) {
               if (_machineCodeCache.containsKey(mId)) {
                 machineCode = _machineCodeCache[mId];
               } else {
@@ -351,7 +387,8 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                   final mJson = (mData['resource'] is Map)
                       ? Map<String, dynamic>.from(mData['resource'] as Map)
                       : mData;
-                  final resolved = mJson['brand']?.toString() ??
+                  final resolved =
+                      mJson['brand']?.toString() ??
                       mJson['name']?.toString() ??
                       mJson['code']?.toString() ??
                       mJson['resourceCode']?.toString() ??
@@ -364,7 +401,9 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
               }
             }
 
-            if (machineCode == null || machineCode.isEmpty || machineCode == '-') {
+            if (machineCode == null ||
+                machineCode.isEmpty ||
+                machineCode == '-') {
               for (final gr in activeTraysAtCurrentOp) {
                 final mBrand = gr.machineModel.brand;
                 final mResCode = gr.machineModel.resourceCode;
@@ -372,7 +411,9 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                   machineCode = mBrand;
                   break;
                 }
-                if (mResCode != null && mResCode.isNotEmpty && mResCode != '-') {
+                if (mResCode != null &&
+                    mResCode.isNotEmpty &&
+                    mResCode != '-') {
                   machineCode = mResCode;
                   break;
                 }
@@ -384,17 +425,20 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
             double totalWeight = 0.0;
             for (final gr in activeTraysAtCurrentOp) {
               final qty = gr.productionProgress.primaryQuantity ?? 0;
-              final tubes = (gr.productionProgress.secondaryQuantity ?? qty).toDouble();
+              final tubes = (gr.productionProgress.secondaryQuantity ?? qty)
+                  .toDouble();
               final pw = gr.item.pieceWeight ?? 0;
               totalTubes += tubes;
               totalWeight += qty * pw;
             }
 
-            final bool isStarted = activeTraysAtCurrentOp.any((r) =>
-            r.productionProgress.isStarted ?? false);
-            final bool isRework = activeTraysAtCurrentOp.any((r) =>
-            r.productionProgress.reworkFlag ?? false);
-            
+            final bool isStarted = activeTraysAtCurrentOp.any(
+              (r) => r.productionProgress.isStarted ?? false,
+            );
+            final bool isRework = activeTraysAtCurrentOp.any(
+              (r) => r.productionProgress.reworkFlag ?? false,
+            );
+
             bool isReassigned = false;
             int? nextOpId;
             String? nextOpName;
@@ -409,7 +453,9 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
 
               if (linesList.isNotEmpty) {
                 final firstLine = linesList.first;
-                final bl = firstLine['batchLines'] as Map<String, dynamic>? ?? firstLine;
+                final bl =
+                    firstLine['batchLines'] as Map<String, dynamic>? ??
+                    firstLine;
                 final itemId = bl['itemId'] as int?;
                 final workOrderLineId = bl['workOrderLineId'] as int?;
                 final colorDescription = bhFull.batchHeader.colorDescription;
@@ -430,7 +476,10 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                         if (dData is List && dData.isNotEmpty) {
                           final firstItem = dData.first;
                           if (firstItem is Map) {
-                            final raw = firstItem['processedItemId'] ?? firstItem['itemId'] ?? firstItem['processIItemd'];
+                            final raw =
+                                firstItem['processedItemId'] ??
+                                firstItem['itemId'] ??
+                                firstItem['processIItemd'];
                             if (raw is int) {
                               firstProcessedItemId = raw;
                             } else if (raw is Map) {
@@ -438,7 +487,8 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                             }
                           }
                         } else if (dData is Map) {
-                          final raw = dData['processedItemId'] ?? dData['itemId'];
+                          final raw =
+                              dData['processedItemId'] ?? dData['itemId'];
                           if (raw is int) {
                             firstProcessedItemId = raw;
                           } else if (raw is Map) {
@@ -446,45 +496,51 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                           }
                         }
                       }
-                      _woLineProcessedItemCache[cacheKey] = firstProcessedItemId;
+                      _woLineProcessedItemCache[cacheKey] =
+                          firstProcessedItemId;
                     } catch (_) {}
                   }
                 }
                 final List<Map<String, dynamic>> parsedRoutings = [];
                 final bhrRes = await _lotRepo.fetchBatchHeaderRoutings(bhId);
-                if (bhrRes.success && bhrRes.data != null && (bhrRes.data as List).isNotEmpty) {
+                if (bhrRes.success &&
+                    bhrRes.data != null &&
+                    (bhrRes.data as List).isNotEmpty) {
                   for (final r in bhrRes.data as List) {
                     final map = r is Map<String, dynamic> ? r : {};
-                    final bhr = map['batchHeaderRouting'] as Map<String, dynamic>? ?? map;
+                    final bhr =
+                        map['batchHeaderRouting'] as Map<String, dynamic>? ??
+                        map;
                     final opId = bhr['operationId'] as int?;
                     final seq = bhr['seq'] as int? ?? bhr['sequence'] as int?;
                     if (opId != null && seq != null) {
-                      parsedRoutings.add({
-                        'operationId': opId,
-                        'seq': seq,
-                      });
+                      parsedRoutings.add({'operationId': opId, 'seq': seq});
                     }
                   }
                 } else {
                   final effectiveItemId = firstProcessedItemId ?? itemId;
                   if (effectiveItemId != null) {
                     if (_itemRoutingCache.containsKey(effectiveItemId)) {
-                      parsedRoutings.addAll(_itemRoutingCache[effectiveItemId]!);
+                      parsedRoutings.addAll(
+                        _itemRoutingCache[effectiveItemId]!,
+                      );
                     } else {
-                      final routingRes = await _lotRepo.fetchItemRoutings(effectiveItemId);
+                      final routingRes = await _lotRepo.fetchItemRoutings(
+                        effectiveItemId,
+                      );
                       if (routingRes.success && routingRes.data != null) {
                         final routingItems = routingRes.data as List;
                         final List<Map<String, dynamic>> cachedList = [];
                         for (final r in routingItems) {
                           final map = r is Map<String, dynamic> ? r : {};
-                          final ir = map['itemRouting'] as Map<String, dynamic>? ?? map;
+                          final ir =
+                              map['itemRouting'] as Map<String, dynamic>? ??
+                              map;
                           final opId = ir['operationId'] as int?;
-                          final seq = ir['sequence'] as int? ?? ir['seq'] as int?;
+                          final seq =
+                              ir['sequence'] as int? ?? ir['seq'] as int?;
                           if (opId != null && seq != null) {
-                            cachedList.add({
-                              'operationId': opId,
-                              'seq': seq,
-                            });
+                            cachedList.add({'operationId': opId, 'seq': seq});
                           }
                         }
                         _itemRoutingCache[effectiveItemId] = cachedList;
@@ -494,16 +550,25 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                   }
                 }
 
-                parsedRoutings.sort((a, b) => (a['seq'] as int).compareTo(b['seq'] as int));
+                parsedRoutings.sort(
+                  (a, b) => (a['seq'] as int).compareTo(b['seq'] as int),
+                );
 
-                final currentIdx = parsedRoutings.indexWhere((r) => r['operationId'] == operationId);
+                final currentIdx = parsedRoutings.indexWhere(
+                  (r) => r['operationId'] == operationId,
+                );
                 if (currentIdx != -1) {
                   hasPrevProcess = currentIdx > 0;
                   if (currentIdx < parsedRoutings.length - 1) {
-                    nextOpId = parsedRoutings[currentIdx + 1]['operationId'] as int?;
+                    nextOpId =
+                        parsedRoutings[currentIdx + 1]['operationId'] as int?;
                     if (nextOpId != null) {
-                      final targetOpIdx = _allOperations.indexWhere((o) => o.id == nextOpId);
-                      nextOpName = targetOpIdx != -1 ? _allOperations[targetOpIdx].name : 'N/A';
+                      final targetOpIdx = _allOperations.indexWhere(
+                        (o) => o.id == nextOpId,
+                      );
+                      nextOpName = targetOpIdx != -1
+                          ? _allOperations[targetOpIdx].name
+                          : 'N/A';
                     }
                   }
                 }
@@ -519,7 +584,8 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                 final tRes = await _lotRepo.fetchTrayDetailById(trayDetailId);
                 if (tRes.success && tRes.data != null) {
                   final tJson = tRes.data as Map;
-                  final tdJson = tJson['trayDetails'] ?? tJson['trayDetail'] ?? tJson;
+                  final tdJson =
+                      tJson['trayDetails'] ?? tJson['trayDetail'] ?? tJson;
                   final tCode = tdJson['trayCode']?.toString();
                   if (tCode != null) {
                     _trayIdToCode[trayDetailId] = tCode;
@@ -529,7 +595,11 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
               }
             }
 
-            final bool isDraft = activeTraysAtCurrentOp.any((r) => r.productionProgress.pbsFlag == true || r.productionProgress.draftFlag == true);
+            final bool isDraft = activeTraysAtCurrentOp.any(
+              (r) =>
+                  r.productionProgress.pbsFlag == true ||
+                  r.productionProgress.draftFlag == true,
+            );
 
             return BatchSummaryItem(
               batchHeaderId: bhId,
@@ -556,12 +626,16 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
         });
 
         final batchResults = await Future.wait(summaryFutures);
-        final List<BatchSummaryItem> summaries = batchResults.whereType<BatchSummaryItem>().toList();
+        final List<BatchSummaryItem> summaries = batchResults
+            .whereType<BatchSummaryItem>()
+            .toList();
 
         // Inject non-expired optimistic cache items
         final pending = _optimisticCache[operationId] ?? [];
         final now = DateTime.now();
-        pending.removeWhere((x) => now.difference(x.timestamp).inSeconds > _cacheTtlSeconds);
+        pending.removeWhere(
+          (x) => now.difference(x.timestamp).inSeconds > _cacheTtlSeconds,
+        );
         for (final opt in pending) {
           if (!summaries.any((b) => b.batchHeaderId == opt.batchHeaderId) &&
               !_isBatchDisposed(operationId, opt.batchHeaderId)) {
@@ -584,8 +658,6 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
       }
     }
   }
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -622,275 +694,409 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                   child: _isLoadingOperations && _operations.isEmpty
                       ? const SizedBox.shrink()
                       : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                    itemCount: _operations.length,
-                    itemBuilder: (context, index) {
-                      final op = _operations[index];
-                      final count = _opBatchCounts[op.id] ?? 0;
-                      final isSelected = _selectedOperation?.id == op.id;
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                          itemCount: _operations.length,
+                          itemBuilder: (context, index) {
+                            final op = _operations[index];
+                            final count = _opBatchCounts[op.id] ?? 0;
+                            final isSelected = _selectedOperation?.id == op.id;
 
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isSelected
-                                ? const Color(0xFF1B64A3)
-                                : const Color(0xFFE2E8F0),
-                            width: isSelected ? 1.5 : 1,
-                          ),
-                          boxShadow: isSelected ? [
-                            BoxShadow(
-                              color: const Color(0xFF1B64A3).withValues(
-                                  alpha: 0.08),
-                              blurRadius: 15,
-                              offset: const Offset(0, 8),
-                            )
-                          ] : null,
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child: Column(
-                          children: [
-                            GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                   if (isSelected) {
-                                     _selectedOperation = null;
-                                   } else {
-                                     _selectedOperation = op;
-                                     _fetchOpDetails(op.id, force: true);
-                                   }
-                                });
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.all(14),
-                                color: isSelected ? const Color(0xFF1B64A3)
-                                    .withValues(alpha: 0.03) : Colors.white,
-                                child: Row(
-                                  children: [
-                                    // Op Name
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment
-                                            .start,
-                                        children: [
-                                          Text(
-                                            op.name.toUpperCase(),
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w900,
-                                              color: isSelected ? const Color(
-                                                  0xFF1B64A3) : const Color(
-                                                  0xFF334155),
-                                              letterSpacing: 0.3,
-                                            ),
-                                          ),
-                                          Text(
-                                            'Work-in-Progress Tracking',
-                                            style: TextStyle(
-                                              fontSize: 9,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.grey.shade500,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-
-                                    // Active Count Badge
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 10, vertical: 5),
-                                      decoration: BoxDecoration(
-                                        color: count > 0 ? const Color(
-                                            0xFF1B64A3) : const Color(
-                                            0xFF94A3B8).withValues(alpha: 0.1),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          if (count > 0)
-                                            const Padding(
-                                              padding: EdgeInsets.only(
-                                                  right: 4),
-                                              child: Icon(Icons.layers_rounded,
-                                                  size: 10,
-                                                  color: Colors.white),
-                                            ),
-                                          Text(
-                                            '$count BATCHES',
-                                            style: TextStyle(
-                                              fontSize: 9,
-                                              fontWeight: FontWeight.w900,
-                                              color: count > 0
-                                                  ? Colors.white
-                                                  : const Color(0xFF64748B),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Icon(
-                                      isSelected ? Icons
-                                          .keyboard_arrow_up_rounded : Icons
-                                          .keyboard_arrow_down_rounded,
-                                      size: 20,
-                                      color: isSelected ? const Color(
-                                          0xFF1B64A3) : const Color(0xFFCBD5E1),
-                                    ),
-                                  ],
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 10),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? const Color(0xFF1B64A3)
+                                      : const Color(0xFFE2E8F0),
+                                  width: isSelected ? 1.5 : 1,
                                 ),
+                                boxShadow: isSelected
+                                    ? [
+                                        BoxShadow(
+                                          color: const Color(
+                                            0xFF1B64A3,
+                                          ).withValues(alpha: 0.08),
+                                          blurRadius: 15,
+                                          offset: const Offset(0, 8),
+                                        ),
+                                      ]
+                                    : null,
                               ),
-                            ),
-                            if (isSelected)
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                    left: 1.5, right: 1.5, bottom: 1.5),
-                                child: BatchDetailsTable(
-                                  isLoading: _loadingDetails[op.id] == true,
-                                  summaries: _opBatchDetails[op.id],
-                                  onDetailsPressed: (s) async {
-                                     
-                                     final nextOpName = s.nextOperationName ?? 'N/A';
-                                     final nextOpId = s.nextOperationId;
-                                     final activeOpId = _selectedOperation?.id;
-                                    final result = await Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) =>
-                                            ProcessingBatchDetailsScreen(
-                                              batchHeaderId: s.batchHeaderId,
-                                              currentOperationId: _selectedOperation!
-                                                  .id,
-                                              batchCode: s.batchCode,
-                                              machineId: s.machineId,
-                                              machine: s.machine,
-                                              color: s.color,
-                                              trayCount: s.trayCount,
-                                              totalWeight: s.totalWeight,
-                                              operationName: _selectedOperation
-                                                  ?.name ?? '-',
-                                              nextOperationName: nextOpName,
-                                              nextOperationId: nextOpId,
-                                              hasPreviousProcess: s.hasPreviousProcess,
-                                            ),
-                                      ),
-                                    );
-
-                                     if (result != null && result is Map &&
-                                         result['submitted'] == true) {
-                                       final List<int> targetOps = [];
-                                       if (result['targetOps'] is List) {
-                                         for (final item in result['targetOps']) {
-                                           if (item is num) {
-                                             targetOps.add(item.toInt());
-                                           }
-                                         }
-                                       }
-
-                                       if (mounted && activeOpId != null) {
-                                         _fetchOpDetails(activeOpId, force: true);
-                                         _fetchBatchCount(activeOpId);
-                                         for (final tOpId in targetOps) {
-                                           _fetchBatchCount(tOpId);
-                                           if (_selectedOperation?.id == tOpId) {
-                                             _fetchOpDetails(tOpId, force: true);
-                                           } else {
-                                             _opBatchDetails.remove(tOpId);
-                                           }
-                                         }
-                                       }
-
-                                        final isRework = result['isRework'] == true;
-                                        final isReassigned = result['isReassigned'] == true;
-                                        final hasRemainingHeldTrays = result['hasRemainingHeldTrays'] == true;
-                                        final int? reworkTargetOpId = result['reworkTargetOpId'] as int?;
-                                        final int reworkTrayCount = (result['reworkTrayCount'] as num?)?.toInt() ?? s.trayCount;
-                                        final int? standardTargetOpId = result['nextOpId'] as int?;
-                                        final int standardTrayCount = (result['standardTrayCount'] as num?)?.toInt() ?? s.trayCount;
-
-                                        setState(() {
-                                          // 1. Remove this batch from the disposed list of EVERY target operation it is entering
-                                          for (final tOpId in targetOps) {
-                                            _disposedBatches[tOpId]?.removeWhere((x) => x.batchHeaderId == s.batchHeaderId);
-                                          }
-
-                                          // 2. Only mark as disposed from activeOpId if no trays are left in activeOpId
-                                          final bool someTraysRemainInActiveOp = targetOps.contains(activeOpId) || hasRemainingHeldTrays;
-                                          if (!someTraysRemainInActiveOp && activeOpId != null) {
-                                            final dList = _disposedBatches.putIfAbsent(activeOpId, () => []);
-                                            dList.removeWhere((x) => x.batchHeaderId == s.batchHeaderId);
-                                            dList.add(DisposedBatch(
-                                              batchHeaderId: s.batchHeaderId,
-                                              timestamp: DateTime.now(),
-                                            ));
-                                            final currentList = _opBatchDetails[activeOpId];
-                                            if (currentList != null) {
-                                              _opBatchDetails[activeOpId] = currentList.where((b) => b.batchHeaderId != s.batchHeaderId).toList();
-                                            }
-                                            if ((_opBatchCounts[activeOpId] ?? 0) > 0) {
-                                              _opBatchCounts[activeOpId] = (_opBatchCounts[activeOpId] ?? 1) - 1;
-                                            }
-                                          }
-
-                                          // 3. Increment counts and populate optimistic cache for each destination operation
-                                          for (final tOpId in targetOps) {
-                                            final bool isThisReworkOp = tOpId == reworkTargetOpId;
-                                            final int opTrayCount = isThisReworkOp ? reworkTrayCount : (tOpId == standardTargetOpId ? standardTrayCount : s.trayCount);
-
-                                            if (tOpId != activeOpId) {
-                                              _opBatchCounts[tOpId] = (_opBatchCounts[tOpId] ?? 0) + 1;
-                                            }
-
-                                            final targetList = _opBatchDetails[tOpId] ?? [];
-                                            final updatedBatch = BatchSummaryItem(
-                                              batchHeaderId: s.batchHeaderId,
-                                              machineId: s.machineId,
-                                              batchCode: s.batchCode,
-                                              machine: s.machine,
-                                              color: s.color,
-                                              trayCount: opTrayCount > 0 ? opTrayCount : s.trayCount,
-                                              totalTubes: s.totalTubes,
-                                              totalWeight: s.totalWeight,
-                                              trolleyCode: s.trolleyCode,
-                                              isStarted: false,
-                                              reworkFlag: isThisReworkOp ? true : (isRework || s.reworkFlag),
-                                              isReassigned: isReassigned || s.isReassigned,
-                                              isDraft: false,
-                                              hasPreviousProcess: s.hasPreviousProcess,
-                                            );
-                                            if (!targetList.any((b) => b.batchHeaderId == s.batchHeaderId)) {
-                                              _opBatchDetails[tOpId] = List.from(targetList)..add(updatedBatch);
-                                            }
-
-                                            final list = _optimisticCache.putIfAbsent(tOpId, () => []);
-                                            list.removeWhere((x) => x.batchHeaderId == s.batchHeaderId);
-                                            list.add(OptimisticTransfer(
-                                              batchHeaderId: s.batchHeaderId,
-                                              item: updatedBatch,
-                                              timestamp: DateTime.now(),
-                                            ));
-                                          }
-
+                              clipBehavior: Clip.antiAlias,
+                              child: Column(
+                                children: [
+                                  GestureDetector(
+                                    onTap: () {
+                                      setState(() {
+                                        if (isSelected) {
                                           _selectedOperation = null;
-                                        });
-                                     } else {
-                                       if (mounted && activeOpId != null) {
-                                         _fetchOpDetails(activeOpId, force: true);
-                                         _fetchBatchCount(activeOpId);
-                                       }
-                                     }
-                                   },
-                                ),
+                                        } else {
+                                          _selectedOperation = op;
+                                          _fetchOpDetails(op.id, force: true);
+                                        }
+                                      });
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.all(14),
+                                      color: isSelected
+                                          ? const Color(
+                                              0xFF1B64A3,
+                                            ).withValues(alpha: 0.03)
+                                          : Colors.white,
+                                      child: Row(
+                                        children: [
+                                          // Op Name
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  op.name.toUpperCase(),
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w900,
+                                                    color: isSelected
+                                                        ? const Color(
+                                                            0xFF1B64A3,
+                                                          )
+                                                        : const Color(
+                                                            0xFF334155,
+                                                          ),
+                                                    letterSpacing: 0.3,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  'Work-in-Progress Tracking',
+                                                  style: TextStyle(
+                                                    fontSize: 9,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: Colors.grey.shade500,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+
+                                          // Active Count Badge
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 10,
+                                              vertical: 5,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: count > 0
+                                                  ? const Color(0xFF1B64A3)
+                                                  : const Color(
+                                                      0xFF94A3B8,
+                                                    ).withValues(alpha: 0.1),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                if (count > 0)
+                                                  const Padding(
+                                                    padding: EdgeInsets.only(
+                                                      right: 4,
+                                                    ),
+                                                    child: Icon(
+                                                      Icons.layers_rounded,
+                                                      size: 10,
+                                                      color: Colors.white,
+                                                    ),
+                                                  ),
+                                                Text(
+                                                  '$count BATCHES',
+                                                  style: TextStyle(
+                                                    fontSize: 9,
+                                                    fontWeight: FontWeight.w900,
+                                                    color: count > 0
+                                                        ? Colors.white
+                                                        : const Color(
+                                                            0xFF64748B,
+                                                          ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Icon(
+                                            isSelected
+                                                ? Icons
+                                                      .keyboard_arrow_up_rounded
+                                                : Icons
+                                                      .keyboard_arrow_down_rounded,
+                                            size: 20,
+                                            color: isSelected
+                                                ? const Color(0xFF1B64A3)
+                                                : const Color(0xFFCBD5E1),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  if (isSelected)
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                        left: 1.5,
+                                        right: 1.5,
+                                        bottom: 1.5,
+                                      ),
+                                      child: BatchDetailsTable(
+                                        isLoading:
+                                            _loadingDetails[op.id] == true,
+                                        summaries: _opBatchDetails[op.id],
+                                        onDetailsPressed: (s) async {
+                                          final nextOpName =
+                                              s.nextOperationName ?? 'N/A';
+                                          final nextOpId = s.nextOperationId;
+                                          final activeOpId =
+                                              _selectedOperation?.id;
+                                          final result = await Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) =>
+                                                  ProcessingBatchDetailsScreen(
+                                                    batchHeaderId:
+                                                        s.batchHeaderId,
+                                                    currentOperationId:
+                                                        _selectedOperation!.id,
+                                                    batchCode: s.batchCode,
+                                                    machineId: s.machineId,
+                                                    machine: s.machine,
+                                                    color: s.color,
+                                                    trayCount: s.trayCount,
+                                                    totalWeight: s.totalWeight,
+                                                    operationName:
+                                                        _selectedOperation
+                                                            ?.name ??
+                                                        '-',
+                                                    nextOperationName:
+                                                        nextOpName,
+                                                    nextOperationId: nextOpId,
+                                                    hasPreviousProcess:
+                                                        s.hasPreviousProcess,
+                                                  ),
+                                            ),
+                                          );
+
+                                          if (result != null &&
+                                              result is Map &&
+                                              result['submitted'] == true) {
+                                            final List<int> targetOps = [];
+                                            if (result['targetOps'] is List) {
+                                              for (final item
+                                                  in result['targetOps']) {
+                                                if (item is num) {
+                                                  targetOps.add(item.toInt());
+                                                }
+                                              }
+                                            }
+
+                                            if (mounted && activeOpId != null) {
+                                              _fetchOpDetails(
+                                                activeOpId,
+                                                force: true,
+                                              );
+                                              _fetchBatchCount(activeOpId);
+                                              for (final tOpId in targetOps) {
+                                                _fetchBatchCount(tOpId);
+                                                if (_selectedOperation?.id ==
+                                                    tOpId) {
+                                                  _fetchOpDetails(
+                                                    tOpId,
+                                                    force: true,
+                                                  );
+                                                } else {
+                                                  _opBatchDetails.remove(tOpId);
+                                                }
+                                              }
+                                            }
+
+                                            final isRework =
+                                                result['isRework'] == true;
+                                            final isReassigned =
+                                                result['isReassigned'] == true;
+                                            final hasRemainingHeldTrays =
+                                                result['hasRemainingHeldTrays'] ==
+                                                true;
+                                            final int? reworkTargetOpId =
+                                                result['reworkTargetOpId']
+                                                    as int?;
+                                            final int reworkTrayCount =
+                                                (result['reworkTrayCount']
+                                                        as num?)
+                                                    ?.toInt() ??
+                                                s.trayCount;
+                                            final int? standardTargetOpId =
+                                                result['nextOpId'] as int?;
+                                            final int standardTrayCount =
+                                                (result['standardTrayCount']
+                                                        as num?)
+                                                    ?.toInt() ??
+                                                s.trayCount;
+
+                                            setState(() {
+                                              // 1. Remove this batch from the disposed list of EVERY target operation it is entering
+                                              for (final tOpId in targetOps) {
+                                                _disposedBatches[tOpId]
+                                                    ?.removeWhere(
+                                                      (x) =>
+                                                          x.batchHeaderId ==
+                                                          s.batchHeaderId,
+                                                    );
+                                              }
+
+                                              // 2. Only mark as disposed from activeOpId if no trays are left in activeOpId
+                                              final bool
+                                              someTraysRemainInActiveOp =
+                                                  targetOps.contains(
+                                                    activeOpId,
+                                                  ) ||
+                                                  hasRemainingHeldTrays;
+                                              if (!someTraysRemainInActiveOp &&
+                                                  activeOpId != null) {
+                                                final dList = _disposedBatches
+                                                    .putIfAbsent(
+                                                      activeOpId,
+                                                      () => [],
+                                                    );
+                                                dList.removeWhere(
+                                                  (x) =>
+                                                      x.batchHeaderId ==
+                                                      s.batchHeaderId,
+                                                );
+                                                dList.add(
+                                                  DisposedBatch(
+                                                    batchHeaderId:
+                                                        s.batchHeaderId,
+                                                    timestamp: DateTime.now(),
+                                                  ),
+                                                );
+                                                final currentList =
+                                                    _opBatchDetails[activeOpId];
+                                                if (currentList != null) {
+                                                  _opBatchDetails[activeOpId] =
+                                                      currentList
+                                                          .where(
+                                                            (b) =>
+                                                                b.batchHeaderId !=
+                                                                s.batchHeaderId,
+                                                          )
+                                                          .toList();
+                                                }
+                                                if ((_opBatchCounts[activeOpId] ??
+                                                        0) >
+                                                    0) {
+                                                  _opBatchCounts[activeOpId] =
+                                                      (_opBatchCounts[activeOpId] ??
+                                                          1) -
+                                                      1;
+                                                }
+                                              }
+
+                                              // 3. Increment counts and populate optimistic cache for each destination operation
+                                              for (final tOpId in targetOps) {
+                                                final bool isThisReworkOp =
+                                                    tOpId == reworkTargetOpId;
+                                                final int opTrayCount =
+                                                    isThisReworkOp
+                                                    ? reworkTrayCount
+                                                    : (tOpId ==
+                                                              standardTargetOpId
+                                                          ? standardTrayCount
+                                                          : s.trayCount);
+
+                                                if (tOpId != activeOpId) {
+                                                  _opBatchCounts[tOpId] =
+                                                      (_opBatchCounts[tOpId] ??
+                                                          0) +
+                                                      1;
+                                                }
+
+                                                final targetList =
+                                                    _opBatchDetails[tOpId] ??
+                                                    [];
+                                                final updatedBatch =
+                                                    BatchSummaryItem(
+                                                      batchHeaderId:
+                                                          s.batchHeaderId,
+                                                      machineId: s.machineId,
+                                                      batchCode: s.batchCode,
+                                                      machine: s.machine,
+                                                      color: s.color,
+                                                      trayCount: opTrayCount > 0
+                                                          ? opTrayCount
+                                                          : s.trayCount,
+                                                      totalTubes: s.totalTubes,
+                                                      totalWeight:
+                                                          s.totalWeight,
+                                                      trolleyCode:
+                                                          s.trolleyCode,
+                                                      isStarted: false,
+                                                      reworkFlag: isThisReworkOp
+                                                          ? true
+                                                          : (isRework ||
+                                                                s.reworkFlag),
+                                                      isReassigned:
+                                                          isReassigned ||
+                                                          s.isReassigned,
+                                                      isDraft: false,
+                                                    );
+                                                if (!targetList.any(
+                                                  (b) =>
+                                                      b.batchHeaderId ==
+                                                      s.batchHeaderId,
+                                                )) {
+                                                  _opBatchDetails[tOpId] =
+                                                      List.from(targetList)
+                                                        ..add(updatedBatch);
+                                                }
+
+                                                final list = _optimisticCache
+                                                    .putIfAbsent(
+                                                      tOpId,
+                                                      () => [],
+                                                    );
+                                                list.removeWhere(
+                                                  (x) =>
+                                                      x.batchHeaderId ==
+                                                      s.batchHeaderId,
+                                                );
+                                                list.add(
+                                                  OptimisticTransfer(
+                                                    batchHeaderId:
+                                                        s.batchHeaderId,
+                                                    item: updatedBatch,
+                                                    timestamp: DateTime.now(),
+                                                  ),
+                                                );
+                                              }
+
+                                              _selectedOperation = null;
+                                            });
+                                          } else {
+                                            if (mounted && activeOpId != null) {
+                                              _fetchOpDetails(
+                                                activeOpId,
+                                                force: true,
+                                              );
+                                              _fetchBatchCount(activeOpId);
+                                            }
+                                          }
+                                        },
+                                      ),
+                                    ),
+                                ],
                               ),
-                          ],
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
                 ),
               ),
             ],
