@@ -23,6 +23,16 @@ class ReportsRepo {
     return _parseWorkOrderHeaders(result.data);
   }
 
+  /// Fetches the Work Order Status PDF Report binary data
+  Future<PlexApiResult> fetchWorkOrderPdf(int workOrderHeaderId) async {
+    return await _api.getBytes('/api/app/reports/work-order-status-report-pdf/$workOrderHeaderId');
+  }
+
+  /// Fetches the Batch Detail PDF Report binary data
+  Future<PlexApiResult> fetchBatchPdf(int batchHeaderId) async {
+    return await _api.getBytes('/api/app/reports/batch-detail-report-pdf/$batchHeaderId');
+  }
+
   PlexApiResult _parseWorkOrderHeaders(dynamic raw) {
     try {
       final List rawData = raw is Map ? (raw['items'] ?? []) : (raw is List ? raw : []);
@@ -81,22 +91,43 @@ class ReportsRepo {
   }) async {
     final query = <String, dynamic>{
       'MaxResultCount': '1000',
+      'maxResultCount': '1000',
     };
-    if (batchCode != null && batchCode.isNotEmpty) query['BatchHeaderCode'] = batchCode;
-    if (lockFlag != null) query['LockFlag'] = lockFlag.toString();
-    if (planDate != null && planDate.isNotEmpty) query['PlanDate'] = planDate;
+    if (batchCode != null && batchCode.isNotEmpty) {
+      query['BatchHeaderCode'] = batchCode;
+      query['batchHeaderCode'] = batchCode;
+    }
+    if (lockFlag != null) {
+      query['LockFlag'] = lockFlag.toString();
+      query['lockFlag'] = lockFlag.toString();
+    }
+    if (planDate != null && planDate.isNotEmpty) {
+      query['PlanDate'] = planDate;
+      query['planDate'] = planDate;
+    }
 
     final result = await _api.getList('/api/app/batch-headers', query: query);
     if (!result.success || result.data == null) return result;
 
     try {
-      final List rawData = result.data is Map ? (result.data['items'] ?? []) : result.data;
-      final list = rawData.map((item) {
-        return LotHeaderModel.fromJson(Map<String, dynamic>.from(item as Map));
-      }).toList();
+      final List rawData = result.data is Map ? (result.data['items'] ?? []) : (result.data is List ? result.data : []);
+      final list = <LotHeaderModel>[];
+      for (final item in rawData) {
+        try {
+          if (item is Map) {
+            final model = LotHeaderModel.fromJson(Map<String, dynamic>.from(item));
+            if (model.id != null && model.id! > 0) {
+              list.add(model);
+            }
+          }
+        } catch (itemErr) {
+          print("Error parsing single LotHeaderModel: $itemErr");
+        }
+      }
+      print("ReportsRepo fetchBatchHeaders parsed ${list.length} / ${rawData.length} batches");
       return PlexApiResult(true, 200, "Success", list);
-    } catch (e) {
-      dev.log("ReportsRepo fetchBatchHeaders error: $e");
+    } catch (e, stack) {
+      print("ReportsRepo fetchBatchHeaders error: $e\n$stack");
       return PlexApiResult(false, 500, e.toString(), null);
     }
   }

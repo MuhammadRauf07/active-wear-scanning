@@ -137,9 +137,9 @@ class _ReportsMainScreenView extends StatelessWidget {
   bool _isDatasetEmpty(ReportsController controller) {
     switch (controller.selectedTabIndex) {
       case 0:
-        return controller.workOrderItemRows.isEmpty && controller.selectedWorkOrderSummary == null;
+        return controller.workOrdersList.isEmpty;
       case 1:
-        return controller.batchItems.isEmpty;
+        return controller.rawBatchItems.isEmpty;
       case 2:
         return controller.inductionItems.isEmpty;
       case 3:

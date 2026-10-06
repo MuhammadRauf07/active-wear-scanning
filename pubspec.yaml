@@ -16,6 +16,7 @@ dependencies:
     path: packages/plex
 #  plex: ^1.0.2
   fl_chart: ^1.2.0
+  syncfusion_flutter_pdfviewer: ^30.2.7
 
 dev_dependencies:
   flutter_test:

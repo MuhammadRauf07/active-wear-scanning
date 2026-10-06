@@ -1,70 +1,58 @@
 import 'package:flutter/material.dart';
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
 import 'package:active_wear_scanning/features/common-models/common_models.dart';
 import 'package:active_wear_scanning/features/reports/controller/reports_controller.dart';
-import 'package:active_wear_scanning/features/reports/model/report_models.dart';
 
-class WorkOrderReportView extends StatelessWidget {
+class WorkOrderReportView extends StatefulWidget {
   final ReportsController controller;
 
   const WorkOrderReportView({super.key, required this.controller});
 
   @override
+  State<WorkOrderReportView> createState() => _WorkOrderReportViewState();
+}
+
+class _WorkOrderReportViewState extends State<WorkOrderReportView> {
+  final PdfViewerController _pdfViewerController = PdfViewerController();
+
+  @override
   Widget build(BuildContext context) {
-    final summary = controller.selectedWorkOrderSummary;
-    final rows = controller.workOrderItemRows;
 
-    return RefreshIndicator(
-      onRefresh: () => controller.fetchCurrentReportData(),
-      color: const Color(0xFF1B64A3),
-      child: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        children: [
-          // 1. Work Order Selector Dropdown Bar
-          _buildWorkOrderSelector(context),
+    return Column(
+      children: [
+        // 1. Selector and Action Controls Bar
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+          child: _buildWorkOrderSelectorBar(context),
+        ),
 
-          const SizedBox(height: 12),
-
-          // 2. Work Order Header Card (Matching Reference Layout)
-          if (summary != null) _buildWorkOrderHeaderCard(summary),
-
-          const SizedBox(height: 12),
-
-          // 3. Legend / Abbreviations Strip
-          _buildLegendStrip(),
-
-          const SizedBox(height: 14),
-
-          // 4. Matrix Breakdown Table / List
-          if (rows.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(32),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: const Column(
-                children: [
-                  Icon(Icons.assignment_late_outlined, size: 44, color: Color(0xFF94A3B8)),
-                  SizedBox(height: 10),
-                  Text(
-                    'No status data available for the selected Work Order',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
-                  ),
-                ],
-              ),
-            )
-          else
-            ..._buildGroupedItemMatrices(rows),
-        ],
-      ),
+        // 2. Main PDF Viewer Area
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+            child: _buildPdfViewerContainer(context),
+          ),
+        ),
+      ],
     );
   }
 
   // ---------------------------------------------------------------------------
-  // 1. Work Order Dropdown Selector
+  // 1. Work Order Selector and Actions Bar
   // ---------------------------------------------------------------------------
-  Widget _buildWorkOrderSelector(BuildContext context) {
+  Widget _buildWorkOrderSelectorBar(BuildContext context) {
+    final controller = widget.controller;
+
+    final uniqueWOs = <int, WorkOrderHeader>{};
+    for (final wo in controller.workOrdersList) {
+      if (wo.id > 0) {
+        uniqueWOs.putIfAbsent(wo.id, () => wo);
+      }
+    }
+    final int? currentId = controller.selectedWorkOrder?.id;
+    final int? dropdownValue = (currentId != null && uniqueWOs.containsKey(currentId)) ? currentId : null;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
@@ -82,17 +70,22 @@ class WorkOrderReportView extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(6),
+            padding: const EdgeInsets.all(7),
             decoration: BoxDecoration(
               color: const Color(0xFFEFF6FF),
               borderRadius: BorderRadius.circular(6),
             ),
-            child: const Icon(Icons.assignment_rounded, size: 18, color: Color(0xFF1B64A3)),
+            child: const Icon(Icons.picture_as_pdf_rounded, size: 18, color: Color(0xFF1B64A3)),
           ),
           const SizedBox(width: 10),
           const Text(
-            'SELECT WORK ORDER:',
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+            'WORK ORDER:',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF475569),
+              letterSpacing: 0.3,
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -105,335 +98,460 @@ class WorkOrderReportView extends StatelessWidget {
                 border: Border.all(color: const Color(0xFFCBD5E1)),
               ),
               child: DropdownButtonHideUnderline(
-                child: DropdownButton<WorkOrderHeader>(
-                  value: controller.selectedWorkOrder,
+                child: DropdownButton<int>(
+                  value: dropdownValue,
                   isExpanded: true,
-                  hint: const Text('Choose Work Order', style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+                  hint: const Text(
+                    'Select Work Order',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                  ),
                   icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF1B64A3)),
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                  items: controller.workOrdersList.map((wo) {
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F172A),
+                  ),
+                  items: uniqueWOs.values.map((wo) {
                     final code = wo.workOrderCode.isNotEmpty ? wo.workOrderCode : 'WO #${wo.id}';
-                    return DropdownMenuItem<WorkOrderHeader>(
-                      value: wo,
+                    return DropdownMenuItem<int>(
+                      value: wo.id,
                       child: Text(code),
                     );
                   }).toList(),
-                  onChanged: (wo) => controller.selectWorkOrder(wo),
+                  onChanged: (id) {
+                    if (id != null) {
+                      controller.selectWorkOrderById(id);
+                    }
+                  },
                 ),
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
+          const SizedBox(width: 8),
 
-  // ---------------------------------------------------------------------------
-  // 2. Work Order Header Card
-  // ---------------------------------------------------------------------------
-  Widget _buildWorkOrderHeaderCard(WorkOrderHeaderSummary summary) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          // Blue Table Header Banner
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: const BoxDecoration(
-              color: Color(0xFF0F3D69), // Navy Header from Web Screenshot
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(9),
-                topRight: Radius.circular(9),
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
+          // Fetch Report Action Button
+          if (controller.selectedWorkOrder != null) ...[
+            InkWell(
+              onTap: controller.isPdfLoading ? null : () => controller.fetchSelectedWorkOrderPdf(),
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                height: 38,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: controller.isPdfLoading ? const Color(0xFF94A3B8) : const Color(0xFF1B64A3),
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF1B64A3).withValues(alpha: 0.25),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.layers_rounded, color: Colors.white, size: 16),
-                    const SizedBox(width: 8),
-                    Text(
-                      'WORK ORDER: ${summary.workOrderCode}',
-                      style: const TextStyle(
-                        fontSize: 13,
+                    if (controller.isPdfLoading)
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      )
+                    else
+                      const Icon(Icons.cloud_download_rounded, size: 16, color: Colors.white),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Fetch Report',
+                      style: TextStyle(
+                        fontSize: 12,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
-                        letterSpacing: 0.5,
                       ),
                     ),
                   ],
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+
+          // Download / Save Action
+          if (controller.workOrderPdfBytes != null) ...[
+            Tooltip(
+              message: 'Download / Save PDF',
+              child: InkWell(
+                onTap: () async {
+                  final savedPath = await controller.saveCurrentWorkOrderPdf();
+                  if (context.mounted) {
+                    if (savedPath != null) {
+                      AppSnackBar.showSuccess(
+                        context,
+                        message: 'Report saved successfully!',
+                      );
+                    } else {
+                      AppSnackBar.showError(
+                        context,
+                        message: 'Failed to save PDF.',
+                      );
+                    }
+                  }
+                },
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  height: 38,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
                   decoration: BoxDecoration(
-                    color: summary.isLocked ? const Color(0xFF16A34A) : const Color(0xFFD97706),
-                    borderRadius: BorderRadius.circular(4),
+                    color: const Color(0xFF16A34A).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFF16A34A).withValues(alpha: 0.3)),
                   ),
-                  child: Text(
-                    summary.status.toUpperCase(),
-                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.download_rounded, size: 16, color: Color(0xFF16A34A)),
+                      SizedBox(width: 4),
+                      Text(
+                        'Download',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF16A34A),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
+            const SizedBox(width: 6),
+            Tooltip(
+              message: 'Full Screen',
+              child: InkWell(
+                onTap: () => _openFullScreenPdf(context),
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  height: 38,
+                  width: 38,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                  ),
+                  child: const Icon(Icons.fullscreen_rounded, size: 20, color: Color(0xFF475569)),
+                ),
+              ),
+            ),
+          ],
 
-          // Header Data Grid
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final isWide = constraints.maxWidth > 600;
-                return Wrap(
-                  spacing: 16,
-                  runSpacing: 10,
-                  children: [
-                    _buildHeaderItem('WORK ORDER DATE', summary.workOrderDate, width: isWide ? 120 : 100),
-                    _buildHeaderItem('DESCRIPTION', summary.description, width: isWide ? 160 : 140),
-                    _buildHeaderItem('CUSTOMER', summary.customer, width: isWide ? 140 : 120),
-                    _buildHeaderItem('BRAND', summary.brand, width: isWide ? 130 : 110),
-                    _buildHeaderItem('STYLE', summary.style, width: isWide ? 120 : 100),
-                    _buildHeaderItem('CUSTOMER PO', summary.customerPo ?? '-', width: isWide ? 120 : 100),
-                    _buildHeaderItem('TOTAL BATCHES', '${summary.totalBatches} Batches', width: isWide ? 120 : 100, isBoldValue: true),
-                    _buildHeaderItem('TOTAL TUBES', '${summary.totalRequiredTubes.toStringAsFixed(0)} Tubes', width: isWide ? 120 : 100, isBoldValue: true, valueColor: const Color(0xFF1B64A3)),
-                  ],
-                );
+          // Refresh Button
+          const SizedBox(width: 6),
+          Tooltip(
+            message: 'Reload Report',
+            child: InkWell(
+              onTap: () {
+                if (controller.selectedWorkOrder != null) {
+                  controller.fetchWorkOrderPdfData(controller.selectedWorkOrder!.id);
+                } else {
+                  controller.fetchCurrentReportData();
+                }
               },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeaderItem(String label, String value, {double? width, bool isBoldValue = false, Color? valueColor}) {
-    return SizedBox(
-      width: width,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 9,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF64748B),
-              letterSpacing: 0.3,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: isBoldValue ? FontWeight.bold : FontWeight.w600,
-              color: valueColor ?? const Color(0xFF0F172A),
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // 3. Legend / Abbreviations Strip
-  // ---------------------------------------------------------------------------
-  Widget _buildLegendStrip() {
-    final legends = [
-      {'abbr': 'WO.TB', 'desc': 'Work Order Required Tubes'},
-      {'abbr': 'P.TB', 'desc': 'Knit Plan Tubes'},
-      {'abbr': 'A.TB', 'desc': 'Knit A-Grade Tubes'},
-      {'abbr': 'C.TB', 'desc': 'Knit C-Grade Tubes'},
-      {'abbr': 'S.TB', 'desc': 'Sample Tubes'},
-      {'abbr': 'GBS.TR', 'desc': 'Trays Received at GBS'},
-      {'abbr': 'GBS.TB', 'desc': 'Tubes Received at GBS'},
-      {'abbr': 'GBS.STK.TB', 'desc': 'Tubes Stock at GBS'},
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Wrap(
-        spacing: 12,
-        runSpacing: 6,
-        children: legends.map((l) {
-          return Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                height: 38,
+                width: 38,
                 decoration: BoxDecoration(
                   color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: const Color(0xFFCBD5E1)),
                 ),
-                child: Text(
-                  l['abbr']!,
-                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF1B64A3)),
-                ),
+                child: const Icon(Icons.refresh_rounded, size: 18, color: Color(0xFF475569)),
               ),
-              const SizedBox(width: 4),
-              Text(
-                l['desc']!,
-                style: const TextStyle(fontSize: 10, color: Color(0xFF64748B)),
-              ),
-            ],
-          );
-        }).toList(),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   // ---------------------------------------------------------------------------
-  // 4. Matrix Breakdown w.r.t Item & Color
+  // 2. PDF Viewer Box
   // ---------------------------------------------------------------------------
-  List<Widget> _buildGroupedItemMatrices(List<WorkOrderItemColorStatusRow> rows) {
-    return rows.map((row) {
+  Widget _buildPdfViewerContainer(BuildContext context) {
+    final controller = widget.controller;
+
+    // Loading State
+    if (controller.isPdfLoading) {
       return Container(
-        margin: const EdgeInsets.only(bottom: 12),
+        width: double.infinity,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: const Color(0xFFE2E8F0)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const CircularProgressIndicator(color: Color(0xFF1B64A3), strokeWidth: 3),
+            const SizedBox(height: 16),
+            Text(
+              'Generating & loading Work Order PDF...',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF475569),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              controller.selectedWorkOrder != null
+                  ? 'Work Order: ${controller.selectedWorkOrder!.workOrderCode}'
+                  : '',
+              style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
             ),
           ],
         ),
+      );
+    }
+
+    // Error State
+    if (controller.pdfError != null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFFCA5A5)),
+        ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Item Header Bar with Quick Metric Badges
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: const BoxDecoration(
-                color: Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(9),
-                  topRight: Radius.circular(9),
-                ),
-                border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    row.itemDescription,
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                  ),
-                  const SizedBox(height: 6),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        _buildMetricTag('WO.TB', row.woRequiredTubes.toStringAsFixed(0), const Color(0xFF1B64A3)),
-                        _buildMetricTag('P.TB', row.knitPlanTubes.toStringAsFixed(0), const Color(0xFF475569)),
-                        _buildMetricTag('A.TB', row.knitAGradeTubes.toStringAsFixed(0), const Color(0xFF16A34A)),
-                        _buildMetricTag('C.TB', row.knitCGradeTubes.toStringAsFixed(0), const Color(0xFFDC2626)),
-                        _buildMetricTag('S.TB', row.sampleTubes.toStringAsFixed(0), const Color(0xFFD97706)),
-                        _buildMetricTag('GBS.TR', '${row.gbsReceivedTrays}', const Color(0xFF0284C7)),
-                        _buildMetricTag('GBS.TB', row.gbsReceivedTubes.toStringAsFixed(0), const Color(0xFF0284C7)),
-                        _buildMetricTag('GBS.STK.TB', row.gbsStockTubes.toStringAsFixed(0), const Color(0xFF64748B)),
-                      ],
-                    ),
-                  ),
-                ],
+            const Icon(Icons.error_outline_rounded, size: 48, color: Color(0xFFDC2626)),
+            const SizedBox(height: 12),
+            const Text(
+              'Failed to Load Report',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF0F172A),
               ),
             ),
-
-            // Horizontal Scrollable Breakdown Table
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                headingRowHeight: 34,
-                dataRowMinHeight: 36,
-                dataRowMaxHeight: 40,
-                headingRowColor: WidgetStateProperty.all(const Color(0xFF0F3D69)),
-                columnSpacing: 14,
-                horizontalMargin: 12,
-                columns: const [
-                  DataColumn(label: Text('Color', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))),
-                  DataColumn(label: Text('Processed', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))),
-                  DataColumn(label: Text('Fresh Lot (Tr/Tb)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))),
-                  DataColumn(label: Text('Reassigned Lot (Tr/Tb)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))),
-                  DataColumn(label: Text('Fresh WIP (Tr/Tb)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))),
-                  DataColumn(label: Text('Reassigned WIP (Tr/Tb)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))),
-                  DataColumn(label: Text('Ready R&I (Tr/Tb)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))),
-                  DataColumn(label: Text('R&I Received (Tr/Tb)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))),
-                  DataColumn(label: Text('R&I Stock (Tr/Tb)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))),
-                  DataColumn(label: Text('Allocated', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))),
-                ],
-                rows: [
-                  DataRow(
-                    cells: [
-                      DataCell(Text(row.colorDescription, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)))),
-                      DataCell(Text(row.processedItemDescription, style: const TextStyle(fontSize: 10, color: Color(0xFF475569)))),
-                      DataCell(_buildStageCell(row.freshLotMakingTrays, row.freshLotMakingTubes)),
-                      DataCell(_buildStageCell(row.reassignedLotMakingTrays, row.reassignedLotMakingTubes)),
-                      DataCell(_buildStageCell(row.freshWipTrays, row.freshWipTubes)),
-                      DataCell(_buildStageCell(row.reassignedWipTrays, row.reassignedWipTubes)),
-                      DataCell(_buildStageCell(row.readyToReceiveTrays, row.readyToReceiveTubes)),
-                      DataCell(_buildStageCell(row.riReceivedTrays, row.riReceivedTubes)),
-                      DataCell(_buildStageCell(row.riStockTrays, row.riStockTubes)),
-                      DataCell(Text(row.allocatedTubes.toStringAsFixed(0), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF1B64A3)))),
-                    ],
-                  ),
-                ],
+            const SizedBox(height: 6),
+            Text(
+              controller.pdfError!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () {
+                if (controller.selectedWorkOrder != null) {
+                  controller.fetchWorkOrderPdfData(controller.selectedWorkOrder!.id);
+                }
+              },
+              icon: const Icon(Icons.replay_rounded, size: 16),
+              label: const Text('Try Again'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1B64A3),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
             ),
           ],
         ),
       );
-    }).toList();
+    }
+
+    // No Work Order Selected
+    if (controller.selectedWorkOrder == null) {
+      return Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.assignment_outlined, size: 54, color: Color(0xFF94A3B8)),
+            SizedBox(height: 12),
+            Text(
+              'Select Work Order to Fetch Report',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF334155)),
+            ),
+            SizedBox(height: 4),
+            Text(
+              'Select a work order from the dropdown above to fetch work order report.',
+              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Work Order Selected, but PDF not fetched yet
+    if (controller.workOrderPdfBytes == null) {
+      final woCode = controller.selectedWorkOrder!.workOrderCode.isNotEmpty
+          ? controller.selectedWorkOrder!.workOrderCode
+          : 'WO #${controller.selectedWorkOrder!.id}';
+      return Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
+                color: Color(0xFFEFF6FF),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.description_outlined, size: 48, color: Color(0xFF1B64A3)),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Selected Work Order: $woCode',
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Click the button below to fetch and display the status report.',
+              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 18),
+            ElevatedButton.icon(
+              onPressed: () => controller.fetchSelectedWorkOrderPdf(),
+              icon: const Icon(Icons.cloud_download_rounded, size: 18),
+              label: const Text('Fetch Report', style: TextStyle(fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1B64A3),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // PDF Ready to Display
+    if (controller.workOrderPdfBytes != null) {
+      return Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFCBD5E1)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            // Top PDF Info Banner
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: const BoxDecoration(
+                color: Color(0xFF0F3D69),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.description_rounded, size: 16, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'WorkOrderStatusReport_${controller.selectedWorkOrder!.workOrderCode}.pdf',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Text(
+                    '${(controller.workOrderPdfBytes!.lengthInBytes / 1024).toStringAsFixed(1)} KB',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF93C5FD),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // In-App SfPdfViewer
+            Expanded(
+              child: SfPdfViewer.memory(
+                controller.workOrderPdfBytes!,
+                controller: _pdfViewerController,
+                enableDoubleTapZooming: true,
+                canShowPaginationDialog: true,
+                canShowScrollHead: true,
+                canShowScrollStatus: true,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Default Fallback
+    return const Center(child: CircularProgressIndicator(color: Color(0xFF1B64A3)));
   }
 
-  Widget _buildMetricTag(String label, String value, Color color) {
-    return Container(
-      margin: const EdgeInsets.only(right: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('$label: ', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color)),
-          Text(value, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color)),
-        ],
-      ),
-    );
-  }
+  // ---------------------------------------------------------------------------
+  // 3. Full Screen PDF Modal
+  // ---------------------------------------------------------------------------
+  void _openFullScreenPdf(BuildContext context) {
+    final controller = widget.controller;
+    if (controller.workOrderPdfBytes == null) return;
 
-  Widget _buildStageCell(int trays, double tubes) {
-    return Text(
-      '$trays / ${tubes.toStringAsFixed(0)}',
-      style: TextStyle(
-        fontSize: 11,
-        fontWeight: tubes > 0 ? FontWeight.bold : FontWeight.normal,
-        color: tubes > 0 ? const Color(0xFF0F172A) : const Color(0xFF94A3B8),
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (ctx) => Scaffold(
+          appBar: AppBar(
+            backgroundColor: const Color(0xFF0F3D69),
+            foregroundColor: Colors.white,
+            title: Text(
+              'Work Order: ${controller.selectedWorkOrder?.workOrderCode ?? ""}',
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.download_rounded),
+                tooltip: 'Download',
+                onPressed: () async {
+                  final savedPath = await controller.saveCurrentWorkOrderPdf();
+                  if (ctx.mounted) {
+                    if (savedPath != null) {
+                      AppSnackBar.showSuccess(ctx, message: 'Report saved successfully!');
+                    } else {
+                      AppSnackBar.showError(ctx, message: 'Failed to save PDF.');
+                    }
+                  }
+                },
+              ),
+            ],
+          ),
+          body: SfPdfViewer.memory(
+            controller.workOrderPdfBytes!,
+            enableDoubleTapZooming: true,
+            canShowPaginationDialog: true,
+          ),
+        ),
       ),
     );
   }

@@ -1,5 +1,7 @@
 import 'dart:developer' as dev;
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:file_saver/file_saver.dart';
 import 'package:intl/intl.dart';
 import 'package:active_wear_scanning/features/common-models/common_models.dart';
 import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
@@ -42,13 +44,22 @@ class ReportsController extends ChangeNotifier {
   List<Operation> get operations => _operations;
 
   // ---------------------------------------------------------------------------
-  // Work Order Status Report State
+  // Work Order Status Report State (PDF & Meta)
   // ---------------------------------------------------------------------------
   List<WorkOrderHeader> _workOrdersList = [];
   List<WorkOrderHeader> get workOrdersList => _workOrdersList;
 
   WorkOrderHeader? _selectedWorkOrder;
   WorkOrderHeader? get selectedWorkOrder => _selectedWorkOrder;
+
+  Uint8List? _workOrderPdfBytes;
+  Uint8List? get workOrderPdfBytes => _workOrderPdfBytes;
+
+  bool _isPdfLoading = false;
+  bool get isPdfLoading => _isPdfLoading;
+
+  String? _pdfError;
+  String? get pdfError => _pdfError;
 
   WorkOrderHeaderSummary? _selectedWorkOrderSummary;
   WorkOrderHeaderSummary? get selectedWorkOrderSummary => _selectedWorkOrderSummary;
@@ -61,6 +72,20 @@ class ReportsController extends ChangeNotifier {
   // ---------------------------------------------------------------------------
   List<BatchReportItem> _batchItems = [];
   List<BatchReportItem> get batchItems => _getFilteredBatchItems();
+  List<BatchReportItem> get rawBatchItems => _batchItems;
+
+  // Batch PDF State
+  BatchReportItem? _selectedBatch;
+  BatchReportItem? get selectedBatch => _selectedBatch;
+
+  Uint8List? _batchPdfBytes;
+  Uint8List? get batchPdfBytes => _batchPdfBytes;
+
+  bool _isBatchPdfLoading = false;
+  bool get isBatchPdfLoading => _isBatchPdfLoading;
+
+  String? _batchPdfError;
+  String? get batchPdfError => _batchPdfError;
 
   List<InductionReportItem> _inductionItems = [];
   List<InductionReportItem> get inductionItems => _getFilteredInductionItems();
@@ -91,9 +116,142 @@ class ReportsController extends ChangeNotifier {
   // ---------------------------------------------------------------------------
   void selectWorkOrder(WorkOrderHeader? wo) {
     _selectedWorkOrder = wo;
+    _workOrderPdfBytes = null;
+    _pdfError = null;
     notifyListeners();
-    if (wo != null) {
-      _loadWorkOrderFullMatrix(wo);
+  }
+
+  void selectWorkOrderById(int workOrderId) {
+    for (final wo in _workOrdersList) {
+      if (wo.id == workOrderId) {
+        selectWorkOrder(wo);
+        return;
+      }
+    }
+  }
+
+  /// Explicitly triggered when user clicks 'Fetch Report' for selected Work Order
+  Future<void> fetchSelectedWorkOrderPdf() async {
+    if (_selectedWorkOrder != null && _selectedWorkOrder!.id > 0) {
+      await fetchWorkOrderPdfData(_selectedWorkOrder!.id);
+      await _loadWorkOrderFullMatrix(_selectedWorkOrder!);
+    }
+  }
+
+  /// Fetches PDF document bytes for the selected work order
+  Future<void> fetchWorkOrderPdfData(int workOrderId) async {
+    if (workOrderId <= 0) return;
+    _isPdfLoading = true;
+    _pdfError = null;
+    notifyListeners();
+
+    try {
+      final res = await _repo.fetchWorkOrderPdf(workOrderId);
+      if (res.success && res.data != null && res.data is Uint8List) {
+        _workOrderPdfBytes = res.data as Uint8List;
+        _pdfError = null;
+      } else {
+        _workOrderPdfBytes = null;
+        _pdfError = res.message.isNotEmpty ? res.message : "Failed to load PDF report.";
+      }
+    } catch (e) {
+      _workOrderPdfBytes = null;
+      _pdfError = "Error loading PDF: $e";
+    } finally {
+      _isPdfLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Saves or downloads the current PDF to device
+  Future<String?> saveCurrentWorkOrderPdf() async {
+    if (_workOrderPdfBytes == null) return null;
+    try {
+      final fileName = _selectedWorkOrder != null && _selectedWorkOrder!.workOrderCode.isNotEmpty
+          ? 'WorkOrderStatusReport_${_selectedWorkOrder!.workOrderCode}.pdf'
+          : 'WorkOrderStatusReport_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      
+      final filePath = await FileSaver.instance.saveFile(
+        name: fileName.replaceAll('.pdf', ''),
+        bytes: _workOrderPdfBytes!,
+        ext: 'pdf',
+        mimeType: MimeType.pdf,
+      );
+      return filePath;
+    } catch (e) {
+      dev.log("Error saving PDF: $e");
+      return null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Batch Selector + PDF
+  // ---------------------------------------------------------------------------
+  void selectBatch(BatchReportItem? batch) {
+    _selectedBatch = batch;
+    _batchPdfBytes = null;
+    _batchPdfError = null;
+    notifyListeners();
+  }
+
+  void selectBatchById(int batchHeaderId) {
+    for (final b in _batchItems) {
+      if (b.batchHeader.id == batchHeaderId) {
+        selectBatch(b);
+        return;
+      }
+    }
+  }
+
+  /// Explicitly triggered when user clicks 'Fetch Report' for selected Batch
+  Future<void> fetchSelectedBatchPdf() async {
+    if (_selectedBatch != null && _selectedBatch!.batchHeader.id != null && _selectedBatch!.batchHeader.id! > 0) {
+      await fetchBatchPdfData(_selectedBatch!.batchHeader.id!);
+    }
+  }
+
+  /// Fetches PDF document bytes for the selected batch
+  Future<void> fetchBatchPdfData(int batchHeaderId) async {
+    print("fetchBatchPdfData started for batchHeaderId: $batchHeaderId");
+    _isBatchPdfLoading = true;
+    _batchPdfError = null;
+    notifyListeners();
+
+    try {
+      final res = await _repo.fetchBatchPdf(batchHeaderId);
+      print("fetchBatchPdfData response: success=${res.success}, code=${res.code}, bytes=${(res.data as Uint8List?)?.lengthInBytes}, message=${res.message}");
+      if (res.success && res.data != null && res.data is Uint8List) {
+        _batchPdfBytes = res.data as Uint8List;
+        _batchPdfError = null;
+      } else {
+        _batchPdfBytes = null;
+        _batchPdfError = res.message.isNotEmpty ? res.message : "Failed to load batch PDF report.";
+      }
+    } catch (e, stack) {
+      print("fetchBatchPdfData error: $e\n$stack");
+      _batchPdfBytes = null;
+      _batchPdfError = "Error loading PDF: $e";
+    } finally {
+      _isBatchPdfLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Saves or downloads the current batch PDF to device
+  Future<String?> saveCurrentBatchPdf() async {
+    if (_batchPdfBytes == null) return null;
+    try {
+      final batchCode = _selectedBatch?.batchCode ?? 'Batch_${DateTime.now().millisecondsSinceEpoch}';
+      final filePath = await FileSaver.instance.saveFile(
+        name: 'BatchDetailReport_$batchCode',
+        bytes: _batchPdfBytes!,
+        ext: 'pdf',
+        mimeType: MimeType.pdf,
+      );
+      return filePath;
+    } catch (e) {
+      dev.log("Error saving batch PDF: $e");
+      return null;
     }
   }
 
@@ -141,6 +299,7 @@ class ReportsController extends ChangeNotifier {
     if (opsRes.success && opsRes.data is List<Operation>) {
       _operations = opsRes.data as List<Operation>;
     }
+    await _fetchBatchReport();
     notifyListeners();
   }
 
@@ -188,7 +347,11 @@ class ReportsController extends ChangeNotifier {
             : [];
 
     if (woHeadersRes.success && woHeadersRes.data is List<WorkOrderHeader>) {
-      woList.addAll(woHeadersRes.data as List<WorkOrderHeader>);
+      for (final wo in (woHeadersRes.data as List<WorkOrderHeader>)) {
+        if (wo.id > 0 && !woList.any((w) => w.id == wo.id)) {
+          woList.add(wo);
+        }
+      }
     }
 
     // Also extract any distinct work orders present in production progress
@@ -201,12 +364,10 @@ class ReportsController extends ChangeNotifier {
 
     _workOrdersList = woList;
 
-    if (_selectedWorkOrder == null && _workOrdersList.isNotEmpty) {
-      _selectedWorkOrder = _workOrdersList.first;
-    }
-
-    if (_selectedWorkOrder != null) {
-      await _loadWorkOrderFullMatrix(_selectedWorkOrder!, progressList: allProgress);
+    // Keep existing selection if valid, otherwise do NOT auto-select by default
+    if (_selectedWorkOrder != null && !_workOrdersList.any((w) => w.id == _selectedWorkOrder!.id)) {
+      _selectedWorkOrder = null;
+      _workOrderPdfBytes = null;
     }
   }
 
@@ -257,7 +418,7 @@ class ReportsController extends ChangeNotifier {
       // Group by Item Description and Color Description
       final Map<String, List<ProductionProgressResponseModel>> itemColorGroups = {};
       for (final p in woProgress) {
-        final key = '${p.item.description ?? 'Body'}__${p.item.colorDescription ?? 'Standard'}';
+        final key = '${p.item.description}__${p.item.colorDescription}';
         itemColorGroups.putIfAbsent(key, () => []).add(p);
       }
 
@@ -403,10 +564,10 @@ class ReportsController extends ChangeNotifier {
           final reassignedWip = wipProgress.where((p) => p.primaryTrayModel.isReAssigned == true).toList();
 
           return WorkOrderItemColorStatusRow(
-            itemDescription: first.item.description ?? 'Fabric Tube Item',
+            itemDescription: first.item.description,
             sizeDescription: first.item.sizeDescription ?? 'Size# Standard',
             colorDescription: first.item.colorDescription ?? 'Standard',
-            processedItemDescription: first.processedItem?.description ?? first.item.description ?? 'Processed Item',
+            processedItemDescription: first.processedItem?.description ?? first.item.description,
             woRequiredTubes: first.workOrderLine.requiredGarmentTubes > 0 ? first.workOrderLine.requiredGarmentTubes : 100.0,
             knitPlanTubes: first.workOrderLine.planQuantity > 0 ? first.workOrderLine.planQuantity : 20.0,
             knitAGradeTubes: knitAGrade,
@@ -445,7 +606,7 @@ class ReportsController extends ChangeNotifier {
   // 2. Batch Report Data Builder
   // ---------------------------------------------------------------------------
   Future<void> _fetchBatchReport() async {
-    final batchHeadersRes = await _repo.fetchBatchHeaders(planDate: _getDateStringForQuery());
+    final batchHeadersRes = await _repo.fetchBatchHeaders();
     final progressRes = await _repo.fetchProductionProgressGeneric({});
 
     if (batchHeadersRes.success && batchHeadersRes.data is List<LotHeaderModel>) {
@@ -501,8 +662,19 @@ class ReportsController extends ChangeNotifier {
           statusBadge: statusBadge,
         );
       }).toList();
+
+      print("_fetchBatchReport: built ${_batchItems.length} batch items");
+
+      // Keep existing selection if valid, otherwise do NOT auto-select by default
+      if (_selectedBatch != null && !_batchItems.any((b) => b.batchHeader.id == _selectedBatch!.batchHeader.id)) {
+        _selectedBatch = null;
+        _batchPdfBytes = null;
+      }
     } else {
+      print("_fetchBatchReport: failed to fetch batches (${batchHeadersRes.message})");
       _batchItems = [];
+      _selectedBatch = null;
+      _batchPdfBytes = null;
     }
   }
 
@@ -527,8 +699,8 @@ class ReportsController extends ChangeNotifier {
           progress: prog,
           trayCode: tray.trayCode ?? 'TRAY-${prog.primaryTrayId ?? 0}',
           locatorName: p.operation.locator?.description ?? 'Induction Staging',
-          workOrderCode: wo.workOrderCode ?? 'WO-${wo.id}',
-          itemDescription: item.description ?? 'Fabric Tube Item',
+          workOrderCode: wo.workOrderCode.isNotEmpty ? wo.workOrderCode : 'WO-${wo.id}',
+          itemDescription: item.description,
           colorDescription: item.colorDescription ?? 'Standard',
           sizeDescription: item.sizeDescription ?? 'M',
           weight: prog.primaryQuantity ?? 0.0,
@@ -642,20 +814,5 @@ class ReportsController extends ChangeNotifier {
       }
       return true;
     }).toList();
-  }
-
-  String? _getDateStringForQuery() {
-    final now = DateTime.now();
-    switch (_datePreset) {
-      case DateFilterPreset.today:
-        return DateFormat('yyyy-MM-dd').format(now);
-      case DateFilterPreset.yesterday:
-        return DateFormat('yyyy-MM-dd').format(now.subtract(const Duration(days: 1)));
-      case DateFilterPreset.last7Days:
-      case DateFilterPreset.last30Days:
-      case DateFilterPreset.custom:
-      case DateFilterPreset.all:
-        return null;
-    }
   }
 }

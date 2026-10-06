@@ -67,33 +67,44 @@ class LotHeaderModel {
   });
 
   factory LotHeaderModel.fromJson(Map<String, dynamic> json) {
-    final rawMachineId = json['machineId'] ??
+    final Map<String, dynamic> target = (json['batchHeader'] is Map)
+        ? Map<String, dynamic>.from(json['batchHeader'] as Map)
+        : json;
+
+    final rawMachineId = target['machineId'] ??
+        target['resourceId'] ??
+        json['machineId'] ??
         json['resourceId'] ??
-        (json['batchHeader'] is Map ? (json['batchHeader']['machineId'] ?? json['batchHeader']['resourceId']) : null);
+        (json['machine'] is Map ? json['machine']['id'] : null);
+
+    final rawId = target['id'] ?? json['id'];
+    final rawColorCode = target['colorCode'] ?? target['colorCodeId'] ?? json['colorCode'] ?? json['colorCodeId'];
+    final rawShiftId = target['shiftId'] ?? json['shiftId'];
+    final rawTrayDetailId = target['trayDetailId'] ?? json['trayDetailId'];
 
     return LotHeaderModel(
-      id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? ''),
-      creationTime: json['creationTime']?.toString(),
-      creatorId: json['creatorId']?.toString(),
-      lastModificationTime: json['lastModificationTime']?.toString(),
-      lastModifierId: json['lastModifierId']?.toString(),
-      planDate: json['planDate']?.toString(),
-      colorDescription: json['colorDescription']?.toString() ??
-          (json['batchHeader'] is Map ? json['batchHeader']['colorDescription']?.toString() : null),
-      lockFlag: json['lockFlag'] as bool?,
-      batchHeaderCode: json['batchHeaderCode']?.toString() ??
-          (json['batchHeader'] is Map ? json['batchHeader']['batchHeaderCode']?.toString() : null),
+      id: rawId is int ? rawId : int.tryParse(rawId?.toString() ?? ''),
+      creationTime: (target['creationTime'] ?? json['creationTime'])?.toString(),
+      creatorId: (target['creatorId'] ?? json['creatorId'])?.toString(),
+      lastModificationTime: (target['lastModificationTime'] ?? json['lastModificationTime'])?.toString(),
+      lastModifierId: (target['lastModifierId'] ?? json['lastModifierId'])?.toString(),
+      planDate: (target['planDate'] ?? json['planDate'])?.toString(),
+      colorDescription: (target['colorDescription'] ?? json['colorDescription'])?.toString() ??
+          (json['colorCode'] is Map ? json['colorCode']['description']?.toString() : null),
+      lockFlag: (target['lockFlag'] ?? json['lockFlag']) as bool?,
+      batchHeaderCode: (target['batchHeaderCode'] ?? json['batchHeaderCode'])?.toString() ??
+          (target['code'] ?? json['code'])?.toString(),
       machineId: rawMachineId is int ? rawMachineId : int.tryParse(rawMachineId?.toString() ?? ''),
-      colorCodeId: json['colorCode'] is int
-          ? json['colorCode']
-          : int.tryParse(json['colorCode']?.toString() ?? ''),
-      shiftId: json['shiftId'] is int
-          ? json['shiftId']
-          : int.tryParse(json['shiftId']?.toString() ?? ''),
-      trayDetailId: json['trayDetailId'] is int
-          ? json['trayDetailId']
-          : int.tryParse(json['trayDetailId']?.toString() ?? ''),
-      concurrencyStamp: json['concurrencyStamp']?.toString(),
+      colorCodeId: rawColorCode is int
+          ? rawColorCode
+          : int.tryParse(rawColorCode?.toString() ?? ''),
+      shiftId: rawShiftId is int
+          ? rawShiftId
+          : int.tryParse(rawShiftId?.toString() ?? ''),
+      trayDetailId: rawTrayDetailId is int
+          ? rawTrayDetailId
+          : int.tryParse(rawTrayDetailId?.toString() ?? ''),
+      concurrencyStamp: (target['concurrencyStamp'] ?? json['concurrencyStamp'])?.toString(),
     );
   }
 }

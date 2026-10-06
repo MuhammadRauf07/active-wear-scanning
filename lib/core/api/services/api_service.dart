@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:http/http.dart' as http;
+import 'package:active_wear_scanning/core/config/app_config.dart';
 import 'package:plex/plex_networking/plex_networking.dart' hide PlexApiResult;
 import 'package:plex/plex_package.dart';
 
@@ -129,4 +131,66 @@ class ApiService {
       return PlexApiResult(false, error.code, error.message, null);
     }
   }
+
+  /// Fetch binary data such as PDF files or image blobs
+  Future<PlexApiResult> getBytes(String endNode, {Map<String, dynamic>? query}) async {
+    try {
+      if (await PlexNetworking.instance.isNetworkAvailable() == false) {
+        return PlexApiResult(false, 5001, 'Network not available', null);
+      }
+
+      String url = endNode;
+      if (query != null && query.isNotEmpty) {
+        url += "?";
+        query.forEach((key, value) {
+          url += "$key=$value&";
+        });
+        url = url.substring(0, url.length - 1);
+      }
+
+      var currentHeaders = <String, String>{};
+      if (PlexNetworking.instance.addHeaders != null) {
+        var constHeaders = await PlexNetworking.instance.addHeaders!.call();
+        currentHeaders.addAll(constHeaders);
+      }
+      currentHeaders['Accept'] = 'text/plain, application/pdf, application/octet-stream, */*';
+      currentHeaders['X-Requested-With'] = 'XMLHttpRequest';
+
+      final fullUrl = Uri.parse(url).scheme.isNotEmpty ? url : "${AppConfig.baseUrl}$url";
+      final uri = Uri.parse(fullUrl);
+
+      final startTime = DateTime.now();
+      print("Started: $fullUrl");
+
+      final response = await http.get(uri, headers: currentHeaders).timeout(
+        const Duration(seconds: 60),
+        onTimeout: () {
+          print("Timeout getBytes: $fullUrl");
+          return http.Response('Timeout', HttpStatus.requestTimeout);
+        },
+      );
+
+      final diffInMillis = DateTime.now().difference(startTime).inMilliseconds;
+      print("Completed: ${response.statusCode}: $fullUrl in ${diffInMillis}ms (length: ${response.bodyBytes.length})");
+
+      if (response.statusCode == HttpStatus.ok) {
+        return PlexApiResult(true, 200, "Success", response.bodyBytes);
+      } else {
+        print("Error getBytes ${response.statusCode}: ${response.body.isNotEmpty ? response.body.substring(0, response.body.length > 200 ? 200 : response.body.length) : 'empty body'}");
+        if (response.statusCode == HttpStatus.unauthorized) {
+          PlexApp.app.logout();
+        }
+        return PlexApiResult(
+          false,
+          response.statusCode,
+          response.reasonPhrase ?? "Failed to fetch document (${response.statusCode})",
+          null,
+        );
+      }
+    } catch (e, stack) {
+      print("Error downloading bytes from $endNode: $e\n$stack");
+      return PlexApiResult(false, 500, "Error downloading bytes: $e", null);
+    }
+  }
 }
+
