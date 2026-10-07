@@ -33,6 +33,47 @@ class ReportsRepo {
     return await _api.getBytes('/api/app/reports/batch-detail-report-pdf/$batchHeaderId');
   }
 
+  /// Fetches the Induction Store (RI Stock) PDF Report binary data
+  Future<PlexApiResult> fetchInductionStorePdf(int workOrderId) async {
+    final query = <String, dynamic>{
+      'workOrderId': workOrderId.toString(),
+      'workOrderHeaderId': workOrderId.toString(),
+    };
+    return await _api.getBytes('/api/app/reports/r-iStock-report-pdf', query: query);
+  }
+
+  /// Fetches the Knit Plan PDF Report binary data
+  Future<PlexApiResult> fetchKnitPlanPdf({
+    required String fromDate,
+    required String toDate,
+    int? shiftId,
+  }) async {
+    final query = <String, dynamic>{
+      'fromDate': fromDate,
+      'toDate': toDate,
+    };
+    if (shiftId != null && shiftId > 0) {
+      query['shiftId'] = shiftId.toString();
+    }
+    return await _api.getBytes('/api/app/reports/knit-plan-report-pdf', query: query);
+  }
+
+  /// Fetches list of shifts for Knit Plan Report dropdown
+  Future<PlexApiResult> fetchShifts() async {
+    final result = await _api.getList('/api/app/shifts');
+    if (!result.success || result.data == null) return result;
+    try {
+      final List rawData = result.data is Map ? (result.data['items'] ?? []) : (result.data is List ? result.data : []);
+      final list = rawData.map((item) {
+        return Shift.fromJson(Map<String, dynamic>.from(item as Map));
+      }).toList();
+      return PlexApiResult(true, 200, "Success", list);
+    } catch (e) {
+      dev.log("ReportsRepo fetchShifts error: $e");
+      return PlexApiResult(false, 500, e.toString(), null);
+    }
+  }
+
   PlexApiResult _parseWorkOrderHeaders(dynamic raw) {
     try {
       final List rawData = raw is Map ? (raw['items'] ?? []) : (raw is List ? raw : []);

@@ -87,6 +87,45 @@ class ReportsController extends ChangeNotifier {
   String? _batchPdfError;
   String? get batchPdfError => _batchPdfError;
 
+  // ---------------------------------------------------------------------------
+  // Knit Plan Report State (PDF & Filters)
+  // ---------------------------------------------------------------------------
+  List<Shift> _shifts = [];
+  List<Shift> get shifts => _shifts;
+
+  DateTime _knitPlanFromDate = DateTime.now();
+  DateTime get knitPlanFromDate => _knitPlanFromDate;
+
+  DateTime _knitPlanToDate = DateTime.now();
+  DateTime get knitPlanToDate => _knitPlanToDate;
+
+  int? _selectedKnitPlanShiftId; // null means 'All Shifts'
+  int? get selectedKnitPlanShiftId => _selectedKnitPlanShiftId;
+
+  Uint8List? _knitPlanPdfBytes;
+  Uint8List? get knitPlanPdfBytes => _knitPlanPdfBytes;
+
+  bool _isKnitPlanPdfLoading = false;
+  bool get isKnitPlanPdfLoading => _isKnitPlanPdfLoading;
+
+  String? _knitPlanPdfError;
+  String? get knitPlanPdfError => _knitPlanPdfError;
+
+  // ---------------------------------------------------------------------------
+  // Induction Store (RI Stock) PDF State
+  // ---------------------------------------------------------------------------
+  WorkOrderHeader? _selectedInductionWorkOrder;
+  WorkOrderHeader? get selectedInductionWorkOrder => _selectedInductionWorkOrder;
+
+  Uint8List? _inductionPdfBytes;
+  Uint8List? get inductionPdfBytes => _inductionPdfBytes;
+
+  bool _isInductionPdfLoading = false;
+  bool get isInductionPdfLoading => _isInductionPdfLoading;
+
+  String? _inductionPdfError;
+  String? get inductionPdfError => _inductionPdfError;
+
   List<InductionReportItem> _inductionItems = [];
   List<InductionReportItem> get inductionItems => _getFilteredInductionItems();
 
@@ -256,6 +295,162 @@ class ReportsController extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
+  // Knit Plan Actions & PDF
+  // ---------------------------------------------------------------------------
+  void setKnitPlanFromDate(DateTime date) {
+    _knitPlanFromDate = date;
+    _knitPlanPdfBytes = null;
+    _knitPlanPdfError = null;
+    notifyListeners();
+  }
+
+  void setKnitPlanToDate(DateTime date) {
+    _knitPlanToDate = date;
+    _knitPlanPdfBytes = null;
+    _knitPlanPdfError = null;
+    notifyListeners();
+  }
+
+  void setKnitPlanShiftId(int? shiftId) {
+    _selectedKnitPlanShiftId = shiftId;
+    _knitPlanPdfBytes = null;
+    _knitPlanPdfError = null;
+    notifyListeners();
+  }
+
+  Future<void> fetchShifts() async {
+    final res = await _repo.fetchShifts();
+    if (res.success && res.data is List<Shift>) {
+      _shifts = res.data as List<Shift>;
+      notifyListeners();
+    }
+  }
+
+  Future<void> fetchKnitPlanPdfData() async {
+    _isKnitPlanPdfLoading = true;
+    _knitPlanPdfError = null;
+    notifyListeners();
+
+    try {
+      final fromStr = DateFormat('yyyy-MM-dd').format(_knitPlanFromDate);
+      final toStr = DateFormat('yyyy-MM-dd').format(_knitPlanToDate);
+
+      final res = await _repo.fetchKnitPlanPdf(
+        fromDate: fromStr,
+        toDate: toStr,
+        shiftId: _selectedKnitPlanShiftId,
+      );
+
+      if (res.success && res.data != null && res.data is Uint8List) {
+        _knitPlanPdfBytes = res.data as Uint8List;
+        _knitPlanPdfError = null;
+      } else {
+        _knitPlanPdfBytes = null;
+        _knitPlanPdfError = res.message.isNotEmpty ? res.message : "Failed to load Knit Plan PDF report.";
+      }
+    } catch (e, stack) {
+      dev.log("fetchKnitPlanPdfData error: $e\n$stack");
+      _knitPlanPdfBytes = null;
+      _knitPlanPdfError = "Error loading PDF: $e";
+    } finally {
+      _isKnitPlanPdfLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<String?> saveCurrentKnitPlanPdf() async {
+    if (_knitPlanPdfBytes == null) return null;
+    try {
+      final fromStr = DateFormat('yyyy-MM-dd').format(_knitPlanFromDate);
+      final toStr = DateFormat('yyyy-MM-dd').format(_knitPlanToDate);
+      final shiftCode = _selectedKnitPlanShiftId != null
+          ? (_shifts.firstWhere((s) => s.id == _selectedKnitPlanShiftId, orElse: () => Shift(code: 'Shift_$_selectedKnitPlanShiftId', description: null, startTime: '', endTime: '', department: null, concurrencyStamp: '', creationTime: '', lastModificationTime: null, creatorId: null, lastModifierId: null, id: _selectedKnitPlanShiftId!)).code)
+          : 'AllShifts';
+
+      final filePath = await FileSaver.instance.saveFile(
+        name: 'KnitPlanReport_${fromStr}_to_${toStr}_$shiftCode',
+        bytes: _knitPlanPdfBytes!,
+        ext: 'pdf',
+        mimeType: MimeType.pdf,
+      );
+      return filePath;
+    } catch (e) {
+      dev.log("Error saving Knit Plan PDF: $e");
+      return null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Induction Store Actions & PDF
+  // ---------------------------------------------------------------------------
+  void selectInductionWorkOrder(WorkOrderHeader? wo) {
+    _selectedInductionWorkOrder = wo;
+    _inductionPdfBytes = null;
+    _inductionPdfError = null;
+    notifyListeners();
+  }
+
+  void selectInductionWorkOrderById(int workOrderId) {
+    for (final wo in _workOrdersList) {
+      if (wo.id == workOrderId) {
+        selectInductionWorkOrder(wo);
+        return;
+      }
+    }
+  }
+
+  Future<void> fetchSelectedInductionPdf() async {
+    if (_selectedInductionWorkOrder != null && _selectedInductionWorkOrder!.id > 0) {
+      await fetchInductionPdfData(_selectedInductionWorkOrder!.id);
+    }
+  }
+
+  Future<void> fetchInductionPdfData(int workOrderId) async {
+    if (workOrderId <= 0) return;
+    _isInductionPdfLoading = true;
+    _inductionPdfError = null;
+    notifyListeners();
+
+    try {
+      final res = await _repo.fetchInductionStorePdf(workOrderId);
+      if (res.success && res.data != null && res.data is Uint8List) {
+        _inductionPdfBytes = res.data as Uint8List;
+        _inductionPdfError = null;
+      } else {
+        _inductionPdfBytes = null;
+        _inductionPdfError = res.message.isNotEmpty ? res.message : "Failed to load Induction Store PDF report.";
+      }
+    } catch (e, stack) {
+      dev.log("fetchInductionPdfData error: $e\n$stack");
+      _inductionPdfBytes = null;
+      _inductionPdfError = "Error loading PDF: $e";
+    } finally {
+      _isInductionPdfLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<String?> saveCurrentInductionPdf() async {
+    if (_inductionPdfBytes == null) return null;
+    try {
+      final woCode = _selectedInductionWorkOrder != null && _selectedInductionWorkOrder!.workOrderCode.isNotEmpty
+          ? _selectedInductionWorkOrder!.workOrderCode
+          : 'WO_${DateTime.now().millisecondsSinceEpoch}';
+
+      final filePath = await FileSaver.instance.saveFile(
+        name: 'InductionStoreReport_$woCode',
+        bytes: _inductionPdfBytes!,
+        ext: 'pdf',
+        mimeType: MimeType.pdf,
+      );
+      return filePath;
+    } catch (e) {
+      dev.log("Error saving Induction Store PDF: $e");
+      return null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Filter Updaters
   // ---------------------------------------------------------------------------
   void setDatePreset(DateFilterPreset preset, {DateTimeRange? customRange}) {
@@ -300,6 +495,7 @@ class ReportsController extends ChangeNotifier {
       _operations = opsRes.data as List<Operation>;
     }
     await _fetchBatchReport();
+    await fetchShifts();
     notifyListeners();
   }
 
@@ -317,10 +513,10 @@ class ReportsController extends ChangeNotifier {
           await _fetchBatchReport();
           break;
         case 2:
-          await _fetchInductionReport();
+          if (_shifts.isEmpty) await fetchShifts();
           break;
         case 3:
-          await _fetchTrayTrolleyReport();
+          if (_workOrdersList.isEmpty) await _fetchWorkOrderReportData();
           break;
       }
     } catch (e) {
@@ -681,7 +877,7 @@ class ReportsController extends ChangeNotifier {
   // ---------------------------------------------------------------------------
   // 3. Induction Report Data Builder
   // ---------------------------------------------------------------------------
-  Future<void> _fetchInductionReport() async {
+  Future<void> fetchInductionReport() async {
     final progressRes = await _repo.fetchInductionProductionProgress(
       operationId: _selectedOperationId,
     );
@@ -719,7 +915,7 @@ class ReportsController extends ChangeNotifier {
   // ---------------------------------------------------------------------------
   // 4. Tray & Trolley Report Data Builder
   // ---------------------------------------------------------------------------
-  Future<void> _fetchTrayTrolleyReport() async {
+  Future<void> fetchTrayTrolleyReport() async {
     final trayRes = await _repo.fetchTrayDetails();
 
     if (trayRes.success && trayRes.data is List<TrayDetail>) {

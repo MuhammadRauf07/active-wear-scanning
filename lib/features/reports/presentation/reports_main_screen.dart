@@ -6,8 +6,8 @@ import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
 import 'package:active_wear_scanning/features/reports/controller/reports_controller.dart';
 import 'package:active_wear_scanning/features/reports/presentation/sub_reports/work_order_report_view.dart';
 import 'package:active_wear_scanning/features/reports/presentation/sub_reports/batch_report_view.dart';
+import 'package:active_wear_scanning/features/reports/presentation/sub_reports/knit_plan_report_view.dart';
 import 'package:active_wear_scanning/features/reports/presentation/sub_reports/induction_report_view.dart';
-import 'package:active_wear_scanning/features/reports/presentation/sub_reports/tray_trolley_report_view.dart';
 
 class ReportsMainScreen extends StatelessWidget {
   const ReportsMainScreen({super.key});
@@ -37,8 +37,8 @@ class _ReportsMainScreenView extends StatelessWidget {
     final tabs = [
       {'label': 'Work Order Status', 'icon': Icons.assignment_rounded},
       {'label': 'Batch Report', 'icon': Icons.layers_rounded},
+      {'label': 'Knit Plan Report', 'icon': Icons.calendar_view_week_rounded},
       {'label': 'Induction Store', 'icon': Icons.warehouse_rounded},
-      {'label': 'Trays & Trolleys', 'icon': Icons.track_changes_rounded},
     ];
 
     return PopScope(
@@ -122,8 +122,8 @@ class _ReportsMainScreenView extends StatelessWidget {
                         children: [
                           WorkOrderReportView(controller: controller),
                           BatchReportView(controller: controller),
+                          KnitPlanReportView(controller: controller),
                           InductionReportView(controller: controller),
-                          TrayTrolleyReportView(controller: controller),
                         ],
                       ),
               ),
@@ -141,9 +141,9 @@ class _ReportsMainScreenView extends StatelessWidget {
       case 1:
         return controller.rawBatchItems.isEmpty;
       case 2:
-        return controller.inductionItems.isEmpty;
+        return false;
       case 3:
-        return controller.trayTrolleyItems.isEmpty;
+        return controller.workOrdersList.isEmpty;
       default:
         return true;
     }
