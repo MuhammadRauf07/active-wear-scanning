@@ -68,8 +68,13 @@ class LotMakingController extends ChangeNotifier {
     );
     notifyListeners();
 
-    if (wo?.id != null) {
-      await ensureWorkOrderColorsCached(wo!.id!);
+    if (_state.colors.isEmpty) {
+      await fetchColors();
+    }
+
+    final woId = wo?.id;
+    if (woId != null) {
+      await ensureWorkOrderColorsCached(woId);
     }
   }
 
@@ -113,8 +118,8 @@ class LotMakingController extends ChangeNotifier {
           );
           final items = res.data as List;
           for (final item in items) {
-            final detail = (item as Map)['workOrderLineDetail'];
-            if (detail != null) {
+            final detail = (item as Map)['workOrderLineDetail'] ?? item;
+            if (detail != null && detail is Map) {
               final colorDesc = detail['colorDescription']
                   ?.toString()
                   .trim()
@@ -148,6 +153,7 @@ class LotMakingController extends ChangeNotifier {
     }
     notifyListeners();
   }
+
 
   void selectTray(ProductionProgressResponseModel? tray) {
     _state = _state.copyWith(selectedTray: tray);
@@ -246,13 +252,13 @@ class LotMakingController extends ChangeNotifier {
   }
 
   List<LotColorModel> getFilteredColors() {
-    if (_state.selectedWorkOrder == null) return _state.colors;
+    if (_state.selectedWorkOrder == null) return [];
     final validColors =
         _state.workOrderValidColors[_state.selectedWorkOrder!.id];
-    if (validColors == null) return [];
+    if (validColors == null || validColors.isEmpty) return [];
 
     return _state.colors.where((color) {
-      final desc = color.segmentCode?.description?.toUpperCase();
+      final desc = color.segmentCode?.description?.trim().toUpperCase();
       return desc != null && validColors.contains(desc);
     }).toList();
   }
@@ -493,8 +499,8 @@ class LotMakingController extends ChangeNotifier {
             );
             final items = res.data as List;
             for (final item in items) {
-              final detail = (item as Map)['workOrderLineDetail'];
-              if (detail != null) {
+              final detail = (item as Map)['workOrderLineDetail'] ?? item;
+              if (detail != null && detail is Map) {
                 final colorDesc = detail['colorDescription']
                     ?.toString()
                     .trim()
@@ -610,6 +616,7 @@ class LotMakingController extends ChangeNotifier {
 
     if (result.success && result.data != null) {
       final colorsList = result.data as List<LotColorModel>;
+      dev.log('LotMakingController fetchColors: loaded ${colorsList.length} colors');
       LotColorModel? selected;
       if (existingBatch?.colorCode != null) {
         final editColorId = existingBatch!.colorCode!.id;
@@ -624,6 +631,7 @@ class LotMakingController extends ChangeNotifier {
         isLoadingColors: false,
       );
     } else {
+      dev.log('LotMakingController fetchColors error: ${result.message}');
       _state = _state.copyWith(
         isLoadingColors: false,
         errorMessage: result.message ?? 'Failed to fetch colors',

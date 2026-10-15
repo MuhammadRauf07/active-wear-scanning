@@ -241,19 +241,21 @@ class LotRepo {
     if (!result.success || result.data == null) return result;
 
     try {
-      final data = result.data as List;
-      final list = data
-          .map(
-            (item) => LotColorModel.fromJson(Map<String, dynamic>.from(item)),
-          )
-          .where(
-            (color) =>
-                color.segmentType?.description?.toUpperCase() == 'COLORS' ||
-                color.segmentType?.code?.toUpperCase() == 'COLORS',
-          )
-          .toList();
+      final List rawData = result.data is Map
+          ? (result.data['items'] ?? [])
+          : (result.data as List);
+      final list = <LotColorModel>[];
+      for (final item in rawData) {
+        if (item is Map) {
+          final color = LotColorModel.fromJson(Map<String, dynamic>.from(item));
+          if (color.segmentCode != null) {
+            list.add(color);
+          }
+        }
+      }
       return PlexApiResult(true, 200, "Success", list);
     } catch (e) {
+      dev.log("LotRepo fetchLotColors parsing error: $e");
       return PlexApiResult(false, 500, e.toString(), null);
     }
   }
@@ -315,6 +317,7 @@ class LotRepo {
     };
     return await _api.getList('/api/app/work-order-line-details', query: query);
   }
+
 
   Future<PlexApiResult> fetchItemRoutings(int itemDefId) async {
     final query = {'ItemDefId': itemDefId.toString()};

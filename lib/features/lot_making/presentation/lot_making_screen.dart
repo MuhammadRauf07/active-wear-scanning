@@ -908,7 +908,7 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
                                   hint: "Select color...",
                                   items: availableColors,
                                   selectedValue: state.selectedColor,
-                                  itemLabel: (c) => c.segmentCode?.description ?? '-',
+                                  itemLabel: (c) => c.segmentCode?.description ?? c.segmentCode?.code ?? '-',
                                   isReadOnly: state.scannedTrays.isNotEmpty,
                                   onChanged: (val) {
                                     HapticFeedbackHelper.buttonClick();
