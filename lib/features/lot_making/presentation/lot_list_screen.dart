@@ -721,6 +721,10 @@ class _LotListScreenState extends State<LotListScreen>
       final targetOpId = batchTargetOpId ?? progress?['operationId'];
       final dynamicLocatorId = batchTargetLocatorId;
 
+      final dyeingMachineId = (bh.machineId != null && bh.machineId! > 0)
+          ? bh.machineId
+          : progress?['machineId'];
+
       final wipData = {
         'subOperation': 'Batch Issue',
         'transactionDate': DateTime.now().toIso8601String(),
@@ -742,7 +746,7 @@ class _LotListScreenState extends State<LotListScreen>
         'shiftId': progress?['shiftId'] ?? bh.shiftId,
         'primaryTrayId': bl['trayId'],
         'secondaryTrayId': _trolleyDetailIdByLot[headerId],
-        'machineId': progress?['machineId'] ?? bh.machineId,
+        'machineId': dyeingMachineId,
         'planHeaderId': progress?['planHeaderId'],
         'locatorId': 3,
         'toLocatorId': dynamicLocatorId,
@@ -784,7 +788,7 @@ class _LotListScreenState extends State<LotListScreen>
         'shiftId': progress?['shiftId'] ?? bh.shiftId,
         'primaryTrayId': bl['trayId'],
         'secondaryTrayId': _trolleyDetailIdByLot[headerId],
-        'machineId': progress?['machineId'] ?? bh.machineId,
+        'machineId': dyeingMachineId,
         'planHeaderId': progress?['planHeaderId'],
         'locatorId': dynamicLocatorId,
         'batchHeaderId': headerId,

@@ -162,11 +162,22 @@ class LotMakingController extends ChangeNotifier {
 
   void removeScannedTray(int index) {
     if (index >= 0 && index < _state.scannedTrays.length) {
+      final removed = _state.scannedTrays[index];
       final updated = List<ProductionProgressResponseModel>.from(
         _state.scannedTrays,
       )..removeAt(index);
+
+      final updatedDbIds = Set<int>.from(_state.currentBatchDatabaseProgressIds);
+      final updatedLotProgIds = Set<int>.from(_state.lotProgressIds);
+      if (removed.productionProgress.id != null) {
+        updatedDbIds.remove(removed.productionProgress.id);
+        updatedLotProgIds.remove(removed.productionProgress.id);
+      }
+
       _state = _state.copyWith(
         scannedTrays: updated,
+        currentBatchDatabaseProgressIds: updatedDbIds,
+        lotProgressIds: updatedLotProgIds,
         clearReferenceRouting: updated.isEmpty,
       );
       notifyListeners();
@@ -882,6 +893,30 @@ class LotMakingController extends ChangeNotifier {
         }
       } else {
         batchHeaderId = existingBatch!.batchHeader.id!;
+        final newMachineId = _state.selectedMachine?.resource?.id ??
+            existingBatch!.batchHeader.machineId ??
+            0;
+        final newColorId = _state.selectedColor?.segmentCode?.id ??
+            existingBatch!.batchHeader.colorCodeId ??
+            0;
+        final newColorDesc = _state.selectedColor?.segmentCode?.description ??
+            existingBatch!.batchHeader.colorDescription ??
+            "N/A";
+
+        await _lotRepo.updateLotHeader(batchHeaderId, {
+          "planDate": existingBatch!.batchHeader.planDate ??
+              DateTime.now().toIso8601String(),
+          "colorDescription": newColorDesc,
+          "batchHeaderCode": batchCode,
+          "machineId": newMachineId,
+          "colorCode": newColorId,
+          "shiftId": _state.scannedTrays.isNotEmpty
+              ? _state.scannedTrays.first.shift?.id
+              : existingBatch!.batchHeader.shiftId,
+          "trayDetailId": existingBatch!.batchHeader.trayDetailId,
+          "lockFlag": false,
+          "concurrencyStamp": existingBatch!.batchHeader.concurrencyStamp,
+        });
       }
 
       if (batchHeaderId == 0) {
@@ -919,9 +954,17 @@ class LotMakingController extends ChangeNotifier {
                   )
                 : null;
             final int? progressId =
-                (lineMap['progressId'] ?? rawLineMap['progressId']) != null
+                (lineMap['progressId'] ??
+                 rawLineMap['progressId'] ??
+                 (rawLineMap['progress'] is Map
+                     ? rawLineMap['progress']['id']
+                     : null)) != null
                 ? int.tryParse(
-                    (lineMap['progressId'] ?? rawLineMap['progressId'])
+                    (lineMap['progressId'] ??
+                     rawLineMap['progressId'] ??
+                     (rawLineMap['progress'] is Map
+                         ? rawLineMap['progress']['id']
+                         : null))
                         .toString(),
                   )
                 : null;
@@ -931,40 +974,151 @@ class LotMakingController extends ChangeNotifier {
             }
 
             if (trayId != null && !currentScannedTrayIds.contains(trayId)) {
+              final Set<int> pIdsToReset = {};
               if (progressId != null && progressId > 0) {
-                final ppFetch = await _lotRepo.fetchProductionProgressById(
-                  progressId,
-                );
-                if (ppFetch.success && ppFetch.data != null) {
-                  final ppMap = Map<String, dynamic>.from(ppFetch.data as Map);
-                  ppMap['batchHeaderId'] = null;
-                  ppMap['batchLineId'] = null;
-                  ppMap.remove('id');
-                  ppMap.remove('progressCode');
-                  ppMap.remove('concurrencyStamp');
-                  ppMap.remove('creationTime');
-                  ppMap.remove('creatorId');
-                  ppMap.remove('lastModificationTime');
-                  ppMap.remove('lastModifierId');
-                  await _lotRepo.updateProductionProgress(progressId, ppMap);
+                pIdsToReset.add(progressId);
+              }
+              for (final pt in _state.productionProgressTrays) {
+                if (pt.primaryTrayModel.id == trayId) {
+                  final ptId = pt.productionProgress.id;
+                  if (ptId != null && ptId > 0) {
+                    if (pt.productionProgress.batchHeaderId == batchHeaderId ||
+                        (progressId != null && ptId == progressId)) {
+                      pIdsToReset.add(ptId);
+                    }
+                  }
                 }
+              }
+
+              for (final pId in pIdsToReset) {
+                final ppFetch = await _lotRepo.fetchProductionProgressById(pId);
+                if (ppFetch.success && ppFetch.data != null) {
+                  final rawPP = Map<String, dynamic>.from(ppFetch.data as Map);
+                  final ppInner = rawPP.containsKey('productionProgress') &&
+                          rawPP['productionProgress'] is Map
+                      ? Map<String, dynamic>.from(
+                          rawPP['productionProgress'] as Map,
+                        )
+                      : rawPP;
+                  final ppObj = ProductionProgress.fromJson(ppInner);
+                  final ppPayload = ppObj.toJson();
+
+                  ppPayload['batchHeaderId'] = null;
+                  ppPayload['batchLineId'] = null;
+                  ppPayload['batchLinesId'] = null;
+                  if (ppPayload['transactionType'] == 6) {
+                    ppPayload['transactionType'] = 1;
+                  }
+
+                  ppPayload.remove('id');
+                  ppPayload.remove('progressCode');
+                  ppPayload.remove('concurrencyStamp');
+                  ppPayload.remove('creationTime');
+                  ppPayload.remove('creatorId');
+                  ppPayload.remove('lastModificationTime');
+                  ppPayload.remove('lastModifierId');
+
+                  await _lotRepo.updateProductionProgress(pId, ppPayload);
+                }
+              }
+
+              if (pIdsToReset.isNotEmpty) {
+                final updatedTrays = _state.productionProgressTrays.map((t) {
+                  if (pIdsToReset.contains(t.productionProgress.id)) {
+                    final p = t.productionProgress;
+                    final clearedPP = ProductionProgress(
+                      subOperation: p.subOperation,
+                      date: p.date,
+                      transactionType:
+                          p.transactionType == 6 ? 1 : p.transactionType,
+                      operatorDescription: p.operatorDescription,
+                      primaryQuantity: p.primaryQuantity,
+                      primaryUOM: p.primaryUOM,
+                      secondaryQuantity: p.secondaryQuantity,
+                      secondaryUOM: p.secondaryUOM,
+                      wipStatus: p.wipStatus,
+                      gbsFlag: p.gbsFlag,
+                      pbsFlag: p.pbsFlag,
+                      isLastProcess: p.isLastProcess,
+                      reworkFlag: p.reworkFlag,
+                      isStarted: p.isStarted,
+                      draftFlag: p.draftFlag,
+                      startDate: p.startDate,
+                      progressCode: p.progressCode,
+                      productGrade: p.productGrade,
+                      productNature: p.productNature,
+                      operationId: p.operationId,
+                      workOrderHeaderId: p.workOrderHeaderId,
+                      workOrderLineId: p.workOrderLineId,
+                      processedItemId: p.processedItemId,
+                      itemId: p.itemId,
+                      shiftId: p.shiftId,
+                      primaryTrayId: p.primaryTrayId,
+                      secondaryTrayId: p.secondaryTrayId,
+                      machineId: p.machineId,
+                      planHeaderId: p.planHeaderId,
+                      locatorId: p.locatorId,
+                      batchHeaderId: null,
+                      batchLinesId: null,
+                      concurrencyStamp: p.concurrencyStamp,
+                      lastModificationTime: p.lastModificationTime,
+                      lastModifierId: p.lastModifierId,
+                      creationTime: p.creationTime,
+                      creatorId: p.creatorId,
+                      id: p.id,
+                      remarks: p.remarks,
+                      waste: p.waste,
+                      requiredQty: p.requiredQty,
+                      defectListId: p.defectListId,
+                      holdFlag: p.holdFlag,
+                      holdDate: p.holdDate,
+                      unHoldDate: p.unHoldDate,
+                    );
+                    return ProductionProgressResponseModel(
+                      productionProgress: clearedPP,
+                      operation: t.operation,
+                      shift: t.shift,
+                      machineModel: t.machineModel,
+                      workOrderHeader: t.workOrderHeader,
+                      workOrderLine: t.workOrderLine,
+                      primaryTrayModel: t.primaryTrayModel,
+                      item: t.item,
+                      processedItem: t.processedItem,
+                      planHeader: t.planHeader,
+                      batchHeader: null,
+                    );
+                  }
+                  return t;
+                }).toList();
+                _state = _state.copyWith(productionProgressTrays: updatedTrays);
               }
 
               final trayData = await _lotRepo.fetchTrayDetailById(trayId);
               if (trayData.success && trayData.data != null) {
-                final tMap = Map<String, dynamic>.from(trayData.data as Map);
+                final rawTray = Map<String, dynamic>.from(trayData.data as Map);
+                final tMap = rawTray.containsKey('trayDetail') &&
+                        rawTray['trayDetail'] is Map
+                    ? Map<String, dynamic>.from(rawTray['trayDetail'] as Map)
+                    : rawTray;
                 tMap['batchHeaderId'] = null;
                 tMap['batchLineId'] = null;
+                tMap['batchLinesId'] = null;
+                tMap.remove('id');
                 tMap.remove('creatorId');
                 tMap.remove('creationTime');
                 tMap.remove('lastModifierId');
                 tMap.remove('lastModificationTime');
+                tMap.remove('concurrencyStamp');
                 await _lotRepo.updateTrayDetails(trayId, tMap);
               }
             }
           }
         }
       }
+
+      final dyeingMachineId = _state.selectedMachine?.resource?.id ??
+          existingBatch?.batchHeader.machineId ??
+          0;
 
       for (int i = 0; i < _state.scannedTrays.length; i++) {
         final tray = _state.scannedTrays[i];
@@ -986,6 +1140,9 @@ class LotMakingController extends ChangeNotifier {
 
           newPPPayload['batchHeaderId'] = batchHeaderId;
           newPPPayload['transactionType'] = 6;
+          if (dyeingMachineId > 0) {
+            newPPPayload['machineId'] = dyeingMachineId;
+          }
 
           newPPPayload.remove('id');
           newPPPayload.remove('progressCode');
@@ -1058,6 +1215,9 @@ class LotMakingController extends ChangeNotifier {
           final ppPayload = pp.toJson();
           ppPayload['batchHeaderId'] = batchHeaderId;
           ppPayload['transactionType'] = 6;
+          if (dyeingMachineId > 0) {
+            ppPayload['machineId'] = dyeingMachineId;
+          }
 
           ppPayload.remove('id');
           ppPayload.remove('progressCode');
@@ -1134,7 +1294,10 @@ class LotMakingController extends ChangeNotifier {
               );
               final ppMap = responseModel.productionProgress.toJson();
               ppMap['batchLineId'] = batchLineDbId;
-              ppMap.remove('batchLinesId');
+              ppMap['batchLinesId'] = batchLineDbId;
+              if (dyeingMachineId > 0) {
+                ppMap['machineId'] = dyeingMachineId;
+              }
 
               ppMap.remove('id');
               ppMap.remove('progressCode');
