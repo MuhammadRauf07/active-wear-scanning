@@ -50,7 +50,9 @@ class ScanningTrayRow extends StatelessWidget {
           Expanded(
             flex: 2,
             child: Text(
-              tray.workOrderHeader?.workOrderCode ?? '-',
+              (tray.workOrderHeader?.description.isNotEmpty == true)
+                  ? tray.workOrderHeader!.description
+                  : (tray.workOrderHeader?.workOrderCode ?? '-'),
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 10, color: Colors.black),
             ),

@@ -1,6 +1,7 @@
 import 'package:active_wear_scanning/core/api/services/api_service.dart';
 import 'package:active_wear_scanning/core/api/plex-result/plex_api_result.dart';
 import 'package:active_wear_scanning/features/common-models/common_models.dart';
+import 'package:active_wear_scanning/features/wip/model/wip_model.dart';
 
 class ProcessingWasteRepo {
   final ApiService _api = ApiService();
@@ -21,6 +22,19 @@ class ProcessingWasteRepo {
         }
         return Operation.fromJson(opJson);
       }).where((op) => op.processNature == 1).toList();
+      return PlexApiResult(true, 200, "Success", list);
+    } catch (e) {
+      return PlexApiResult(false, 500, e.toString(), null);
+    }
+  }
+
+  Future<PlexApiResult> fetchLocators() async {
+    final result = await _api.getList('/api/app/locators?MaxResultCount=1000');
+    if (!result.success || result.data == null) return result;
+
+    try {
+      final List rawData = result.data is Map ? (result.data['items'] ?? []) : result.data;
+      final list = rawData.map((item) => LocatorResponse.fromJson(Map<String, dynamic>.from(item as Map))).toList();
       return PlexApiResult(true, 200, "Success", list);
     } catch (e) {
       return PlexApiResult(false, 500, e.toString(), null);

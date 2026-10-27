@@ -1096,13 +1096,17 @@ class _ProcessingBatchDetailsViewState extends State<_ProcessingBatchDetailsView
                           ),
                         ),
                       );
-                      if (mounted && result == true) {
-                        Navigator.pop(context, {
-                          'submitted': true,
-                          'targetOps': [if (controller.nextOperationId != null) controller.nextOperationId!],
-                          'isReassigned': true,
-                          'isRework': false,
-                        });
+                      if (mounted) {
+                        if (result == true) {
+                          Navigator.pop(context, {
+                            'submitted': true,
+                            'targetOps': [if (controller.nextOperationId != null) controller.nextOperationId!],
+                            'isReassigned': true,
+                            'isRework': false,
+                          });
+                        } else {
+                          await controller.fetchTrays();
+                        }
                       }
                     },
                   ),

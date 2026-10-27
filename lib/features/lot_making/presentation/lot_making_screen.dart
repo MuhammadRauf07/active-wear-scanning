@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -229,7 +228,7 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
                             child: Row(
                               children: [
                                 Expanded(flex: 8, child: Text(tray.primaryTrayModel.trayCode ?? 'N/A', textAlign: TextAlign.center, style: blueCellStyle)),
-                                Expanded(flex: 4, child: Text(tray.workOrderHeader.workOrderCode ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
+                                Expanded(flex: 4, child: Text(tray.workOrderHeader.description.isNotEmpty ? tray.workOrderHeader.description : (tray.workOrderHeader.workOrderCode ?? 'N/A'), textAlign: TextAlign.center, style: cellStyle)),
                                 Expanded(flex: 3, child: Text(tray.item.sizeDescription ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
                                 Expanded(flex: 3, child: Text(actualVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
                                 Expanded(flex: 3, child: Text(alreadyScannedVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle.copyWith(color: Colors.orange.shade800))),
@@ -359,7 +358,7 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'WORK ORDER - ${woCode.isNotEmpty ? woCode : 'N/A'}',
+                              'WORK ORDER - ${state.selectedWorkOrder?.description.isNotEmpty == true ? state.selectedWorkOrder!.description : (woCode.isNotEmpty ? woCode : 'N/A')}',
                               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF1B64A3)),
                             ),
                           ],
@@ -409,7 +408,7 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
                             child: Row(
                               children: [
                                 Expanded(flex: 8, child: Text(tray.primaryTrayModel.trayCode ?? 'N/A', textAlign: TextAlign.center, style: blueCellStyle)),
-                                Expanded(flex: 4, child: Text(tray.workOrderHeader.workOrderCode ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
+                                Expanded(flex: 4, child: Text(tray.workOrderHeader.description.isNotEmpty ? tray.workOrderHeader.description : (tray.workOrderHeader.workOrderCode ?? 'N/A'), textAlign: TextAlign.center, style: cellStyle)),
                                 Expanded(flex: 3, child: Text(tray.item.sizeDescription ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
                                 Expanded(flex: 3, child: Text(actualVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
                                 Expanded(flex: 3, child: Text(alreadyScannedVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle.copyWith(color: Colors.orange.shade800))),
@@ -453,10 +452,11 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
         AppSnackBar.showError(context, message: 'Please enter a valid tubes value for all trays.');
         return;
       }
-      final maxVal = (state.scannedTrays[i].productionProgress.primaryQuantity ?? 0.0).toInt();
+      final qtys = controller.getTrayQuantities(state.scannedTrays[i]);
+      final maxVal = (qtys['remaining'] ?? state.scannedTrays[i].productionProgress.primaryQuantity ?? 0.0).toInt();
       if (val > maxVal) {
         HapticFeedbackHelper.scanError();
-        AppSnackBar.showError(context, message: 'Tubes count cannot exceed tray capacity ($maxVal).');
+        AppSnackBar.showError(context, message: 'Tubes count cannot exceed remaining tray capacity ($maxVal).');
         return;
       }
     }
@@ -879,8 +879,8 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
                                 hint: "Select work order...",
                                 items: availableWOs,
                                 selectedValue: state.selectedWorkOrder,
-                                itemLabel: (wo) => wo.workOrderCode ?? '-',
-                                isReadOnly: false,
+                                itemLabel: (wo) => wo.description.isNotEmpty ? wo.description : (wo.workOrderCode.isNotEmpty ? wo.workOrderCode : '-'),
+                                isReadOnly: state.scannedTrays.isNotEmpty,
                                 onChanged: (val) async {
                                   HapticFeedbackHelper.buttonClick();
                                   AppLoader.show(context, message: 'Loading color details...');
@@ -1112,7 +1112,7 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
       child: Row(
         children: [
           Expanded(flex: 8, child: Text(tray.primaryTrayModel.trayCode ?? 'N/A', textAlign: TextAlign.center, style: blueCellStyle)),
-          Expanded(flex: 4, child: Text(tray.workOrderHeader.workOrderCode ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
+          Expanded(flex: 4, child: Text(tray.workOrderHeader.description.isNotEmpty ? tray.workOrderHeader.description : (tray.workOrderHeader.workOrderCode ?? 'N/A'), textAlign: TextAlign.center, style: cellStyle)),
           Expanded(flex: 3, child: Text(tray.item.sizeDescription ?? 'N/A', textAlign: TextAlign.center, style: cellStyle)),
           Expanded(flex: 3, child: Text(actualVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle)),
           Expanded(flex: 3, child: Text(alreadyScannedVal.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle.copyWith(color: Colors.orange.shade800))),
@@ -1208,7 +1208,7 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
     final Map<String, Map<String, dynamic>> woGroups = {};
 
     for (final tray in allEligibleTrays) {
-      final code = tray.workOrderHeader.workOrderCode ?? 'Unknown WO';
+      final code = tray.workOrderHeader.description.isNotEmpty ? tray.workOrderHeader.description : (tray.workOrderHeader.workOrderCode ?? 'Unknown WO');
       final itemDesc = tray.item.description ?? 'N/A';
       final sizeDesc = tray.item.sizeDescription ?? 'N/A';
       final lineId = tray.productionProgress.workOrderLineId ?? tray.workOrderLine?.id;
@@ -1235,7 +1235,7 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
     for (int i = 0; i < state.scannedTrays.length; i++) {
       final tray = state.scannedTrays[i];
       final qty = double.tryParse(_quantityControllers[i].text) ?? 0;
-      final code = tray.workOrderHeader.workOrderCode ?? 'Unknown WO';
+      final code = tray.workOrderHeader.description.isNotEmpty ? tray.workOrderHeader.description : (tray.workOrderHeader.workOrderCode ?? 'Unknown WO');
       final itemDesc = tray.item.description ?? 'N/A';
       final sizeDesc = tray.item.sizeDescription ?? 'N/A';
       final lineId = tray.productionProgress.workOrderLineId ?? tray.workOrderLine?.id;
@@ -1338,7 +1338,7 @@ class _LotMakingScreenViewState extends State<_LotMakingScreenView> {
                       final double assigned = lineId != null ? controller.getAlreadyAssignedTubesForWorkOrderLine(lineId) : 0.0;
                       final currentTubes = data['tubes'] as double;
                       final double totalScanned = currentTubes + assigned;
-                      final double remTubes = planVal > 0.0 ? (planVal - totalScanned) : 0.0;
+                      final double remTubes = planVal > 0.0 ? (maxAllowed - totalScanned) : 0.0;
                       final remStr = planVal > 0.0 ? remTubes.toStringAsFixed(0) : '-';
                       final weightVal = (data['weight'] as double);
 
@@ -1532,6 +1532,9 @@ class _LotOverlayDropdownState<T> extends State<_LotOverlayDropdown<T>> with Sin
     final filteredItems = widget.items.where((item) {
       final label = (widget.itemLabelInList != null ? widget.itemLabelInList!(item) : widget.itemLabel(item)).toLowerCase();
       final query = _searchQuery.toLowerCase();
+      if (item is WorkOrderHeader) {
+        return label.contains(query) || item.workOrderCode.toLowerCase().contains(query);
+      }
       return label.contains(query);
     }).toList();
 
@@ -1585,6 +1588,7 @@ class _LotOverlayDropdownState<T> extends State<_LotOverlayDropdown<T>> with Sin
               itemBuilder: (context, index) {
                 final item = filteredItems[index];
                 final isSelected = item == widget.selectedValue;
+                final isWO = item is WorkOrderHeader && item.description.isNotEmpty && item.workOrderCode.isNotEmpty;
 
                 return InkWell(
                   onTap: () {
@@ -1597,10 +1601,24 @@ class _LotOverlayDropdownState<T> extends State<_LotOverlayDropdown<T>> with Sin
                     child: Row(
                       children: [
                         Expanded(
-                          child: Text(
-                            widget.itemLabelInList != null ? widget.itemLabelInList!(item) : widget.itemLabel(item),
-                            style: TextStyle(color: isSelected ? const Color(0xFF1B64A3) : const Color(0xFF263238), fontSize: 12, fontWeight: FontWeight.w700),
-                          ),
+                          child: isWO
+                              ? Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      widget.itemLabelInList != null ? widget.itemLabelInList!(item) : widget.itemLabel(item),
+                                      style: TextStyle(color: isSelected ? const Color(0xFF1B64A3) : const Color(0xFF263238), fontSize: 12, fontWeight: FontWeight.w700),
+                                    ),
+                                    Text(
+                                      item.workOrderCode,
+                                      style: TextStyle(color: Colors.grey.shade500, fontSize: 10, fontWeight: FontWeight.w400),
+                                    ),
+                                  ],
+                                )
+                              : Text(
+                                  widget.itemLabelInList != null ? widget.itemLabelInList!(item) : widget.itemLabel(item),
+                                  style: TextStyle(color: isSelected ? const Color(0xFF1B64A3) : const Color(0xFF263238), fontSize: 12, fontWeight: FontWeight.w700),
+                                ),
                         ),
                         if (isSelected) const Icon(Icons.check_rounded, color: Color(0xFF1B64A3), size: 16),
                       ],

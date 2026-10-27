@@ -243,7 +243,9 @@ class InductionController extends ChangeNotifier {
 
     final newTray = GBSScannedTray(
       trayCode: match.primaryTrayModel.trayCode ?? '-',
-      workOrderCode: match.workOrderHeader.workOrderCode,
+      workOrderCode: match.workOrderHeader.description.isNotEmpty
+          ? match.workOrderHeader.description
+          : match.workOrderHeader.workOrderCode,
       itemDescription: match.item.description,
       sizeDescription: sizeDesc,
       colorDescription: colorDesc,

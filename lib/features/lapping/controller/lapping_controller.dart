@@ -59,6 +59,7 @@ class LappingController extends ChangeNotifier {
       final res = await _lappingRepo.fetchProductionProgress({
         'BatchHeaderId': batchHeaderId.toString(),
         'TransactionType': '2',
+        'MaxResultCount': '1000',
       });
 
       if (res.success && res.data != null) {
@@ -169,11 +170,8 @@ class LappingController extends ChangeNotifier {
         for (final tray in rawTrays) {
           if (tray.productionProgress.transactionType != 2) continue;
 
-          // Detect waste records (no trayId, waste > 0, or subOperation = 'waste')
-          if ((tray.productionProgress.subOperation ?? '').toLowerCase() == 'waste' ||
-              (tray.productionProgress.waste ?? 0) > 0 ||
-              tray.productionProgress.locatorId == 18 ||
-              tray.productionProgress.primaryTrayId == null) {
+          // 1. Detect Reassign-screen waste records: strictly identified by locatorId == 23
+          if (tray.productionProgress.locatorId == 23) {
             final woId = tray.workOrderHeader.id;
             final itemDesc = tray.processedItem?.description ?? tray.item.description;
             if (itemDesc.isNotEmpty) {
@@ -186,6 +184,14 @@ class LappingController extends ChangeNotifier {
             continue;
           }
 
+          // 2. Skip main screen scrap records (locator 18, etc.) or records without a tray
+          if (tray.productionProgress.locatorId == 18 ||
+              tray.productionProgress.primaryTrayId == null ||
+              (tray.productionProgress.subOperation ?? '').toLowerCase() == 'waste') {
+            continue;
+          }
+
+          // 3. Process active incoming trays for current operation (Lapping)
           if (tray.productionProgress.operationId != currentOperationId) continue;
 
           final code = tray.primaryTrayModel.trayCode ?? 'UNKNOWN';
@@ -194,38 +200,23 @@ class LappingController extends ChangeNotifier {
           }
         }
 
-        // Determine previous process operationId to find original incoming quantities
-        final prevOps = rawTrays
-            .map((t) => t.productionProgress.operationId)
-            .where((opId) => opId != null && opId < currentOperationId)
-            .toList();
-        final int? prevOpId = prevOps.isEmpty ? null : prevOps.reduce((a, b) => a! > b! ? a : b);
+        final fetchedTrays = uniqueTrays.values.toList();
 
-        final Map<String, double> originalPiecesMap = {};
-        for (final tray in rawTrays) {
-          final isTargetOp = prevOpId != null
-              ? (tray.productionProgress.operationId == prevOpId)
-              : (tray.productionProgress.operationId == currentOperationId &&
-                 tray.productionProgress.primaryTrayId != null);
-
-          if (isTargetOp &&
-              tray.productionProgress.transactionType == 2 &&
-              (tray.productionProgress.subOperation ?? '').toLowerCase() != 'waste' &&
-              tray.productionProgress.locatorId != 18) {
-            final woId = tray.workOrderHeader.id;
-            final itemDesc = tray.processedItem?.description ?? tray.item.description;
-            if (itemDesc.isNotEmpty) {
-              final compositeId = '${woId}_$itemDesc';
-              final double trayTubes = (tray.productionProgress.secondaryQuantity ?? tray.productionProgress.primaryQuantity ?? 0.0).toDouble();
-              originalPiecesMap[compositeId] = (originalPiecesMap[compositeId] ?? 0.0) + trayTubes;
-            }
+        // Calculate available usable pieces for each work order from active trays currently in Lapping
+        final Map<String, double> availablePiecesMap = {};
+        for (final tray in fetchedTrays) {
+          final woId = tray.workOrderHeader.id;
+          final itemDesc = tray.processedItem?.description ?? tray.item.description;
+          if (itemDesc.isNotEmpty) {
+            final compositeId = '${woId}_$itemDesc';
+            final double trayTubes = (tray.productionProgress.secondaryQuantity ?? tray.productionProgress.primaryQuantity ?? 0.0).toDouble();
+            availablePiecesMap[compositeId] = (availablePiecesMap[compositeId] ?? 0.0) + trayTubes;
           }
         }
 
-        final fetchedTrays = uniqueTrays.values.toList();
         final Map<String, WorkOrderSummary> summaries = {};
 
-        // Discover and initialize all work order summaries based on original quantities
+        // Discover and initialize all work order summaries based on currently available quantities
         for (final tray in rawTrays) {
           final woId = tray.workOrderHeader.id;
           final itemDesc = tray.processedItem?.description ?? tray.item.description;
@@ -233,14 +224,16 @@ class LappingController extends ChangeNotifier {
           final compositeId = '${woId}_$itemDesc';
 
           if (!summaries.containsKey(compositeId)) {
-            final origQty = originalPiecesMap[compositeId] ?? 0.0;
+            final availQty = availablePiecesMap[compositeId] ?? 0.0;
             summaries[compositeId] = WorkOrderSummary(
               id: compositeId,
-              description: tray.workOrderHeader.description,
+              description: tray.workOrderHeader.description.isNotEmpty
+                  ? tray.workOrderHeader.description
+                  : (tray.workOrderHeader.workOrderCode.isNotEmpty ? tray.workOrderHeader.workOrderCode : 'WO #${tray.workOrderHeader.id}'),
               componentDescription: itemDesc,
               trayCount: 0,
               cumulativePieces: 0.0,
-              originalPieces: origQty,
+              originalPieces: availQty,
             );
           }
         }
@@ -314,8 +307,10 @@ class LappingController extends ChangeNotifier {
     double totalScanned = currentWOTrays.fold(0, (sum, t) =>
         sum + (_state.trayOverrideQuantities[t.primaryTrayModel.trayCode?.toLowerCase() ?? ''] ?? 0));
 
-    if ((totalScanned + inputPcs) > activeSummary.cumulativePieces) {
-      return 'Limit exceeded! Max: ${activeSummary.cumulativePieces}';
+    final double currentWaste = _state.itemWasteQuantities[_state.selectedWorkOrderId] ?? 0.0;
+    if ((totalScanned + inputPcs + currentWaste) > activeSummary.cumulativePieces) {
+      final double remaining = activeSummary.cumulativePieces - totalScanned - currentWaste;
+      return 'Limit exceeded! Remaining available: ${remaining > 0 ? remaining.toInt() : 0} (Max: ${activeSummary.cumulativePieces.toInt()}${currentWaste > 0 ? ", Waste: ${currentWaste.toInt()}" : ""})';
     }
 
     LappingModel? matchedTray = _state.trays.where((t) => t.primaryTrayModel.trayCode?.toLowerCase() == trayCode).firstOrNull ??
@@ -632,10 +627,10 @@ class LappingController extends ChangeNotifier {
         if ((reassignedQty + wasteQty) != originalQty) {
           throw Exception(
             'Quantity mismatch for "${wo.componentDescription}".\n'
-            'Came from previous process: ${originalQty.toInt()} tubes\n'
+            'Current batch tubes to reassign: ${originalQty.toInt()} tubes\n'
             'Reassigned scanned quantity: ${reassignedQty.toInt()} tubes\n'
             'Waste quantity entered: ${wasteQty.toInt()} tubes\n'
-            'Total Scanned + Waste must equal the original incoming quantity.',
+            'Total Scanned + Waste must equal the batch quantity (${originalQty.toInt()} tubes).',
           );
         }
       }
@@ -1326,11 +1321,11 @@ class LappingController extends ChangeNotifier {
 
                 updateWasteJson['subOperation'] = 'Waste';
                 updateWasteJson['transactionType'] = 2;
-                updateWasteJson['locatorId'] = 18;
+                updateWasteJson['locatorId'] = 23;
                 updateWasteJson['primaryQuantity'] = wastePrimaryQty.round();
                 updateWasteJson['secondaryQuantity'] = wasteQty.round();
                 updateWasteJson['waste'] = wasteQty.round();
-                updateWasteJson['wipStatus'] = 1; // Closed scrap record in locator 18
+                updateWasteJson['wipStatus'] = 1; // Closed scrap record in locator 23
                 updateWasteJson['draftFlag'] = isDraft;
                 updateWasteJson['draftStatus'] = isDraft;
                 updateWasteJson.remove('id');
@@ -1361,11 +1356,11 @@ class LappingController extends ChangeNotifier {
                 "gbsFlag": false,
                 "productGrade": 0,
                 "productNature": 0,
-                "wipStatus": 1, // Closed scrap record in locator 18
+                "wipStatus": 1, // Closed scrap record in locator 23
                 "date": DateTime.now().toIso8601String(),
                 "operatorDescription": "system",
                 "operationId": currentOperationId,
-                "locatorId": 18,
+                "locatorId": 23,
                 "batchHeaderId": batchHeaderId,
                 "workOrderHeaderId": match.workOrderHeader.id,
                 "workOrderLineId": match.workOrderLine.id,
@@ -1403,14 +1398,18 @@ class LappingController extends ChangeNotifier {
           (nextOperationId == null || r.productionProgress.operationId != nextOperationId) &&
           (r.productionProgress.subOperation ?? '').toLowerCase() != 'handover' &&
           (r.productionProgress.subOperation ?? '').toLowerCase() != 'waste' &&
-          r.productionProgress.locatorId != 18
+          r.productionProgress.locatorId != 18 &&
+          r.productionProgress.locatorId != 23 &&
+          r.productionProgress.locatorId != 8
         ).toList();
       }
       if (traysToClose.isEmpty) {
         traysToClose = _state.trays.where((t) =>
           (t.productionProgress.subOperation ?? '').toLowerCase() != 'handover' &&
           (t.productionProgress.subOperation ?? '').toLowerCase() != 'waste' &&
-          t.productionProgress.locatorId != 18
+          t.productionProgress.locatorId != 18 &&
+          t.productionProgress.locatorId != 23 &&
+          t.productionProgress.locatorId != 8
         ).toList();
       }
 
@@ -1437,8 +1436,8 @@ class LappingController extends ChangeNotifier {
               final int? locId = closeJson['locatorId'] as int? ?? realLappingPP.productionProgress.locatorId;
               final String subOp = (closeJson['subOperation'] ?? realLappingPP.productionProgress.subOperation ?? '').toString().toLowerCase();
 
-              // Do not update transactionType to 3 for waste entries (locatorId 18)
-              if (locId != 18 && subOp != 'waste') {
+              // Do not update transactionType to 3 for waste entries (locatorId 18, 23, 8)
+              if (locId != 18 && locId != 23 && locId != 8 && subOp != 'waste') {
                 closeJson['transactionType'] = 3;
                 closeJson['wipStatus'] = 1;
               }

@@ -786,7 +786,8 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
     final sumPrimaryQty = controller.getSumPrimaryQuantityForWorkOrder(plan.workOrderLineId);
     final remainingWoPlanQty = maxAllowed - sumPrimaryQty - scannedTubesSum;
 
-    addField('Work Order Code', Icons.qr_code_rounded, 'WORK ORDER', workOrder.workOrderCode);
+    final woDisplay = workOrder.description.isNotEmpty ? workOrder.description : workOrder.workOrderCode;
+    addField('Work Order Description', Icons.description_outlined, 'WORK ORDER', woDisplay);
     addField('Work Order Date', Icons.event_note_rounded, 'WORK ORDER DATE', formatDate(workOrder.workOrderDate));
     addField('Plan Date', Icons.calendar_today_rounded, 'PLAN DATE', formatDate(plan.planDate));
     addField('Shift Code', Icons.timer_rounded, 'SHIFT', planLine.shift.code);
@@ -1185,7 +1186,27 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
                         ),
                       ],
                     ),
-                    const Divider(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      margin: const EdgeInsets.only(top: 4, bottom: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.qr_code_scanner_rounded, size: 14, color: Color(0xFF64748B)),
+                          SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Read-only list • Scan tray barcode to attach',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
                     Expanded(
                       child: availableTrays.isEmpty && !isLoadingMore
                           ? const Center(
@@ -1245,18 +1266,23 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
                                               ),
                                             ),
                                           )
-                                        : const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF94A3B8)),
-                                    onTap: isAlreadyScanned
-                                        ? null
-                                        : () async {
-                                            Navigator.pop(context);
-                                            final err = await controller.validateAndAddTray(code, _overrideQuantityController.text);
-                                            if (err != null && mounted) {
-                                              _showError(err);
-                                            } else {
-                                              HapticFeedbackHelper.scanSuccess();
-                                            }
-                                          },
+                                        : Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFE8F5E9),
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: const Text(
+                                              'AVAILABLE',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w800,
+                                                color: Color(0xFF2E7D32),
+                                                letterSpacing: 0.5,
+                                              ),
+                                            ),
+                                          ),
+                                    onTap: null, // Read-only list: trays must be attached via barcode scanner
                                   ),
                                 );
                               },
@@ -1565,7 +1591,7 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
                                   child: Text(
                                     item.item.description.isNotEmpty
                                         ? item.item.description
-                                        : (item.workOrderHeader.workOrderCode ?? 'N/A'),
+                                        : (item.workOrderHeader.description.isNotEmpty ? item.workOrderHeader.description : (item.workOrderHeader.workOrderCode ?? 'N/A')),
                                     maxLines: 1,
                                     textAlign: TextAlign.center,
                                     overflow: TextOverflow.ellipsis,

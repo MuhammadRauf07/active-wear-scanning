@@ -34,7 +34,9 @@ class BatchScanSummary extends StatelessWidget {
       if (t.productionProgress.isStarted == true) startedCount++;
       if (t.productionProgress.reworkFlag == true) reworkCount++;
 
-      final woCode = t.workOrderHeader.workOrderCode;
+      final woCode = t.workOrderHeader.description.isNotEmpty
+          ? t.workOrderHeader.description
+          : (t.workOrderHeader.workOrderCode.isNotEmpty ? t.workOrderHeader.workOrderCode : 'WO #${t.workOrderHeader.id}');
       byWO.putIfAbsent(woCode, () => []).add(t);
     }
 

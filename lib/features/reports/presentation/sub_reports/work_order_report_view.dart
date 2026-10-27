@@ -112,10 +112,12 @@ class _WorkOrderReportViewState extends State<WorkOrderReportView> {
                     color: Color(0xFF0F172A),
                   ),
                   items: uniqueWOs.values.map((wo) {
-                    final code = wo.workOrderCode.isNotEmpty ? wo.workOrderCode : 'WO #${wo.id}';
+                    final label = wo.description.isNotEmpty
+                        ? wo.description
+                        : (wo.workOrderCode.isNotEmpty ? wo.workOrderCode : 'WO #${wo.id}');
                     return DropdownMenuItem<int>(
                       value: wo.id,
-                      child: Text(code),
+                      child: Text(label, overflow: TextOverflow.ellipsis),
                     );
                   }).toList(),
                   onChanged: (id) {
@@ -304,7 +306,7 @@ class _WorkOrderReportViewState extends State<WorkOrderReportView> {
             const SizedBox(height: 4),
             Text(
               controller.selectedWorkOrder != null
-                  ? 'Work Order: ${controller.selectedWorkOrder!.workOrderCode}'
+                  ? 'Work Order: ${controller.selectedWorkOrder!.description.isNotEmpty ? controller.selectedWorkOrder!.description : controller.selectedWorkOrder!.workOrderCode}'
                   : '',
               style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
             ),
@@ -526,7 +528,7 @@ class _WorkOrderReportViewState extends State<WorkOrderReportView> {
             backgroundColor: const Color(0xFF0F3D69),
             foregroundColor: Colors.white,
             title: Text(
-              'Work Order: ${controller.selectedWorkOrder?.workOrderCode ?? ""}',
+              'Work Order: ${controller.selectedWorkOrder != null ? (controller.selectedWorkOrder!.description.isNotEmpty ? controller.selectedWorkOrder!.description : controller.selectedWorkOrder!.workOrderCode) : ""}',
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
             ),
             actions: [

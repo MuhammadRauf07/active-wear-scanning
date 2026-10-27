@@ -35,9 +35,13 @@ class ProductionProgressResponseModel {
     // Greedy flag capture: if flags are at the root, override the nested ones
     final bool? rootRework = json['reworkFlag'] as bool?;
     final bool? rootReassigned = json['isReAssigned'] as bool?;
+    final int? rootLocatorId = int.tryParse(json['locatorId']?.toString() ?? '') ??
+        int.tryParse(json['locator']?['id']?.toString() ?? '') ??
+        int.tryParse(json['productionProgress']?['locatorId']?.toString() ?? '');
     
     final finalPP = pp.copyWith(
       reworkFlag: rootRework ?? pp.reworkFlag,
+      locatorId: rootLocatorId ?? pp.locatorId,
     );
     
     final finalPTM = ptm.copyWith(

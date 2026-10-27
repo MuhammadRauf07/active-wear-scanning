@@ -111,10 +111,12 @@ class _InductionReportViewState extends State<InductionReportView> {
                     color: Color(0xFF0F172A),
                   ),
                   items: uniqueWOs.values.map((wo) {
-                    final code = wo.workOrderCode.isNotEmpty ? wo.workOrderCode : 'WO #${wo.id}';
+                    final label = wo.description.isNotEmpty
+                        ? wo.description
+                        : (wo.workOrderCode.isNotEmpty ? wo.workOrderCode : 'WO #${wo.id}');
                     return DropdownMenuItem<int>(
                       value: wo.id,
-                      child: Text(code),
+                      child: Text(label, overflow: TextOverflow.ellipsis),
                     );
                   }).toList(),
                   onChanged: (id) {
@@ -417,7 +419,7 @@ class _InductionReportViewState extends State<InductionReportView> {
             const SizedBox(height: 18),
             Text(
               controller.selectedInductionWorkOrder != null
-                  ? 'Selected: ${controller.selectedInductionWorkOrder!.workOrderCode}'
+                  ? 'Selected: ${controller.selectedInductionWorkOrder!.description.isNotEmpty ? controller.selectedInductionWorkOrder!.description : controller.selectedInductionWorkOrder!.workOrderCode}'
                   : 'Select Work Order from dropdown to fetch Induction Store report',
               textAlign: TextAlign.center,
               style: const TextStyle(

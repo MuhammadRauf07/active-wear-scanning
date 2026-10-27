@@ -171,7 +171,9 @@ class GbsController extends ChangeNotifier {
       result.add(
         GbsSampleCGradeGroup(
           workOrderHeaderId: first.workOrderHeader.id,
-          workOrderCode: first.workOrderHeader.workOrderCode,
+          workOrderCode: first.workOrderHeader.description.isNotEmpty
+              ? first.workOrderHeader.description
+              : first.workOrderHeader.workOrderCode,
           itemId: first.item.id,
           itemDescription: first.item.description,
           totalTubes: tubes,
@@ -236,7 +238,10 @@ class GbsController extends ChangeNotifier {
     }
 
     if (_state.selectedWorkOrder != null && match.workOrderHeader.id != _state.selectedWorkOrder?.id) {
-      return 'Tray belongs to another Work Order (${match.workOrderHeader.workOrderCode})';
+      final woDesc = match.workOrderHeader.description.isNotEmpty
+          ? match.workOrderHeader.description
+          : match.workOrderHeader.workOrderCode;
+      return 'Tray belongs to another Work Order ($woDesc)';
     }
 
     if ((match.primaryTrayModel.trayType ?? 0) != 1) {
@@ -263,7 +268,9 @@ class GbsController extends ChangeNotifier {
       componentDescription: match.item.componentDescription ?? '',
       sizeDescription: sizeDesc,
       colorDescription: colorDesc,
-      workOrderCode: match.workOrderHeader.workOrderCode,
+      workOrderCode: match.workOrderHeader.description.isNotEmpty
+          ? match.workOrderHeader.description
+          : match.workOrderHeader.workOrderCode,
       primaryQuantity: match.productionProgress.primaryQuantity?.toStringAsFixed(0) ?? '0',
       pieceWeight: match.item.pieceWeight ?? 0.0,
       perGarmentTube: perGarmentTube,

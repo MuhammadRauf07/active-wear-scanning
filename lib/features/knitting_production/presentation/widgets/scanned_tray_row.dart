@@ -66,7 +66,9 @@ class ScannedTrayRow extends StatelessWidget {
             Expanded(
               flex: 4,
               child: Text(
-                selectedPlanLine?.workOrderHeader.workOrderCode ?? "-",
+                selectedPlanLine?.workOrderHeader.description.isNotEmpty == true
+                    ? selectedPlanLine!.workOrderHeader.description
+                    : (selectedPlanLine?.workOrderHeader.workOrderCode ?? "-"),
                 textAlign: TextAlign.center,
                 style: _cellStyle,
               ),

@@ -147,7 +147,9 @@ class TrayTrackingController extends ChangeNotifier {
         if (latestPP.processedItem?.description != null && latestPP.processedItem!.description.isNotEmpty) {
           itemDescription = latestPP.processedItem!.description;
         }
-        if (latestPP.workOrderHeader.workOrderCode.isNotEmpty) {
+        if (latestPP.workOrderHeader.description.isNotEmpty) {
+          workOrderDescription = latestPP.workOrderHeader.description;
+        } else if (latestPP.workOrderHeader.workOrderCode.isNotEmpty) {
           workOrderDescription = latestPP.workOrderHeader.workOrderCode;
         }
         if (latestPP.operation.name.isNotEmpty) {

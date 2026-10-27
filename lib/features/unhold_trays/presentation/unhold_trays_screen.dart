@@ -132,7 +132,9 @@ class _UnholdTraysScreenViewState extends State<_UnholdTraysScreenView> {
                           final item = state.heldTrays[idx];
                           final trayCode = item.primaryTrayModel.trayCode ?? '-';
                           final itemDesc = item.item.description;
-                          final woCode = item.workOrderHeader.workOrderCode;
+                          final woCode = item.workOrderHeader.description.isNotEmpty
+                              ? item.workOrderHeader.description
+                              : (item.workOrderHeader.workOrderCode.isNotEmpty ? item.workOrderHeader.workOrderCode : 'N/A');
                           final qty = item.productionProgress.primaryQuantity?.toStringAsFixed(0) ?? '0';
 
                           return ListTile(

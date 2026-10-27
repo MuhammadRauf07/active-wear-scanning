@@ -104,7 +104,10 @@ class LockedLotTrayTable extends StatelessWidget {
             itemBuilder: (context, index) {
               final line = lines[index];
               final trayCode = _resolveTrayCode(line);
-              final woCode = line['workOrderHeader']?['workOrderCode']?.toString() ?? '-';
+              final woDesc = line['workOrderHeader']?['description']?.toString();
+              final woCode = (woDesc != null && woDesc.isNotEmpty)
+                  ? woDesc
+                  : (line['workOrderHeader']?['workOrderCode']?.toString() ?? '-');
               final itemDesc = line['item']?['description']?.toString() ?? '-';
               final pgt = (line['item']?['perGarmentTube'] as num?)?.toDouble() ?? 0;
               final tubes = (line['batchLines']?['primaryQuantity'] as num?)?.toDouble() ?? 0;

@@ -224,6 +224,7 @@ class ProcessingBatchController extends ChangeNotifier {
               (t) =>
                   t.productionProgress.operationId == currentOperationId &&
                   (t.productionProgress.locatorId == 18 ||
+                      t.productionProgress.locatorId == 23 ||
                       (t.productionProgress.waste ?? 0) > 0),
             )
             .map((t) => t.productionProgress.primaryTrayId)
@@ -237,7 +238,7 @@ class ProcessingBatchController extends ChangeNotifier {
           final subOp = t.productionProgress.subOperation;
           if (subOp != null) {
             final origId = int.tryParse(subOp);
-            if (origId != null && t.productionProgress.locatorId == 18) {
+            if (origId != null && (t.productionProgress.locatorId == 18 || t.productionProgress.locatorId == 23)) {
               wastageByOriginalId[origId] = t;
             }
           }
@@ -250,7 +251,7 @@ class ProcessingBatchController extends ChangeNotifier {
           if (tray.productionProgress.wipStatus != 0) continue;
           if (tray.productionProgress.operationId != currentOperationId)
             continue;
-          if (tray.productionProgress.locatorId == 18) continue;
+          if (tray.productionProgress.locatorId == 18 || tray.productionProgress.locatorId == 23) continue;
 
           final code = tray.primaryTrayModel.trayCode ?? 'UNKNOWN';
           if (!uniqueTrays.containsKey(code) ||

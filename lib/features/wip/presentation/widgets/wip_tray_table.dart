@@ -93,7 +93,7 @@ class WipTrayTable extends StatelessWidget {
                 child: Row(
                   children: [
                     Expanded(flex: 7, child: Text(t.primaryTrayModel.trayCode ?? '-', textAlign: TextAlign.center, style: blueCellStyle)),
-                    Expanded(flex: 5, child: Text(t.workOrderHeader.workOrderCode, textAlign: TextAlign.center, style: cellStyle)),
+                    Expanded(flex: 5, child: Text(t.workOrderHeader.description.isNotEmpty ? t.workOrderHeader.description : (t.workOrderHeader.workOrderCode.isNotEmpty ? t.workOrderHeader.workOrderCode : '-'), textAlign: TextAlign.center, style: cellStyle)),
                     Expanded(flex: 5, child: Text(t.item.sizeDescription ?? t.item.description, textAlign: TextAlign.center, style: cellStyle)),
                     Expanded(flex: 3, child: Text(tubes.toStringAsFixed(0), textAlign: TextAlign.center, style: cellStyle.copyWith(fontWeight: FontWeight.w700))),
                     Expanded(flex: 4, child: Text('${weight.toStringAsFixed(0)}g', textAlign: TextAlign.center, style: cellStyle)),

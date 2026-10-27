@@ -491,7 +491,9 @@ class _ProcessingTrayTableState extends State<ProcessingTrayTable> {
                                                 ],
                                               ),
                                               content: Text(
-                                                'Are you sure you want to delete waste for Tray ${t.primaryTrayModel.trayCode ?? '-'} and restore quantity?',
+                                                widget.trays.any((item) => item.productionProgress.draftFlag == true)
+                                                    ? 'Are you sure you want to delete waste for Tray ${t.primaryTrayModel.trayCode ?? '-'} and restore quantity?\n\nNote: A draft reassignment exists. You will need to re-adjust quantities in the Reassign screen before final submission.'
+                                                    : 'Are you sure you want to delete waste for Tray ${t.primaryTrayModel.trayCode ?? '-'} and restore quantity?',
                                                 style: const TextStyle(fontSize: 13, color: Color(0xFF475569)),
                                               ),
                                               actions: [

@@ -130,7 +130,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
       for (var r in allRecords) {
         if (r.productionProgress.transactionType != 2) continue;
         if (r.productionProgress.wipStatus != 0) continue;
-        if (r.productionProgress.locatorId == 18) continue;
+        if (r.productionProgress.locatorId == 18 || r.productionProgress.locatorId == 23) continue;
         if ((r.productionProgress.subOperation ?? '').toLowerCase() == 'waste')
           continue;
         if (r.primaryTrayModel.trayCode == null ||
@@ -199,7 +199,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
         if (r.productionProgress.transactionType != 2) continue;
         if (r.productionProgress.wipStatus != 0) continue;
         if (r.productionProgress.operationId != operationId) continue;
-        if (r.productionProgress.locatorId == 18) continue;
+        if (r.productionProgress.locatorId == 18 || r.productionProgress.locatorId == 23) continue;
         if ((r.productionProgress.subOperation ?? '').toLowerCase() == 'waste')
           continue;
         if (r.primaryTrayModel.trayCode == null ||
@@ -258,7 +258,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
           if (r.productionProgress.transactionType != 2) continue;
           if (r.productionProgress.wipStatus != 0) continue;
           if (r.productionProgress.operationId != operationId) continue;
-          if (r.productionProgress.locatorId == 18)
+          if (r.productionProgress.locatorId == 18 || r.productionProgress.locatorId == 23)
             continue; // Exclude waste/scrap records
           if ((r.productionProgress.subOperation ?? '').toLowerCase() ==
               'waste')
@@ -321,6 +321,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
                             p.productionProgress.transactionType == 2 &&
                             p.productionProgress.wipStatus == 0 &&
                             p.productionProgress.locatorId != 18 &&
+                            p.productionProgress.locatorId != 23 &&
                             (p.productionProgress.subOperation ?? '')
                                     .toLowerCase() !=
                                 'waste' &&

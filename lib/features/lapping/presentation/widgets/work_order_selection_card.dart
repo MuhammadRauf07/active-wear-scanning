@@ -97,6 +97,10 @@ class WorkOrderSelectionCard extends StatelessWidget {
           );
           final waste = itemWasteQuantities[wo.id] ?? 0.0;
 
+          final double totalAllocated = reassigned + waste;
+          final double diff = wo.originalPieces - totalAllocated;
+          final bool isBalanced = totalAllocated == wo.originalPieces;
+
           return InkWell(
             onTap: () => onSelected(wo.id),
             child: Container(
@@ -155,10 +159,30 @@ class WorkOrderSelectionCard extends StatelessWidget {
                   // Re-Assign
                   Expanded(
                     flex: 2,
-                    child: Text(
-                      reassigned > 0 ? '${reassigned.toInt()}' : '-',
-                      textAlign: TextAlign.center,
-                      style: _cellStyle(isSelected, color: const Color(0xFF059669), isBold: true),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          reassigned > 0 ? '${reassigned.toInt()}' : '-',
+                          textAlign: TextAlign.center,
+                          style: _cellStyle(
+                            isSelected,
+                            color: isBalanced
+                                ? const Color(0xFF059669)
+                                : (reassigned > 0 ? const Color(0xFFD97706) : null),
+                            isBold: true,
+                          ),
+                        ),
+                        if (diff != 0 && (reassigned > 0 || waste > 0))
+                          Text(
+                            diff > 0 ? '(-${diff.toInt()})' : '(+${(-diff).toInt()})',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: diff > 0 ? const Color(0xFFD97706) : const Color(0xFFDC2626),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
 

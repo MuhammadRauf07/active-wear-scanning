@@ -213,7 +213,27 @@ class _LappingDetailScreenViewState extends State<_LappingDetailScreenView> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            margin: const EdgeInsets.only(top: 8, bottom: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.qr_code_scanner_rounded, size: 14, color: Color(0xFF64748B)),
+                                SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    'Read-only list • Scan tray barcode to attach',
+                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
 
                           // ── Search Input ────────────────────────────────────
                           TextField(
@@ -335,20 +355,7 @@ class _LappingDetailScreenViewState extends State<_LappingDetailScreenView> {
                                                     ),
                                                   ),
                                                 ),
-                                          onTap: isAlreadyScanned
-                                              ? null
-                                              : () async {
-                                                  Navigator.pop(dialogCtx);
-                                                  if (_trayQtyController.text.trim().isEmpty) {
-                                                    _focusNode.requestFocus();
-                                                    AppSnackBar.showError(
-                                                      context,
-                                                      message: 'Please enter tubes count to scan tray $code',
-                                                    );
-                                                  } else {
-                                                    await _processBluetoothScan(rawCode);
-                                                  }
-                                                },
+                                          onTap: null, // Read-only: trays can only be attached via barcode scanner
                                         ),
                                       );
                                     },
@@ -598,7 +605,7 @@ class _LappingDetailScreenViewState extends State<_LappingDetailScreenView> {
                               ),
                               child: Column(
                                 children: [
-                                  _buildWasteInfoRow('Incoming (Prev. Process):', '${originalQty.toInt()} tubes'),
+                                  _buildWasteInfoRow('Available for Reassignment:', '${originalQty.toInt()} tubes'),
                                   const SizedBox(height: 8),
                                   _buildWasteInfoRow('Reassigned (Scanned):', '${reassignedQty.toInt()} tubes'),
                                   const Divider(height: 18, color: Color(0xFFE2E8F0)),
@@ -851,6 +858,42 @@ class _LappingDetailScreenViewState extends State<_LappingDetailScreenView> {
                                                 'Editing Draft State: Work progress loaded from server.',
                                                 style: TextStyle(
                                                   color: Color(0xFF1E40AF),
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                    if (state.scannedTraysByWO.values.any((list) => list.isNotEmpty) &&
+                                        state.workOrders.values.any((wo) {
+                                          final double reassigned = (state.scannedTraysByWO[wo.id] ?? []).fold<double>(
+                                            0.0,
+                                            (sum, t) => sum + (state.trayOverrideQuantities[t.primaryTrayModel.trayCode?.toLowerCase() ?? ''] ?? 0.0),
+                                          );
+                                          final double waste = state.itemWasteQuantities[wo.id] ?? 0.0;
+                                          return (reassigned + waste) != wo.originalPieces;
+                                        })) ...[
+                                      Container(
+                                        width: double.infinity,
+                                        margin: const EdgeInsets.only(bottom: 16),
+                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFFFBEB),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: const Color(0xFFFDE68A), width: 1.5),
+                                        ),
+                                        child: const Row(
+                                          children: [
+                                            Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 20),
+                                            SizedBox(width: 12),
+                                            Expanded(
+                                              child: Text(
+                                                'Batch quantity mismatch: Batch tubes changed since draft was saved. Please adjust scanned trays or waste quantities to match before submitting.',
+                                                style: TextStyle(
+                                                  color: Color(0xFF92400E),
                                                   fontSize: 11,
                                                   fontWeight: FontWeight.w700,
                                                 ),

@@ -594,7 +594,7 @@ class ReportsController extends ChangeNotifier {
 
       _selectedWorkOrderSummary = WorkOrderHeaderSummary(
         id: wo.id,
-        workOrderCode: wo.workOrderCode.isNotEmpty ? wo.workOrderCode : 'WO-${wo.id}',
+        workOrderCode: wo.description.isNotEmpty ? wo.description : (wo.workOrderCode.isNotEmpty ? wo.workOrderCode : 'WO-${wo.id}'),
         workOrderDate: wo.workOrderDate.isNotEmpty ? wo.workOrderDate.split('T').first : '17-09-2026',
         description: wo.description.isNotEmpty ? wo.description : 'Standard WorkOrder',
         customer: 'ADIDAS GROUP',
@@ -895,7 +895,7 @@ class ReportsController extends ChangeNotifier {
           progress: prog,
           trayCode: tray.trayCode ?? 'TRAY-${prog.primaryTrayId ?? 0}',
           locatorName: p.operation.locator?.description ?? 'Induction Staging',
-          workOrderCode: wo.workOrderCode.isNotEmpty ? wo.workOrderCode : 'WO-${wo.id}',
+          workOrderCode: wo.description.isNotEmpty ? wo.description : (wo.workOrderCode.isNotEmpty ? wo.workOrderCode : 'WO-${wo.id}'),
           itemDescription: item.description,
           colorDescription: item.colorDescription ?? 'Standard',
           sizeDescription: item.sizeDescription ?? 'M',

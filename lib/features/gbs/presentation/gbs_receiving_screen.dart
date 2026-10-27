@@ -7,7 +7,6 @@ import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/tray_table_header.dart';
 import 'package:active_wear_scanning/core/widgets/empty_scan_state.dart';
 import 'package:active_wear_scanning/features/gbs/presentation/widgets/gbs_tray_row.dart';
-import 'package:active_wear_scanning/features/gbs/model/production_progress.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:active_wear_scanning/features/gbs/controller/gbs_controller.dart';
@@ -348,7 +347,7 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
                   hint: "Select work order...",
                   items: availableWOs,
                   selectedValue: state.selectedWorkOrder,
-                  itemLabel: (wo) => wo.workOrderCode,
+                  itemLabel: (wo) => wo.description.isNotEmpty ? wo.description : (wo.workOrderCode.isNotEmpty ? wo.workOrderCode : 'WO #${wo.id}'),
                   onChanged: (val) {
                     controller.selectWorkOrder(val);
                   },
@@ -1036,6 +1035,9 @@ class _GbsOverlayDropdownState<T> extends State<_GbsOverlayDropdown<T>> with Sin
     final filteredItems = widget.items.where((item) {
       final label = widget.itemLabel(item).toLowerCase();
       final query = _searchQuery.toLowerCase();
+      if (item is WorkOrderHeader) {
+        return label.contains(query) || item.workOrderCode.toLowerCase().contains(query);
+      }
       return label.contains(query);
     }).toList();
 
@@ -1089,6 +1091,7 @@ class _GbsOverlayDropdownState<T> extends State<_GbsOverlayDropdown<T>> with Sin
                     itemBuilder: (context, index) {
                       final item = filteredItems[index];
                       final isSelected = item == widget.selectedValue;
+                      final isWO = item is WorkOrderHeader && item.description.isNotEmpty && item.workOrderCode.isNotEmpty;
 
                       return InkWell(
                         onTap: () {
@@ -1101,10 +1104,36 @@ class _GbsOverlayDropdownState<T> extends State<_GbsOverlayDropdown<T>> with Sin
                           child: Row(
                             children: [
                               Expanded(
-                                child: Text(
-                                  widget.itemLabel(item),
-                                  style: TextStyle(color: isSelected ? const Color(0xFF1B64A3) : const Color(0xFF263238), fontSize: 12, fontWeight: FontWeight.w700),
-                                ),
+                                child: isWO
+                                    ? Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            widget.itemLabel(item),
+                                            style: TextStyle(
+                                              color: isSelected ? const Color(0xFF1B64A3) : const Color(0xFF263238),
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                          Text(
+                                            item.workOrderCode,
+                                            style: TextStyle(
+                                              color: Colors.grey.shade500,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w400,
+                                            ),
+                                          ),
+                                        ],
+                                      )
+                                    : Text(
+                                        widget.itemLabel(item),
+                                        style: TextStyle(
+                                          color: isSelected ? const Color(0xFF1B64A3) : const Color(0xFF263238),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
                               ),
                               if (isSelected) const Icon(Icons.check_rounded, color: Color(0xFF1B64A3), size: 16),
                             ],

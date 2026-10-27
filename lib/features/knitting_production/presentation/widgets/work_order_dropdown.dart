@@ -153,15 +153,22 @@ class _WorkOrderDropdownState extends State<WorkOrderDropdown> with SingleTicker
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            widget.selectedPlanLine!.workOrderHeader.workOrderCode,
+                            widget.selectedPlanLine!.workOrderHeader.description.isNotEmpty
+                                ? widget.selectedPlanLine!.workOrderHeader.description
+                                : widget.selectedPlanLine!.workOrderHeader.workOrderCode,
                             style: TextStyle(
                               color: widget.enabled ? const Color(0xFF263238) : Colors.grey.shade500,
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                           Text(
-                            widget.selectedPlanLine!.item.description,
+                            widget.selectedPlanLine!.workOrderHeader.description.isNotEmpty &&
+                                    widget.selectedPlanLine!.workOrderHeader.workOrderCode.isNotEmpty
+                                ? '${widget.selectedPlanLine!.workOrderHeader.workOrderCode} • ${widget.selectedPlanLine!.item.description}'
+                                : widget.selectedPlanLine!.item.description,
                             style: TextStyle(
                               color: widget.enabled ? Colors.grey.shade600 : Colors.grey.shade400,
                               fontSize: 10,
@@ -193,9 +200,10 @@ class _WorkOrderDropdownState extends State<WorkOrderDropdown> with SingleTicker
   Widget _buildDropdownMenu() {
     final filteredLines = widget.planLines?.where((plan) {
       final code = plan.workOrderHeader.workOrderCode.toLowerCase();
+      final woDesc = plan.workOrderHeader.description.toLowerCase();
       final desc = plan.item.description.toLowerCase();
       final query = _searchQuery.toLowerCase();
-      return code.contains(query) || desc.contains(query);
+      return code.contains(query) || woDesc.contains(query) || desc.contains(query);
     }).toList() ?? [];
 
     return Container(
@@ -266,6 +274,13 @@ class _WorkOrderDropdownState extends State<WorkOrderDropdown> with SingleTicker
                     itemBuilder: (context, index) {
                       final plan = filteredLines[index];
                       final isSelected = plan == widget.selectedPlanLine;
+                      final primaryTitle = plan.workOrderHeader.description.isNotEmpty
+                          ? plan.workOrderHeader.description
+                          : plan.workOrderHeader.workOrderCode;
+                      final subtitle = plan.workOrderHeader.description.isNotEmpty &&
+                              plan.workOrderHeader.workOrderCode.isNotEmpty
+                          ? '${plan.workOrderHeader.workOrderCode} • ${plan.item.description}'
+                          : plan.item.description;
 
                       return InkWell(
                         onTap: () {
@@ -282,7 +297,7 @@ class _WorkOrderDropdownState extends State<WorkOrderDropdown> with SingleTicker
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      plan.workOrderHeader.workOrderCode,
+                                      primaryTitle,
                                       style: TextStyle(
                                         color: isSelected ? const Color(0xFF1B64A3) : const Color(0xFF263238),
                                         fontSize: 12,
@@ -290,7 +305,7 @@ class _WorkOrderDropdownState extends State<WorkOrderDropdown> with SingleTicker
                                       ),
                                     ),
                                     Text(
-                                      plan.item.description,
+                                      subtitle,
                                       style: TextStyle(
                                         color: Colors.grey.shade500,
                                         fontSize: 10,

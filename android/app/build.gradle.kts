@@ -8,7 +8,8 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-val keystorePropertiesFile = rootProject.file("key.properties")
+val keystorePropertiesFile = rootProject.file("key.properties").takeIf { it.exists() }
+    ?: project.file("key.properties")
 val keystoreProperties = Properties()
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
@@ -44,7 +45,16 @@ android {
         create("release") {
             keyAlias = keystoreProperties["keyAlias"] as String?
             keyPassword = keystoreProperties["keyPassword"] as String?
-            storeFile = keystoreProperties["storeFile"]?.let { file(it as String) }
+            storeFile = keystoreProperties["storeFile"]?.let {
+                val fName = it as String
+                val candidate1 = file(fName)
+                val candidate2 = rootProject.file(fName)
+                when {
+                    candidate1.exists() -> candidate1
+                    candidate2.exists() -> candidate2
+                    else -> candidate1
+                }
+            }
             storePassword = keystoreProperties["storePassword"] as String?
         }
     }
@@ -77,4 +87,26 @@ android {
 
 flutter {
     source = "../.."
+}
+
+tasks.matching { it.name == "assembleRelease" }.configureEach {
+    doLast {
+        val flutterApkDir = File(rootProject.layout.buildDirectory.get().asFile, "app/outputs/flutter-apk")
+        val uatApk = File(flutterApkDir, "app-uat-release.apk")
+        val defaultReleaseApk = File(flutterApkDir, "app-release.apk")
+        if (uatApk.exists()) {
+            uatApk.copyTo(defaultReleaseApk, overwrite = true)
+        }
+    }
+}
+
+tasks.matching { it.name == "assembleDebug" }.configureEach {
+    doLast {
+        val flutterApkDir = File(rootProject.layout.buildDirectory.get().asFile, "app/outputs/flutter-apk")
+        val uatDebugApk = File(flutterApkDir, "app-uat-debug.apk")
+        val defaultDebugApk = File(flutterApkDir, "app-debug.apk")
+        if (uatDebugApk.exists()) {
+            uatDebugApk.copyTo(defaultDebugApk, overwrite = true)
+        }
+    }
 }

@@ -5,7 +5,8 @@ class WasteOperationOption {
   final String key;
   final String label;
   final int? operationId;
-  final String? stageType; // 'batch', 'adjustments', or null
+  final int? locatorId;
+  final String? stageType; // 'batch', 'reassign', or operation name
   final int count;
   final int totalTubes;
 
@@ -13,6 +14,7 @@ class WasteOperationOption {
     required this.key,
     required this.label,
     this.operationId,
+    this.locatorId,
     this.stageType,
     this.count = 0,
     this.totalTubes = 0,
@@ -22,6 +24,7 @@ class WasteOperationOption {
     String? key,
     String? label,
     int? operationId,
+    int? locatorId,
     String? stageType,
     int? count,
     int? totalTubes,
@@ -30,6 +33,7 @@ class WasteOperationOption {
       key: key ?? this.key,
       label: label ?? this.label,
       operationId: operationId ?? this.operationId,
+      locatorId: locatorId ?? this.locatorId,
       stageType: stageType ?? this.stageType,
       count: count ?? this.count,
       totalTubes: totalTubes ?? this.totalTubes,
@@ -106,9 +110,12 @@ class ProcessingWasteState {
 
   List<BatchWasteGroupItem> get filteredBatchGroups {
     return allBatchGroups.where((batch) {
-      // Operation filter
+      // Locator / Operation filter
       if (selectedOperationKey != 'all') {
-        if (selectedOperationKey.startsWith('lapping_')) {
+        if (selectedOperationKey.startsWith('loc_')) {
+          final targetLocId = int.tryParse(selectedOperationKey.replaceFirst('loc_', ''));
+          if (batch.sourceLocatorId != targetLocId) return false;
+        } else if (selectedOperationKey.startsWith('lapping_')) {
           if (batch.stageKey != selectedOperationKey) return false;
         } else if (selectedOperationKey.startsWith('op_')) {
           final targetOpId = int.tryParse(selectedOperationKey.replaceFirst('op_', ''));
