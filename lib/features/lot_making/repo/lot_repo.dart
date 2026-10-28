@@ -318,6 +318,56 @@ class LotRepo {
     return await _api.getList('/api/app/work-order-line-details', query: query);
   }
 
+  Future<PlexApiResult> fetchWorkOrderLines({int? workOrderId, int? workOrderHeaderId}) async {
+    final query = <String, String>{'MaxResultCount': '1000'};
+    if (workOrderId != null) query['WorkOrderId'] = workOrderId.toString();
+    if (workOrderHeaderId != null) query['WorkOrderHeaderId'] = workOrderHeaderId.toString();
+    return await _api.getList('/api/app/work-order-lines', query: query);
+  }
+
+  Future<PlexApiResult> fetchWorkOrderLineDetailsByWorkOrder(int workOrderId) async {
+    // 1. Try with WorkOrderId as given in the user's curl (with and without MaxResultCount)
+    var res = await _api.getList(
+      '/api/app/work-order-line-details',
+      query: {
+        'WorkOrderId': workOrderId.toString(),
+        'MaxResultCount': '1000',
+      },
+    );
+    if (res.success && res.data != null && (res.data as List).isNotEmpty) {
+      return res;
+    }
+
+    res = await _api.getList(
+      '/api/app/work-order-line-details',
+      query: {
+        'WorkOrderId': workOrderId.toString(),
+      },
+    );
+    if (res.success && res.data != null && (res.data as List).isNotEmpty) {
+      return res;
+    }
+
+    // 2. Fallback: try WorkOrderHeaderId
+    res = await _api.getList(
+      '/api/app/work-order-line-details',
+      query: {
+        'WorkOrderHeaderId': workOrderId.toString(),
+        'MaxResultCount': '1000',
+      },
+    );
+    if (res.success && res.data != null && (res.data as List).isNotEmpty) {
+      return res;
+    }
+
+    return await _api.getList(
+      '/api/app/work-order-line-details',
+      query: {
+        'WorkOrderHeaderId': workOrderId.toString(),
+      },
+    );
+  }
+
 
   Future<PlexApiResult> fetchItemRoutings(int itemDefId) async {
     final query = {'ItemDefId': itemDefId.toString()};

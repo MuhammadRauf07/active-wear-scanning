@@ -605,7 +605,7 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
     final List<Map<String, dynamic>> allItems = [
       {'label': 'WORK ORDER', 'icon': Icons.qr_code_rounded, 'value': info['Work Order Code']?['value']},
       {'label': 'WORK ORDER DATE', 'icon': Icons.event_note_rounded, 'value': info['Work Order Date']?['value']},
-      {'label': 'PLAN DATE', 'icon': Icons.calendar_today_rounded, 'value': info['Plan Date']?['value']},
+      {'label': 'FABRICATION', 'icon': Icons.texture_rounded, 'value': info['Fabrication']?['value']},
       {'label': 'SHIFT', 'icon': Icons.timer_rounded, 'value': info['Shift Code']?['value']},
       {'label': 'TOTAL WO PLAN QTY', 'icon': Icons.analytics_rounded, 'value': info['Total WO Plan QTY']?['value']},
       {'label': 'TOLERANCE', 'icon': Icons.add_circle_outline_rounded, 'value': info['10% Allowed']?['value']},
@@ -786,10 +786,12 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
     final sumPrimaryQty = controller.getSumPrimaryQuantityForWorkOrder(plan.workOrderLineId);
     final remainingWoPlanQty = maxAllowed - sumPrimaryQty - scannedTubesSum;
 
-    final woDisplay = workOrder.description.isNotEmpty ? workOrder.description : workOrder.workOrderCode;
-    addField('Work Order Description', Icons.description_outlined, 'WORK ORDER', woDisplay);
+    addField('Work Order Code', Icons.qr_code_rounded, 'WORK ORDER', workOrder.workOrderCode.isNotEmpty ? workOrder.workOrderCode : 'WO #${workOrder.id}');
     addField('Work Order Date', Icons.event_note_rounded, 'WORK ORDER DATE', formatDate(workOrder.workOrderDate));
-    addField('Plan Date', Icons.calendar_today_rounded, 'PLAN DATE', formatDate(plan.planDate));
+    final fabType = (item.garmentFabricationType != null && item.garmentFabricationType!.trim().isNotEmpty)
+        ? item.garmentFabricationType!.trim()
+        : '---';
+    addField('Fabrication', Icons.texture_rounded, 'FABRICATION', fabType);
     addField('Shift Code', Icons.timer_rounded, 'SHIFT', planLine.shift.code);
     addField('Total WO Plan QTY', Icons.analytics_rounded, 'TOTAL WO PLAN QTY', totalWoPlanQty.toStringAsFixed(0));
     addField('10% Allowed', Icons.add_circle_outline_rounded, 'TOLERANCE', extraAllowed.toString());
@@ -1301,6 +1303,8 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
   }
 
   Future<void> _onScanMachineBarcode(KnittingProductionController controller) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    SystemChannels.textInput.invokeMethod('TextInput.hide');
     setState(() => _isScannerOpen = true);
     final code = await BarcodeScannerDialog.show(
       context,
@@ -1316,6 +1320,8 @@ class _KnittingProductionScreenViewState extends State<_KnittingProductionScreen
   }
 
   Future<void> _onScanTray(KnittingProductionController controller) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    SystemChannels.textInput.invokeMethod('TextInput.hide');
     setState(() => _isScannerOpen = true);
     await ScannerAlwaysOpen.show(
       context,

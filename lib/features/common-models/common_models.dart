@@ -713,6 +713,7 @@ class Item {
   final String? lastModificationTime;
   final String? creatorId;
   final int id;
+  final String? garmentFabricationType;
 
   Item({
     required this.code,
@@ -731,6 +732,7 @@ class Item {
     required this.lastModificationTime,
     required this.creatorId,
     required this.id,
+    this.garmentFabricationType,
   });
 
   factory Item.fromJson(Map<String, dynamic> json) {
@@ -751,6 +753,7 @@ class Item {
       lastModificationTime: json['lastModificationTime']?.toString(),
       creatorId: json['creatorId']?.toString(),
       id: (json['id'] as num?)?.toInt() ?? 0,
+      garmentFabricationType: json['garmentFabricationType']?.toString(),
     );
   }
 
@@ -771,6 +774,7 @@ class Item {
     String? lastModificationTime,
     String? creatorId,
     int? id,
+    String? garmentFabricationType,
   }) {
     return Item(
       code: code ?? this.code,
@@ -789,6 +793,7 @@ class Item {
       lastModificationTime: lastModificationTime ?? this.lastModificationTime,
       creatorId: creatorId ?? this.creatorId,
       id: id ?? this.id,
+      garmentFabricationType: garmentFabricationType ?? this.garmentFabricationType,
     );
   }
 }

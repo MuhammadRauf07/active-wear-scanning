@@ -44,6 +44,12 @@ class SectionPermissionHelper {
     if (normalizedTitle.contains('gbsreceiving') || normalizedTitle.contains('gbs')) {
       return ['gbsreceiving', 'gbs'];
     }
+    if (normalizedTitle.contains('samplereceiving') || normalizedTitle.contains('sample')) {
+      return ['samplereceiving', 'sample', 'gbsreceiving', 'gbs'];
+    }
+    if (normalizedTitle.contains('cgradereceiving') || normalizedTitle.contains('cgrade')) {
+      return ['cgradereceiving', 'cgrade', 'gbsreceiving', 'gbs'];
+    }
     if (normalizedTitle.contains('lotmaking') || normalizedTitle.contains('lot')) {
       return ['lotmaking', 'pdmerchandizer', 'pdmerchandiser', 'lot', 'pd'];
     }

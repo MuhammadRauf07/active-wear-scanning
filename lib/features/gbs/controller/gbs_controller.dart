@@ -192,13 +192,7 @@ class GbsController extends ChangeNotifier {
 
   List<ProductionProgressResponseModel> getUnfilteredTraysForReceiving() {
     final unheldTrays = _state.availableTrayForGbs.where((t) => t.productionProgress.holdFlag != true).toList();
-    if (_state.receivingType == 'sample') {
-      return unheldTrays.where((t) => t.productionProgress.productNature == 1).toList();
-    } else if (_state.receivingType == 'c_grade') {
-      return unheldTrays.where((t) => t.productionProgress.productGrade == 2).toList();
-    } else {
-      return unheldTrays.where((t) => t.productionProgress.productNature != 1 && t.productionProgress.productGrade != 2).toList();
-    }
+    return unheldTrays.where((t) => t.productionProgress.productNature != 1 && t.productionProgress.productGrade != 2).toList();
   }
 
   List<ProductionProgressResponseModel> getFilteredTrays() {

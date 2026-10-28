@@ -23,7 +23,6 @@ class GBSReceivingRepo {
   Future<PlexApiResult> getProductionProgress({Map<String, String>? params}) async {
     final Map<String, String> p = params ?? {
       'LocatorId': '2',
-      'TransactionType': '1',
       'MaxResultCount': '1000',
     };
     final result = await _api.getList(

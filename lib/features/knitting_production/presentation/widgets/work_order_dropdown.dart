@@ -153,9 +153,12 @@ class _WorkOrderDropdownState extends State<WorkOrderDropdown> with SingleTicker
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            widget.selectedPlanLine!.workOrderHeader.description.isNotEmpty
-                                ? widget.selectedPlanLine!.workOrderHeader.description
-                                : widget.selectedPlanLine!.workOrderHeader.workOrderCode,
+                            widget.selectedPlanLine!.workOrderHeader.workOrderCode.isNotEmpty &&
+                                    widget.selectedPlanLine!.workOrderHeader.description.isNotEmpty
+                                ? '${widget.selectedPlanLine!.workOrderHeader.workOrderCode} - ${widget.selectedPlanLine!.workOrderHeader.description}'
+                                : (widget.selectedPlanLine!.workOrderHeader.description.isNotEmpty
+                                    ? widget.selectedPlanLine!.workOrderHeader.description
+                                    : widget.selectedPlanLine!.workOrderHeader.workOrderCode),
                             style: TextStyle(
                               color: widget.enabled ? const Color(0xFF263238) : Colors.grey.shade500,
                               fontSize: 13,
@@ -165,10 +168,7 @@ class _WorkOrderDropdownState extends State<WorkOrderDropdown> with SingleTicker
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
-                            widget.selectedPlanLine!.workOrderHeader.description.isNotEmpty &&
-                                    widget.selectedPlanLine!.workOrderHeader.workOrderCode.isNotEmpty
-                                ? '${widget.selectedPlanLine!.workOrderHeader.workOrderCode} • ${widget.selectedPlanLine!.item.description}'
-                                : widget.selectedPlanLine!.item.description,
+                            widget.selectedPlanLine!.item.description,
                             style: TextStyle(
                               color: widget.enabled ? Colors.grey.shade600 : Colors.grey.shade400,
                               fontSize: 10,
@@ -274,13 +274,12 @@ class _WorkOrderDropdownState extends State<WorkOrderDropdown> with SingleTicker
                     itemBuilder: (context, index) {
                       final plan = filteredLines[index];
                       final isSelected = plan == widget.selectedPlanLine;
-                      final primaryTitle = plan.workOrderHeader.description.isNotEmpty
-                          ? plan.workOrderHeader.description
-                          : plan.workOrderHeader.workOrderCode;
-                      final subtitle = plan.workOrderHeader.description.isNotEmpty &&
-                              plan.workOrderHeader.workOrderCode.isNotEmpty
-                          ? '${plan.workOrderHeader.workOrderCode} • ${plan.item.description}'
-                          : plan.item.description;
+                      final woCode = plan.workOrderHeader.workOrderCode;
+                      final woDesc = plan.workOrderHeader.description;
+                      final primaryTitle = woCode.isNotEmpty && woDesc.isNotEmpty
+                          ? '$woCode - $woDesc'
+                          : (woDesc.isNotEmpty ? woDesc : woCode);
+                      final subtitle = plan.item.description;
 
                       return InkWell(
                         onTap: () {

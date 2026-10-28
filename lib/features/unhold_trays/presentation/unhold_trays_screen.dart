@@ -357,6 +357,15 @@ class _UnholdTraysScreenViewState extends State<_UnholdTraysScreenView> {
   }
 
   Widget _buildOriginSelectorPanel(UnholdTraysController controller, UnholdTraysState state) {
+    const originOptions = [
+      HoldOriginOption('knitting', 'Knitting Production'),
+      HoldOriginOption('pbs', 'PBS (Processing)'),
+    ];
+    final selectedOption = originOptions.firstWhere(
+      (opt) => opt.key == state.selectedOrigin,
+      orElse: () => originOptions.first,
+    );
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: const BoxDecoration(
@@ -374,36 +383,25 @@ class _UnholdTraysScreenViewState extends State<_UnholdTraysScreenView> {
               children: [
                 const Text(
                   'HOLD ORIGIN',
-                  style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Color(0xFF78909C), letterSpacing: 0.5),
+                  style: TextStyle(
+                    fontSize: 8,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF78909C),
+                    letterSpacing: 0.5,
+                  ),
                 ),
                 const SizedBox(height: 6),
-                Container(
-                  height: 40,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFCFD8DC)),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: state.selectedOrigin,
-                      isExpanded: true,
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'knitting',
-                          child: Text('Knitting Production', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238))),
-                        ),
-                        DropdownMenuItem(
-                          value: 'pbs',
-                          child: Text('PBS (Processing)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238))),
-                        ),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) controller.changeOrigin(val);
-                      },
-                    ),
-                  ),
+                _UnholdOverlayDropdown<HoldOriginOption>(
+                  hint: "Select origin...",
+                  items: originOptions,
+                  selectedValue: selectedOption,
+                  itemLabel: (opt) => opt.label,
+                  onChanged: (val) {
+                    if (val != null) {
+                      HapticFeedbackHelper.buttonClick();
+                      controller.changeOrigin(val.key);
+                    }
+                  },
                 ),
               ],
             ),
@@ -434,3 +432,206 @@ class _UnholdTraysScreenViewState extends State<_UnholdTraysScreenView> {
     );
   }
 }
+
+class HoldOriginOption {
+  final String key;
+  final String label;
+  const HoldOriginOption(this.key, this.label);
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is HoldOriginOption && runtimeType == other.runtimeType && key == other.key;
+
+  @override
+  int get hashCode => key.hashCode;
+}
+
+class _UnholdOverlayDropdown<T> extends StatefulWidget {
+  final String hint;
+  final List<T> items;
+  final T? selectedValue;
+  final String Function(T) itemLabel;
+  final ValueChanged<T?> onChanged;
+
+  const _UnholdOverlayDropdown({
+    required this.hint,
+    required this.items,
+    required this.selectedValue,
+    required this.itemLabel,
+    required this.onChanged,
+  });
+
+  @override
+  State<_UnholdOverlayDropdown<T>> createState() => _UnholdOverlayDropdownState<T>();
+}
+
+class _UnholdOverlayDropdownState<T> extends State<_UnholdOverlayDropdown<T>> with SingleTickerProviderStateMixin {
+  bool _isOpen = false;
+  late AnimationController _controller;
+  late Animation<double> _rotateAnimation;
+
+  final LayerLink _layerLink = LayerLink();
+  OverlayEntry? _overlayEntry;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(duration: const Duration(milliseconds: 250), vsync: this);
+    _rotateAnimation = Tween<double>(begin: 0, end: 0.5).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+    );
+  }
+
+  @override
+  void dispose() {
+    _overlayEntry?.remove();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _toggleDropdown() {
+    if (_isOpen) {
+      _closeDropdown();
+    } else {
+      _openDropdown();
+    }
+  }
+
+  void _openDropdown() {
+    _overlayEntry = _createOverlayEntry();
+    Overlay.of(context).insert(_overlayEntry!);
+    setState(() {
+      _isOpen = true;
+      _controller.forward();
+    });
+  }
+
+  void _closeDropdown() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+    setState(() {
+      _isOpen = false;
+      _controller.reverse();
+    });
+  }
+
+  OverlayEntry _createOverlayEntry() {
+    RenderBox renderBox = context.findRenderObject() as RenderBox;
+    var size = renderBox.size;
+
+    return OverlayEntry(
+      builder: (context) => Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _closeDropdown,
+              child: Container(),
+            ),
+          ),
+          Positioned(
+            width: size.width,
+            child: CompositedTransformFollower(
+              link: _layerLink,
+              showWhenUnlinked: false,
+              offset: Offset(0, size.height + 4),
+              child: Material(
+                elevation: 0,
+                color: Colors.transparent,
+                child: Container(
+                  constraints: const BoxConstraints(maxHeight: 220),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFCFD8DC), width: 1.2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(7),
+                    child: ListView.separated(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      shrinkWrap: true,
+                      itemCount: widget.items.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                      itemBuilder: (context, index) {
+                        final item = widget.items[index];
+                        final isSelected = widget.selectedValue == item;
+                        return InkWell(
+                          onTap: () {
+                            widget.onChanged(item);
+                            _closeDropdown();
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            color: isSelected ? const Color(0xFFF0F7FF) : Colors.transparent,
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    widget.itemLabel(item),
+                                    style: TextStyle(
+                                      color: isSelected ? const Color(0xFF1B64A3) : const Color(0xFF263238),
+                                      fontSize: 12,
+                                      fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                if (isSelected)
+                                  const Icon(Icons.check_rounded, color: Color(0xFF1B64A3), size: 16),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: GestureDetector(
+        onTap: _toggleDropdown,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: _isOpen ? const Color(0xFF1B64A3) : const Color(0xFFCFD8DC), width: 1.2),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: widget.selectedValue == null
+                    ? Text(widget.hint, style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.w400))
+                    : Text(widget.itemLabel(widget.selectedValue as T), style: const TextStyle(color: Color(0xFF263238), fontSize: 12, fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+              RotationTransition(
+                turns: _rotateAnimation,
+                child: Icon(Icons.arrow_drop_down_rounded, color: _isOpen ? const Color(0xFF1B64A3) : const Color(0xFF546E7A), size: 24),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+

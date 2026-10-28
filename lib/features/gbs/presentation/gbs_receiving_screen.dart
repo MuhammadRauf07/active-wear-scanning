@@ -6,6 +6,7 @@ import 'package:active_wear_scanning/core/widgets/app_snackbar.dart';
 import 'package:active_wear_scanning/core/widgets/app_top_header.dart';
 import 'package:active_wear_scanning/core/widgets/tray_table_header.dart';
 import 'package:active_wear_scanning/core/widgets/empty_scan_state.dart';
+import 'package:active_wear_scanning/core/widgets/work_order_metrics_row.dart';
 import 'package:active_wear_scanning/features/gbs/presentation/widgets/gbs_tray_row.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -35,7 +36,6 @@ class _GBSReceivingScreenView extends StatefulWidget {
 
 class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
   final _barcodeParser = BarcodeBufferParser();
-  static final _tableHeaderStyle = TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700);
 
   bool _isScannerOpen = false;
 
@@ -158,91 +158,25 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
   }
 
   bool _isSaveEnabled(GbsState state) {
-    if (state.receivingType == 'gbs') {
-      return state.scannedTrays.isNotEmpty;
-    } else {
-      return state.selectedProgressIds.isNotEmpty;
-    }
+    return state.scannedTrays.isNotEmpty;
   }
 
   Future<void> _onSave(GbsController controller, GbsState state) async {
     HapticFeedbackHelper.buttonClick();
-    if (state.receivingType == 'gbs') {
-      AppLoader.show(context, message: 'Saving GBS WIP Data...');
-      try {
-        await controller.saveWipTransactionsAndUpdateTray();
-        if (!mounted) return;
-        AppLoader.hide(context);
-        HapticFeedbackHelper.scanSuccess();
-        AppSnackBar.showSuccess(context, message: 'Saved successfully');
-        Future.delayed(const Duration(milliseconds: 400), () {
-          if (mounted) Navigator.of(context).pop(true);
-        });
-      } catch (e) {
-        if (!mounted) return;
-        AppLoader.hide(context);
-        _showError(e.toString());
-      }
-    } else {
-      AppLoader.show(context, message: 'Saving Sample/C-Grade WIP Data...');
-      try {
-        await controller.saveSampleOrCGradeProgress();
-        if (!mounted) return;
-        AppLoader.hide(context);
-        HapticFeedbackHelper.scanSuccess();
-        AppSnackBar.showSuccess(context, message: 'Saved successfully');
-      } catch (e) {
-        if (!mounted) return;
-        AppLoader.hide(context);
-        _showError(e.toString());
-      }
-    }
-  }
-
-  void _handleReceivingTypeChange(GbsController controller, GbsState state, String newType) {
-    if (state.receivingType == newType) return;
-
-    if (state.receivingType == 'gbs' && state.scannedTrays.isNotEmpty) {
-      showDialog(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            backgroundColor: const Color(0xFFF8FAFC),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Row(
-              children: [
-                Icon(Icons.warning_amber_rounded, color: Color(0xFFF59E0B)),
-                SizedBox(width: 8),
-                Text('Confirm Switch', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1E293B))),
-              ],
-            ),
-            content: const Text(
-              'Switching receiving nature will dismiss all scanned trays. Do you want to proceed?',
-              style: TextStyle(fontSize: 13, color: Color(0xFF475569), fontWeight: FontWeight.w500),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w600)),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFEF4444),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                ),
-                onPressed: () {
-                  Navigator.pop(context);
-                  controller.changeReceivingType(newType);
-                },
-                child: const Text('OK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-              ),
-            ],
-          );
-        },
-      );
-    } else {
-      controller.changeReceivingType(newType);
+    AppLoader.show(context, message: 'Saving GBS WIP Data...');
+    try {
+      await controller.saveWipTransactionsAndUpdateTray();
+      if (!mounted) return;
+      AppLoader.hide(context);
+      HapticFeedbackHelper.scanSuccess();
+      AppSnackBar.showSuccess(context, message: 'Saved successfully');
+      Future.delayed(const Duration(milliseconds: 400), () {
+        if (mounted) Navigator.of(context).pop(true);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      AppLoader.hide(context);
+      _showError(e.toString());
     }
   }
 
@@ -266,13 +200,10 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
           child: Column(
             children: [
               _buildPremiumHeader(controller, state),
-              _buildReceivingTypeRadioButtons(controller, state),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                  child: state.receivingType == 'gbs'
-                      ? _buildScannedTraysSection(controller, state)
-                      : _buildSampleCGradeTableSection(controller, state),
+                  child: _buildScannedTraysSection(controller, state),
                 ),
               ),
             ],
@@ -355,25 +286,23 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
               ],
             ),
           ),
-          if (state.receivingType == 'gbs') ...[
-            const SizedBox(width: 12),
-            SizedBox(
-              height: 40,
-              child: ElevatedButton.icon(
-                onPressed: state.selectedWorkOrder == null ? null : () => _showAvailableTraysDialog(controller, state),
-                icon: const Icon(Icons.layers_outlined, size: 16),
-                label: const Text('SHOW TRAYS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE67E22),
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: Colors.grey.shade300,
-                  disabledForegroundColor: Colors.grey.shade500,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  elevation: 0,
-                ),
+          const SizedBox(width: 12),
+          SizedBox(
+            height: 40,
+            child: ElevatedButton.icon(
+              onPressed: state.selectedWorkOrder == null ? null : () => _showAvailableTraysDialog(controller, state),
+              icon: const Icon(Icons.layers_outlined, size: 16),
+              label: const Text('SHOW TRAYS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE67E22),
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: Colors.grey.shade300,
+                disabledForegroundColor: Colors.grey.shade500,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                elevation: 0,
               ),
             ),
-          ],
+          ),
         ],
       ),
     );
@@ -460,6 +389,32 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
     );
   }
 
+  String _formatDate(String? rawDate) {
+    if (rawDate == null || rawDate.trim().isEmpty) return '---';
+    return rawDate.split('T')[0].split(' ')[0];
+  }
+
+  String _getFabricationType(GbsState state) {
+    if (state.selectedWorkOrder == null) return '---';
+    final matches = state.availableTrayForGbs
+        .where((t) => t.workOrderHeader.id == state.selectedWorkOrder!.id);
+    if (matches.isNotEmpty) {
+      final fab = matches.first.item.garmentFabricationType;
+      if (fab != null && fab.trim().isNotEmpty) return fab.trim();
+    }
+    return '---';
+  }
+
+  String _getScannedTubes(GbsState state) {
+    double totalTubes = 0;
+    for (final tray in state.scannedTrays) {
+      totalTubes += double.tryParse(tray.primaryQuantity) ?? 0.0;
+    }
+    return totalTubes % 1 == 0
+        ? totalTubes.toInt().toString()
+        : totalTubes.toStringAsFixed(1);
+  }
+
   Widget _buildScannedTraysSection(GbsController controller, GbsState state) {
     return Container(
       decoration: BoxDecoration(
@@ -473,6 +428,12 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
         children: [
           _buildConfigurationPanel(controller, state),
           if (state.selectedWorkOrder != null) ...[
+            WorkOrderMetricsRow(
+              workOrderDate: _formatDate(state.selectedWorkOrder?.workOrderDate),
+              fabricationType: _getFabricationType(state),
+              scannedTrays: '${state.scannedTrays.length}',
+              scannedTubes: _getScannedTubes(state),
+            ),
             Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
@@ -549,353 +510,6 @@ class _GBSReceivingScreenViewState extends State<_GBSReceivingScreenView> {
             const Expanded(
               child: Center(child: Text('Please select a work order to start scanning', style: TextStyle(color: Colors.grey, fontSize: 13))),
             ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildReceivingTypeRadioButtons(GbsController controller, GbsState state) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFB0BEC5), width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('RECEIVING NATURE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF546E7A), letterSpacing: 0.5)),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Expanded(child: _buildRadioOption(controller, state, 'GOOD PRODUCTION RECEIVING', 'gbs')),
-              Expanded(child: _buildRadioOption(controller, state, 'SAMPLE RECEIVING', 'sample')),
-              Expanded(child: _buildRadioOption(controller, state, 'C-GRADE RECEIVING', 'c_grade')),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRadioOption(GbsController controller, GbsState state, String label, String value) {
-    final isSelected = state.receivingType == value;
-    Color optionColor;
-    if (value == 'sample') {
-      optionColor = const Color(0xFFF59E0B);
-    } else if (value == 'c_grade') {
-      optionColor = const Color(0xFFEF4444);
-    } else {
-      optionColor = const Color(0xFF0D47A1);
-    }
-
-    return InkWell(
-      onTap: () {
-        HapticFeedbackHelper.buttonClick();
-        _handleReceivingTypeChange(controller, state, value);
-      },
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Radio<String>(
-            value: value,
-            groupValue: state.receivingType,
-            activeColor: optionColor,
-            fillColor: WidgetStateProperty.resolveWith<Color>((states) {
-              if (states.contains(WidgetState.selected)) {
-                return optionColor;
-              }
-              return Colors.grey.shade400;
-            }),
-            onChanged: (val) {
-              if (val != null) {
-                HapticFeedbackHelper.buttonClick();
-                _handleReceivingTypeChange(controller, state, val);
-              }
-            },
-          ),
-          Flexible(
-            child: Text(
-              label,
-              style: TextStyle(fontSize: 11, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500, color: isSelected ? optionColor : const Color(0xFF37474F)),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSampleCGradeTableSection(GbsController controller, GbsState state) {
-    final grouped = controller.getGroupedSampleOrCGradeEntries();
-    final allIds = controller.getFilteredTrays().map((t) => t.productionProgress.id).whereType<int>().toList();
-    final isAllSelected = allIds.isNotEmpty && allIds.every((id) => state.selectedProgressIds.contains(id));
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFB0BEC5), width: 1.5, strokeAlign: BorderSide.strokeAlignOutside),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildConfigurationPanel(controller, state),
-          if (state.selectedWorkOrder != null) ...[
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        state.receivingType == 'sample' ? 'SAMPLE PENDING ENTRIES' : 'C GRADE PENDING ENTRIES',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF263238), letterSpacing: 0.5),
-                      ),
-                      Text('${grouped.length} Pending Groups, ${state.selectedProgressIds.length} Selected Records', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF78909C))),
-                    ],
-                  ),
-                  SizedBox(
-                    height: 38,
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        HapticFeedbackHelper.buttonClick();
-                        controller.fetchLatestTraysSilently();
-                      },
-                      icon: const Icon(Icons.refresh_rounded, size: 18),
-                      label: const Text('REFRESH', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 10)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0D47A1),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            _buildSampleCGradeTableHeader(controller, state, isAllSelected),
-            Expanded(
-              child: grouped.isEmpty
-                  ? const EmptyScanState(hasBorder: false)
-                  : ListView.builder(
-                      padding: EdgeInsets.zero,
-                      itemCount: grouped.length,
-                      itemBuilder: (context, index) {
-                        return _buildSampleCGradeRow(controller, state, grouped[index], index);
-                      },
-                    ),
-            ),
-          ] else
-            const Expanded(
-              child: Center(child: Text('Please select a work order to view pending entries', style: TextStyle(color: Colors.grey, fontSize: 13))),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSampleCGradeTableHeader(GbsController controller, GbsState state, bool isAllSelected) {
-    final isCGrade = state.receivingType == 'c_grade';
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-      decoration: const BoxDecoration(
-        color: Color(0xFFF1F5F9),
-        border: Border(bottom: BorderSide(color: Color(0xFFB0BEC5), width: 1.5)),
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 32,
-            child: Checkbox(
-              value: isAllSelected,
-              activeColor: const Color(0xFF0D47A1),
-              onChanged: (val) {
-                HapticFeedbackHelper.buttonClick();
-                controller.toggleAllProgressIds(val == true);
-              },
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(flex: 9, child: Text('ITEM DESCRIPTION', style: _tableHeaderStyle)),
-          if (!isCGrade) ...[
-            Expanded(flex: 3, child: Text('TUBES', textAlign: TextAlign.center, style: _tableHeaderStyle)),
-            Expanded(flex: 3, child: Text('PCS', textAlign: TextAlign.center, style: _tableHeaderStyle)),
-            Expanded(flex: 3, child: Text('WEIGHT', textAlign: TextAlign.center, style: _tableHeaderStyle)),
-          ] else ...[
-            Expanded(flex: 3, child: Text('WEIGHT (KG)', textAlign: TextAlign.center, style: _tableHeaderStyle)),
-          ],
-          Expanded(flex: 4, child: Text('REMARKS', textAlign: TextAlign.center, style: _tableHeaderStyle)),
-        ],
-      ),
-    );
-  }
-
-  void _showRemarksDialog(BuildContext context, String itemDesc, String remarks) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFFF8FAFC),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.comment_rounded, color: Color(0xFF0D47A1), size: 20),
-            SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Entry Remarks',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              itemDesc,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF1B64A3)),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFCBD5E1)),
-              ),
-              child: Text(
-                remarks,
-                style: const TextStyle(fontSize: 13, color: Color(0xFF334155), height: 1.4),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0D47A1),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSampleCGradeRow(GbsController controller, GbsState state, GbsSampleCGradeGroup group, int index) {
-    final isCGrade = state.receivingType == 'c_grade';
-    final isGroupSelected = group.allProgressIds.isNotEmpty && group.allProgressIds.every((id) => state.selectedProgressIds.contains(id));
-
-    final weightGrams = group.totalWeightGrams;
-    final String weightStr = isCGrade
-        ? '${group.totalWeightKg.toStringAsFixed(2)} kg'
-        : (weightGrams >= 1000 ? '${(weightGrams / 1000).toStringAsFixed(2)} kg' : '${weightGrams.toStringAsFixed(1)} g');
-
-    final remarksText = group.remarks.trim().isNotEmpty ? group.remarks.trim() : '-';
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-      decoration: BoxDecoration(
-        color: index.isEven ? Colors.white : const Color(0xFFF8FAFC),
-        border: Border(bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.1), width: 1)),
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 32,
-            child: Checkbox(
-              value: isGroupSelected,
-              activeColor: const Color(0xFF0D47A1),
-              onChanged: (val) {
-                HapticFeedbackHelper.buttonClick();
-                controller.toggleGroupProgressIds(group.allProgressIds, val == true);
-              },
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            flex: 9,
-            child: Text(
-              group.itemDescription,
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1B64A3)),
-            ),
-          ),
-          if (!isCGrade) ...[
-            Expanded(
-              flex: 3,
-              child: Text(
-                group.totalTubes.toStringAsFixed(0),
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238)),
-              ),
-            ),
-            Expanded(
-              flex: 3,
-              child: Text(
-                group.totalPcs.toStringAsFixed(0),
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238)),
-              ),
-            ),
-          ],
-          Expanded(
-            flex: 3,
-            child: Text(
-              weightStr,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF263238)),
-            ),
-          ),
-          Expanded(
-            flex: 4,
-            child: InkWell(
-              onTap: remarksText == '-' ? null : () => _showRemarksDialog(context, group.itemDescription, remarksText),
-              borderRadius: BorderRadius.circular(6),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: remarksText == '-' ? Colors.transparent : const Color(0xFFEFF6FF),
-                  borderRadius: BorderRadius.circular(6),
-                  border: remarksText == '-' ? null : Border.all(color: const Color(0xFFBFDBFE)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        remarksText,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: remarksText == '-' ? FontWeight.normal : FontWeight.w600,
-                          color: remarksText == '-' ? Colors.grey.shade500 : const Color(0xFF1D4ED8),
-                        ),
-                      ),
-                    ),
-                    if (remarksText != '-') ...[
-                      const SizedBox(width: 4),
-                      const Icon(Icons.info_outline_rounded, size: 12, color: Color(0xFF1D4ED8)),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     );

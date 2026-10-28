@@ -33,6 +33,8 @@ class _SectionCardState extends State<SectionCard> {
     if (t.contains('dashboard')) return Icons.auto_graph_rounded;
     if (t.contains('tray scanning')) return Icons.qr_code_scanner_rounded;
     if (t.contains('gbs')) return Icons.lan_rounded;
+    if (t.contains('sample')) return Icons.science_rounded;
+    if (t.contains('c-grade') || t.contains('c grade')) return Icons.assignment_late_rounded;
     if (t.contains('batch')) return Icons.layers_rounded;
     if (t.contains('processing')) return Icons.settings_input_component_rounded;
     if (t.contains('induction')) return Icons.vibration_rounded;
@@ -47,6 +49,8 @@ class _SectionCardState extends State<SectionCard> {
   Color _getGlowColor(String title) {
     final t = title.toLowerCase();
     if (t.contains('dashboard') || t.contains('gbs')) return const Color(0xFF00E5FF); // Cyber Cyan
+    if (t.contains('sample')) return const Color(0xFFF59E0B);
+    if (t.contains('c-grade') || t.contains('c grade')) return const Color(0xFFEF4444);
     if (t.contains('wip')) return const Color(0xFF00E676); // Neon Green
     if (t.contains('processing')) return const Color(0xFFFF1744); // Electric Red
     if (t.contains('carton packing') || t.contains('cartanization')) return const Color(0xFFFF9100); // Orange

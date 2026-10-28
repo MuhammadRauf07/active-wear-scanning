@@ -25,6 +25,8 @@ class ScannerAlwaysOpen extends StatefulWidget {
     Widget Function(BuildContext context)? scannedItemsBuilder,
     bool showDoneButton = true,
   }) {
+    FocusManager.instance.primaryFocus?.unfocus();
+    SystemChannels.textInput.invokeMethod('TextInput.hide');
     return showGeneralDialog<T>(
       context: context,
       barrierDismissible: false,
@@ -61,7 +63,7 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
     autoStart: false,
     detectionSpeed: DetectionSpeed.noDuplicates,
     detectionTimeoutMs: 800,
-    cameraResolution: const Size(1920, 1080),
+    cameraResolution: const Size(1280, 720),
     formats: const [
       BarcodeFormat.qrCode,
       BarcodeFormat.code128,
@@ -77,6 +79,7 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
     ],
   );
   final _manualController = TextEditingController();
+  final _manualFocusNode = FocusNode();
   bool _showSubmit = false;
   Timer? _duplicateAlertTimer;
   bool _isProcessing = false;
@@ -90,9 +93,12 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
   @override
   void initState() {
     super.initState();
+    _manualFocusNode.canRequestFocus = false;
     _manualController.addListener(_onManualChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Future.delayed(const Duration(milliseconds: 800), () {
+      FocusManager.instance.primaryFocus?.unfocus();
+      SystemChannels.textInput.invokeMethod('TextInput.hide');
+      Future.delayed(const Duration(milliseconds: 250), () {
         if (mounted) {
           _controller.start();
           debugPrint("SCANNER: Camera Started Manually");
@@ -107,6 +113,9 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
   }
 
   void _submitManual() async {
+    _manualFocusNode.unfocus();
+    _manualFocusNode.canRequestFocus = false;
+    SystemChannels.textInput.invokeMethod('TextInput.hide');
     final text = _manualController.text.trim();
     if (text.isEmpty || _isProcessing) return;
 
@@ -226,10 +235,16 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
     }
   }
 
-  void _close() => Navigator.pop(context);
+  void _close() {
+    _manualFocusNode.unfocus();
+    _manualFocusNode.canRequestFocus = false;
+    SystemChannels.textInput.invokeMethod('TextInput.hide');
+    Navigator.pop(context);
+  }
 
   @override
   void dispose() {
+    _manualFocusNode.dispose();
     _manualController.removeListener(_onManualChange);
     _manualController.dispose();
     _controller.dispose();
@@ -239,9 +254,18 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      child: SafeArea(
+    return GestureDetector(
+      onTap: () {
+        if (_manualFocusNode.hasFocus) {
+          _manualFocusNode.unfocus();
+          _manualFocusNode.canRequestFocus = false;
+          SystemChannels.textInput.invokeMethod('TextInput.hide');
+        }
+      },
+      behavior: HitTestBehavior.opaque,
+      child: Material(
+        color: Colors.white,
+        child: SafeArea(
         top: false,
         child: Column(
           children: [
@@ -358,7 +382,18 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
                       height: 38,
                       child: TextField(
                         controller: _manualController,
-                        onSubmitted: (_) => _submitManual(),
+                        focusNode: _manualFocusNode,
+                        autofocus: false,
+                        onTap: () {
+                          _manualFocusNode.canRequestFocus = true;
+                          _manualFocusNode.requestFocus();
+                          SystemChannels.textInput.invokeMethod('TextInput.show');
+                        },
+                        onSubmitted: (_) {
+                          _manualFocusNode.unfocus();
+                          _manualFocusNode.canRequestFocus = false;
+                          _submitManual();
+                        },
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
@@ -699,6 +734,7 @@ class _ScannerAlwaysOpenState extends State<ScannerAlwaysOpen> {
           ],
         ),
       ),
+    ),
     );
   }
 }

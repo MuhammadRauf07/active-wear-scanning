@@ -1,6 +1,8 @@
 import 'package:active_wear_scanning/core/widgets/environment_switcher_button.dart';
 import 'package:active_wear_scanning/features/carton_packing/presentation/carton_packing_screen.dart';
 import 'package:active_wear_scanning/features/gbs/presentation/gbs_receiving_screen.dart';
+import 'package:active_wear_scanning/features/sample_receiving/presentation/sample_receiving_screen.dart';
+import 'package:active_wear_scanning/features/c_grade_receiving/presentation/c_grade_receiving_screen.dart';
 import 'package:active_wear_scanning/features/induction/presentation/induction_store_screen.dart';
 import 'package:active_wear_scanning/features/knitting_production/presentation/knitting_production_screen.dart';
 import 'package:active_wear_scanning/features/lot_making/presentation/lot_list_screen.dart';
@@ -42,6 +44,16 @@ class HomeScreen extends StatelessWidget {
       title: 'GBS Receiving',
       icon: Icons.inventory_2_rounded,
       screen: (c) => const GBSReceivingScreen(),
+    ),
+    _WorkstationModule(
+      title: 'Sample Receiving',
+      icon: Icons.science_rounded,
+      screen: (c) => const SampleReceivingScreen(),
+    ),
+    _WorkstationModule(
+      title: 'C-Grade Receiving',
+      icon: Icons.assignment_late_rounded,
+      screen: (c) => const CGradeReceivingScreen(),
     ),
     _WorkstationModule(
       title: 'Lot Making',

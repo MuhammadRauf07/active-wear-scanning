@@ -1,7 +1,8 @@
+import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'dart:io' show Platform;
 
 class BarcodeScannerDialog extends StatefulWidget {
   const BarcodeScannerDialog({super.key, this.title = 'Scan Barcode'});
@@ -12,6 +13,8 @@ class BarcodeScannerDialog extends StatefulWidget {
     BuildContext context, {
     String title = 'Scan Barcode',
   }) {
+    FocusManager.instance.primaryFocus?.unfocus();
+    SystemChannels.textInput.invokeMethod('TextInput.hide');
     return showGeneralDialog<String>(
       context: context,
       barrierDismissible: true,
@@ -22,13 +25,12 @@ class BarcodeScannerDialog extends StatefulWidget {
         return FadeTransition(
           opacity: animation,
           child: SlideTransition(
-            position:
-                Tween<Offset>(
-                  begin: const Offset(0, 0.05),
-                  end: Offset.zero,
-                ).animate(
-                  CurvedAnimation(parent: animation, curve: Curves.easeOut),
-                ),
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.05),
+              end: Offset.zero,
+            ).animate(
+              CurvedAnimation(parent: animation, curve: Curves.easeOut),
+            ),
             child: child,
           ),
         );
@@ -67,7 +69,7 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
   final _controller = MobileScannerController(
     detectionSpeed: DetectionSpeed.noDuplicates,
     detectionTimeoutMs: 800,
-    cameraResolution: const Size(1920, 1080),
+    cameraResolution: const Size(1280, 720),
     facing: CameraFacing.back,
     formats: const [
       BarcodeFormat.qrCode,
@@ -85,13 +87,19 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
   );
 
   final _manualController = TextEditingController();
+  final _manualFocusNode = FocusNode();
   bool _showSubmit = false;
   bool _hasScanned = false;
 
   @override
   void initState() {
     super.initState();
+    _manualFocusNode.canRequestFocus = false;
     _manualController.addListener(_onManualChange);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      FocusManager.instance.primaryFocus?.unfocus();
+      SystemChannels.textInput.invokeMethod('TextInput.hide');
+    });
   }
 
   void _onManualChange() {
@@ -102,6 +110,9 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
   void _submitManual() {
     final text = _manualController.text.trim();
     if (text.isNotEmpty) {
+      _manualFocusNode.unfocus();
+      _manualFocusNode.canRequestFocus = false;
+      SystemChannels.textInput.invokeMethod('TextInput.hide');
       if (!kIsWeb && !Platform.isWindows) {
         _controller.stop();
       }
@@ -125,10 +136,16 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
     }
   }
 
-  void _close() => Navigator.pop(context);
+  void _close() {
+    _manualFocusNode.unfocus();
+    _manualFocusNode.canRequestFocus = false;
+    SystemChannels.textInput.invokeMethod('TextInput.hide');
+    Navigator.pop(context);
+  }
 
   @override
   void dispose() {
+    _manualFocusNode.dispose();
     _manualController.removeListener(_onManualChange);
     _manualController.dispose();
     if (!kIsWeb && !Platform.isWindows) {
@@ -139,221 +156,251 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      child: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            // ── Seamless Integrated Dialog Header ─────────────────────────
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: const BoxDecoration(
-                color: Color(0xFF0F172A), // Dark Slate Navy
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF3B82F6).withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.qr_code_scanner_rounded,
-                      color: Color(0xFF60A5FA),
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          widget.title,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.2,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        const Text(
-                          'Scan barcode or enter manually',
-                          style: TextStyle(
-                            color: Color(0xFF94A3B8),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: _close,
-                    icon: const Icon(
-                      Icons.close_rounded,
-                      color: Color(0xFF94A3B8),
-                      size: 22,
-                    ),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 32,
-                      minHeight: 32,
-                    ),
-                    splashRadius: 20,
-                  ),
-                ],
-              ),
-            ),
-
-            // ── Compact Manual Input Bar ─────────────────────────────────
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: const BoxDecoration(
-                color: Color(0xFFF8FAFC),
-                border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 38,
-                      child: TextField(
-                        controller: _manualController,
-                        onSubmitted: (_) => _submitManual(),
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF1E293B),
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'Enter code manually...',
-                          hintStyle: const TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFF94A3B8),
-                            fontWeight: FontWeight.normal,
-                          ),
-                          prefixIcon: const Icon(
-                            Icons.keyboard_alt_outlined,
-                            size: 18,
-                            color: Color(0xFF64748B),
-                          ),
-                          prefixIconConstraints: const BoxConstraints(
-                            minWidth: 36,
-                            minHeight: 36,
-                          ),
-                          filled: true,
-                          fillColor: Colors.white,
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 8,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: const BorderSide(
-                              color: Color(0xFFCBD5E1),
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: const BorderSide(
-                              color: Color(0xFFCBD5E1),
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: const BorderSide(
-                              color: Color(0xFF0284C7),
-                              width: 1.5,
-                            ),
-                          ),
-                        ),
+    return GestureDetector(
+      onTap: () {
+        if (_manualFocusNode.hasFocus) {
+          _manualFocusNode.unfocus();
+          _manualFocusNode.canRequestFocus = false;
+          SystemChannels.textInput.invokeMethod('TextInput.hide');
+        }
+      },
+      behavior: HitTestBehavior.opaque,
+      child: Material(
+        color: Colors.white,
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              // ── Seamless Integrated Dialog Header ─────────────────────────
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF0F172A), // Dark Slate Navy
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF3B82F6).withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.qr_code_scanner_rounded,
+                        color: Color(0xFF60A5FA),
+                        size: 20,
                       ),
                     ),
-                  ),
-                  if (_showSubmit) ...[
-                    const SizedBox(width: 8),
-                    SizedBox(
-                      height: 38,
-                      child: ElevatedButton(
-                        onPressed: _submitManual,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0D47A1),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: const Text(
-                          'SUBMIT',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            Expanded(
-              child: (!kIsWeb && Platform.isWindows)
-                  ? Center(
+                    const SizedBox(width: 12),
+                    Expanded(
                       child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            Icons.computer,
-                            size: 64,
-                            color: Colors.grey.shade300,
+                          Text(
+                            widget.title,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.2,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 2),
                           const Text(
-                            'Camera scanner not supported on Windows',
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                          const Text(
-                            'Please enter the code manually above',
-                            style: TextStyle(color: Colors.grey, fontSize: 12),
+                            'Scan barcode or enter manually',
+                            style: TextStyle(
+                              color: Color(0xFF94A3B8),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
-                    )
-                  : Stack(
-                      children: [
-                        MobileScanner(
-                          controller: _controller,
-                          onDetect: _onDetect,
-                        ),
-                        Center(
-                          child: Container(
-                            width: 320,
-                            height: 160,
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: Colors.blue.withValues(alpha: 0.6),
-                                width: 3,
+                    ),
+                    IconButton(
+                      onPressed: _close,
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: Color(0xFF94A3B8),
+                        size: 22,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 32,
+                        minHeight: 32,
+                      ),
+                      splashRadius: 20,
+                    ),
+                  ],
+                ),
+              ),
+
+              // ── Compact Manual Input Bar ─────────────────────────────────
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF8FAFC),
+                  border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 38,
+                        child: TextField(
+                          controller: _manualController,
+                          focusNode: _manualFocusNode,
+                          autofocus: false,
+                          onTap: () {
+                            _manualFocusNode.canRequestFocus = true;
+                            _manualFocusNode.requestFocus();
+                            SystemChannels.textInput.invokeMethod('TextInput.show');
+                          },
+                          onSubmitted: (_) => _submitManual(),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1E293B),
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Enter code manually...',
+                            hintStyle: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF94A3B8),
+                              fontWeight: FontWeight.normal,
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.keyboard_alt_outlined,
+                              size: 18,
+                              color: Color(0xFF64748B),
+                            ),
+                            prefixIconConstraints: const BoxConstraints(
+                              minWidth: 36,
+                              minHeight: 36,
+                            ),
+                            filled: true,
+                            fillColor: Colors.white,
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(
+                                color: Color(0xFFCBD5E1),
                               ),
-                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(
+                                color: Color(0xFFCBD5E1),
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(
+                                color: Color(0xFF0284C7),
+                                width: 1.5,
+                              ),
                             ),
                           ),
                         ),
-                      ],
+                      ),
                     ),
-            ),
-          ],
+                    if (_showSubmit) ...[
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        height: 38,
+                        child: ElevatedButton(
+                          onPressed: _submitManual,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0D47A1),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: const Text(
+                            'SUBMIT',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              // ── Scanner Viewport ─────────────────────────────────────────
+              Expanded(
+                child: (kIsWeb || Platform.isWindows)
+                    ? Container(
+                        color: const Color(0xFF0F172A),
+                        child: const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.videocam_off_outlined,
+                                color: Color(0xFF94A3B8),
+                                size: 48,
+                              ),
+                              SizedBox(height: 12),
+                              Text(
+                                'Camera scanner is only available on Mobile',
+                                style: TextStyle(
+                                  color: Color(0xFFE2E8F0),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                'Use manual entry or a hardware scanner',
+                                style: TextStyle(
+                                  color: Color(0xFF94A3B8),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : Stack(
+                        children: [
+                          MobileScanner(
+                            controller: _controller,
+                            onDetect: _onDetect,
+                          ),
+                          Center(
+                            child: Container(
+                              width: 320,
+                              height: 160,
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: Colors.blue.withValues(alpha: 0.6),
+                                  width: 3,
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
     );

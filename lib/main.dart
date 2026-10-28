@@ -3,6 +3,8 @@ import 'package:active_wear_scanning/features/carton_packing/presentation/carton
 import 'package:active_wear_scanning/features/carton_packing/repo/carton_packing_repo.dart';
 import 'package:active_wear_scanning/features/home/presentation/home_screen.dart';
 import 'package:active_wear_scanning/features/gbs/presentation/gbs_receiving_screen.dart';
+import 'package:active_wear_scanning/features/sample_receiving/presentation/sample_receiving_screen.dart';
+import 'package:active_wear_scanning/features/c_grade_receiving/presentation/c_grade_receiving_screen.dart';
 import 'package:active_wear_scanning/features/gbs/repo/gbs_receiving_repo.dart';
 import 'package:active_wear_scanning/features/induction/presentation/induction_store_screen.dart';
 import 'package:active_wear_scanning/features/induction/repo/induction_repo.dart';
@@ -179,6 +181,20 @@ void runActiveWearApp({
             screen: (context, {data}) => const GBSReceivingScreen(),
           ),
           PlexRoute(
+            route: '/sample_receiving',
+            title: 'Sample Receiving',
+            logo: const Icon(Icons.science_outlined),
+            selectedLogo: const Icon(Icons.science),
+            screen: (context, {data}) => const SampleReceivingScreen(),
+          ),
+          PlexRoute(
+            route: '/c_grade_receiving',
+            title: 'C-Grade Receiving',
+            logo: const Icon(Icons.assignment_late_outlined),
+            selectedLogo: const Icon(Icons.assignment_late),
+            screen: (context, {data}) => const CGradeReceivingScreen(),
+          ),
+          PlexRoute(
             route: '/lot_making',
             title: 'Lot Making',
             logo: const Icon(Icons.layers_outlined),
@@ -272,6 +288,16 @@ void runActiveWearApp({
           route: '/gbs_receiving',
           title: 'GBS Receiving',
           screen: (context, {data}) => const GBSReceivingScreen(),
+        ),
+        PlexRoute(
+          route: '/sample_receiving',
+          title: 'Sample Receiving',
+          screen: (context, {data}) => const SampleReceivingScreen(),
+        ),
+        PlexRoute(
+          route: '/c_grade_receiving',
+          title: 'C-Grade Receiving',
+          screen: (context, {data}) => const CGradeReceivingScreen(),
         ),
         PlexRoute(
           route: '/lot_making',

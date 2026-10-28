@@ -1,5 +1,7 @@
 import 'package:active_wear_scanning/features/lot_making/presentation/lot_list_screen.dart';
 import 'package:active_wear_scanning/features/gbs/presentation/gbs_receiving_screen.dart';
+import 'package:active_wear_scanning/features/sample_receiving/presentation/sample_receiving_screen.dart';
+import 'package:active_wear_scanning/features/c_grade_receiving/presentation/c_grade_receiving_screen.dart';
 import 'package:active_wear_scanning/features/processing/presentation/processing_screen.dart';
 import 'package:active_wear_scanning/features/induction/presentation/induction_store_screen.dart';
 import 'package:active_wear_scanning/features/scanning_sections/presentation/widgets/section_card.dart';
@@ -87,6 +89,27 @@ class ScanningSectionsScreen extends StatelessWidget {
                             progressValue: 0.5,
                             enabled: SectionPermissionHelper.isSectionAllowed('GBS Receiving', userRoles),
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GBSReceivingScreen())),
+                          ),
+                        ]),
+                      ),
+                      _FadeSlideTransition(
+                        delay: 50,
+                        child: _buildRow(context, [
+                          SectionCard(
+                            title: 'Sample Receiving',
+                            subtitle: 'Receive sample production items',
+                            sectionCode: 'SMPL',
+                            progressValue: 0.5,
+                            enabled: SectionPermissionHelper.isSectionAllowed('Sample Receiving', userRoles),
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SampleReceivingScreen())),
+                          ),
+                          SectionCard(
+                            title: 'C-Grade Receiving',
+                            subtitle: 'Receive C-Grade production items',
+                            sectionCode: 'CGRD',
+                            progressValue: 0.5,
+                            enabled: SectionPermissionHelper.isSectionAllowed('C-Grade Receiving', userRoles),
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CGradeReceivingScreen())),
                           ),
                         ]),
                       ),

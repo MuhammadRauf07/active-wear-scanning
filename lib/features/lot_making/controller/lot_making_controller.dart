@@ -64,9 +64,10 @@ class LotMakingController extends ChangeNotifier {
   }
 
   Future<void> selectWorkOrder(WorkOrderHeader? wo) async {
-    if (_state.selectedWorkOrder?.id == wo?.id) return;
+    final isDifferent = _state.selectedWorkOrder?.id != wo?.id;
     _state = _state.copyWith(
       selectedWorkOrder: wo,
+      clearSelectedColor: isDifferent && _state.scannedTrays.isEmpty,
       clearSelectedTray: true,
       clearReferenceRouting: _state.scannedTrays.isEmpty,
     );
@@ -78,57 +79,111 @@ class LotMakingController extends ChangeNotifier {
 
     final woId = wo?.id;
     if (woId != null) {
-      await ensureWorkOrderColorsCached(woId);
+      await ensureWorkOrderColorsCached(woId, force: true);
     }
   }
 
-  Future<void> ensureWorkOrderColorsCached(int woId) async {
-    if (_state.workOrderValidColors.containsKey(woId)) return;
+  Future<void> ensureWorkOrderColorsCached(int woId, {bool force = false, bool silent = false}) async {
+    if (!force &&
+        _state.workOrderValidColors.containsKey(woId) &&
+        _state.workOrderValidColors[woId] != null &&
+        _state.workOrderValidColors[woId]!.isNotEmpty) {
+      return;
+    }
 
-    _state = _state.copyWith(isCachingColors: true);
-    notifyListeners();
+    if (!silent) {
+      _state = _state.copyWith(isCachingColors: true);
+      notifyListeners();
+    }
 
     try {
-      final trays = _state.productionProgressTrays.where((t) {
-        if (t.productionProgress.locatorId != 3 || t.productionProgress.gbsFlag != true) return false;
-        if (t.workOrderHeader?.id != woId) return false;
-        final qtys = getTrayQuantities(t);
-        return (qtys['remaining'] ?? 0.0) > 0;
-      }).toList();
-
-      final lineIds = trays
-          .map(
-            (t) => t.productionProgress.workOrderLineId ?? t.workOrderLine?.id,
-          )
-          .whereType<int>()
-          .toSet();
-
+      final Set<int> lineIds = {};
       final Set<String> validColors = {};
       final updatedPlanQuantities = Map<String, double>.from(
         _state.colorPlanQuantities,
       );
 
-      for (final lineId in lineIds) {
-        final res = await _lotRepo.fetchAllWorkOrderLineDetails(lineId);
-        if (res.success && res.data != null) {
-          updatedPlanQuantities.removeWhere(
-            (key, _) => key.startsWith("${lineId}_"),
-          );
-          final items = res.data as List;
+      // 1. Primary: Fetch line details directly for this work order
+      // (matches /api/app/work-order-line-details?WorkOrderId=$woId)
+      try {
+        final directDetailsRes = await _lotRepo.fetchWorkOrderLineDetailsByWorkOrder(woId);
+        if (directDetailsRes.success && directDetailsRes.data != null) {
+          final items = directDetailsRes.data as List;
           for (final item in items) {
-            final detail = (item as Map)['workOrderLineDetail'] ?? item;
-            if (detail != null && detail is Map) {
-              final colorDesc = detail['colorDescription']
-                  ?.toString()
-                  .trim()
-                  .toUpperCase();
-              final planQty =
-                  (detail['planQuantity'] as num?)?.toDouble() ?? 0.0;
-              if (colorDesc != null && colorDesc.isNotEmpty) {
-                validColors.add(colorDesc);
-                final key = "${lineId}_$colorDesc";
-                updatedPlanQuantities[key] =
-                    (updatedPlanQuantities[key] ?? 0.0) + planQty;
+            final detail = (item is Map) ? (item['workOrderLineDetail'] ?? item) : null;
+            final colorDesc = (detail?['colorDescription'] ??
+                    item['processIItemd']?['colorDescription'] ??
+                    item['garmentItem']?['colorDescription'])
+                ?.toString()
+                .trim()
+                .toUpperCase();
+            final planQty = (detail?['planQuantity'] as num?)?.toDouble() ?? 0.0;
+            final lid = int.tryParse((detail?['workOrderLineId'] ?? item['workOrderLine']?['id'])?.toString() ?? '');
+            if (colorDesc != null && colorDesc.isNotEmpty) {
+              validColors.add(colorDesc);
+              if (lid != null) {
+                lineIds.add(lid);
+                final key = "${lid}_$colorDesc";
+                updatedPlanQuantities[key] = (updatedPlanQuantities[key] ?? 0.0) + planQty;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        dev.log('Error fetching direct line details for WO $woId: $e');
+      }
+
+      // 2. Fetch all work order lines for this work order from API to discover any other lines
+      try {
+        final linesRes = await _lotRepo.fetchWorkOrderLines(workOrderId: woId);
+        if (linesRes.success && linesRes.data != null) {
+          final list = linesRes.data as List;
+          for (final item in list) {
+            final line = item is Map ? (item['workOrderLine'] ?? item) : null;
+            final id = int.tryParse(line?['id']?.toString() ?? '');
+            if (id != null) lineIds.add(id);
+          }
+        }
+      } catch (e) {
+        dev.log('Error fetching work order lines: $e');
+      }
+
+      // 3. Collect lineIds & colors from production progress trays for this work order
+      for (final t in _state.productionProgressTrays) {
+        if (t.workOrderHeader?.id == woId) {
+          final lid = t.productionProgress.workOrderLineId ?? t.workOrderLine?.id;
+          if (lid != null) lineIds.add(lid);
+          final c = t.item.colorDescription?.trim().toUpperCase();
+          if (c != null && c.isNotEmpty) validColors.add(c);
+        }
+      }
+
+      // 4. If directDetailsRes did not find any colors, query each individual lineId
+      if (validColors.isEmpty) {
+        for (final lineId in lineIds) {
+          final res = await _lotRepo.fetchAllWorkOrderLineDetails(lineId);
+          if (res.success && res.data != null) {
+            updatedPlanQuantities.removeWhere(
+              (key, _) => key.startsWith("${lineId}_"),
+            );
+            final items = res.data as List;
+            for (final item in items) {
+              final detail = (item is Map) ? (item['workOrderLineDetail'] ?? item) : item;
+              if (detail != null && detail is Map) {
+                final colorDesc = (detail['colorDescription'] ??
+                        item['processIItemd']?['colorDescription'] ??
+                        item['garmentItem']?['colorDescription'])
+                    ?.toString()
+                    .trim()
+                    .toUpperCase();
+                final planQty =
+                    (detail['planQuantity'] as num?)?.toDouble() ?? 0.0;
+                if (colorDesc != null && colorDesc.isNotEmpty) {
+                  validColors.add(colorDesc);
+                  final key = "${lineId}_$colorDesc";
+                  updatedPlanQuantities[key] =
+                      (updatedPlanQuantities[key] ?? 0.0) + planQty;
+                }
               }
             }
           }
@@ -146,7 +201,7 @@ class LotMakingController extends ChangeNotifier {
         isCachingColors: false,
       );
     } catch (e) {
-      dev.log('Error caching colors for WO $woId: $e');
+      dev.log('Error in ensureWorkOrderColorsCached: $e');
       _state = _state.copyWith(isCachingColors: false);
     }
     notifyListeners();
@@ -263,17 +318,42 @@ class LotMakingController extends ChangeNotifier {
     if (_state.selectedWorkOrder == null) return _state.colors;
     final validColors =
         _state.workOrderValidColors[_state.selectedWorkOrder!.id];
-    if (validColors == null || validColors.isEmpty) return _state.colors;
+    if (validColors == null || validColors.isEmpty) {
+      return _state.selectedColor != null ? [_state.selectedColor!] : [];
+    }
 
-    final filtered = _state.colors.where((color) {
-      if (_state.selectedColor != null && color.segmentCode?.id == _state.selectedColor!.segmentCode?.id) {
-        return true;
-      }
+    final List<LotColorModel> filtered = [];
+    final Set<String> matchedColors = {};
+
+    for (final color in _state.colors) {
       final desc = color.segmentCode?.description?.trim().toUpperCase();
-      return desc != null && validColors.contains(desc);
-    }).toList();
+      if (desc != null && validColors.contains(desc)) {
+        if (!matchedColors.contains(desc)) {
+          filtered.add(color);
+          matchedColors.add(desc);
+        }
+      }
+    }
 
-    if (_state.selectedColor != null && !filtered.any((c) => c.segmentCode?.id == _state.selectedColor!.segmentCode?.id)) {
+    // Ensure all distinct colors in work order line details are represented in the list
+    for (final colorName in validColors) {
+      if (!matchedColors.contains(colorName)) {
+        filtered.add(
+          LotColorModel(
+            segmentCode: SegmentCode(
+              description: colorName,
+              code: colorName,
+            ),
+          ),
+        );
+        matchedColors.add(colorName);
+      }
+    }
+
+    if (_state.selectedColor != null &&
+        !filtered.any((c) =>
+            c.segmentCode?.description?.trim().toUpperCase() ==
+            _state.selectedColor!.segmentCode?.description?.trim().toUpperCase())) {
       filtered.insert(0, _state.selectedColor!);
     }
 
@@ -322,10 +402,13 @@ class LotMakingController extends ChangeNotifier {
     final trays = getTraysForSelectedWorkOrder();
     if (_state.selectedColor == null) return [];
     final selectedColorDesc = _state.selectedColor!.segmentCode?.description
-        ?.toUpperCase();
-    if (selectedColorDesc == null) return [];
+        ?.trim()
+        .toUpperCase();
+    if (selectedColorDesc == null || selectedColorDesc.isEmpty) return [];
 
     return trays.where((t) {
+      final itemColor = t.item.colorDescription?.trim().toUpperCase();
+      if (itemColor != null && itemColor == selectedColorDesc) return true;
       final lineId =
           t.productionProgress.workOrderLineId ?? t.workOrderLine?.id;
       if (lineId == null) return false;
@@ -498,77 +581,18 @@ class LotMakingController extends ChangeNotifier {
 
     try {
       final wos = getAvailableWorkOrders();
-      final updatedValidColors = Map<int, Set<String>>.from(
-        _state.workOrderValidColors,
-      );
-      final updatedPlanQuantities = Map<String, double>.from(
-        _state.colorPlanQuantities,
-      );
-
       for (final wo in wos) {
         final woId = wo.id;
-        if (woId == null || updatedValidColors.containsKey(woId)) continue;
-
-        final trays = _state.productionProgressTrays.where((t) {
-          if (t.productionProgress.locatorId != 3 || t.productionProgress.gbsFlag != true) return false;
-          if (t.workOrderHeader?.id != woId) return false;
-          final qtys = getTrayQuantities(t);
-          return (qtys['remaining'] ?? 0.0) > 0;
-        }).toList();
-
-        final lineIds = trays
-            .map(
-              (t) =>
-                  t.productionProgress.workOrderLineId ?? t.workOrderLine?.id,
-            )
-            .whereType<int>()
-            .toSet();
-
-        final Set<String> validColors = {};
-        final results = await Future.wait(
-          lineIds.map(
-            (lineId) => _lotRepo.fetchAllWorkOrderLineDetails(lineId),
-          ),
-        );
-        for (int i = 0; i < lineIds.length; i++) {
-          final lineId = lineIds.elementAt(i);
-          final res = results[i];
-          if (res.success && res.data != null) {
-            updatedPlanQuantities.removeWhere(
-              (key, _) => key.startsWith("${lineId}_"),
-            );
-            final items = res.data as List;
-            for (final item in items) {
-              final detail = (item as Map)['workOrderLineDetail'] ?? item;
-              if (detail != null && detail is Map) {
-                final colorDesc = detail['colorDescription']
-                    ?.toString()
-                    .trim()
-                    .toUpperCase();
-                final planQty =
-                    (detail['planQuantity'] as num?)?.toDouble() ?? 0.0;
-                if (colorDesc != null && colorDesc.isNotEmpty) {
-                  validColors.add(colorDesc);
-                  final key = "${lineId}_$colorDesc";
-                  updatedPlanQuantities[key] =
-                      (updatedPlanQuantities[key] ?? 0.0) + planQty;
-                }
-              }
-            }
-          }
+        if (woId != null) {
+          await ensureWorkOrderColorsCached(woId, silent: true);
         }
-        updatedValidColors[woId] = validColors;
       }
-      _state = _state.copyWith(
-        workOrderValidColors: updatedValidColors,
-        colorPlanQuantities: updatedPlanQuantities,
-        isCachingColors: false,
-      );
     } catch (e) {
       dev.log('Error caching colors: $e');
+    } finally {
       _state = _state.copyWith(isCachingColors: false);
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   Future<void> _loadExistingLotTrays(
@@ -1488,6 +1512,7 @@ class LotMakingController extends ChangeNotifier {
             final ppFetchRes = await _lotRepo.fetchProductionProgressById(
               resolvedProgressId,
             );
+
             if (ppFetchRes.success && ppFetchRes.data != null) {
               final responseModel = ProductionProgressResponseModel.fromJson(
                 Map<String, dynamic>.from(ppFetchRes.data as Map),
