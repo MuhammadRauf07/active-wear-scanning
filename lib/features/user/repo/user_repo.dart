@@ -13,7 +13,13 @@ class UserRepo {
     ///  Step 2: Perform login API call
     var response = await PlexNetworking.instance.post(
       AppConfig.login,
-      formData: {"grant_type": "password", "username": email, "password": password, "client_id": "activewear_mobile", "scope": "FitTracker"},
+      formData: {
+        "grant_type": "password",
+        "username": email,
+        "password": password,
+        "client_id": AppConfig.currentEnvironment.clientId,
+        "scope": AppConfig.currentEnvironment.scope,
+      },
     );
 
     if (response is PlexSuccess) {

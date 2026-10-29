@@ -31,37 +31,40 @@ class _EnvironmentSwitcherButtonState extends State<EnvironmentSwitcherButton> {
             mainAxisSize: MainAxisSize.min,
             children: AppEnvironment.values.map((env) {
               final isSelected = AppConfig.currentEnvironment == env;
-              final isProd = env == AppEnvironment.prod;
+              Color envColor;
+              Color envBgColor;
+              if (env == AppEnvironment.prod) {
+                envColor = Colors.green;
+                envBgColor = Colors.green.shade50;
+              } else if (env == AppEnvironment.uat) {
+                envColor = Colors.amber.shade800;
+                envBgColor = Colors.amber.shade50;
+              } else {
+                envColor = const Color(0xFF673AB7);
+                envBgColor = const Color(0xFFEDE7F6);
+              }
 
               return Container(
                 margin: const EdgeInsets.symmetric(vertical: 4),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: isSelected
-                        ? (isProd ? Colors.green : Colors.amber.shade800)
-                        : Colors.grey.shade300,
+                    color: isSelected ? envColor : Colors.grey.shade300,
                     width: isSelected ? 2 : 1,
                   ),
-                  color: isSelected
-                      ? (isProd ? Colors.green.shade50 : Colors.amber.shade50)
-                      : Colors.transparent,
+                  color: isSelected ? envBgColor : Colors.transparent,
                 ),
                 child: ListTile(
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   leading: Icon(
                     isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                    color: isSelected
-                        ? (isProd ? Colors.green : Colors.amber.shade800)
-                        : Colors.grey,
+                    color: isSelected ? envColor : Colors.grey,
                   ),
                   title: Text(
                     env.label,
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: isSelected
-                          ? (isProd ? Colors.green.shade900 : Colors.amber.shade900)
-                          : Colors.black87,
+                      color: isSelected ? envColor : Colors.black87,
                     ),
                   ),
                   subtitle: Text(
@@ -76,7 +79,7 @@ class _EnvironmentSwitcherButtonState extends State<EnvironmentSwitcherButton> {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text('Switched to ${env.label} (${env.url})'),
-                          backgroundColor: isProd ? Colors.green : Colors.amber.shade800,
+                          backgroundColor: envColor,
                           duration: const Duration(seconds: 2),
                         ),
                       );
@@ -106,7 +109,18 @@ class _EnvironmentSwitcherButtonState extends State<EnvironmentSwitcherButton> {
     }
 
     final current = AppConfig.currentEnvironment;
-    final isProd = current == AppEnvironment.prod;
+    Color envColor;
+    Color envBgColor;
+    if (current == AppEnvironment.prod) {
+      envColor = Colors.green;
+      envBgColor = Colors.green.shade50;
+    } else if (current == AppEnvironment.uat) {
+      envColor = Colors.amber.shade800;
+      envBgColor = Colors.amber.shade50;
+    } else {
+      envColor = const Color(0xFF673AB7);
+      envBgColor = const Color(0xFFEDE7F6);
+    }
 
     return InkWell(
       onTap: () => _showEnvironmentDialog(context),
@@ -114,10 +128,10 @@ class _EnvironmentSwitcherButtonState extends State<EnvironmentSwitcherButton> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: isProd ? Colors.green.shade50 : Colors.amber.shade50,
+          color: envBgColor,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isProd ? Colors.green.shade400 : Colors.amber.shade600,
+            color: envColor,
             width: 1.5,
           ),
         ),
@@ -129,7 +143,7 @@ class _EnvironmentSwitcherButtonState extends State<EnvironmentSwitcherButton> {
               height: 8,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: isProd ? Colors.green : Colors.amber.shade800,
+                color: envColor,
               ),
             ),
             const SizedBox(width: 6),
@@ -138,14 +152,14 @@ class _EnvironmentSwitcherButtonState extends State<EnvironmentSwitcherButton> {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
-                color: isProd ? Colors.green.shade800 : Colors.amber.shade900,
+                color: envColor,
               ),
             ),
             const SizedBox(width: 2),
             Icon(
               Icons.arrow_drop_down_rounded,
               size: 18,
-              color: isProd ? Colors.green.shade800 : Colors.amber.shade900,
+              color: envColor,
             ),
           ],
         ),

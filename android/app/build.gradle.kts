@@ -71,6 +71,11 @@ android {
             dimension = "default"
             resValue("string", "app_name", "AWFL PROD")
         }
+        create("revamp") {
+            dimension = "default"
+            applicationIdSuffix = ".revamp"
+            resValue("string", "app_name", "AWFL Revamp")
+        }
     }
 
     buildTypes {

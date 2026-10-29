@@ -20,6 +20,16 @@
                 "--flavor",
                 "prod"
             ]
+        },
+        {
+            "name": "AWFL (Revamp)",
+            "request": "launch",
+            "type": "dart",
+            "program": "lib/main_revamp.dart",
+            "args": [
+                "--flavor",
+                "revamp"
+            ]
         }
     ]
 }

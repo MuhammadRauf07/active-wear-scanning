@@ -2,12 +2,35 @@ import 'package:plex/plex_networking/plex_networking.dart';
 import 'package:plex/plex_sp.dart';
 
 enum AppEnvironment {
-  prod('PROD', 'https://10.111.2.40:4400'),
-  uat('UAT', 'https://10.0.12.30:4201');
+  prod(
+    'PROD',
+    'https://10.111.2.40:4400',
+    clientId: 'activewear_mobile',
+    scope: 'FitTracker',
+  ),
+  uat(
+    'UAT',
+    'https://10.0.12.30:4201',
+    clientId: 'activewear_mobile',
+    scope: 'FitTracker',
+  ),
+  revamp(
+    'REVAMP',
+    'https://10.111.6.21:5001',
+    clientId: 'AwflRevamped_App',
+    scope: 'AwflRevamped',
+  );
 
   final String label;
   final String url;
-  const AppEnvironment(this.label, this.url);
+  final String clientId;
+  final String scope;
+  const AppEnvironment(
+    this.label,
+    this.url, {
+    this.clientId = 'activewear_mobile',
+    this.scope = 'FitTracker',
+  });
 }
 
 class AppConfig {
